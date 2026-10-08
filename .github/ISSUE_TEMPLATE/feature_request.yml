@@ -1,0 +1,58 @@
+name: Feature request
+description: Suggest an idea or an improvement for Nöbetçi.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Ideas are welcome. A few things are off the table by design, because they would make Nöbetçi less trustworthy: approving HIGH or CRITICAL requests without a person, an "always allow", network access or telemetry, and changing `~/.claude/settings.json` without a reviewed diff. [CONTRIBUTING.md](https://github.com/tahap0l/nobetci/blob/main/CONTRIBUTING.md) explains why.
+
+        For a missing or wrong risk rule, use the [risk rule template](https://github.com/tahap0l/nobetci/issues/new?template=risk_rule.yml) instead.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve?
+      description: Describe the situation you're in, not the solution yet.
+      placeholder: When I run several sessions at once, I …
+    validations:
+      required: true
+
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you've considered
+      description: Workarounds you use today, or other ways this could work.
+    validations:
+      required: false
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Island or approval card
+        - Risk engine
+        - Rules or project trust
+        - History
+        - Notifications, quiet hours or hotkeys
+        - Hooks or Claude Code integration
+        - Other agents or platforms
+        - Something else
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: contribute
+    attributes:
+      label: Contributing
+      options:
+        - label: I'd like to work on this myself.
+          required: false

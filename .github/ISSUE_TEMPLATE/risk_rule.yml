@@ -1,0 +1,97 @@
+name: Risk rule — false positive or missed risk
+description: A request got a risk level that's too high or too low, or a misleading reason.
+labels: ["risk-rule"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks — reports like this are how the risk engine gets better.
+
+        - **Settings → Safety** has a tester: paste the command, path or URL there to see the current level and findings.
+        - Keep the example **harmless**. Don't paste working malware — describe the shape of the command instead.
+        - If the trick makes the **approval card** show something different from what would run, or hides part of a request from view, please [report it privately](https://github.com/tahap0l/nobetci/security/advisories/new) instead.
+
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What kind of problem is it?
+      options:
+        - False positive — scored too high
+        - Missed risk — scored too low
+        - Wrong or misleading reason on the card
+    validations:
+      required: true
+
+  - type: dropdown
+    id: tool
+    attributes:
+      label: Tool
+      description: The tool Claude Code asked permission for.
+      options:
+        - Bash
+        - PowerShell
+        - Write, Edit, MultiEdit or NotebookEdit
+        - Read, Glob or Grep
+        - WebFetch or WebSearch
+        - An MCP tool
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: request
+    attributes:
+      label: The command, path or URL
+      description: Exactly as it appeared on the card, with secrets, user names and private paths replaced. For an MCP tool, give the tool name (for example `mcp__github__delete_repository`) and its arguments.
+      render: shell
+    validations:
+      required: true
+
+  - type: dropdown
+    id: actual
+    attributes:
+      label: Level Nöbetçi gave
+      options:
+        - LOW
+        - MEDIUM
+        - HIGH
+        - CRITICAL
+    validations:
+      required: true
+
+  - type: dropdown
+    id: expected
+    attributes:
+      label: Level you expected
+      options:
+        - LOW
+        - MEDIUM
+        - HIGH
+        - CRITICAL
+    validations:
+      required: true
+
+  - type: textarea
+    id: findings
+    attributes:
+      label: Findings shown on the card
+      description: The reasons listed under the request, if any. A screenshot works too.
+    validations:
+      required: false
+
+  - type: textarea
+    id: why
+    attributes:
+      label: Why should it be different?
+      description: What does the request actually do? How common is it in everyday development? How hard is it to undo?
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Nöbetçi version
+      description: Shown in Settings → About.
+      placeholder: "0.2.0"
+    validations:
+      required: true

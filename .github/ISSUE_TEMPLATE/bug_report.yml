@@ -1,0 +1,120 @@
+name: Bug report
+description: Something in Nöbetçi doesn't work the way it should.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report this.
+
+        - **Security problem?** Please don't file it here — report it privately instead: [Report a vulnerability](https://github.com/tahap0l/nobetci/security/advisories/new). See [SECURITY.md](https://github.com/tahap0l/nobetci/blob/main/SECURITY.md).
+        - **A command got the wrong risk level?** The [risk rule template](https://github.com/tahap0l/nobetci/issues/new?template=risk_rule.yml) is a better fit.
+
+        Issues are welcome in English or Turkish.
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you do, and what did Nöbetçi do?
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Start a Claude Code session in …
+        2. Ask it to …
+        3. The island shows …
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Island or approval card
+        - Risk engine
+        - Rules or project trust
+        - History
+        - Notifications, quiet hours or hotkeys
+        - Hook install, removal or health check
+        - Settings window or welcome wizard
+        - Installer or uninstaller
+        - Something else
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Nöbetçi version
+      description: Shown in Settings → About.
+      placeholder: "0.2.0"
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: Operating system and version
+      description: On Windows, run `winver`; on a Mac, choose Apple menu → About This Mac.
+      placeholder: Windows 11 24H2 (build 26100) · macOS 15.4 on Apple silicon
+    validations:
+      required: true
+
+  - type: input
+    id: claude
+    attributes:
+      label: Claude Code version
+      description: The output of `claude --version`, if it matters for this bug.
+    validations:
+      required: false
+
+  - type: dropdown
+    id: language
+    attributes:
+      label: UI language
+      options:
+        - English
+        - Türkçe
+    validations:
+      required: false
+
+  - type: textarea
+    id: log
+    attributes:
+      label: Log excerpt
+      description: |
+        From `nobetci.log` — `%LOCALAPPDATA%\Nobetci` on Windows, `~/Library/Application Support/Nobetci` on macOS (Settings → About has a shortcut). The log records request IDs, tool names, risk levels and decisions — not the commands themselves — but please read it before you paste.
+      render: text
+    validations:
+      required: false
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots
+      description: For anything visual. Crop or blur anything private.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before you submit
+      options:
+        - label: I searched the existing issues and this hasn't been reported yet.
+          required: true
+        - label: I removed secrets, user names and private paths from everything I pasted.
+          required: true

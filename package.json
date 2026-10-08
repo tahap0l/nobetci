@@ -1,0 +1,42 @@
+{
+  "name": "nobetci",
+  "private": true,
+  "version": "0.2.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "icons": "node scripts/gen-icons.mjs",
+    "tauri": "tauri",
+    "predev": "node scripts/build-relay.mjs",
+    "prebuild": "node scripts/build-relay.mjs",
+    "test": "cargo test --workspace",
+    "pack": "tauri build && node scripts/pack.mjs",
+    "pack:mac": "NOBETCI_RELAY=universal tauri build --target universal-apple-darwin && node scripts/pack.mjs",
+    "lint": "cargo clippy --workspace --all-targets -- -D warnings && tsc --noEmit",
+    "fmt": "cargo fmt --all",
+    "screenshots": "node scripts/screenshots.mjs",
+    "check:invisible": "node scripts/check-invisible.mjs",
+    "pretest": "node scripts/build-relay.mjs"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2",
+    "typescript": "^5.6.0",
+    "vite": "^6"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2"
+  },
+  "description": "A watchful owl for your AI coding agents — watches Claude Code sessions and scores every permission request.",
+  "license": "MIT",
+  "author": "Esat Taha Polat (tahap0l)",
+  "homepage": "https://github.com/tahap0l/nobetci",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tahap0l/nobetci.git"
+  },
+  "bugs": {
+    "url": "https://github.com/tahap0l/nobetci/issues"
+  }
+}

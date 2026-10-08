@@ -1,0 +1,29 @@
+[package]
+name = "nobetci-hook"
+description = "Relays Claude Code hook events to Nöbetçi over a named pipe (Windows) or a Unix socket (macOS)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "nobetci-hook"
+path = "src/main.rs"
+
+[dependencies]
+serde_json = "1"
+
+# Just enough Win32 to know our own SID, check who is serving the pipe, and
+# read the parent-process chain.
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.61", features = [
+  "Win32_Foundation",
+  "Win32_Security",
+  "Win32_Security_Authorization",
+  "Win32_System_Diagnostics_ToolHelp",
+  "Win32_System_Pipes",
+  "Win32_System_Threading",
+] }
+
+# macOS: who is on the other end of the socket, and the parent-process chain.
+[target.'cfg(target_os = "macos")'.dependencies]
+libc = "0.2"

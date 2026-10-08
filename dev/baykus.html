@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Baykuş preview</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #0b0b0d;
+        --panel: #141417;
+        --line: #26262c;
+        --text: #e9e7e2;
+        --muted: #8c8a93;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        padding: 20px 24px 60px;
+        background: var(--bg);
+        color: var(--text);
+        font: 13px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+      }
+      h1 { font-size: 18px; margin: 0 0 4px; }
+      #bench { color: #86efac; margin: 0 0 12px; }
+      h2 { font-size: 14px; margin: 28px 0 10px; color: var(--muted); font-weight: 600; }
+      p.hint { margin: 0 0 14px; color: var(--muted); }
+      .bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 8px; }
+      .bar .lbl { color: var(--muted); margin-right: 4px; min-width: 64px; }
+      button {
+        background: #1d1d22; color: var(--text); border: 1px solid var(--line);
+        border-radius: 7px; padding: 5px 10px; font: inherit; cursor: pointer;
+      }
+      button:hover { background: #26262d; }
+      button.on { border-color: #6d6afc; background: #23234a; }
+      canvas { display: block; }
+      .island { background: #000; border-radius: 12px; padding: 0 6px; display: inline-block; }
+      .zoom { image-rendering: pixelated; background: #000; outline: 1px solid #222; }
+      .cards { display: grid; grid-template-columns: repeat(5, auto); gap: 12px; justify-content: start; }
+      .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px 10px; }
+      .card .head { display: flex; justify-content: space-between; gap: 8px; color: var(--text); margin-bottom: 6px; }
+      .badge { font-size: 10px; color: #7dd3fc; }
+      .badge.rest { color: #86efac; }
+      .card .island { display: flex; align-items: center; gap: 10px; padding: 0 8px; }
+      .strip { padding: 0; border-radius: 6px; margin-bottom: 6px; }
+      .strip-labels { display: flex; color: var(--muted); font-size: 11px; margin-top: 2px; }
+      .strip-labels span { flex: 1; text-align: center; }
+      .minis { display: grid; grid-template-columns: repeat(10, auto); gap: 10px 18px; justify-content: start; }
+      .mini { display: flex; flex-direction: column; align-items: center; gap: 4px; color: var(--muted); font-size: 11px; }
+      .mini .row { display: flex; gap: 8px; align-items: center; background: #000; padding: 6px 8px; border-radius: 9px; }
+      #greet { background: #000; border-radius: 14px; outline: 1px dashed #2a2a30; }
+      .icons { display: flex; gap: 16px; }
+      .icons > div { display: flex; gap: 12px; align-items: end; padding: 12px; border-radius: 10px; }
+    </style>
+  </head>
+  <body>
+    <h1>Baykuş — Nöbetçi owl preview</h1>
+    <p class="hint">Mouse drives lookX / lookY. Click an owl to poke it (three quick pokes → dizzy).</p>
+    <div id="app"></div>
+    <script type="module" src="./baykus.ts"></script>
+  </body>
+</html>
