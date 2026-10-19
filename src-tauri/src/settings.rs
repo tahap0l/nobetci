@@ -1,6 +1,6 @@
 // Preferences, stored as plain JSON in settings.json: %APPDATA%\Nobetci on
 // Windows, ~/Library/Application Support/Nobetci on macOS.
-// Nöbetçi holds no secrets at all: no API keys, no tokens.
+// Credentials are kept separately in the OS credential store, never in this file.
 //
 // Every field has a default (`#[serde(default)]`), so a file written by an older
 // build — or edited by hand and missing half its keys — still loads.
@@ -128,6 +128,12 @@ pub struct Settings {
     /// Open the island when a session finishes (otherwise just a compact flash).
     pub expand_on_finish: bool,
 
+    // ── Prompt review ────────────────────────────────────────────────────────
+    /// "ollama" (local) or "openai" (only used after an explicit review click).
+    pub prompt_provider: String,
+    pub ollama_model: String,
+    pub openai_model: String,
+
     // ── Claude Code ───────────────────────────────────────────────────────────
     pub hooks_installed: bool,
     /// Which events `Install hooks` writes. PermissionRequest is what approvals need.
@@ -188,6 +194,10 @@ impl Default for Settings {
             auto_close_interval: 15.0,
             stale_minutes: 45,
             expand_on_finish: false,
+
+            prompt_provider: "ollama".into(),
+            ollama_model: "gemma4".into(),
+            openai_model: "gpt-6-luna".into(),
 
             hooks_installed: false,
             hook_events: ALL_EVENTS.iter().map(|s| s.to_string()).collect(),
@@ -257,6 +267,11 @@ impl Settings {
         self.stale_minutes = self.stale_minutes.clamp(5, 24 * 60);
         self.sound_volume = self.sound_volume.clamp(0.0, 1.0);
         self.audit_max_mb = self.audit_max_mb.clamp(1, 200);
+        if !["ollama", "openai"].contains(&self.prompt_provider.as_str()) {
+            self.prompt_provider = d.prompt_provider;
+        }
+        self.ollama_model = clean_model(&self.ollama_model, &d.ollama_model);
+        self.openai_model = clean_model(&self.openai_model, &d.openai_model);
         self.hook_events.retain(|e| ALL_EVENTS.contains(&e.as_str()));
         self.deny_reasons.retain(|r| !r.trim().is_empty());
         self.deny_reasons.truncate(12);
@@ -266,6 +281,15 @@ impl Settings {
             }
         }
         self
+    }
+}
+
+fn clean_model(model: &str, default: &str) -> String {
+    let clean = model.trim();
+    if clean.is_empty() || clean.chars().count() > 120 || clean.chars().any(char::is_control) {
+        default.into()
+    } else {
+        clean.into()
     }
 }
 

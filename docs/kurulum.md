@@ -109,6 +109,13 @@ Nöbetçi, Claude Code'u **hook**'lar üzerinden görür. Hook'lar `~/.claude/se
 İstersen **Ayarlar → Güvenlik → Risk motorunu dene** bölümüne bir komut yazıp nasıl
 puanlandığını hiçbir şey çalıştırmadan görebilirsin.
 
+Herhangi bir yapay zekâ ajanına göndereceğin mesaj için **Ayarlar → Mesaj Atölyesi**'ni açıp hedefi
+seç ve taslağını incele. Varsayılan model yerel Ollama'dır; Ollama'da **cloud** etiketli modeller
+taslağı bilgisayar dışına iletebilir. OpenAI kullanmak için onu seçip anahtarını ekle; Nöbetçi anahtarı
+işletim sisteminin güvenli parola kasasında tutar. Düzenlenmiş mesajı gözden
+geçirip kopyalayabilirsin; hedef uygulamaya kendin yapıştırıp gönderirsin. Nöbetçi diğer uygulamaların
+mesajlarını otomatik okumaz ya da göndermez.
+
 ## 7. Önerilen ilk ayarlar
 
 | Ayar | Nerede | Öneri |

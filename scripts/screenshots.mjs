@@ -9,6 +9,7 @@
 //   NOBETCI_URL    dev server to capture (default http://127.0.0.1:1420)
 //   NOBETCI_EDGE   path to msedge.exe (default: where Windows installs it)
 //   NOBETCI_SCALE  device scale factor, e.g. 2 for high-DPI images (default 1)
+//   NOBETCI_OUT    output directory, relative to the repo root (default docs/media)
 //
 // Dependency-free on purpose: Node built-ins and the Edge that ships with Windows.
 
@@ -19,7 +20,7 @@ import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const outRoot = join(root, "docs", "media");
+const outRoot = resolve(root, process.env.NOBETCI_OUT || "docs/media");
 
 const base = (process.env.NOBETCI_URL || "http://127.0.0.1:1420").replace(/\/*$/, "/");
 const scale = Number(process.env.NOBETCI_SCALE || 1);
@@ -44,6 +45,7 @@ const SHOTS = [
   { name: "settings-rules", path: "settings.html?tab=kurallar", size: SETTINGS },
   { name: "settings-history", path: "settings.html?tab=gecmis", size: SETTINGS },
   { name: "settings-security", path: "settings.html?tab=guvenlik", size: SETTINGS },
+  { name: "settings-prompts", path: "settings.html?tab=prompts", size: SETTINGS },
   { name: "wizard", path: "settings.html?tab=hosgeldin", size: SETTINGS },
 ];
 

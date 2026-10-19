@@ -30,12 +30,14 @@ import { genelTab } from "./tabs/genel";
 import { guvenlikTab } from "./tabs/guvenlik";
 import { hakkindaTab } from "./tabs/hakkinda";
 import { kurallarTab } from "./tabs/kurallar";
+import { promptsTab } from "./tabs/prompts";
 import { closeTopLayer, toast, toggle } from "./ui";
 import { openWizard } from "./wizard";
 
 const TABS: Record<TabId, Tab> = {
   genel: genelTab,
   claude: claudeTab,
+  prompts: promptsTab,
   guvenlik: guvenlikTab,
   kurallar: kurallarTab,
   bildirimler: bildirimlerTab,
@@ -312,7 +314,7 @@ window.addEventListener("keydown", (e) => {
   closeWindow();
 });
 
-// Ctrl+1…7 switches tabs.
+// Ctrl+1…8 switches tabs.
 window.addEventListener("keydown", (e) => {
   if (!e.ctrlKey || e.altKey || e.shiftKey || e.metaKey) return;
   const n = Number(e.key);

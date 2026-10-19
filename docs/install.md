@@ -107,6 +107,12 @@ Nöbetçi sees Claude Code through **hooks**, added to `~/.claude/settings.json`
 You can also type a command into **Settings → Safety → Try the risk engine** to see how it's scored,
 without running anything.
 
+For a message to any AI agent, open **Settings → Prompt Studio**, choose the target and review a
+draft. Local Ollama is the default; Ollama models marked **cloud** may forward the draft. To use
+OpenAI, select it and add your key; Nöbetçi stores the key in the operating system credential vault.
+The rewritten message is shown for review and copied only when you ask. Paste it into the target app
+yourself; Nöbetçi does not read or send messages in other apps automatically.
+
 ## 7. Suggested first settings
 
 | Setting | Where | Suggestion |

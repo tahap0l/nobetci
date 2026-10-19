@@ -1,8 +1,8 @@
 // Nöbetçi — app wiring and the commands the two windows call.
 //
-// Nothing here reaches the network and there are no secrets to hold. Decisions
-// that matter for safety (risk, rules, the hold requirement) are made in Rust;
-// the windows only ask.
+// Network access is limited to the explicit prompt-review provider call. Optional
+// API credentials use the OS vault. Safety decisions (risk, rules, hold) stay in
+// Rust; the windows only ask.
 
 mod audit;
 mod focus;
@@ -13,6 +13,7 @@ mod inputguard;
 mod island;
 mod log;
 mod pipe;
+mod prompts;
 mod quiet;
 mod redact;
 mod risk;
@@ -791,6 +792,10 @@ pub fn run() {
             hooks_preview,
             hooks_apply,
             hooks_health,
+            prompts::rewrite_prompt,
+            prompts::openai_api_key_status,
+            prompts::set_openai_api_key,
+            prompts::delete_openai_api_key,
             approval_decision,
             approval_ack,
             approval_decline,

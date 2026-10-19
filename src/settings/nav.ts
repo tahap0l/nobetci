@@ -3,11 +3,12 @@
 
 import type { IconName } from "./icons";
 
-export type TabId = "genel" | "claude" | "guvenlik" | "kurallar" | "bildirimler" | "gecmis" | "hakkinda";
+export type TabId = "genel" | "claude" | "prompts" | "guvenlik" | "kurallar" | "bildirimler" | "gecmis" | "hakkinda";
 
 export const TAB_IDS: readonly TabId[] = [
   "genel",
   "claude",
+  "prompts",
   "guvenlik",
   "kurallar",
   "bildirimler",

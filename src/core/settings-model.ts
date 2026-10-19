@@ -45,6 +45,10 @@ export interface Settings {
   autoCloseInterval: number;
   staleMinutes: number;
   expandOnFinish: boolean;
+  // Prompt review
+  promptProvider: "ollama" | "openai";
+  ollamaModel: string;
+  openaiModel: string;
   // Claude Code
   hooksInstalled: boolean;
   hookEvents: string[];
@@ -104,6 +108,9 @@ export const DEFAULT_SETTINGS: Settings = {
   autoCloseInterval: 15,
   staleMinutes: 45,
   expandOnFinish: false,
+  promptProvider: "ollama",
+  ollamaModel: "gemma4",
+  openaiModel: "gpt-6-luna",
   hooksInstalled: false,
   hookEvents: [...ALL_EVENTS],
   holdMs: 1200,

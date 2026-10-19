@@ -82,18 +82,26 @@ edge of the screen.
   filters, charts, CSV and JSON export.
 - **Quiet when you need it.** Do not disturb, quiet hours, and (on Windows) automatic quiet while a
   full-screen app is in front. Requests still queue; nothing pops up or makes a sound.
+- **Prompt Studio for any agent.** Choose Claude Code, Codex, Cursor, ChatGPT, Gemini or another
+  target; fix spelling and clarify the request with local Ollama by default, or explicitly choose
+  the OpenAI API. Review and copy the result yourself — it is never sent to an agent automatically.
 - **And the rest.** Global hotkeys, a hook health check through the real relay, a choice of which
   hook events to listen to, per-category risk switches, island placement, settings import and
   export, and an English or Turkish UI that follows your system language.
 
 ### 🔒 Privacy
 
-- **No network, no telemetry, no accounts.** Nöbetçi never connects anywhere — it doesn't even
-  check for updates — and it stores no API keys or tokens.
-- **Plain files on your machine.** Settings, history and log are JSON, JSON Lines and text.
+- **No telemetry or accounts.** Outside an explicit prompt review, Nöbetçi makes no network
+  requests. Ollama uses its local service by default; Ollama models marked **cloud** may forward the
+  draft. OpenAI receives it only after you select it and click **Improve**. Optional API keys stay
+  in the operating system credential vault.
+- **Local data.** Settings, history and log are JSON, JSON Lines and text. Drafts and rewrites are
+  not saved to history.
 - **Secrets stay out of the record.** API keys, tokens, passwords and private keys are masked
   before a request is written to the history or shown in a notification. The approval
   card itself always shows the request in full.
+
+See the full [Privacy Policy](PRIVACY.md).
 
 ## How it works
 
@@ -440,8 +448,10 @@ and only while a card is really on your screen, for at most 110 seconds before t
 over.
 
 **Does it send anything anywhere?**
-No. Nöbetçi makes no network connections: no telemetry, no crash reports, no update checks, no
-accounts. Everything stays in plain files on your machine.
+Nöbetçi has no telemetry, crash reports, update checks or accounts. In **Settings → Prompt Studio**,
+Ollama requests go to its local service by default; Ollama models marked **cloud** may forward them.
+If you select OpenAI and click **Improve**, the current draft is sent to the OpenAI API. Nöbetçi
+never forwards it to the selected agent or saves it to history.
 
 **What happens if Nöbetçi is closed, paused or crashes?**
 Claude Code carries on as if Nöbetçi weren't installed: with nobody listening (or the island
@@ -517,6 +527,7 @@ npm run tauri dev    # the real app, with live reload
 npm test             # Rust tests
 npm run lint         # clippy (warnings are errors) and the TypeScript typecheck
 npm run pack         # the Windows installer, into release\
+npm run pack:store:offline # Store-path Windows installer, into release/store\ (unsigned)
 npm run pack:mac     # the macOS disk image (universal), into release/
 ```
 
@@ -525,7 +536,7 @@ With `npm run dev` running:
 - `http://127.0.0.1:1420/?demo=critical` shows the island with fake sessions and requests. Other
   demos: `low`, `write`, `hidden`, `deny-menu`, `overview`, `session`, `compact`, `empty`.
 - `http://127.0.0.1:1420/settings.html?tab=kurallar` opens Settings with mock data. Tabs:
-  `genel`, `claude`, `guvenlik`, `kurallar`, `bildirimler`, `gecmis`, `hakkinda`, plus
+  `genel`, `claude`, `prompts`, `guvenlik`, `kurallar`, `bildirimler`, `gecmis`, `hakkinda`, plus
   `hosgeldin` for the welcome wizard.
 - Add `&lang=en` or `&lang=tr` to pick the language, and `&platform=macos` to see the Mac wording.
 - In the browser console, `nobetci.inject({ … })` feeds the island a fake hook event.
