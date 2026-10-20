@@ -15,6 +15,9 @@ import type {
   AuditEntry,
   AuditFilter,
   AuditStats,
+  AgentHookPreview,
+  AgentHookStatus,
+  AgentProvider,
   CategoryInfo,
   Evaluation,
   HealthReport,
@@ -1043,6 +1046,22 @@ export function createMockApi(): Api {
   const lang0: Lang = pref === "auto" ? systemLang : pref;
   const U = (p: Pair) => (lang0 === "tr" ? p[0] : p[1]);
   let mockOpenAiKeyStored = false;
+  const agentStatuses = new Map<AgentProvider, AgentHookStatus>();
+  const agentStatus = (provider: AgentProvider): AgentHookStatus => {
+    const existing = agentStatuses.get(provider);
+    if (existing) return existing;
+    const status: AgentHookStatus = {
+      provider,
+      installed: false,
+      settingsPath: `${HOME}\\.${provider}\\hooks.json`,
+      hookPath: `${HOME}\\AppData\\Local\\Nobetci\\bin\\nobetci-hook.exe`,
+      hookReady: true,
+      events: [],
+      stale: false,
+    };
+    agentStatuses.set(provider, status);
+    return status;
+  };
 
   let settings: Settings = sanitize({
     ...DEFAULT_SETTINGS,
@@ -1205,7 +1224,7 @@ export function createMockApi(): Api {
       systemLang,
       hooksLost: lost,
       screen: { x: 0, y: 0, width: 1920, height: 1080, scale: 1.5 },
-      version: "2.0.1",
+      version: "2.0.2",
       hookPath: hookStatus.hookPath,
       platform,
       fullscreenSupported: platform === "windows",
@@ -1240,6 +1259,22 @@ export function createMockApi(): Api {
     closeSettingsWindow: async () => {},
     log: async () => {},
     hooksStatus: async () => clone(hookStatus),
+    agentHooksStatus: async (provider: AgentProvider) => clone(agentStatus(provider)),
+    agentHooksPreview: async (provider: AgentProvider, install: boolean): Promise<AgentHookPreview> => {
+      const settingsPath = agentStatus(provider).settingsPath;
+      return {
+        diff: `--- ${settingsPath}\n+++ ${settingsPath} (Nöbetçi)\n@@ hooks @@\n${install ? "+" : "-"}    "hooks": { … ${provider} hooks … }`,
+        backup: `${settingsPath}.bak-20261020-1432`,
+        settingsPath,
+        fingerprint: "mock-agent-fp",
+      };
+    },
+    agentHooksApply: async (provider: AgentProvider, install: boolean, _fingerprint: string) => {
+      const status = agentStatus(provider);
+      status.installed = install;
+      status.events = install ? ["SessionStart", "UserPromptSubmit", "PermissionRequest"] : [];
+      return `${status.settingsPath}.bak-20261020-1432`;
+    },
     rewritePrompt: async (text: string, _agent: string, provider: "ollama" | "openai") => {
       await delay(500);
       if (provider === "openai" && !mockOpenAiKeyStored)

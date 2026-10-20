@@ -51,7 +51,11 @@ use mac as os;
 use win as os;
 
 fn main() {
-    let Some((payload, event)) = read_event() else { std::process::exit(0) };
+    let mut args = std::env::args().skip(1);
+    let first = args.next().unwrap_or_default();
+    let provider = if first == "codex" || first == "cursor" { first.clone() } else { "claude".into() };
+    let event_arg = if provider == "claude" { first } else { args.next().unwrap_or_default() };
+    let Some((payload, event)) = read_event(&provider, event_arg) else { std::process::exit(0) };
 
     let waits_for_answer = event == "PermissionRequest";
     let budget = if waits_for_answer { DECISION_BUDGET } else { FIRE_AND_FORGET_BUDGET };
@@ -64,14 +68,95 @@ fn main() {
     });
 
     if let Ok(Some(decision)) = rx.recv_timeout(budget) {
-        if let Some(json) = decision_json(&decision) {
+        if let Some(json) = output_json(&provider, &event, &decision) {
             let mut out = std::io::stdout();
             let _ = writeln!(out, "{json}");
             let _ = out.flush();
         }
+    } else if provider == "cursor" && event == "PermissionRequest" {
+        // Fail closed when Nöbetçi cannot make a decision. Cursor's `ask`
+        // behavior varies by approval mode, so an unavailable relay must not
+        // turn into an unreviewed tool execution.
+        let _ = writeln!(std::io::stdout(), "{{\"permission\":\"deny\",\"user_message\":\"Nobetci is unavailable; reopen it and retry.\",\"agent_message\":\"Nobetci was unavailable, so this action was blocked. Ask the user to reopen Nobetci and retry.\"}}");
+    } else if provider == "cursor" && event == "UserPromptSubmit" {
+        let _ = writeln!(std::io::stdout(), "{{\"continue\":true}}");
     }
-    // Nothing printed: Claude Code asks in the terminal, as if we were not here.
+    // No decision: the host agent's own approval UI takes over.
     std::process::exit(0);
+}
+
+fn output_json(provider: &str, event: &str, answer: &str) -> Option<String> {
+    match provider {
+        "codex" => codex_decision_json(event, answer),
+        "cursor" => cursor_decision_json(event, answer),
+        _ => decision_json(answer),
+    }
+}
+
+fn codex_decision_json(event: &str, answer: &str) -> Option<String> {
+    if event != "PermissionRequest" {
+        return None;
+    }
+    let reply = parse_internal_decision(answer)?;
+    let behavior = reply.get("behavior")?.as_str()?;
+    if behavior != "allow" && behavior != "deny" {
+        return None;
+    }
+    let mut decision = serde_json::json!({ "behavior": behavior });
+    if behavior == "deny" {
+        decision["message"] = serde_json::Value::String(clean_message(reply.get("message"), DEFAULT_DENY));
+    }
+    Some(
+        serde_json::json!({
+            "hookSpecificOutput": { "hookEventName": "PermissionRequest", "decision": decision }
+        })
+        .to_string(),
+    )
+}
+
+fn cursor_decision_json(event: &str, answer: &str) -> Option<String> {
+    if event == "UserPromptSubmit" {
+        return Some(serde_json::json!({ "continue": true }).to_string());
+    }
+    if event != "PermissionRequest" {
+        return None;
+    }
+    let reply = parse_internal_decision(answer)?;
+    let behavior = reply.get("behavior")?.as_str()?;
+    if behavior != "allow" && behavior != "deny" {
+        return None;
+    }
+    if behavior == "allow" {
+        return Some(serde_json::json!({ "permission": "allow" }).to_string());
+    }
+    let message = clean_message(reply.get("message"), DEFAULT_DENY);
+    Some(serde_json::json!({ "permission": "deny", "user_message": message, "agent_message": message }).to_string())
+}
+
+fn parse_internal_decision(answer: &str) -> Option<serde_json::Value> {
+    let answer = answer.trim();
+    match answer {
+        "allow" => Some(serde_json::json!({ "behavior": "allow" })),
+        "deny" => Some(serde_json::json!({ "behavior": "deny" })),
+        _ => serde_json::from_str(answer).ok(),
+    }
+}
+
+fn clean_message(value: Option<&serde_json::Value>, fallback: &str) -> String {
+    let message = value
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or(fallback)
+        .chars()
+        .filter(|c| !c.is_control() || *c == '\n')
+        .take(MAX_MESSAGE)
+        .collect::<String>()
+        .trim()
+        .to_string();
+    if message.is_empty() {
+        fallback.to_string()
+    } else {
+        message
+    }
 }
 
 /// Longest denial message passed on to Claude Code.
@@ -126,26 +211,37 @@ fn decision_json(answer: &str) -> Option<String> {
 }
 
 /// Reads stdin and returns the payload to forward plus the event name.
-fn read_event() -> Option<(String, String)> {
+fn read_event(provider: &str, arg_event: String) -> Option<(String, String)> {
     let mut raw = Vec::new();
     if std::io::stdin().read_to_end(&mut raw).is_err() || raw.is_empty() {
         return None;
     }
-    let arg_event = std::env::args().nth(1).unwrap_or_default();
     // The process chain lets the app bring the session's terminal or editor window
     // to the front. Only the events that open or ask something carry it: walking
     // the process table costs a millisecond or two.
     let peek = String::from_utf8_lossy(&raw[..raw.len().min(4096)]).to_string();
-    let wants_parents = ["SessionStart", "UserPromptSubmit", "PermissionRequest"]
-        .iter()
-        .any(|e| arg_event == *e || peek.contains(&format!("\"{e}\"")));
+    let wants_parents = [
+        "SessionStart",
+        "UserPromptSubmit",
+        "PermissionRequest",
+        "beforeSubmitPrompt",
+        "beforeShellExecution",
+        "beforeMCPExecution",
+    ]
+    .iter()
+    .any(|e| arg_event == *e || peek.contains(&format!("\"{e}\"")));
     let parents = wants_parents.then(|| os::ancestors(12));
-    prepare(&raw, arg_event, parents)
+    prepare(&raw, provider, arg_event, parents)
 }
 
 /// Turns the raw hook JSON into the line sent over the pipe. Split from
 /// `read_event` so it can be tested without stdin or a real environment.
-fn prepare(raw: &[u8], arg_event: String, parents: Option<Vec<(u32, String)>>) -> Option<(String, String)> {
+fn prepare(
+    raw: &[u8],
+    provider: &str,
+    arg_event: String,
+    parents: Option<Vec<(u32, String)>>,
+) -> Option<(String, String)> {
     // Some shells hand us a UTF-8 BOM; serde_json would choke on it.
     let raw = raw.strip_prefix(&[0xEF, 0xBB, 0xBF]).unwrap_or(raw);
 
@@ -154,13 +250,72 @@ fn prepare(raw: &[u8], arg_event: String, parents: Option<Vec<(u32, String)>>) -
 
     // The event name is passed as argv[1] by the hook command; the JSON usually
     // carries it too. Trust argv when the JSON is missing it.
-    let event = map
+    let source_event = map
         .get("hook_event_name")
         .and_then(|v| v.as_str())
         .map(str::to_string)
         .filter(|s| !s.is_empty())
         .unwrap_or(arg_event);
+    let event = if provider == "cursor" {
+        match source_event.as_str() {
+            "beforeSubmitPrompt" => "UserPromptSubmit".to_string(),
+            "beforeShellExecution" | "beforeMCPExecution" => "PermissionRequest".to_string(),
+            "afterShellExecution" | "afterMCPExecution" => "PostToolUse".to_string(),
+            "sessionStart" => "SessionStart".to_string(),
+            "sessionEnd" => "SessionEnd".to_string(),
+            "afterAgentResponse" => "Stop".to_string(),
+            other => other.to_string(),
+        }
+    } else {
+        source_event.clone()
+    };
     map.insert("hook_event_name".into(), serde_json::Value::String(event.clone()));
+
+    if provider != "claude" {
+        map.insert(
+            "agent_name".into(),
+            serde_json::Value::String(if provider == "codex" { "Codex" } else { "Cursor" }.into()),
+        );
+    }
+    if provider == "cursor" {
+        if !map.contains_key("session_id") {
+            if let Some(id) = map
+                .get("conversation_id")
+                .and_then(|v| v.as_str())
+                .or_else(|| map.get("generation_id").and_then(|v| v.as_str()))
+            {
+                map.insert("session_id".into(), serde_json::Value::String(id.to_string()));
+            }
+        }
+        if !map.contains_key("cwd") {
+            if let Some(cwd) =
+                map.get("workspace_roots").and_then(|v| v.as_array()).and_then(|a| a.first()).and_then(|v| v.as_str())
+            {
+                map.insert("cwd".into(), serde_json::Value::String(cwd.to_string()));
+            }
+        }
+        match source_event.as_str() {
+            "beforeShellExecution" | "afterShellExecution" => {
+                map.insert("tool_name".into(), serde_json::Value::String("Bash".into()));
+                if let Some(command) = map.get("command").cloned() {
+                    map.insert("tool_input".into(), serde_json::json!({"command": command}));
+                }
+            }
+            "beforeMCPExecution" | "afterMCPExecution" => {
+                let server = map.get("mcp_server_name").and_then(|v| v.as_str()).unwrap_or("cursor");
+                let tool = map.get("tool_name").and_then(|v| v.as_str()).unwrap_or("tool");
+                map.insert("tool_name".into(), serde_json::Value::String(format!("mcp__{server}__{tool}")));
+                if let Some(input) = map
+                    .get("tool_input")
+                    .and_then(|v| v.as_str())
+                    .and_then(|s| serde_json::from_str::<serde_json::Value>(s).ok())
+                {
+                    map.insert("tool_input".into(), input);
+                }
+            }
+            _ => {}
+        }
+    }
 
     for field in DROPPED_FIELDS {
         map.remove(*field);
@@ -335,11 +490,56 @@ mod tests {
             "tool_input": { "command": command },
         })
         .to_string();
-        let (line, event) = prepare(raw.as_bytes(), String::new(), None).unwrap();
+        let (line, event) = prepare(raw.as_bytes(), "claude", String::new(), None).unwrap();
         assert_eq!(event, "PermissionRequest");
         let sent: serde_json::Value = serde_json::from_str(&line).unwrap();
         assert_eq!(sent["tool_input"]["command"].as_str().unwrap(), command);
         assert!(sent.get(TRUNCATED_FLAG).is_none());
+    }
+
+    #[test]
+    fn codex_permission_decisions_use_codex_hook_output() {
+        let allowed: serde_json::Value =
+            serde_json::from_str(&codex_decision_json("PermissionRequest", "allow").unwrap()).unwrap();
+        assert_eq!(allowed["hookSpecificOutput"]["decision"]["behavior"], "allow");
+        let denied: serde_json::Value = serde_json::from_str(
+            &codex_decision_json("PermissionRequest", r#"{"behavior":"deny","message":"Ask first"}"#).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(denied["hookSpecificOutput"]["decision"]["message"], "Ask first");
+        assert!(codex_decision_json("UserPromptSubmit", "allow").is_none());
+    }
+
+    #[test]
+    fn cursor_permission_decisions_use_cursor_hook_output() {
+        let allowed: serde_json::Value =
+            serde_json::from_str(&cursor_decision_json("PermissionRequest", "allow").unwrap()).unwrap();
+        assert_eq!(allowed["permission"], "allow");
+        let denied: serde_json::Value = serde_json::from_str(
+            &cursor_decision_json("PermissionRequest", r#"{"behavior":"deny","message":"Ask first"}"#).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(denied["permission"], "deny");
+        assert_eq!(denied["user_message"], "Ask first");
+        assert!(cursor_decision_json("UserPromptSubmit", "allow").unwrap().contains("continue"));
+    }
+
+    #[test]
+    fn cursor_prompts_are_normalized_and_include_agent_identity() {
+        let raw = serde_json::json!({
+            "hook_event_name": "beforeSubmitPrompt",
+            "prompt": "Fix this typo",
+            "conversation_id": "conversation-1",
+            "workspace_roots": ["C:/work/project"]
+        })
+        .to_string();
+        let (line, event) = prepare(raw.as_bytes(), "cursor", String::new(), None).unwrap();
+        let payload: serde_json::Value = serde_json::from_str(&line).unwrap();
+        assert_eq!(event, "UserPromptSubmit");
+        assert_eq!(payload["agent_name"], "Cursor");
+        assert_eq!(payload["session_id"], "conversation-1");
+        assert_eq!(payload["cwd"], "C:/work/project");
+        assert_eq!(payload["prompt"], "Fix this typo");
     }
 
     #[test]
@@ -350,7 +550,7 @@ mod tests {
             "tool_input": { "command": "x".repeat(MAX_APPROVAL_FIELD_LEN + 10) },
         })
         .to_string();
-        let (line, _) = prepare(raw.as_bytes(), String::new(), None).unwrap();
+        let (line, _) = prepare(raw.as_bytes(), "claude", String::new(), None).unwrap();
         let sent: serde_json::Value = serde_json::from_str(&line).unwrap();
         assert_eq!(sent[TRUNCATED_FLAG], serde_json::Value::Bool(true));
     }
@@ -363,7 +563,7 @@ mod tests {
             "tool_input": { "command": "y".repeat(5000) },
         })
         .to_string();
-        let (line, _) = prepare(raw.as_bytes(), String::new(), None).unwrap();
+        let (line, _) = prepare(raw.as_bytes(), "claude", String::new(), None).unwrap();
         let sent: serde_json::Value = serde_json::from_str(&line).unwrap();
         assert!(sent["tool_input"]["command"].as_str().unwrap().len() <= MAX_FIELD_LEN + 4);
     }
@@ -372,7 +572,7 @@ mod tests {
     fn the_process_chain_is_attached_when_given() {
         let raw = br#"{"hook_event_name":"SessionStart","cwd":"C:/w"}"#;
         let chain = vec![(10, "claude.exe".to_string()), (9, "pwsh.exe".to_string())];
-        let (line, _) = prepare(raw, String::new(), Some(chain)).unwrap();
+        let (line, _) = prepare(raw, "claude", String::new(), Some(chain)).unwrap();
         let sent: serde_json::Value = serde_json::from_str(&line).unwrap();
         assert_eq!(sent["nobetci_parents"][0]["name"], "claude.exe");
         assert_eq!(sent["nobetci_parents"][1]["pid"], 9);
@@ -390,7 +590,7 @@ mod tests {
     fn a_bom_and_argv_event_are_handled() {
         let mut raw = vec![0xEF, 0xBB, 0xBF];
         raw.extend_from_slice(br#"{"cwd":"C:/w"}"#);
-        let (_, event) = prepare(&raw, "Stop".into(), None).unwrap();
+        let (_, event) = prepare(&raw, "claude", "Stop".into(), None).unwrap();
         assert_eq!(event, "Stop");
     }
 }

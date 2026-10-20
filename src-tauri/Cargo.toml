@@ -1,6 +1,6 @@
 [package]
 name = "nobetci"
-description = "Nöbetçi — a watchful owl for your Claude Code sessions"
+description = "Nöbetçi — a watchful owl for Claude Code, Codex and Cursor sessions"
 authors = ["Esat Taha Polat (tahap0l)"]
 version.workspace = true
 edition.workspace = true

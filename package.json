@@ -1,7 +1,7 @@
 {
   "name": "nobetci",
   "private": true,
-  "version": "2.0.1",
+  "version": "2.0.2",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -29,7 +29,7 @@
   "dependencies": {
     "@tauri-apps/api": "^2"
   },
-  "description": "A watchful owl for your AI coding agents — watches Claude Code sessions and scores every permission request.",
+  "description": "A watchful owl for AI coding agents — monitors Claude Code, Codex and Cursor sessions and permission requests.",
   "license": "MIT",
   "author": "Esat Taha Polat (tahap0l)",
   "homepage": "https://github.com/tahap0l/nobetci",

@@ -4,6 +4,7 @@
 // API credentials use the OS vault. Safety decisions (risk, rules, hold) stay in
 // Rust; the windows only ask.
 
+mod agent_hooks;
 mod audit;
 mod focus;
 mod hooks;
@@ -417,6 +418,23 @@ async fn hooks_health(app: AppHandle) -> HealthReport {
     report
 }
 
+#[tauri::command]
+fn agent_hooks_status(provider: agent_hooks::Provider) -> agent_hooks::Status {
+    agent_hooks::status(provider)
+}
+
+#[tauri::command]
+fn agent_hooks_preview(provider: agent_hooks::Provider, install: bool) -> Result<agent_hooks::Preview, String> {
+    agent_hooks::preview(provider, install)
+}
+
+#[tauri::command]
+fn agent_hooks_apply(provider: agent_hooks::Provider, install: bool, fingerprint: String) -> Result<String, String> {
+    let backup = agent_hooks::write(provider, install, &fingerprint)?;
+    log::line(format!("{} hooks {}", provider.name(), if install { "installed" } else { "removed" }));
+    Ok(backup)
+}
+
 // ── Permission requests ───────────────────────────────────────────────────────
 
 /// How a decision was made, beyond allow/deny.
@@ -743,17 +761,22 @@ pub fn cli() -> Option<i32> {
         return None;
     }
     i18n::apply("auto");
-    Some(match hooks::remove_for_uninstall() {
-        Ok(Some(backup)) => {
-            log::line(format!("uninstall: hooks removed (backup {backup})"));
-            0
+    let mut failed = false;
+    for result in [
+        hooks::remove_for_uninstall().map(|backup| ("Claude Code", backup)),
+        agent_hooks::remove_for_uninstall(agent_hooks::Provider::Codex).map(|backup| ("Codex", backup)),
+        agent_hooks::remove_for_uninstall(agent_hooks::Provider::Cursor).map(|backup| ("Cursor", backup)),
+    ] {
+        match result {
+            Ok((_, Some(backup))) => log::line(format!("uninstall: hooks removed (backup {backup})")),
+            Ok(_) => {}
+            Err(err) => {
+                log::line(format!("uninstall: could not remove hooks: {err}"));
+                failed = true;
+            }
         }
-        Ok(None) => 0,
-        Err(err) => {
-            log::line(format!("uninstall: could not remove hooks: {err}"));
-            1
-        }
-    })
+    }
+    Some(if failed { 1 } else { 0 })
 }
 
 pub fn run() {
@@ -792,6 +815,9 @@ pub fn run() {
             hooks_preview,
             hooks_apply,
             hooks_health,
+            agent_hooks_status,
+            agent_hooks_preview,
+            agent_hooks_apply,
             prompts::rewrite_prompt,
             prompts::openai_api_key_status,
             prompts::set_openai_api_key,
