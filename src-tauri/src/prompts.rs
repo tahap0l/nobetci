@@ -12,11 +12,8 @@ const MAX_TEXT_CHARS: usize = 30_000;
 
 fn entry() -> Result<Entry, String> {
     Entry::new(KEYRING_SERVICE, KEYRING_USER).map_err(|_| {
-        crate::i18n::pick(
-            "Couldn't open the system credential store.",
-            "İşletim sisteminin parola kasası açılamadı.",
-        )
-        .to_string()
+        crate::i18n::pick("Couldn't open the system credential store.", "İşletim sisteminin parola kasası açılamadı.")
+            .to_string()
     })
 }
 
@@ -37,11 +34,9 @@ pub fn openai_api_key_status() -> Result<bool, String> {
 pub fn set_openai_api_key(api_key: String) -> Result<(), String> {
     let api_key = api_key.trim();
     if api_key.chars().count() < 20 || api_key.chars().count() > 500 {
-        return Err(crate::i18n::pick(
-            "Enter a valid OpenAI API key.",
-            "Geçerli bir OpenAI API anahtarı gir.",
-        )
-        .to_string());
+        return Err(
+            crate::i18n::pick("Enter a valid OpenAI API key.", "Geçerli bir OpenAI API anahtarı gir.").to_string()
+        );
     }
     entry()?.set_password(api_key).map_err(|_| {
         crate::i18n::pick(
@@ -73,11 +68,9 @@ fn agent_name(agent: &str) -> Result<&'static str, String> {
         "chatgpt" => Ok("ChatGPT"),
         "gemini" => Ok("Gemini"),
         "other" => Ok("the selected AI agent"),
-        _ => Err(crate::i18n::pick(
-            "Choose a supported AI agent.",
-            "Desteklenen bir yapay zekâ ajanı seç.",
-        )
-        .to_string()),
+        _ => {
+            Err(crate::i18n::pick("Choose a supported AI agent.", "Desteklenen bir yapay zekâ ajanı seç.").to_string())
+        }
     }
 }
 
@@ -89,9 +82,7 @@ fn instructions(agent: &str) -> String {
 
 fn validate(text: &str, model: &str) -> Result<(), String> {
     if text.trim().is_empty() {
-        return Err(
-            crate::i18n::pick("Write a draft first.", "Önce bir mesaj taslağı yaz.").to_string(),
-        );
+        return Err(crate::i18n::pick("Write a draft first.", "Önce bir mesaj taslağı yaz.").to_string());
     }
     if text.chars().count() > MAX_TEXT_CHARS {
         return Err(crate::i18n::pick(
@@ -100,13 +91,8 @@ fn validate(text: &str, model: &str) -> Result<(), String> {
         )
         .to_string());
     }
-    if model.trim().is_empty()
-        || model.chars().count() > 120
-        || model.chars().any(char::is_control)
-    {
-        return Err(
-            crate::i18n::pick("Enter a valid model name.", "Geçerli bir model adı gir.").to_string(),
-        );
+    if model.trim().is_empty() || model.chars().count() > 120 || model.chars().any(char::is_control) {
+        return Err(crate::i18n::pick("Enter a valid model name.", "Geçerli bir model adı gir.").to_string());
     }
     Ok(())
 }
@@ -124,12 +110,7 @@ fn result_text(value: &Value) -> Option<String> {
 }
 
 #[tauri::command]
-pub async fn rewrite_prompt(
-    text: String,
-    agent: String,
-    provider: String,
-    model: String,
-) -> Result<String, String> {
+pub async fn rewrite_prompt(text: String, agent: String, provider: String, model: String) -> Result<String, String> {
     validate(&text, &model)?;
     let agent = agent_name(&agent)?;
     let instruction = instructions(agent);
@@ -139,8 +120,7 @@ pub async fn rewrite_prompt(
         builder = builder.no_proxy();
     }
     let client = builder.build().map_err(|_| {
-        crate::i18n::pick("Couldn't start the message editor.", "Mesaj düzenleyici başlatılamadı.")
-            .to_string()
+        crate::i18n::pick("Couldn't start the message editor.", "Mesaj düzenleyici başlatılamadı.").to_string()
     })?;
 
     let response = match provider.as_str() {
@@ -211,22 +191,15 @@ pub async fn rewrite_prompt(
     }
 
     let value: Value = response.json().await.map_err(|_| {
-        crate::i18n::pick("The model returned an unreadable response.", "Model okunamayan bir yanıt verdi.")
-            .to_string()
+        crate::i18n::pick("The model returned an unreadable response.", "Model okunamayan bir yanıt verdi.").to_string()
     })?;
     let result = if provider == "ollama" {
-        value["message"]["content"]
-            .as_str()
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-            .map(str::to_string)
+        value["message"]["content"].as_str().map(str::trim).filter(|s| !s.is_empty()).map(str::to_string)
     } else {
         result_text(&value)
     };
-    result
-        .filter(|s| s.chars().count() <= MAX_TEXT_CHARS)
-        .ok_or_else(|| {
-            crate::i18n::pick("The model returned no usable message.", "Model kullanılabilir bir mesaj döndürmedi.")
-                .to_string()
-        })
+    result.filter(|s| s.chars().count() <= MAX_TEXT_CHARS).ok_or_else(|| {
+        crate::i18n::pick("The model returned no usable message.", "Model kullanılabilir bir mesaj döndürmedi.")
+            .to_string()
+    })
 }
