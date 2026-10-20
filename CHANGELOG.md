@@ -7,6 +7,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.0.1] - 2026-10-20
+
+### Added
+
+- **Prompt Studio.** Revise messages for Claude Code, Codex, Cursor, ChatGPT, Gemini and other agents. Local Ollama is the default; OpenAI API is optional and explicit. Review and copy the result yourself.
+- **Microsoft Store preparation.** Add an offline package configuration and bilingual privacy and submission guidance.
+
+
 ## [0.2.0] - 2026-10-03
 
 The first public release: a watchful owl for Claude Code on Windows 10 and 11 and, as a beta, on
@@ -100,5 +108,6 @@ pipe relay, the reviewed-diff hook installer and the island window were adapted 
 [Coucou](https://github.com/Louis-CFM/coucou) (MIT). Everything they had, and much more, shipped
 publicly in 0.2.0.
 
-[Unreleased]: https://github.com/tahap0l/nobetci/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/tahap0l/nobetci/compare/v2.0.1...HEAD
 [0.2.0]: https://github.com/tahap0l/nobetci/releases/tag/v0.2.0
+[2.0.1]: https://github.com/tahap0l/nobetci/compare/v0.2.0...v2.0.1

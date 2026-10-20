@@ -158,7 +158,7 @@ programı onu indirir.
 2. Kurulum dosyasının yayımlanan dosyanın kendisi olduğunu doğrula:
 
    ```powershell
-   Get-FileHash .\Nobetci-0.2.0-setup.exe -Algorithm SHA256
+   Get-FileHash .\Nobetci-2.0.1-setup.exe -Algorithm SHA256
    Get-Content .\SHA256SUMS.txt
    ```
 
@@ -178,7 +178,7 @@ programı onu indirir.
 2. Disk görüntüsünü Terminal'de doğrula:
 
    ```sh
-   shasum -a 256 ~/Downloads/Nobetci-0.2.0-macos-universal.dmg
+   shasum -a 256 ~/Downloads/Nobetci-2.0.1-macos-universal.dmg
    cat ~/Downloads/SHA256SUMS.txt
    ```
 

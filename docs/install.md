@@ -41,7 +41,7 @@ updating and uninstalling. A troubleshooting section is at the end.
 2. Check that your download is the published file. Open PowerShell in the download folder and run:
 
    ```powershell
-   Get-FileHash .\Nobetci-0.2.0-setup.exe -Algorithm SHA256
+   Get-FileHash .\Nobetci-2.0.1-setup.exe -Algorithm SHA256
    Get-Content .\SHA256SUMS.txt
    ```
 
@@ -56,7 +56,7 @@ updating and uninstalling. A troubleshooting section is at the end.
 3. Installation takes a few seconds and goes into `%LOCALAPPDATA%\Nobetci`. It shows up in the Start
    menu as **Nobetci**.
 
-> Silent install: `Nobetci-0.2.0-setup.exe /S`
+> Silent install: `Nobetci-2.0.1-setup.exe /S`
 
 ## 4. First run and the setup wizard
 
@@ -268,7 +268,7 @@ way on a Mac. This section covers what's different.
 
    ```sh
    cd ~/Downloads
-   shasum -a 256 Nobetci-0.2.0-macos-universal.dmg
+   shasum -a 256 Nobetci-2.0.1-macos-universal.dmg
    grep macos SHA256SUMS.txt
    ```
 

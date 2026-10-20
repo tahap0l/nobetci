@@ -1205,7 +1205,7 @@ export function createMockApi(): Api {
       systemLang,
       hooksLost: lost,
       screen: { x: 0, y: 0, width: 1920, height: 1080, scale: 1.5 },
-      version: "0.2.0",
+      version: "2.0.1",
       hookPath: hookStatus.hookPath,
       platform,
       fullscreenSupported: platform === "windows",

@@ -43,7 +43,7 @@ adımı anlatır. Sonda bir sorun giderme bölümü var.
    şunu çalıştır:
 
    ```powershell
-   Get-FileHash .\Nobetci-0.2.0-setup.exe -Algorithm SHA256
+   Get-FileHash .\Nobetci-2.0.1-setup.exe -Algorithm SHA256
    Get-Content .\SHA256SUMS.txt
    ```
 
@@ -59,7 +59,7 @@ adımı anlatır. Sonda bir sorun giderme bölümü var.
 3. Kurulum birkaç saniye sürer ve `%LOCALAPPDATA%\Nobetci` klasörüne yapılır. Başlat menüsünde
    **Nobetci** olarak görünür.
 
-> Sessiz kurulum için: `Nobetci-0.2.0-setup.exe /S`
+> Sessiz kurulum için: `Nobetci-2.0.1-setup.exe /S`
 
 ## 4. Kurulum sihirbazı (ilk açılış)
 
@@ -272,7 +272,7 @@ olanları anlatır.
 
    ```sh
    cd ~/Downloads
-   shasum -a 256 Nobetci-0.2.0-macos-universal.dmg
+   shasum -a 256 Nobetci-2.0.1-macos-universal.dmg
    grep macos SHA256SUMS.txt
    ```
 
