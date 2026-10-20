@@ -62,6 +62,20 @@ export interface HookPreview {
   fingerprint: string;
 }
 
+export type AgentProvider = "codex" | "cursor";
+
+export interface AgentHookStatus {
+  provider: AgentProvider;
+  installed: boolean;
+  settingsPath: string;
+  hookPath: string;
+  hookReady: boolean;
+  events: string[];
+  stale: boolean;
+}
+
+export type AgentHookPreview = HookPreview;
+
 export interface HealthReport {
   installed: boolean;
   relayPath: string;
@@ -241,6 +255,11 @@ export const Bridge = {
     callOrThrow<string>("hooks_apply", { install, fingerprint }),
   /** End-to-end check: settings.json entries, relay on disk, and a real ping. */
   hooksHealth: () => call<HealthReport>("hooks_health"),
+  agentHooksStatus: (provider: AgentProvider) => call<AgentHookStatus>("agent_hooks_status", { provider }),
+  agentHooksPreview: (provider: AgentProvider, install: boolean) =>
+    callOrThrow<AgentHookPreview>("agent_hooks_preview", { provider, install }),
+  agentHooksApply: (provider: AgentProvider, install: boolean, fingerprint: string) =>
+    callOrThrow<string>("agent_hooks_apply", { provider, install, fingerprint }),
 
   // ── Prompt review ────────────────────────────────────────────────────────
   rewritePrompt: (text: string, agent: string, provider: "ollama" | "openai", model: string) =>

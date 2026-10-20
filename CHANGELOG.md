@@ -7,6 +7,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.0.2] - 2026-10-20
+
+### Added
+
+- **Codex and Cursor monitoring.** Install their local hooks from Settings → Other agents to track sessions and submitted prompts. Codex permission requests and Cursor shell/MCP requests can be reviewed from the island; exact configuration diffs and timestamped backups are shown before changing settings.
+- **Safe prompt handling.** Prompt events are recorded in the session timeline. Agent hooks cannot replace submitted text, so typo correction stays in Prompt Studio and the user pastes the reviewed result.
+- **Safe fallback and cleanup.** Cursor permission hooks fail closed; if Nöbetçi cannot decide, the action is denied with a retry message. Uninstall removes only Nöbetçi's own hooks.
+
 ## [2.0.1] - 2026-10-20
 
 ### Added
@@ -108,6 +116,7 @@ pipe relay, the reviewed-diff hook installer and the island window were adapted 
 [Coucou](https://github.com/Louis-CFM/coucou) (MIT). Everything they had, and much more, shipped
 publicly in 0.2.0.
 
-[Unreleased]: https://github.com/tahap0l/nobetci/compare/v2.0.1...HEAD
+[Unreleased]: https://github.com/tahap0l/nobetci/compare/v2.0.2...HEAD
+[2.0.2]: https://github.com/tahap0l/nobetci/compare/v2.0.1...v2.0.2
 [0.2.0]: https://github.com/tahap0l/nobetci/releases/tag/v0.2.0
 [2.0.1]: https://github.com/tahap0l/nobetci/compare/v0.2.0...v2.0.1

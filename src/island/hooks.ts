@@ -18,6 +18,7 @@ interface HookPayload {
   hook_event_name?: string;
   request_id?: string;
   session_id?: string;
+  agent_name?: string;
   cwd?: string;
   message?: string;
   /** Notification only: permission_prompt, idle_prompt, agent_needs_input, quota_… */
@@ -136,7 +137,8 @@ function sessionFor(p: HookPayload): Session {
   const cwd = p.cwd ?? "";
   const id = p.session_id || cwd || "oturum";
   const existing = State.session(id);
-  const name = existing?.name ?? uniqueName(id, lastPathComponent(cwd) || t("session.generic"));
+  const base = lastPathComponent(cwd) || t("session.generic");
+  const name = existing?.name ?? uniqueName(id, p.agent_name ? `${p.agent_name} · ${base}` : base);
   const s = State.touch(id, cwd, name);
   if (p.nobetci_parents?.length) s.parents = p.nobetci_parents.map((x) => x.pid);
   const term = terminalName(p);

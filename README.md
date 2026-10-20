@@ -4,7 +4,7 @@
 
 # Nöbetçi
 
-**A watchful owl for your AI coding agents — starting with Claude Code.**
+**A watchful owl for Claude Code, Codex and Cursor.**
 
 [![CI](https://github.com/tahap0l/nobetci/actions/workflows/ci.yml/badge.svg)](https://github.com/tahap0l/nobetci/actions/workflows/ci.yml)
 ![Windows 10 | 11](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D4)
@@ -16,9 +16,11 @@
 
 </div>
 
-Nöbetçi is a small owl on a black island at the top of your screen. It watches your Claude Code
-sessions, and when one of them asks for permission, it shows you exactly what would run, how risky
-it looks and why — and lets you allow or deny it without hunting for the right terminal.
+Nöbetçi is a small owl on a black island at the top of your screen. It watches Claude Code, Codex
+and Cursor sessions, records submitted prompts and surfaces supported permission requests. Claude
+Code has the full safety review; Codex and Cursor support depends on each agent's hook API.
+Permission cards show what would run, how risky it looks and why, so you can decide without hunting
+for the right terminal.
 
 <p align="center">
   <img src="docs/media/en/critical.png" width="720" alt="Nöbetçi's approval card for a CRITICAL request: a command that pipes a downloaded script into bash and sends AWS credentials to a remote host, with the risky parts highlighted and four findings listed, a Deny button and a Hold · Allow button">
@@ -159,7 +161,7 @@ fetches it if it's missing.
 2. Check that the installer is the one that was published:
 
    ```powershell
-   Get-FileHash .\Nobetci-2.0.1-setup.exe -Algorithm SHA256
+   Get-FileHash .\Nobetci-x.y.z-setup.exe -Algorithm SHA256
    Get-Content .\SHA256SUMS.txt
    ```
 
@@ -179,7 +181,7 @@ fetches it if it's missing.
 2. Check the disk image in Terminal:
 
    ```sh
-   shasum -a 256 ~/Downloads/Nobetci-2.0.1-macos-universal.dmg
+   shasum -a 256 ~/Downloads/Nobetci-x.y.z-macos-universal.dmg
    cat ~/Downloads/SHA256SUMS.txt
    ```
 
@@ -235,6 +237,12 @@ careful way:
 Then press **Health check** in **Settings → Claude Code**: it runs the relay exactly the way
 Claude Code would and times a ping through it. Claude Code reads hooks when a session
 starts, so restart any session that was already running.
+
+To connect Codex or Cursor, open **Settings → Other agents**, choose **Connect…**, review the
+settings-file diff and confirm. Codex may ask you to trust the new hooks from its `/hooks` screen.
+Codex prompt submissions and permission requests are tracked; Cursor prompt submissions and
+shell/MCP requests are tracked. Cursor requests fail closed if Nöbetçi cannot respond. Prompt text
+is shown in the timeline, but the agent hooks cannot rewrite it before the agent receives it.
 
 ## Using it
 

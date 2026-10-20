@@ -4,7 +4,7 @@
 
 # Nöbetçi
 
-**Yapay zekâ kodlama ajanlarına göz kulak olan bir baykuş — şimdilik Claude Code için.**
+**Claude Code, Codex ve Cursor oturumlarını izleyen bir baykuş.**
 
 [![CI](https://github.com/tahap0l/nobetci/actions/workflows/ci.yml/badge.svg)](https://github.com/tahap0l/nobetci/actions/workflows/ci.yml)
 ![Windows 10 | 11](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D4)
@@ -16,9 +16,10 @@
 
 </div>
 
-Nöbetçi, ekranının üst kenarında siyah bir adada yaşayan küçük bir baykuş. Claude Code
-oturumlarını izler; biri izin istediğinde tam olarak neyin çalışacağını, ne kadar riskli
-göründüğünü ve nedenini gösterir. Doğru terminali aramadan izin verir ya da reddedersin.
+Nöbetçi, ekranının üst kenarında siyah bir adada yaşayan küçük bir baykuş. Claude Code, Codex ve
+Cursor oturumlarını ve gönderilen mesajları izler; desteklenen izin isteklerini adaya taşır.
+Claude Code tam risk incelemesine sahiptir; Codex ve Cursor desteği her ajanın hook yeteneklerine
+bağlıdır. Ne çalışacağını ve riskini görüp doğru terminali aramadan karar verirsin.
 
 <p align="center">
   <img src="docs/media/tr/critical.png" width="720" alt="KRİTİK bir istek için Nöbetçi onay kartı: indirilen bir betiği bash'e veren ve AWS kimlik bilgilerini uzak bir makineye gönderen komut; riskli kısımlar vurgulu, dört bulgu listelenmiş, Reddet ve Basılı tut · İzin ver butonları">
@@ -158,7 +159,7 @@ programı onu indirir.
 2. Kurulum dosyasının yayımlanan dosyanın kendisi olduğunu doğrula:
 
    ```powershell
-   Get-FileHash .\Nobetci-2.0.1-setup.exe -Algorithm SHA256
+   Get-FileHash .\Nobetci-x.y.z-setup.exe -Algorithm SHA256
    Get-Content .\SHA256SUMS.txt
    ```
 
@@ -178,7 +179,7 @@ programı onu indirir.
 2. Disk görüntüsünü Terminal'de doğrula:
 
    ```sh
-   shasum -a 256 ~/Downloads/Nobetci-2.0.1-macos-universal.dmg
+   shasum -a 256 ~/Downloads/Nobetci-x.y.z-macos-universal.dmg
    cat ~/Downloads/SHA256SUMS.txt
    ```
 
@@ -234,6 +235,12 @@ Claude Code → Hook'ları kur…** — bunu dikkatle yapar:
 Ardından **Ayarlar → Claude Code** sayfasında **Sağlık testi**'ne bas: relay'i tam Claude Code'un
 çalıştırdığı gibi çalıştırır ve bir ping'in gidiş-dönüş süresini ölçer. Claude
 Code hook'ları oturum başlarken okur; o sırada açık olan oturumları yeniden başlat.
+
+Codex veya Cursor'ı bağlamak için **Ayarlar → Diğer ajanlar** sayfasını aç, **Bağla…**'ya bas,
+ayar dosyasındaki farkı incele ve onayla. Codex, `/hooks` ekranında yeni hook'lara güvenmeni
+isteyebilir. Codex mesajları ve izin istekleri; Cursor mesajları ile komut/MCP istekleri izlenir.
+Nöbetçi yanıt veremezse Cursor istekleri güvenlik için reddedilir. Mesajlar oturum akışında görünür;
+ajan hook'ları gönderilen metni alıcıya ulaşmadan değiştiremez.
 
 ## Kullanım
 
