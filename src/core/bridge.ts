@@ -223,7 +223,7 @@ export const Bridge = {
   openLocation: (what: string) => call<boolean>("open_location", { what }),
 
   quit: () => call<void>("quit_app"),
-  /** Opens the settings window, optionally on a tab (genel, claude, guvenlik, kurallar, bildirimler, gecmis, hakkinda). */
+  /** Opens the settings window, optionally on a tab (genel, claude, prompts, guvenlik, kurallar, bildirimler, gecmis, hakkinda). */
   openSettingsWindow: (tab?: string) => call<void>("open_settings_window", { tab: tab ?? null }),
   /** Native folder picker; null when cancelled. */
   pickFolder: (start?: string) => call<string | null>("pick_folder", { start: start ?? null }),
@@ -241,6 +241,13 @@ export const Bridge = {
     callOrThrow<string>("hooks_apply", { install, fingerprint }),
   /** End-to-end check: settings.json entries, relay on disk, and a real ping. */
   hooksHealth: () => call<HealthReport>("hooks_health"),
+
+  // ── Prompt review ────────────────────────────────────────────────────────
+  rewritePrompt: (text: string, agent: string, provider: "ollama" | "openai", model: string) =>
+    callOrThrow<string>("rewrite_prompt", { text, agent, provider, model }),
+  openAiKeyStatus: () => callOrThrow<boolean>("openai_api_key_status"),
+  saveOpenAiKey: (apiKey: string) => callOrThrow<void>("set_openai_api_key", { apiKey }),
+  deleteOpenAiKey: () => callOrThrow<void>("delete_openai_api_key"),
 
   // ── Permission requests ───────────────────────────────────────────────────
   /**

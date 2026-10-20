@@ -20,7 +20,10 @@ approve permission requests, each scored by a risk engine.
 - Relay ↔ app speak a small JSON line (`{"behavior":"deny","message":…,"interrupt":…,"stop":…}`); only `hook/src/main.rs` knows Claude Code's output format.
 - **No innerHTML.** The approval card shows attacker-controllable text in a window that can approve commands. Build DOM with `h()` / text nodes only.
 - What the card shows must be what runs: never truncate approval payloads silently (`nobetci_truncated` flag → high risk).
-- No telemetry, no network calls, no secrets stored.
+- No telemetry. Network access is limited to an explicit Prompt Studio provider call: Ollama on
+  loopback (cloud-tagged models may forward the draft) or OpenAI after the user selects it and asks
+  for a rewrite. Optional API keys stay in the OS credential store, never settings JSON, logs or
+  audit. Drafts and rewrites are not persisted.
 - 0 % CPU while hidden: the frame loop stops and the cursor poll parks.
 - The owl, icons and sounds are original. Do not import anything from Coucou's Mochi, icons or sounds (not MIT).
 - **Every user-visible string exists in Turkish and English.** Front end: `defineMessages(tr, en)` from `src/i18n/core.ts` (island strings in `src/i18n/island.ts`, settings strings under `src/settings/`); Rust: `i18n::pick(en, tr)`. The language follows the `language` setting ("auto" = the system language). Wording that differs on a Mac goes in a `key@mac` entry next to the key. Code comments are English.

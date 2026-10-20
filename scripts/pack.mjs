@@ -1,8 +1,9 @@
 // Copies the installer Tauri buries under target/ into release/, with the name
-// it ships under. Used by `npm run pack` / `npm run pack:mac` and by the release
-// workflow, so all of them produce exactly the same file names:
+// it ships under. The Store flavor is kept in release/store so it cannot be
+// mistaken for the regular online installer.
 //
 //   Windows  release/Nobetci-<version>-setup.exe  (+ Nobetci-setup.exe)
+//   Store    release/store/Nobetci-<version>-setup.exe
 //   macOS    release/Nobetci-<version>-macos-<universal|arm64|x64>.dmg
 
 import { readFileSync, mkdirSync, copyFileSync, readdirSync, statSync, existsSync } from "node:fs";
@@ -10,7 +11,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const outDir = join(root, "release");
+const outDir = join(root, "release", process.argv.includes("--store") ? "store" : "");
 const { version } = JSON.parse(readFileSync(join(root, "src-tauri", "tauri.conf.json"), "utf8"));
 
 /** Every `<dir>` under target/release/bundle and target/<triple>/release/bundle. */

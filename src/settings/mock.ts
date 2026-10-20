@@ -1017,6 +1017,11 @@ function sanitize(x: Settings): Settings {
   s.staleMinutes = Math.min(1440, Math.max(5, s.staleMinutes));
   s.soundVolume = Math.min(1, Math.max(0, s.soundVolume));
   s.auditMaxMb = Math.min(200, Math.max(1, s.auditMaxMb));
+  if (s.promptProvider !== "ollama" && s.promptProvider !== "openai") s.promptProvider = DEFAULT_SETTINGS.promptProvider;
+  for (const key of ["ollamaModel", "openaiModel"] as const) {
+    const model = s[key].trim();
+    s[key] = !model || model.length > 120 || /[\u0000-\u001f\u007f]/.test(model) ? DEFAULT_SETTINGS[key] : model;
+  }
   s.hookEvents = s.hookEvents.filter((e) => (ALL_EVENTS as readonly string[]).includes(e));
   s.denyReasons = s.denyReasons.filter((d) => d.trim()).slice(0, 12);
   return s;
@@ -1037,6 +1042,7 @@ export function createMockApi(): Api {
   // window starts in — like a real user's would be.
   const lang0: Lang = pref === "auto" ? systemLang : pref;
   const U = (p: Pair) => (lang0 === "tr" ? p[0] : p[1]);
+  let mockOpenAiKeyStored = false;
 
   let settings: Settings = sanitize({
     ...DEFAULT_SETTINGS,
@@ -1199,7 +1205,7 @@ export function createMockApi(): Api {
       systemLang,
       hooksLost: lost,
       screen: { x: 0, y: 0, width: 1920, height: 1080, scale: 1.5 },
-      version: "0.2.0",
+      version: "2.0.1",
       hookPath: hookStatus.hookPath,
       platform,
       fullscreenSupported: platform === "windows",
@@ -1234,6 +1240,20 @@ export function createMockApi(): Api {
     closeSettingsWindow: async () => {},
     log: async () => {},
     hooksStatus: async () => clone(hookStatus),
+    rewritePrompt: async (text: string, _agent: string, provider: "ollama" | "openai") => {
+      await delay(500);
+      if (provider === "openai" && !mockOpenAiKeyStored)
+        throw new Error(L(["Önce OpenAI API anahtarını güvenli şekilde kaydet.", "Save your OpenAI API key securely first."]));
+      return text.trim().replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n");
+    },
+    openAiKeyStatus: async () => mockOpenAiKeyStored,
+    saveOpenAiKey: async (apiKey: string) => {
+      if (apiKey.trim().length < 20) throw new Error(L(["Geçerli bir OpenAI API anahtarı gir.", "Enter a valid OpenAI API key."]));
+      mockOpenAiKeyStored = true;
+    },
+    deleteOpenAiKey: async () => {
+      mockOpenAiKeyStored = false;
+    },
     hooksPreview: async (install: boolean) => {
       await delay(120);
       return {

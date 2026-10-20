@@ -223,10 +223,11 @@ The relay and the app speak a small JSON line
 (`{"behavior":"deny","message":…,"interrupt":…,"stop":…}`). Only `hook/src/main.rs` knows Claude
 Code's hook output format.
 
-### 8. No telemetry, no network, no secrets
+### 8. No telemetry; explicit provider requests only
 
-No HTTP clients, analytics, crash reporters or update checks, and nothing stored that would be
-worth stealing.
+No analytics, crash reporters or update checks. Prompt Studio may use local Ollama or the OpenAI
+API only after the user selects a provider and asks for a rewrite. Keep drafts out of logs, settings
+and history; keep the optional OpenAI key in the OS credential store.
 
 ### 9. Idle means idle
 

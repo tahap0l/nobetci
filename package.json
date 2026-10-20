@@ -1,7 +1,7 @@
 {
   "name": "nobetci",
   "private": true,
-  "version": "0.2.0",
+  "version": "2.0.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -13,6 +13,7 @@
     "prebuild": "node scripts/build-relay.mjs",
     "test": "cargo test --workspace",
     "pack": "tauri build && node scripts/pack.mjs",
+    "pack:store:offline": "tauri build --config src-tauri/tauri.store.conf.json && node scripts/pack.mjs --store",
     "pack:mac": "NOBETCI_RELAY=universal tauri build --target universal-apple-darwin && node scripts/pack.mjs",
     "lint": "cargo clippy --workspace --all-targets -- -D warnings && tsc --noEmit",
     "fmt": "cargo fmt --all",

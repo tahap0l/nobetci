@@ -81,19 +81,26 @@ butonu bilerek basılı tutman gerekir. Sana ihtiyaç olmadığında ekranın ü
   grafikler, CSV ve JSON dışa aktarma.
 - **Gerektiğinde sessiz.** Rahatsız etme, sessiz saatler ve (Windows'ta) tam ekran bir uygulama
   öndeyken kendiliğinden sessizlik. İstekler yine sıraya girer; hiçbir şey açılmaz, ses çıkmaz.
+- **Her ajan için Mesaj Atölyesi.** Claude Code, Codex, Cursor, ChatGPT, Gemini ya da başka bir hedef
+  seç; varsayılan yerel Ollama ile yazımı ve açıklığı düzelt veya OpenAI API'sini açıkça seç. Sonucu
+  inceleyip kendin kopyala — hiçbir ajana otomatik gönderilmez.
 - **Ve dahası.** Genel kısayollar, gerçek relay üzerinden hook sağlık testi, hangi hook
   olaylarının dinleneceğini seçme, risk kategorilerini tek tek kapatma, adanın konumu, ayarları
   içe ve dışa aktarma; sistem diline göre kendiliğinden Türkçe ya da İngilizce arayüz.
 
 ### 🔒 Gizlilik
 
-- **Ağ yok, telemetri yok, hesap yok.** Nöbetçi hiçbir yere bağlanmaz — güncelleme bile kontrol
-  etmez — ve API anahtarı ya da token saklamaz.
-- **Bilgisayarında düz dosyalar.** Ayarlar, geçmiş ve kayıt dosyası JSON, JSON Lines ve düz
-  metindir.
+- **Telemetri yok, hesap yok.** Açıkça mesaj inceleme istemediğin sürece Nöbetçi ağ isteği yapmaz.
+  Ollama varsayılan olarak yerel servisini kullanır; **cloud** etiketli Ollama modelleri taslağı
+  dışarı iletebilir. OpenAI yalnızca onu seçip **Mesajı iyileştir** dediğinde taslağı alır. İsteğe
+  bağlı API anahtarı işletim sisteminin güvenli parola kasasında durur.
+- **Veriler yerel.** Ayarlar, geçmiş ve kayıt dosyası JSON, JSON Lines ve düz metindir. Taslaklar ve
+  düzenlenmiş mesajlar geçmişe kaydedilmez.
 - **Sırlar kayda geçmez.** API anahtarları, token'lar, parolalar ve özel anahtarlar, istek geçmişe
   yazılmadan ya da bildirimde gösterilmeden önce maskelenir. Onay kartı ise isteği her
   zaman eksiksiz gösterir.
+
+Ayrıntılar için [Gizlilik Politikası](PRIVACY.md) sayfasına bak.
 
 ## Nasıl çalışır
 
@@ -151,7 +158,7 @@ programı onu indirir.
 2. Kurulum dosyasının yayımlanan dosyanın kendisi olduğunu doğrula:
 
    ```powershell
-   Get-FileHash .\Nobetci-0.2.0-setup.exe -Algorithm SHA256
+   Get-FileHash .\Nobetci-2.0.1-setup.exe -Algorithm SHA256
    Get-Content .\SHA256SUMS.txt
    ```
 
@@ -171,7 +178,7 @@ programı onu indirir.
 2. Disk görüntüsünü Terminal'de doğrula:
 
    ```sh
-   shasum -a 256 ~/Downloads/Nobetci-0.2.0-macos-universal.dmg
+   shasum -a 256 ~/Downloads/Nobetci-2.0.1-macos-universal.dmg
    cat ~/Downloads/SHA256SUMS.txt
    ```
 
@@ -442,8 +449,10 @@ gidiş-dönüş süresini gösterir). Nöbetçi çalışmıyorsa relay hemen ç�
 bekler; o da sadece kart gerçekten ekranındayken ve terminal devralmadan önce en fazla 110 saniye.
 
 **Bir yere veri gönderiyor mu?**
-Hayır. Nöbetçi hiçbir ağ bağlantısı kurmaz: telemetri yok, hata raporu yok, güncelleme denetimi
-yok, hesap yok. Her şey bilgisayarında, düz dosyalarda kalır.
+Nöbetçi telemetri, hata raporu, güncelleme denetimi ya da hesap kullanmaz. **Ayarlar → Mesaj
+Atölyesi**'nde Ollama varsayılan olarak yerel servise bağlanır; **cloud** etiketli Ollama modelleri
+taslağı dışarı iletebilir. OpenAI'yi seçip **Mesajı iyileştir** dediğinde yalnızca o anki taslak
+OpenAI API'sine gönderilir. Nöbetçi mesajı ajana iletmez ve geçmişe kaydetmez.
 
 **Nöbetçi kapalıysa, duraklatılmışsa ya da çökerse ne olur?**
 Claude Code, Nöbetçi hiç kurulmamış gibi devam eder: dinleyen kimse yoksa (ya da ada
@@ -523,6 +532,7 @@ npm run tauri dev    # gerçek uygulama, canlı yenilemeyle
 npm test             # Rust testleri
 npm run lint         # clippy (uyarılar hata sayılır) ve TypeScript tip denetimi
 npm run pack         # Windows kurulum dosyası, release\ klasörüne
+npm run pack:store:offline # Store uyumlu çevrimdışı Windows paketi, release/store\ klasörüne (imzasız)
 npm run pack:mac     # macOS disk görüntüsü (universal), release/ klasörüne
 ```
 
@@ -531,7 +541,7 @@ npm run pack:mac     # macOS disk görüntüsü (universal), release/ klasörün
 - `http://127.0.0.1:1420/?demo=critical` adayı sahte oturumlar ve isteklerle gösterir. Diğer
   demolar: `low`, `write`, `hidden`, `deny-menu`, `overview`, `session`, `compact`, `empty`.
 - `http://127.0.0.1:1420/settings.html?tab=kurallar` Ayarlar'ı sahte verilerle açar. Sekmeler:
-  `genel`, `claude`, `guvenlik`, `kurallar`, `bildirimler`, `gecmis`, `hakkinda`; hoş geldin
+  `genel`, `claude`, `prompts`, `guvenlik`, `kurallar`, `bildirimler`, `gecmis`, `hakkinda`; hoş geldin
   sihirbazı için `hosgeldin`.
 - Dili seçmek için `&lang=tr` ya da `&lang=en`, Mac metinlerini görmek için `&platform=macos` ekle.
 - Tarayıcı konsolunda `nobetci.inject({ … })` adaya sahte bir hook olayı gönderir.

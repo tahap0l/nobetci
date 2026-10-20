@@ -738,6 +738,65 @@ textarea.input {
   resize: vertical;
   line-height: 1.45;
 }
+
+/* Prompt Studio */
+.prompt-studio {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.prompt-top-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.prompt-textarea {
+  width: 100%;
+  min-height: 170px;
+  font-size: 13px;
+  user-select: text;
+}
+.prompt-result-card .prompt-textarea {
+  min-height: 190px;
+  border-color: rgba(59, 158, 255, 0.25);
+}
+.prompt-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+.prompt-feedback {
+  margin-top: 10px;
+}
+.prompt-feedback:empty {
+  display: none;
+}
+.prompt-key-block {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.prompt-key-controls {
+  display: flex;
+  gap: 8px;
+}
+.prompt-key-controls .input {
+  flex: 1;
+}
+.prompt-privacy-card .notice + .notice {
+  margin-top: 8px;
+}
+@media (max-width: 720px) {
+  .prompt-top-grid {
+    grid-template-columns: 1fr;
+  }
+  .prompt-key-controls {
+    flex-direction: column;
+  }
+}
+
 .input::placeholder {
   color: var(--faint);
 }

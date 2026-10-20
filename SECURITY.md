@@ -74,9 +74,10 @@ Fixes land in the latest release only. Please update before reporting.
 
 Nöbetçi is a **reviewer**, not a sandbox. It shows you the permission requests Claude Code would
 otherwise ask about in a terminal, scores each one with a set of heuristics, and passes your
-decision back. It runs as you, on your machine, with no network access. It decides on its own only
-where you told it to — a rule, a trusted project or a session grant — and never above MEDIUM
-risk.
+decision back. It runs as you, on your machine. Network access is limited to Prompt Studio's
+explicit model request: Ollama on loopback (cloud-tagged Ollama models may forward the draft), or
+the OpenAI API after the user selects it and clicks Improve. It decides on its own only where you
+told it to — a rule, a trusted project or a session grant — and never above MEDIUM risk.
 
 Nöbetçi runs on Windows and, since 0.2.0, on macOS. Where the two differ, this page says so.
 
@@ -183,8 +184,12 @@ agent to change Claude Code's permission or hook settings is scored CRITICAL; on
 hooks, agents, plugins or `.mcp.json` is HIGH. The same goes for Nöbetçi itself: a request to
 change its settings, history or relay is CRITICAL, and one that tries to stop it is HIGH.
 
-**No network, no secrets.** Nöbetçi makes no network connections and stores no API keys, tokens
-or passwords, so there is nothing to steal from it and nowhere for it to send your data.
+**No telemetry; explicit provider requests only.** Nöbetçi has no analytics, crash reporting or
+update checks. Prompt drafts are not saved. Ollama receives the draft at the local Ollama service;
+Ollama models marked cloud may forward it. The OpenAI API receives it only after the user selects
+OpenAI and clicks Improve. The optional API key is stored in the operating system credential vault,
+never in settings, logs or history. Review OpenAI's data policies for how API requests are handled
+by the provider.
 
 **Secrets are masked in what lingers.** Before a request is written to the history, and before a
 Windows notification is shown, its text goes through redaction: PEM private keys; tokens with a
