@@ -20,7 +20,7 @@ Nöbetçi is a small owl on a black island at the top of your screen. It watches
 and Cursor sessions, records submitted prompts and surfaces supported permission requests. Claude
 Code has the full safety review; Codex and Cursor support depends on each agent's hook API.
 Permission cards show what would run, how risky it looks and why, so you can decide without hunting
-for the right terminal.
+for the right terminal. 
 
 <p align="center">
   <img src="docs/media/en/critical.png" width="720" alt="Nöbetçi's approval card for a CRITICAL request: a command that pipes a downloaded script into bash and sends AWS credentials to a remote host, with the risky parts highlighted and four findings listed, a Deny button and a Hold · Allow button">
