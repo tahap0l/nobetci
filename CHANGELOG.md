@@ -7,6 +7,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.1.2] - 2026-11-09
+
+- Keep the compact Dynamic Island visible while idle and show the date, weather, and active Windows media in rotation.
+- Add a weekly calendar and swipe between calendar, weather, and media cards. Agent approvals still take priority.
+- Refresh desktop and demo mascot artwork and update the English and Turkish README files.
+- Add an opt-in ChatGPT Web response-status bridge for Chrome and Edge on Windows.
+
 ## [2.1.1] - 2026-11-09
 
 - Added optional weather and Windows media controls to the desktop island, including when no agent session is active.
@@ -127,7 +134,8 @@ pipe relay, the reviewed-diff hook installer and the island window were adapted 
 [Coucou](https://github.com/Louis-CFM/coucou) (MIT). Everything they had, and much more, shipped
 publicly in 0.2.0.
 
-[Unreleased]: https://github.com/tahap0l/nobetci/compare/v2.1.1...HEAD
+[Unreleased]: https://github.com/tahap0l/nobetci/compare/v2.1.2...HEAD
+[2.1.2]: https://github.com/tahap0l/nobetci/compare/v2.1.1...v2.1.2
 [2.1.1]: https://github.com/tahap0l/nobetci/compare/v2.1.0...v2.1.1
 [2.1.0]: https://github.com/tahap0l/nobetci/compare/v2.0.2...v2.1.0
 [2.0.2]: https://github.com/tahap0l/nobetci/compare/v2.0.1...v2.0.2

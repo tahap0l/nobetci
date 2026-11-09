@@ -808,10 +808,27 @@ mark.lvl-critical { background: #f4505e; color: #fff; }
 
 .island-widgets {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+  align-items: center;
   margin-bottom: 8px;
 }
+.island-widget-slides {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  scroll-snap-type: x mandatory;
+}
+.island-widget-slides > * {
+  scroll-snap-align: start;
+}
+.island-widget-slides:focus-visible {
+  outline: 1px solid var(--accent, currentColor);
+  outline-offset: -1px;
+}
+.island-widget-page[hidden],
 .island-widgets[hidden],
 .island-widget[hidden],
 .island-media-buttons[hidden] {
@@ -844,4 +861,31 @@ mark.lvl-critical { background: #f4505e; color: #fff; }
 }
 .island-media-buttons .btn {
   padding: 1px 7px;
+}
+
+.island-calendar-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.island-calendar-head strong {
+  flex: 1;
+}
+.island-calendar-head .btn {
+  height: 20px;
+}
+.island-calendar-days {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 3px;
+}
+.island-calendar-days span {
+  text-align: center;
+  padding: 2px 1px;
+  border-radius: 4px;
+}
+.island-calendar-days [data-today="true"] {
+  color: var(--text);
+  background: var(--line);
+  font-weight: 700;
 }

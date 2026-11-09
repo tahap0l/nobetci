@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "Nöbetçi · ChatGPT Web",
+  "version": "0.1.0",
+  "description": "Shows ChatGPT response status in the local Nöbetçi app.",
+  "permissions": [
+    "nativeMessaging",
+    "storage"
+  ],
+  "background": {
+    "service_worker": "worker.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://chatgpt.com/*"
+      ],
+      "js": [
+        "status.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}

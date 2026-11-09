@@ -39,6 +39,7 @@ const MAX_APPROVAL_FIELD_LEN: usize = 64 * 1024;
 /// Set on the payload when any field had to be cut.
 const TRUNCATED_FLAG: &str = "nobetci_truncated";
 
+mod browser;
 #[cfg(target_os = "macos")]
 mod mac;
 #[cfg(windows)]
@@ -53,6 +54,10 @@ use win as os;
 fn main() {
     let mut args = std::env::args().skip(1);
     let first = args.next().unwrap_or_default();
+    if first.starts_with("chrome-extension://") {
+        browser::run();
+        return;
+    }
     let provider = if first == "codex" || first == "cursor" { first.clone() } else { "claude".into() };
     let event_arg = if provider == "claude" { first } else { args.next().unwrap_or_default() };
     let Some((payload, event)) = read_event(&provider, event_arg) else { std::process::exit(0) };

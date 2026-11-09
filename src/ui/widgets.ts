@@ -7,7 +7,91 @@ import { h } from "./dom";
 const local = (tr: string, en: string) => getLang() === "tr" ? tr : en;
 
 export function widgetHeight(): number {
-  return (State.settings.islandMedia && getPlatform() === "windows") || State.settings.islandWeatherCity ? 68 : 0;
+  return 68;
+}
+
+export function compactWidgetSummary(redraw: () => void) {
+  let city = "";
+  let temperature: number | undefined;
+  let track = "";
+  let weatherAfter = 0;
+  let mediaAfter = 0;
+  let timer: number | undefined;
+
+  return () => {
+    if (State.mode !== "compact") return "";
+    if (timer === undefined) {
+      timer = window.setTimeout(() => {
+        timer = undefined;
+        if (State.mode === "compact") redraw();
+      }, 5_000);
+    }
+    const now = Date.now();
+    const settings = State.settings;
+    if (city !== settings.islandWeatherCity) {
+      city = settings.islandWeatherCity;
+      temperature = undefined;
+      weatherAfter = 0;
+    }
+    if (city && now >= weatherAfter) {
+      const requestedCity = city;
+      weatherAfter = now + 60_000;
+      void Bridge.islandWeather(requestedCity).then((result) => {
+        if (city !== requestedCity) return;
+        temperature = result?.temperature;
+        if (result) weatherAfter = Date.now() + 600_000;
+        redraw();
+      });
+    }
+    const mediaOn = settings.islandMedia && getPlatform() === "windows";
+    if (!mediaOn) track = "";
+    else if (now >= mediaAfter) {
+      mediaAfter = now + 5_000;
+      void Bridge.islandMedia().then((result) => {
+        if (State.mode !== "compact" || !State.settings.islandMedia) return;
+        track = result?.playing ? result.title : "";
+        redraw();
+      });
+    }
+    const date = new Intl.DateTimeFormat(getLang(), { weekday: "short", day: "numeric", month: "short" }).format(now);
+    const weather = temperature === undefined ? "" : `${Math.round(temperature)} °C`;
+    const summaries = [date, weather, track && `♪ ${track}`].filter(Boolean);
+    return summaries[Math.floor(now / 5_000) % summaries.length];
+  };
+}
+
+function buildCalendar() {
+  const caption = h("strong");
+  const days = h("div", { class: "island-calendar-days" });
+  let offset = 0;
+  let lastKey = "";
+  const refresh = () => {
+    const today = new Date();
+    const key = `${today.toDateString()}/${offset}`;
+    if (key === lastKey) return;
+    lastKey = key;
+    const first = new Date(today.getFullYear(), today.getMonth(), today.getDate() - (today.getDay() + 6) % 7 + offset * 7, 12);
+    const month = new Intl.DateTimeFormat(getLang(), { month: "long", year: "numeric" });
+    const weekday = new Intl.DateTimeFormat(getLang(), { weekday: "short" });
+    const full = new Intl.DateTimeFormat(getLang(), { dateStyle: "full" });
+    caption.textContent = month.format(first);
+    days.replaceChildren(...Array.from({ length: 7 }, (_, index) => {
+      const date = new Date(first.getFullYear(), first.getMonth(), first.getDate() + index, 12);
+      return h("span", {
+        "data-today": date.toDateString() === today.toDateString() ? "true" : undefined,
+        "aria-current": date.toDateString() === today.toDateString() ? "date" : undefined,
+        title: full.format(date),
+        text: `${weekday.format(date)} ${date.getDate()}`,
+      });
+    }));
+  };
+  const move = (step: number, label: string) => h("button", {
+    type: "button", class: "btn btn-small", title: label, "aria-label": label,
+    text: step < 0 ? "‹" : "›", onclick: () => { offset += step; refresh(); },
+  });
+  const header = h("div", { class: "island-calendar-head" }, caption,
+    move(-1, local("Önceki hafta", "Previous week")), move(1, local("Sonraki hafta", "Next week")));
+  return { el: h("div", { class: "island-widget island-calendar" }, header, days), refresh };
 }
 
 export function buildWidgets(view: "overview" | "empty") {
@@ -17,7 +101,22 @@ export function buildWidgets(view: "overview" | "empty") {
   const mediaLabel = h("strong");
   const mediaValue = h("span");
   const media = h("div", { class: "island-widget", hidden: true }, mediaLabel, mediaValue);
-  const el = h("div", { class: "island-widgets", hidden: true }, weather, media);
+  const calendar = buildCalendar();
+  const carousel = h("div", {
+    class: "island-widget-slides", tabindex: 0,
+    "aria-label": local("Kaydırılabilir ada kartları", "Scrollable island cards"),
+  }, calendar.el, weather, media);
+  const togglePage = h("button", {
+    type: "button", class: "btn btn-small island-widget-page", hidden: true, text: "⇄",
+    "aria-label": local("Sonraki ada kartı", "Next island card"),
+  });
+  togglePage.addEventListener("click", () => {
+    if (!carousel.clientWidth) return;
+    const count = 1 + Number(!weather.hidden) + Number(!media.hidden);
+    const left = ((Math.round(carousel.scrollLeft / carousel.clientWidth) + 1) % count) * carousel.clientWidth;
+    carousel.scrollTo({ left, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" });
+  });
+  const el = h("div", { class: "island-widgets", hidden: true }, carousel, togglePage);
   let currentMedia: IslandMedia | null = null;
   let city = "";
   let weatherAt = 0;
@@ -86,7 +185,9 @@ export function buildWidgets(view: "overview" | "empty") {
       drawMedia(null);
       media.hidden = !mediaOn;
     }
-    el.hidden = !city && !mediaOn;
+    calendar.refresh();
+    el.hidden = false;
+    togglePage.hidden = !city && !mediaOn;
     if (State.mode !== "expanded" || State.view !== view || el.hidden || !el.isConnected) return;
     if (wake === undefined) {
       wake = window.setTimeout(() => {
