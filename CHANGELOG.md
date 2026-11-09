@@ -7,6 +7,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-11-09
+
+- Added seven mascot themes with saved preferences.
+- Show the session working directory on approval cards.
+- Added an interactive approval demo to the website.
+
 ## [2.0.2] - 2026-10-20
 
 ### Added
@@ -116,7 +122,8 @@ pipe relay, the reviewed-diff hook installer and the island window were adapted 
 [Coucou](https://github.com/Louis-CFM/coucou) (MIT). Everything they had, and much more, shipped
 publicly in 0.2.0.
 
-[Unreleased]: https://github.com/tahap0l/nobetci/compare/v2.0.2...HEAD
+[Unreleased]: https://github.com/tahap0l/nobetci/compare/v2.1.0...HEAD
+[2.1.0]: https://github.com/tahap0l/nobetci/compare/v2.0.2...v2.1.0
 [2.0.2]: https://github.com/tahap0l/nobetci/compare/v2.0.1...v2.0.2
 [0.2.0]: https://github.com/tahap0l/nobetci/releases/tag/v0.2.0
 [2.0.1]: https://github.com/tahap0l/nobetci/compare/v0.2.0...v2.0.1
