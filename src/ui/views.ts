@@ -449,6 +449,7 @@ function buildApproval(actions: ViewActions): ViewHost {
   const who = h("span", { class: "appr-who" });
   const queue = h("span", { class: "appr-queue" });
   const timer = h("span", { class: "appr-timer" });
+  const project = h("div", { class: "appr-project" });
   const kind = h("div", { class: "appr-kind" });
   const target = h("pre", { class: "appr-target" });
   const overflow = h("div", { class: "appr-overflow", text: t("ap.overflow") });
@@ -481,6 +482,7 @@ function buildApproval(actions: ViewActions): ViewHost {
     h("div", { class: "appr-head" }, chip, who, h("span", { class: "grow" }), queue, timer),
     warning,
     ruleNote,
+    project,
     kind,
     target,
     overflow,
@@ -587,6 +589,9 @@ function buildApproval(actions: ViewActions): ViewHost {
     chip.className = `risk-chip lvl-${r.level}`;
     chip.textContent = LEVEL_LABEL[r.level];
     who.textContent = `${session?.name ?? t("ap.session")} · ${toolLabel(a.tool)}`;
+    project.replaceChildren();
+    project.hidden = !session?.cwd;
+    if (session?.cwd) appendRevealed(project, session.cwd);
     kind.textContent = `${kindTitle(r.kind)}:`;
     target.replaceChildren(highlighted(r));
     target.scrollTop = 0;

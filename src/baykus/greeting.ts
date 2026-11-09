@@ -4,6 +4,8 @@
 // pose until interrupted.
 
 import { Ease, clamp, lerp, seg } from "../core/anim";
+import { State } from "../core/state";
+import { drawMascot } from "./mascot";
 import { OwlEngine } from "./owl";
 import { t } from "../i18n/island";
 
@@ -165,7 +167,9 @@ export class OwlGreeting {
     ctx.translate(x, y);
     if (bank !== 0) ctx.rotate(bank);
     ctx.translate(-OWL / 2, -(OWL + OVER) / 2);
-    owl.draw(ctx, OWL, OWL + OVER);
+    if (!drawMascot(ctx, State.settings.mascotTheme, OWL / 2, (OWL + OVER) / 2, OWL, "idle", t)) {
+      owl.draw(ctx, OWL, OWL + OVER);
+    }
     ctx.restore();
 
     // Caption.

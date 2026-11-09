@@ -798,3 +798,10 @@ mark.lvl-critical { background: #f4505e; color: #fff; }
   color: var(--medium);
   opacity: 0.8;
 }
+
+.appr-project {
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}

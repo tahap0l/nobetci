@@ -114,6 +114,7 @@ pub struct Settings {
     // ── General ───────────────────────────────────────────────────────────────
     /// "auto" follows the system display language; "tr" or "en" force one.
     pub language: String,
+    pub mascot_theme: String,
     /// The first-run welcome has been completed or skipped.
     pub onboarded: bool,
     pub autostart: bool,
@@ -187,6 +188,7 @@ impl Default for Settings {
         let tr = crate::i18n::is_tr();
         Self {
             language: "auto".into(),
+            mascot_theme: "owl".into(),
             onboarded: false,
             autostart: false,
             screen: "primary".into(),
@@ -253,6 +255,11 @@ impl Settings {
         self.hold_critical_ms = self.hold_critical_ms.clamp(self.hold_ms, 20_000);
         if !["none", "low", "medium"].contains(&self.auto_allow_max.as_str()) {
             self.auto_allow_max = d.auto_allow_max;
+        }
+        if !["owl", "wolf", "hawk", "octopus", "lion", "canary", "eagle"]
+            .contains(&self.mascot_theme.as_str())
+        {
+            self.mascot_theme = d.mascot_theme;
         }
         if !["auto", "tr", "en"].contains(&self.language.as_str()) {
             self.language = d.language;
