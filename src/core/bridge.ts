@@ -106,6 +106,7 @@ export interface RiskAssessment {
   kind: "command" | "write" | "read" | "web" | "mcp" | "other";
   target: string;
   preview: string | null;
+  previewBefore?: string | null;
   findings: RiskFinding[];
   truncated: boolean;
 }

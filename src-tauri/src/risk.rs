@@ -59,6 +59,7 @@ pub struct Assessment {
     pub target: String,
     /// The start of the content a Write/Edit would put in the file.
     pub preview: Option<String>,
+    pub preview_before: Option<String>,
     pub findings: Vec<Finding>,
     pub truncated: bool,
     #[serde(skip)]
@@ -813,6 +814,10 @@ fn preview_of(input: &Value) -> Option<String> {
                 .and_then(|e| e.get("new_string"))
                 .and_then(Value::as_str)
         })?;
+    Some(preview_excerpt(text))
+}
+
+fn preview_excerpt(text: &str) -> String {
     let mut end = text.len().min(1200);
     while !text.is_char_boundary(end) {
         end -= 1;
@@ -821,7 +826,7 @@ fn preview_of(input: &Value) -> Option<String> {
     if end < text.len() {
         s.push('…');
     }
-    Some(s)
+    s
 }
 
 /// Everything a Write/Edit would put in the file, for the content rules.
@@ -983,7 +988,14 @@ pub fn assess_with(tool: &str, input: &Value, cwd: &str, truncated: bool, off: &
     findings.sort_by_key(|f| std::cmp::Reverse(f.level));
     let level = findings.first().map(|f| f.level).unwrap_or(Low);
 
-    Assessment { level, kind, target, preview, findings, truncated, manual_review }
+    let preview_before = (kind == Kind::Write && preview.is_some())
+        .then(|| {
+            str_field(input, "old_string")
+                .or_else(|| input.get("edits")?.as_array()?.first().and_then(|edit| str_field(edit, "old_string")))
+        })
+        .flatten()
+        .map(preview_excerpt);
+    Assessment { level, kind, target, preview, preview_before, findings, truncated, manual_review }
 }
 
 fn excerpt_long(s: &str, max: usize) -> String {
@@ -1002,6 +1014,14 @@ mod tests {
 
     fn cmd(c: &str) -> Level {
         assess("Bash", &json!({ "command": c }), CWD, false).level
+    }
+
+    #[test]
+    fn edit_preview_includes_the_supplied_before_and_after() {
+        let input = serde_json::json!({"file_path": "src/lib.rs", "old_string": "old", "new_string": "new"});
+        let result = assess("Edit", &input, CWD, false);
+        assert_eq!(result.preview_before.as_deref(), Some("old"));
+        assert_eq!(result.preview.as_deref(), Some("new"));
     }
 
     #[test]

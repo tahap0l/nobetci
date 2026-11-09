@@ -349,8 +349,8 @@ const M = {
   "claude.pill.relayReady": ["Relay hazır", "Relay ready"],
   "claude.pill.relayMissing": ["Relay bulunamadı", "Relay not found"],
   "claude.pill.stale": [
-    "Eski konuma işaret eden girdi var — yeniden kur",
-    "An entry points to an old location — reinstall",
+    "Hook ayarı güncel değil. Yeniden kur.",
+    "A hook setting is out of date. Reinstall it.",
   ],
   "claude.noEntries": ["settings.json'da Nöbetçi girdisi yok.", "No Nöbetçi entries in settings.json."],
   "claude.kv.settings": ["Claude ayarları", "Claude settings"],

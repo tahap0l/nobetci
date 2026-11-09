@@ -204,6 +204,23 @@ button {
   gap: 8px;
 }
 
+.session-search {
+  display: block;
+  width: calc(100% - 20px);
+  margin: 4px 10px 8px;
+  padding: 6px 9px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: inherit;
+  font: inherit;
+}
+
+.session-search:focus-visible, .session:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: -2px;
+}
+
 .session-name {
   font-weight: 600;
   white-space: nowrap;
@@ -472,6 +489,9 @@ button {
 }
 
 .appr-target::-webkit-scrollbar,
+.appr-preview .edit-before { color: #ffabb1; }
+.appr-preview .edit-after { color: #95e7b5; }
+
 .appr-preview::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -919,7 +939,41 @@ mark.lvl-critical { background: #f4505e; color: #fff; }
   text-align: left;
 }
 .island-card-agents { --card-glow: #80472d; cursor: pointer; }
-.island-card-media { --card-glow: #96364b; }
+.island-card-media {
+  --card-glow: #54358d;
+  background: radial-gradient(ellipse at 100% 0%, var(--card-glow), transparent 70%), #181321;
+}
+.island-card-media.is-spotify {
+  --card-glow: #22784f;
+  background-color: #10241b;
+}
+.media-equalizer {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  height: 21px;
+  margin-bottom: 5px;
+  color: #c6afff;
+}
+.is-spotify .media-equalizer { color: #6af5ab; }
+.media-equalizer i {
+  width: 3px;
+  height: 16px;
+  border-radius: 99px;
+  background: currentColor;
+  transform: scaleY(.25);
+}
+.view.on .is-playing .media-equalizer i { animation: media-beat .7s ease-in-out var(--beat-delay, 0s) infinite alternate; }
+.media-equalizer i:nth-child(2) { --beat-delay: -.32s; }
+.media-equalizer i:nth-child(3) { --beat-delay: -.15s; }
+.media-equalizer i:nth-child(4) { --beat-delay: -.48s; }
+@keyframes media-beat {
+  from { transform: scaleY(.25); }
+  to { transform: scaleY(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .view.on .is-playing .media-equalizer i { animation: none; transform: scaleY(.55); }
+}
 .island-card-focus { --card-glow: #633785; }
 .view.on .island-card { animation: island-card-in 220ms ease-out both; }
 .view.on .island-card:nth-child(2) { animation-delay: 35ms; }

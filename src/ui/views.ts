@@ -224,11 +224,46 @@ function sessionLabel(session: Session, now: number): string {
     : stateLabel(session.state);
 }
 
+const SESSION_PRIORITY: Record<SessionState, number> = {
+  approval: 0, question: 1, error: 2, ratelimit: 3,
+  thinking: 4, working: 4, finished: 5, idle: 5,
+};
+
 function buildOverview(actions: ViewActions): ViewHost {
   const list = h("div", { class: "sessions" });
   const widgets = buildWidgets("overview", actions.openSettings);
-  const el = h("div", { class: "view view-overview" }, widgets.el, list);
+  const search = h("input", {
+    class: "session-search", type: "search", placeholder: t("ov.search"),
+    "aria-label": t("ov.search"), autocomplete: "off",
+  });
+  const el = h("div", { class: "view view-overview" }, widgets.el, search, list);
   let key = "";
+  let results: Session[] = [];
+
+  search.addEventListener("input", () => State.notify());
+  search.addEventListener("keydown", (event) => {
+    if (event.isComposing) return;
+    if (event.key === "Enter" && results[0]) {
+      event.preventDefault();
+      const session = results[0];
+      if (session.parents.length) actions.focusSession(session.id);
+      else actions.showSession(session.id);
+    } else if (event.key === "ArrowDown") {
+      const first = list.querySelector<HTMLButtonElement>(".session");
+      if (first) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+  });
+
+  el.addEventListener("keydown", (event) => {
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "f") {
+      event.preventDefault();
+      search.focus();
+      search.select();
+    }
+  });
 
   const row = (s: Session) =>
     h(
@@ -252,20 +287,32 @@ function buildOverview(actions: ViewActions): ViewHost {
   return {
     el,
     height: () => {
-      const rows = Math.min(MAX_ROWS, State.sessions.length) + (State.sessions.length > MAX_ROWS ? 0.5 : 0);
-      return Math.max(150, HEADER_H + 14 + rows * ROW_H + 12) + widgetHeight();
+      const rows = Math.max(1, Math.min(MAX_ROWS, results.length)) + (results.length > MAX_ROWS ? 0.5 : 0);
+      return Math.max(150, HEADER_H + 14 + rows * ROW_H + 48) + widgetHeight();
     },
     sync() {
       widgets.refresh();
-      const shown = State.sessions.slice(0, MAX_ROWS);
+      const query = search.value.trim().toLowerCase();
+      results = State.sessions
+        .filter((session) => [session.name, session.cwd, session.terminal]
+          .some((field) => field.toLowerCase().includes(query)))
+        .sort((a, b) => SESSION_PRIORITY[a.state] - SESSION_PRIORITY[b.state] || b.lastEventAt - a.lastEventAt);
+      const shown = results.slice(0, MAX_ROWS);
       const next =
         shown.map((s) => `${s.id}:${s.state}:${s.name}:${s.steps.length}:${s.lastEventAt}:${State.lastStep(s)}`).join("|") +
-        `#${State.sessions.length}`;
+        `#${results.length}`;
       if (next === key) return;
       key = next;
-      list.replaceChildren(...shown.map(row));
-      if (State.sessions.length > MAX_ROWS) {
-        list.append(h("div", { class: "more", text: t("ov.more", { n: State.sessions.length - MAX_ROWS }) }));
+      const focusedId = list.contains(document.activeElement)
+        ? (document.activeElement as HTMLElement).dataset.sessionId
+        : undefined;
+      const rows = shown.map(row);
+      list.replaceChildren(...rows);
+      if (focusedId) (rows.find((button) => button.dataset.sessionId === focusedId) ?? search).focus();
+      if (!results.length) {
+        list.append(h("p", { class: "more", role: "status", text: t("ov.noMatches") }));
+      } else if (results.length > MAX_ROWS) {
+        list.append(h("div", { class: "more", text: t("ov.more", { n: results.length - MAX_ROWS }) }));
       }
     },
     tick() {
@@ -630,9 +677,19 @@ function buildApproval(actions: ViewActions): ViewHost {
       overflow.style.display = target.scrollHeight > target.clientHeight + 2 ? "" : "none";
     });
 
-    preview.style.display = r.preview ? "" : "none";
+    preview.style.display = r.preview != null ? "" : "none";
     preview.replaceChildren();
-    if (r.preview) appendRevealed(preview, r.preview);
+    if (r.preview != null) {
+      if (r.previewBefore != null) {
+        const before = h("span", { class: "edit-before" }, t("ap.before"), "\n");
+        const after = h("span", { class: "edit-after" }, t("ap.after"), "\n");
+        appendRevealed(before, r.previewBefore);
+        appendRevealed(after, r.preview);
+        preview.append(before, "\n", after);
+      } else {
+        appendRevealed(preview, r.preview);
+      }
+    }
 
     const policyNote = a.policy === "strict" ? t("ap.strict") : a.policy === "trusted" ? t("ap.trusted") : "";
     const ruleText = [policyNote, a.note].filter(Boolean).join(" · ");

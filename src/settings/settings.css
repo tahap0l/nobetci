@@ -3601,3 +3601,17 @@ code.path,
   padding: 6px 10px;
   font: inherit;
 }
+
+.mascot-gallery { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; max-width: 350px; }
+.mascot-choice {
+  display: grid; justify-items: center; gap: 3px; min-width: 62px; padding: 5px;
+  border: 1px solid #ffffff22; border-radius: 9px; background: #ffffff08;
+  color: inherit; font: inherit; font-size: 11px; cursor: pointer;
+}
+.mascot-choice canvas { width: 42px; height: 42px; transition: transform 160ms ease; }
+.mascot-choice:hover canvas { transform: translateY(-2px) scale(1.08); }
+.mascot-choice[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+@media (prefers-reduced-motion: reduce) {
+  .mascot-choice canvas { transition: none; }
+  .mascot-choice:hover canvas { transform: none; }
+}

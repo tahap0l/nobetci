@@ -22,6 +22,7 @@ const faces = {
   eagle: new Path2D("M8 30 14 17Q24 11 34 13L49 19 53 34 45 46 37 42 32 53 22 46 15 49Z"),
 };
 
+const wolfEars = new Path2D("M9 9 18 18 11 24ZM51 9 42 18 49 24Z");
 const muzzle = new Path2D("M15 36Q30 42 45 36Q42 49 30 51Q18 49 15 36Z");
 const beak = new Path2D("M21 34Q30 29 39 34L30 46Z");
 const hookedBeak = new Path2D("M19 34Q32 27 43 35Q43 43 33 47L34 40 24 42Z");
@@ -45,10 +46,21 @@ export function drawMascot(
   ctx.save();
   ctx.translate(cx - size / 2, cy - size / 2 + bounce);
   ctx.scale(size / 60, size / 60);
-  ctx.fillStyle = face;
+  const coat = ctx.createLinearGradient(0, 3, 0, 57);
+  coat.addColorStop(0, accent);
+  coat.addColorStop(.37, face);
+  coat.addColorStop(1, "#202333");
+  ctx.fillStyle = coat;
   ctx.fill(shapes[theme]);
+  ctx.lineWidth = 1.4;
+  ctx.strokeStyle = "#ffffff34";
+  ctx.stroke(shapes[theme]);
   ctx.fillStyle = accent;
   ctx.fill(faces[theme]);
+  if (theme === "wolf") {
+    ctx.fillStyle = "#3c475c";
+    ctx.fill(wolfEars);
+  }
   for (const x of [21, 39]) {
     ctx.fillStyle = "#181a21";
     ctx.beginPath();

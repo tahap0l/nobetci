@@ -1,6 +1,7 @@
 // Genel: the UI language first, then an at-a-glance strip, startup, where the
 // island lives and how long it stays.
 
+import { drawOwlMini } from "../../baykus/mini";
 import { applyMascotPalette, MASCOT_THEMES, type MascotTheme } from "../../core/mascot-theme";
 import { WEATHER_CITIES } from "../../core/island-widgets";
 import { getLang, getPlatform } from "../../i18n/core";
@@ -139,16 +140,25 @@ function render(): HTMLElement {
   weather.addEventListener("change", () => update((x) => (x.islandWeatherCity = weather.value)));
   const appearance = t("genel.appearance");
   const themeLabel = t("genel.mascotTheme");
-  const picker = h("select", { "aria-label": themeLabel, "data-fk": "mascotTheme", class: "mascot-theme-picker" });
-  for (const [id, theme] of Object.entries(MASCOT_THEMES)) {
-    picker.append(h("option", { value: id, text: theme[lang] }));
+  const picker = h("div", { class: "mascot-gallery", role: "group", "aria-label": themeLabel });
+  for (const theme of Object.keys(MASCOT_THEMES) as MascotTheme[]) {
+    const canvas = h("canvas", { width: 88, height: 88, "aria-hidden": "true" });
+    const ctx = canvas.getContext("2d");
+    if (ctx) drawOwlMini(ctx, 44, 44, 72, "idle", null, 0, theme);
+    const button = h("button", {
+      type: "button", class: "mascot-choice", "aria-pressed": theme === s.mascotTheme,
+      "data-theme": theme, "data-fk": "mascotTheme-" + theme,
+      onclick: () => {
+        update((x) => (x.mascotTheme = theme));
+        applyMascotPalette(theme);
+        for (const choice of picker.querySelectorAll<HTMLButtonElement>(".mascot-choice")) {
+          choice.setAttribute("aria-pressed", String(choice.dataset.theme === theme));
+        }
+      },
+    }, canvas, MASCOT_THEMES[theme][lang]);
+    button.setAttribute("aria-pressed", String(theme === s.mascotTheme));
+    picker.append(button);
   }
-  picker.value = s.mascotTheme;
-  picker.addEventListener("change", () => {
-    const theme = picker.value as MascotTheme;
-    update((x) => (x.mascotTheme = theme));
-    applyMascotPalette(theme);
-  });
 
   return h(
     "div",

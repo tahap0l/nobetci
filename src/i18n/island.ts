@@ -39,6 +39,10 @@ const tr = {
 
   // Overview
   "ov.details": "Ayrıntılar",
+  "ap.before": "Önce · önizleme",
+  "ap.after": "Sonra · önizleme",
+  "ov.search": "Oturum veya proje ara",
+  "ov.noMatches": "Eşleşen oturum yok.",
   "ov.lastEvent": "Son olay {age} önce",
   "ov.noRecentEvents": "Uzun süredir olay yok",
   "fl.guardUnavailable": "Fiziksel basılı tutma doğrulanamıyor. Kararı terminalden ver.",
@@ -196,6 +200,10 @@ const en: { [K in keyof typeof tr]: string } = {
   "hdr.close": "Close",
 
   "ov.details": "Details",
+  "ap.before": "Before · preview",
+  "ap.after": "After · preview",
+  "ov.search": "Search sessions or projects",
+  "ov.noMatches": "No matching sessions.",
   "ov.lastEvent": "Last event {age} ago",
   "ov.noRecentEvents": "No recent events",
   "fl.guardUnavailable": "The physical hold cannot be verified. Decide in the terminal.",

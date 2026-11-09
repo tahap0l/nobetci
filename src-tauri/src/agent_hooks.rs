@@ -104,12 +104,20 @@ fn entry_is_ours(provider: Provider, event: &str, entry: &Value) -> bool {
         Provider::Codex => entry.get("hooks").and_then(Value::as_array).map(Vec::as_slice),
         Provider::Cursor => Some(std::slice::from_ref(entry)),
     };
-    commands.into_iter().flatten().any(|h| {
-        h.get("command")
-            .and_then(Value::as_str)
-            .map(|c| c.contains(MARKER) && c.contains(provider.name()) && c.ends_with(event))
-            .unwrap_or(false)
-    })
+    commands.into_iter().flatten().any(|hook| hook_is_ours(provider, event, hook))
+}
+
+fn hook_is_ours(provider: Provider, event: &str, hook: &Value) -> bool {
+    hook.get("command")
+        .and_then(Value::as_str)
+        .is_some_and(|command| command.contains(MARKER) && command.ends_with(&format!(" {} {event}", provider.name())))
+}
+
+fn hook_is_stale(provider: Provider, event: &str, hook: &Value) -> bool {
+    hook_is_ours(provider, event, hook)
+        && (hook["command"].as_str() != Some(command(provider, event).as_str())
+            || hook["timeout"].as_u64()
+                != provider.events().iter().find_map(|(name, timeout)| (*name == event).then_some(*timeout)))
 }
 
 fn merged(provider: Provider, existing: &Value, install: bool) -> Result<Value, String> {
@@ -139,7 +147,18 @@ fn merged(provider: Provider, existing: &Value, install: bool) -> Result<Value, 
             },
             None => Vec::new(),
         };
-        list.retain(|entry| !entry_is_ours(provider, event, entry));
+        list.retain_mut(|entry| {
+            if provider == Provider::Codex {
+                if let Some(hooks) = entry.get_mut("hooks").and_then(Value::as_array_mut) {
+                    let before = hooks.len();
+                    hooks.retain(|hook| !hook_is_ours(provider, event, hook));
+                    return !hooks.is_empty() || before == 0;
+                }
+                true
+            } else {
+                !entry_is_ours(provider, event, entry)
+            }
+        });
         if install {
             match provider {
                 Provider::Codex => list.push(json!({
@@ -213,7 +232,6 @@ pub fn status(provider: Provider) -> Status {
                 continue;
             }
             events.push(event.clone());
-            let expected = command(provider, event);
             stale |= ours.iter().any(|entry| {
                 match provider {
                     Provider::Codex => entry.get("hooks").and_then(Value::as_array).map(Vec::as_slice),
@@ -221,8 +239,7 @@ pub fn status(provider: Provider) -> Status {
                 }
                 .into_iter()
                 .flatten()
-                .filter_map(|h| h.get("command").and_then(Value::as_str))
-                .any(|c| c != expected)
+                .any(|hook| hook_is_stale(provider, event, hook))
             });
         }
     }
@@ -332,6 +349,20 @@ mod tests {
         assert_eq!(result["hooks"]["Stop"].as_array().unwrap().len(), 2);
         assert!(result["hooks"]["UserPromptSubmit"][0]["hooks"][0]["command"].as_str().unwrap().contains("codex"));
         assert!(result["hooks"]["PermissionRequest"].is_array());
+    }
+
+    #[test]
+    fn codex_session_end_repair_detects_old_timeout_and_keeps_sibling_hooks() {
+        let old = json!({"command": command(Provider::Codex, "SessionEnd"), "timeout": 10});
+        let foreign = json!({"command": "other"});
+        assert!(hook_is_stale(Provider::Codex, "SessionEnd", &old));
+        let existing = json!({"hooks": {"SessionEnd": [{"matcher": "*", "hooks": [old, foreign.clone()]}]}});
+        let result = merged(Provider::Codex, &existing, true).unwrap();
+        assert_eq!(result["hooks"]["SessionEnd"][0]["hooks"], json!([foreign]));
+        assert_eq!(result["hooks"]["SessionEnd"][0]["matcher"], "*");
+        let repaired = &result["hooks"]["SessionEnd"][1]["hooks"][0];
+        assert_eq!(repaired["timeout"], 3);
+        assert!(!hook_is_stale(Provider::Codex, "SessionEnd", repaired));
     }
 
     #[test]

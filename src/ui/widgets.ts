@@ -150,6 +150,9 @@ export function buildWidgets(view: "overview" | "empty", openSettings: (tab: str
   const weatherLabel = h("strong");
   const weatherValue = h("span");
   const weather = h("div", { class: "island-widget", hidden: true }, weatherLabel, weatherValue);
+  const mediaHeading = label("Müzik", "Music");
+  const equalizer = h("span", { class: "media-equalizer", "aria-hidden": "true" },
+    h("i"), h("i"), h("i"), h("i"));
   const mediaLabel = value();
   const mediaValue = h("span", { class: "island-card-hint" });
   const mediaSetup = h("button", {
@@ -157,7 +160,7 @@ export function buildWidgets(view: "overview" | "empty", openSettings: (tab: str
     "aria-label": local("Medya ayarları", "Media settings"), onclick: () => openSettings("genel"),
   });
   const media = h("div", { class: "island-card island-card-media" },
-    label("Müzik", "Music"), mediaSetup, mediaLabel, mediaValue);
+    mediaHeading, mediaSetup, equalizer, mediaLabel, mediaValue);
   const home = h("div", { class: "island-dashboard-page" }, agents, media, focus);
   const calendar = buildCalendar();
   const carousel = h("div", {
@@ -190,10 +193,13 @@ export function buildWidgets(view: "overview" | "empty", openSettings: (tab: str
     button.addEventListener("click", async () => {
       if (!currentMedia || busy) return;
       busy = true;
-      const ok = await Bridge.islandMediaControl(currentMedia.source, name);
-      busy = false;
-      if (!ok) mediaValue.textContent = local("Medya komutu uygulanamadı", "Media command unavailable");
-      mediaAt = Date.now() + 500;
+      try {
+        const ok = await Bridge.islandMediaControl(currentMedia.source, name);
+        if (!ok) mediaValue.textContent = local("Medya komutu uygulanamadı", "Media command unavailable");
+      } finally {
+        busy = false;
+        mediaAt = Date.now() + 500;
+      }
     });
     return button;
   };
@@ -205,10 +211,17 @@ export function buildWidgets(view: "overview" | "empty", openSettings: (tab: str
 
   function drawMedia(result: IslandMedia | null) {
     currentMedia = result;
+    const spotify = result?.source.toLowerCase().includes("spotify") ?? false;
+    media.classList.toggle("is-spotify", spotify);
+    media.classList.toggle("is-playing", result?.playing ?? false);
+    mediaHeading.textContent = spotify ? "Spotify" : local("Müzik", "Music");
     mediaLabel.textContent = result?.title || local("Medya", "Media");
     mediaLabel.title = result?.title || "";
     mediaValue.textContent = result ? result.artist : local("Etkin medya bulunamadı", "No active media");
     play.textContent = result?.playing ? "Ⅱ" : "▶";
+    const playLabel = result?.playing ? local("Duraklat", "Pause") : local("Oynat", "Play");
+    play.title = playLabel;
+    play.setAttribute("aria-label", playLabel);
     controls.hidden = !result;
   }
 

@@ -42,6 +42,7 @@ export function drawOwlMini(
   mood: OwlMood,
   accent: string | null,
   t: number,
+  theme = State.settings.mascotTheme,
 ): void {
   const C = OWL_COLORS;
   const R = size / 2;
@@ -69,7 +70,7 @@ export function drawOwlMini(
     ctx.stroke();
   }
 
-  if (drawMascot(ctx, State.settings.mascotTheme, cx, cy, size * 0.75, mood, t)) {
+  if (drawMascot(ctx, theme, cx, cy, size * 0.75, mood, t)) {
     ctx.restore();
     return;
   }
