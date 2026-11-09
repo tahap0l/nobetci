@@ -31,7 +31,7 @@ impl Provider {
         match self {
             Self::Codex => &[
                 ("SessionStart", 10),
-                ("SessionEnd", 10),
+                ("SessionEnd", 3),
                 ("UserPromptSubmit", 10),
                 ("PreToolUse", 10),
                 ("PostToolUse", 10),
