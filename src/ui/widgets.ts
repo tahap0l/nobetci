@@ -7,7 +7,7 @@ import { h } from "./dom";
 const local = (tr: string, en: string) => getLang() === "tr" ? tr : en;
 
 export function widgetHeight(): number {
-  return 68;
+  return 154;
 }
 
 export function compactWidgetSummary(redraw: () => void) {
@@ -94,25 +94,83 @@ function buildCalendar() {
   return { el: h("div", { class: "island-widget island-calendar" }, header, days), refresh };
 }
 
-export function buildWidgets(view: "overview" | "empty") {
+let focusRemaining = 25 * 60_000;
+let focusUntil = 0;
+
+export function buildWidgets(view: "overview" | "empty", openSettings: (tab: string) => void) {
+  const label = (tr: string, en: string) => h("span", { class: "island-card-label", text: local(tr, en) });
+  const value = () => h("strong", { class: "island-card-value" });
+  const agentCount = value();
+  const agentStatus = h("span", { class: "island-card-hint" });
+  const agents = h("button", {
+    type: "button", class: "island-card island-card-agents", onclick: () => openSettings("ajanlar"),
+  }, label("Ajanlar", "Agents"), h("span", { class: "island-card-icon", text: "◉", "aria-hidden": "true" }),
+  agentCount, agentStatus);
+  const focusTime = value();
+  const focusStatus = h("span", { class: "island-card-hint" });
+  const focusToggle = h("button", { type: "button", class: "island-card-action" });
+  const focusReset = h("button", {
+    type: "button", class: "island-focus-reset", text: "↺",
+    title: local("Sayacı sıfırla", "Reset timer"), "aria-label": local("Sayacı sıfırla", "Reset timer"),
+  });
+  const focus = h("div", { class: "island-card island-card-focus" },
+    label("Odak", "Focus"), focusToggle, focusTime, focusStatus, focusReset);
+
+  function refreshFocus() {
+    if (focusUntil && Date.now() >= focusUntil) {
+      focusUntil = 0;
+      focusRemaining = 0;
+    }
+    const remaining = Math.ceil((focusUntil ? focusUntil - Date.now() : focusRemaining) / 1_000);
+    const clock = `${String(Math.floor(remaining / 60)).padStart(2, "0")}:${String(remaining % 60).padStart(2, "0")}`;
+    if (focusTime.textContent !== clock) focusTime.textContent = clock;
+    focusStatus.textContent = focusUntil ? local("Odaklanıyorsun", "Focus in progress")
+      : remaining === 0 ? local("Süre doldu", "Time's up") : local("Başlamaya hazır", "Ready to start");
+    const action = focusUntil ? local("Sayacı duraklat", "Pause timer") : local("Sayacı başlat", "Start timer");
+    focusToggle.textContent = focusUntil ? "Ⅱ" : "▶";
+    focusToggle.title = action;
+    focusToggle.setAttribute("aria-label", action);
+  }
+
+  focusToggle.addEventListener("click", () => {
+    if (focusUntil) {
+      focusRemaining = Math.max(0, focusUntil - Date.now());
+      focusUntil = 0;
+    } else {
+      if (focusRemaining === 0) focusRemaining = 25 * 60_000;
+      focusUntil = Date.now() + focusRemaining;
+    }
+    refreshFocus();
+  });
+  focusReset.addEventListener("click", () => {
+    focusRemaining = 25 * 60_000;
+    focusUntil = 0;
+    refreshFocus();
+  });
   const weatherLabel = h("strong");
   const weatherValue = h("span");
   const weather = h("div", { class: "island-widget", hidden: true }, weatherLabel, weatherValue);
-  const mediaLabel = h("strong");
-  const mediaValue = h("span");
-  const media = h("div", { class: "island-widget", hidden: true }, mediaLabel, mediaValue);
+  const mediaLabel = value();
+  const mediaValue = h("span", { class: "island-card-hint" });
+  const mediaSetup = h("button", {
+    type: "button", class: "island-card-action", text: "♪", title: local("Medya ayarları", "Media settings"),
+    "aria-label": local("Medya ayarları", "Media settings"), onclick: () => openSettings("genel"),
+  });
+  const media = h("div", { class: "island-card island-card-media" },
+    label("Müzik", "Music"), mediaSetup, mediaLabel, mediaValue);
+  const home = h("div", { class: "island-dashboard-page" }, agents, media, focus);
   const calendar = buildCalendar();
   const carousel = h("div", {
     class: "island-widget-slides", tabindex: 0,
     "aria-label": local("Kaydırılabilir ada kartları", "Scrollable island cards"),
-  }, calendar.el, weather, media);
+  }, home, h("div", { class: "island-dashboard-day" }, calendar.el, weather));
   const togglePage = h("button", {
     type: "button", class: "btn btn-small island-widget-page", hidden: true, text: "⇄",
     "aria-label": local("Sonraki ada kartı", "Next island card"),
   });
   togglePage.addEventListener("click", () => {
     if (!carousel.clientWidth) return;
-    const count = 1 + Number(!weather.hidden) + Number(!media.hidden);
+    const count = 2;
     const left = ((Math.round(carousel.scrollLeft / carousel.clientWidth) + 1) % count) * carousel.clientWidth;
     carousel.scrollTo({ left, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" });
   });
@@ -125,6 +183,7 @@ export function buildWidgets(view: "overview" | "empty") {
   let weatherVersion = 0;
   let mediaVersion = 0;
   let wake: number | undefined;
+  let mediaEnabled: boolean | undefined;
 
   const action = (glyph: string, label: string, name: "previous" | "toggle" | "next") => {
     const button = h("button", { type: "button", class: "btn btn-small", text: glyph, title: label, "aria-label": label });
@@ -146,11 +205,9 @@ export function buildWidgets(view: "overview" | "empty") {
 
   function drawMedia(result: IslandMedia | null) {
     currentMedia = result;
-    mediaLabel.textContent = local("Çalan medya", "Now playing");
-    mediaValue.textContent = result
-      ? [result.title, result.artist].filter(Boolean).join(" · ")
-      : local("Etkin medya bulunamadı", "No active media");
-    mediaValue.title = result ? mediaValue.textContent : "";
+    mediaLabel.textContent = result?.title || local("Medya", "Media");
+    mediaLabel.title = result?.title || "";
+    mediaValue.textContent = result ? result.artist : local("Etkin medya bulunamadı", "No active media");
     play.textContent = result?.playing ? "Ⅱ" : "▶";
     controls.hidden = !result;
   }
@@ -179,21 +236,26 @@ export function buildWidgets(view: "overview" | "empty") {
       weatherValue.textContent = local("Yükleniyor…", "Loading…");
     }
     weather.hidden = !city;
-    if (media.hidden !== !mediaOn) {
+    if (mediaEnabled !== mediaOn) {
       mediaVersion++;
       mediaAt = 0;
       drawMedia(null);
-      media.hidden = !mediaOn;
+      mediaEnabled = mediaOn;
+      if (!mediaOn) mediaValue.textContent = local("Medya kartını aç", "Enable the media widget");
     }
     calendar.refresh();
     el.hidden = false;
-    togglePage.hidden = !city && !mediaOn;
+    togglePage.hidden = false;
+    refreshFocus();
+    const active = State.sessions.filter((session) => ["working", "thinking", "approval"].includes(session.state)).length;
+    agentCount.textContent = String(active);
+    agentStatus.textContent = active ? local("Aktif oturum", "Active sessions") : local("ChatGPT · Codex · Claude", "ChatGPT · Codex · Claude");
     if (State.mode !== "expanded" || State.view !== view || el.hidden || !el.isConnected) return;
     if (wake === undefined) {
       wake = window.setTimeout(() => {
         wake = undefined;
         refresh();
-      }, 4_000);
+      }, 1_000);
     }
     const now = Date.now();
     if (city && now >= weatherAt) {

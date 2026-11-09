@@ -889,3 +889,87 @@ mark.lvl-critical { background: #f4505e; color: #fff; }
   background: var(--line);
   font-weight: 700;
 }
+
+.island-dashboard-page {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+  min-width: 0;
+}
+.island-dashboard-day {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  padding: 4px;
+}
+.island-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-end;
+  min-width: 0;
+  height: 135px;
+  padding: 10px;
+  overflow: hidden;
+  border: 1px solid #ffffff19;
+  border-radius: 15px;
+  color: #fdf9ff;
+  background: linear-gradient(160deg, #17151a 12%, var(--card-glow) 100%);
+  text-align: left;
+}
+.island-card-agents { --card-glow: #80472d; cursor: pointer; }
+.island-card-media { --card-glow: #96364b; }
+.island-card-focus { --card-glow: #633785; }
+.view.on .island-card { animation: island-card-in 220ms ease-out both; }
+.view.on .island-card:nth-child(2) { animation-delay: 35ms; }
+.view.on .island-card:nth-child(3) { animation-delay: 70ms; }
+@keyframes island-card-in {
+  from { opacity: 0; transform: translateY(8px) scale(.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.island-card-label {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  font-size: 10px;
+  letter-spacing: .025em;
+  color: #ede0ec;
+}
+.island-card-icon, .island-card-action {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 50%;
+  color: inherit;
+  background: #ffffff24;
+}
+.island-card-action[hidden], .island-dashboard-day [hidden] { display: none; }
+.island-card-action, .island-focus-reset { cursor: pointer; }
+.island-card-value, .island-card-hint {
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.island-card-value { font-size: 20px; line-height: 1.15; }
+.island-card-media .island-card-value { font-size: 16px; }
+.island-card-hint { font-size: 10px; color: #fff1fa; }
+.island-card-media .island-media-buttons { margin-top: 4px; }
+.island-card-media .island-media-buttons .btn { height: 20px; }
+.island-focus-reset {
+  position: absolute;
+  bottom: 7px;
+  right: 7px;
+  border: 0;
+  color: inherit;
+  background: transparent;
+}
+@media (prefers-reduced-motion: reduce) {
+  .view.on .island-card { animation: none; }
+}

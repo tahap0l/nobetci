@@ -2,6 +2,7 @@
 // backed up and written only after the user confirms it.
 
 import type { AgentHookStatus, AgentProvider } from "../../core/bridge";
+import { getLang } from "../../i18n/core";
 import { h } from "../../ui/dom";
 import { api, errText } from "../api";
 import { t } from "../i18n";
@@ -137,9 +138,20 @@ function providerCard(state: ProviderState): HTMLElement {
 let root: HTMLElement | null = null;
 
 function renderTab(): HTMLElement {
+  const tr = getLang() === "tr";
+  const chatgpt = card(
+    { title: "ChatGPT Web", icon: "agents" },
+    h("p", { text: tr
+      ? "Windows’ta Chrome veya Edge eklentisi ChatGPT’nin yanıt durumunu adada gösterir. Sohbet metni aktarılmaz."
+      : "On Windows, the Chrome or Edge extension shows ChatGPT’s response status on the island. Conversation text stays in the browser." }),
+    button(tr ? "Kurulum kılavuzunu aç" : "Open setup guide", {
+      kind: "primary", onClick: () => void api.openLocation("chatgpt-web"),
+    }),
+  );
   const next = h(
     "div",
     { class: "tab-body" },
+    chatgpt,
     notice("info", t("agents.intro")),
     notice("warn", t("agents.promptLimit")),
     providerCard(states[0]),
