@@ -17,7 +17,7 @@ import { toolLabel } from "../island/hooks";
 import { HEADER_H } from "../island/layout";
 import { clear, h } from "./dom";
 import { LEVEL_LABEL } from "./labels";
-import { buildWidgets, widgetHeight } from "./widgets";
+import { buildWidgets, compactWidgetSummary, widgetHeight } from "./widgets";
 
 export interface ViewHost {
   el: HTMLElement;
@@ -715,9 +715,11 @@ export function buildCompact(): { el: HTMLElement; sync(): void } {
   const row = h("span", { class: "compact-minis" });
   const el = h("div", { id: "compact" }, text, quiet, row);
   let key = "";
-  return {
+  const summary = compactWidgetSummary(() => { if (el.isConnected) compact.sync(); });
+  const compact = {
     el,
     sync() {
+      const widget = summary();
       const flash = State.flash && State.flash.until > Date.now() ? State.flash : null;
       const waiting = State.approvals.length;
       let msg: string;
@@ -732,10 +734,10 @@ export function buildCompact(): { el: HTMLElement; sync(): void } {
       } else if (State.paused) {
         msg = t("cp.paused");
       } else if (State.sessions.length === 0) {
-        msg = t("cp.idle");
+        msg = widget || t("cp.idle");
       } else {
         const working = State.sessions.filter((s) => s.state === "working" || s.state === "thinking").length;
-        msg = working ? t("cp.working", { w: working, n: State.sessions.length }) : t("cp.sessions", { n: State.sessions.length });
+        msg = working ? t("cp.working", { w: working, n: State.sessions.length }) : widget || t("cp.sessions", { n: State.sessions.length });
       }
       if (text.textContent !== msg) text.textContent = msg;
       text.dataset.tone = tone;
@@ -749,4 +751,5 @@ export function buildCompact(): { el: HTMLElement; sync(): void } {
       }
     },
   };
+  return compact;
 }

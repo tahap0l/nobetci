@@ -23,6 +23,7 @@
 This development version keeps a compact island at the top of the screen. Click it to open agent sessions and widgets. Permission requests take priority and open the approval card.
 
 - **Agents:** Claude Code, Codex and Cursor sessions and supported approval requests. The [ChatGPT Web bridge](integrations/chatgpt-web/README.md) uses a Chrome or Edge extension on Windows to show response status.
+- **Calendar:** View the current week and use the arrows to browse weeks. The idle compact island cycles through the date, weather, and the current track.
 - **Widgets:** Open Settings → General → Island widgets to enable weather and Windows media. Swipe horizontally or use ⇄ to switch cards.
 - **Mascots:** Choose one of seven mascots in Settings → General → Appearance.
 

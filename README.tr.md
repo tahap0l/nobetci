@@ -23,6 +23,7 @@
 Bu geliştirme sürümünde Nöbetçi ekranın üstünde küçük bir ada olarak açık kalır. Adaya tıklayarak ajan oturumlarını ve kartları açabilirsin. İzin isteği geldiğinde onay kartı öne çıkar.
 
 - **Ajanlar:** Claude Code, Codex ve Cursor oturumları ile desteklenen izin istekleri. [ChatGPT Web bağlantısı](integrations/chatgpt-web/README.md) Windows’ta Chrome veya Edge eklentisiyle yanıt durumunu gösterir.
+- **Takvim:** Adada haftayı gör, oklarla önceki veya sonraki haftaya geç. Boştayken küçük ada tarihi, hava durumunu ve çalan parçayı sırayla gösterir.
 - **Kişisel kartlar:** Ayarlar → Genel → Ada bileşenleri bölümünden hava durumunu ve Windows medya kartını aç. Kartlar arasında yatay kaydırarak veya ⇄ düğmesiyle geç.
 - **Maskot:** Ayarlar → Genel → Görünüm bölümünde yedi maskottan birini seç.
 

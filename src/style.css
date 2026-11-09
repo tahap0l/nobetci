@@ -862,3 +862,30 @@ mark.lvl-critical { background: #f4505e; color: #fff; }
 .island-media-buttons .btn {
   padding: 1px 7px;
 }
+
+.island-calendar-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.island-calendar-head strong {
+  flex: 1;
+}
+.island-calendar-head .btn {
+  height: 20px;
+}
+.island-calendar-days {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 3px;
+}
+.island-calendar-days span {
+  text-align: center;
+  padding: 2px 1px;
+  border-radius: 4px;
+}
+.island-calendar-days [data-today="true"] {
+  color: var(--text);
+  background: var(--line);
+  font-weight: 700;
+}
