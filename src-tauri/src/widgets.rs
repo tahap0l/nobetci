@@ -64,7 +64,7 @@ pub async fn island_media(app: AppHandle) -> Option<Media> {
         return None;
     }
     #[cfg(windows)]
-    return windows_media::read().await;
+    return tauri::async_runtime::spawn_blocking(windows_media::read).await.ok().flatten();
     #[cfg(not(windows))]
     None
 }
@@ -75,7 +75,9 @@ pub async fn island_media_control(app: AppHandle, source: String, action: String
         return false;
     }
     #[cfg(windows)]
-    return windows_media::control(&source, &action).await;
+    return tauri::async_runtime::spawn_blocking(move || windows_media::control(&source, &action))
+        .await
+        .unwrap_or(false);
     #[cfg(not(windows))]
     {
         let _ = (source, action);
@@ -92,13 +94,13 @@ mod windows_media {
         GlobalSystemMediaTransportControlsSessionPlaybackStatus as PlaybackStatus,
     };
 
-    async fn current() -> Option<Session> {
-        Manager::RequestAsync().ok()?.await.ok()?.GetCurrentSession().ok()
+    fn current() -> Option<Session> {
+        Manager::RequestAsync().ok()?.get().ok()?.GetCurrentSession().ok()
     }
 
-    pub async fn read() -> Option<Media> {
-        let session = current().await?;
-        let properties = session.TryGetMediaPropertiesAsync().ok()?.await.ok()?;
+    pub fn read() -> Option<Media> {
+        let session = current()?;
+        let properties = session.TryGetMediaPropertiesAsync().ok()?.get().ok()?;
         let title = properties.Title().ok()?.to_string();
         if title.trim().is_empty() {
             return None;
@@ -111,8 +113,8 @@ mod windows_media {
         })
     }
 
-    pub async fn control(source: &str, action: &str) -> bool {
-        let Some(session) = current().await else { return false };
+    pub fn control(source: &str, action: &str) -> bool {
+        let Some(session) = current() else { return false };
         if session.SourceAppUserModelId().map_or(true, |id| id != source) {
             return false;
         }
@@ -123,7 +125,7 @@ mod windows_media {
             _ => return false,
         };
         match operation {
-            Ok(operation) => operation.await.unwrap_or(false),
+            Ok(operation) => operation.get().unwrap_or(false),
             Err(_) => false,
         }
     }
