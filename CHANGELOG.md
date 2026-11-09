@@ -7,6 +7,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.1.4] - 2026-11-09
+
+- Give ChatGPT a dedicated settings tab alongside Claude Code and link to it from the island.
+- Add a relay health check and report incomplete hook installations for local ChatGPT Work, Codex, and Cursor.
+- Document the desktop Hooks list workaround. Work Cloud does not run local hooks, and live ChatGPT approval delivery has not yet been verified.
+
 ## [2.1.3] - 2026-11-09
 
 - Redesigned the expanded Dynamic Island with animated agent, media, and focus cards.
@@ -140,7 +146,8 @@ pipe relay, the reviewed-diff hook installer and the island window were adapted 
 [Coucou](https://github.com/Louis-CFM/coucou) (MIT). Everything they had, and much more, shipped
 publicly in 0.2.0.
 
-[Unreleased]: https://github.com/tahap0l/nobetci/compare/v2.1.3...HEAD
+[Unreleased]: https://github.com/tahap0l/nobetci/compare/v2.1.4...HEAD
+[2.1.4]: https://github.com/tahap0l/nobetci/compare/v2.1.3...v2.1.4
 [2.1.3]: https://github.com/tahap0l/nobetci/compare/v2.1.2...v2.1.3
 [2.1.2]: https://github.com/tahap0l/nobetci/compare/v2.1.1...v2.1.2
 [2.1.1]: https://github.com/tahap0l/nobetci/compare/v2.1.0...v2.1.1

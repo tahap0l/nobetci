@@ -244,7 +244,8 @@ pub fn status(provider: Provider) -> Status {
         }
     }
     if !events.is_empty() {
-        stale |= provider.events().iter().any(|(event, _)| !events.iter().any(|installed| installed.as_str() == *event));
+        stale |=
+            provider.events().iter().any(|(event, _)| !events.iter().any(|installed| installed.as_str() == *event));
     }
     let hook_path = settings::hook_exe_path();
     Status {
