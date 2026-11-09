@@ -1,6 +1,8 @@
 // Genel: the UI language first, then an at-a-glance strip, startup, where the
 // island lives and how long it stays.
 
+import { applyMascotPalette, MASCOT_THEMES, type MascotTheme } from "../../core/mascot-theme";
+import { getLang } from "../../i18n/core";
 import type { AuditStats } from "../../core/bridge";
 import type { Settings } from "../../core/settings-model";
 import { h } from "../../ui/dom";
@@ -125,6 +127,19 @@ function screenPreview(pos: Settings["position"]): HTMLElement {
 function render(): HTMLElement {
   const s = settings();
   const preview = screenPreview(s.position);
+  const lang = getLang();
+  const appearance = t("genel.appearance");
+  const themeLabel = t("genel.mascotTheme");
+  const picker = h("select", { "aria-label": themeLabel, "data-fk": "mascotTheme", class: "mascot-theme-picker" });
+  for (const [id, theme] of Object.entries(MASCOT_THEMES)) {
+    picker.append(h("option", { value: id, text: theme[lang] }));
+  }
+  picker.value = s.mascotTheme;
+  picker.addEventListener("change", () => {
+    const theme = picker.value as MascotTheme;
+    update((x) => (x.mascotTheme = theme));
+    applyMascotPalette(theme);
+  });
 
   return h(
     "div",
@@ -132,6 +147,10 @@ function render(): HTMLElement {
     card(
       { title: t("genel.langTitle"), icon: "globe", desc: t("genel.langDesc"), cls: "card-lang" },
       languagePicker("lang"),
+    ),
+    card(
+      { title: appearance, icon: "eye" },
+      row(themeLabel, t("genel.mascotThemeHint"), picker),
     ),
     glance(),
     card(

@@ -4,6 +4,7 @@
 
 import "./settings.css";
 import type { QuietReason } from "../core/bridge";
+import { applyMascotPalette } from "../core/mascot-theme";
 import { DEFAULT_SETTINGS, type Settings } from "../core/settings-model";
 import { onLangChange, setPlatform } from "../i18n/core";
 import { h } from "../ui/dom";
@@ -332,6 +333,7 @@ async function start() {
   await initApi();
   const boot = await api.boot();
   initSettings(boot?.settings ?? DEFAULT_SETTINGS);
+  applyMascotPalette(settings().mascotTheme);
   app.version = boot?.version ?? "";
   app.hookPath = boot?.hookPath ?? "";
   app.systemLang = boot?.systemLang ?? "en";
@@ -344,6 +346,7 @@ async function start() {
   buildShell();
   onSaveState(paintSave);
   onExternalChange(() => {
+    applyMascotPalette(settings().mascotTheme);
     // An import, a reset or another window may have changed the language too.
     applyLanguage();
     paintSideFoot();

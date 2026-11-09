@@ -3,6 +3,8 @@
 // island is hidden — a sleeping Nöbetçi costs no CPU.
 
 import { OwlEngine } from "../baykus/owl";
+import { applyMascotPalette } from "../core/mascot-theme";
+import { drawMascot } from "../baykus/mascot";
 import { OwlGreeting } from "../baykus/greeting";
 import { Spring, Tracked } from "../core/anim";
 import { Bridge, IS_TAURI, type DecisionOptions } from "../core/bridge";
@@ -647,7 +649,9 @@ export class Island {
     this.owl.update(dt);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, w, hCss);
-    this.owl.draw(ctx, w, hCss);
+    if (!drawMascot(ctx, State.settings.mascotTheme, w / 2, hCss / 2, w * 0.86, State.mood, performance.now() / 1000)) {
+      this.owl.draw(ctx, w, hCss);
+    }
   }
 
   private updateGlow(on: boolean) {
@@ -722,6 +726,7 @@ export class Island {
 
   /** Applies settings from Rust (boot, or the settings window). */
   applySettings() {
+    applyMascotPalette(State.settings.mascotTheme);
     Sound.setEnabled(State.settings.soundEnabled);
     Sound.setVolume(State.settings.soundVolume);
     Sound.setMuted(State.settings.mutedSounds);

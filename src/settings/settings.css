@@ -3592,3 +3592,12 @@ code.path,
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+.mascot-theme-picker {
+  color: var(--text);
+  background: var(--card);
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font: inherit;
+}

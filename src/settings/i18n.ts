@@ -10,6 +10,9 @@ import { defineMessages, locale, plural, type Vars } from "../i18n/core";
 type Pair = readonly [tr: string, en: string];
 
 const M = {
+  "genel.appearance": ["Görünüm", "Appearance"],
+  "genel.mascotTheme": ["Maskot teması", "Mascot theme"],
+  "genel.mascotThemeHint": ["Maskotu ve renkleri değiştir.", "Change the mascot and colors."],
   // ── Common ──────────────────────────────────────────────────────────────────
   "common.cancel": ["Vazgeç", "Cancel"],
   "common.close": ["Kapat", "Close"],

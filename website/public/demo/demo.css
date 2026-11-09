@@ -1,0 +1,15 @@
+:root { color-scheme: dark; font: 16px/1.5 system-ui, sans-serif; color: #f2f2f4; background: #0a0a0c; }
+body { margin: 0; padding: clamp(16px, 6vw, 64px); }
+main { max-width: 34rem; margin: auto; }
+header { margin-bottom: 1.5rem; }
+h1, h2, p { margin: 0 0 .65rem; }
+article { background: #16171e; border: 1px solid #343641; padding: 1.25rem; border-radius: 18px; }
+.muted { color: #b8bdcc; }
+pre { white-space: pre-wrap; overflow-wrap: anywhere; padding: .75rem; background: #0b0d12; border-radius: 8px; }
+.actions { display: flex; flex-wrap: wrap; gap: .65rem; }
+button { font: inherit; cursor: pointer; padding: .55rem .9rem; border-radius: 8px; border: 1px solid #565d72; }
+button:focus-visible { outline: 3px solid #92c8ff; outline-offset: 3px; }
+button:disabled { cursor: default; opacity: .55; }
+#allow { color: #06261a; background: #77e3b3; }
+#deny { color: #310d13; background: #ffa0aa; }
+#result { min-height: 1.5em; margin-top: 1rem; }

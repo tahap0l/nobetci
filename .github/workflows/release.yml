@@ -3,6 +3,12 @@ name: Release
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag matching the version in main (for example v2.1.0)"
+        required: true
+        type: string
 
 # The build job runs third-party code (npm and cargo dependencies) with a
 # read-only token. Only the small publish job, which runs nothing from the
@@ -33,7 +39,7 @@ jobs:
       - name: Check the tag against the version numbers
         id: version
         env:
-          TAG: ${{ github.ref_name }}
+          TAG: ${{ inputs.tag || github.ref_name }}
         run: |
           if ($env:TAG -notmatch '^v\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$') {
             throw "Tag '$env:TAG' isn't v<semver> (for example v0.2.0 or v0.3.0-beta.1)."
@@ -173,7 +179,7 @@ jobs:
 
       - name: Write the checksum
         env:
-          TAG: ${{ github.ref_name }}
+          TAG: ${{ inputs.tag || github.ref_name }}
         run: |
           set -euo pipefail
           name="Nobetci-${TAG#v}-macos-universal.dmg"
@@ -191,6 +197,7 @@ jobs:
           retention-days: 7
 
   publish:
+    if: github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main'
     name: Publish the GitHub release
     needs: [build, build-macos]
     runs-on: ubuntu-latest
@@ -217,11 +224,18 @@ jobs:
       - name: Create the release
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.ref_name }}
+          TAG: ${{ inputs.tag || github.ref_name }}
           VERSION: ${{ needs.build.outputs.version }}
+          RELEASE_SHA: ${{ github.sha }}
+          RELEASE_EVENT: ${{ github.event_name }}
         run: |
           set -euo pipefail
           flags=()
+          if [[ "$RELEASE_EVENT" == "workflow_dispatch" ]]; then
+            flags+=(--target "$RELEASE_SHA")
+          else
+            flags+=(--verify-tag)
+          fi
           # v0.3.0-beta.1 and the like are pre-releases.
           if [[ "$TAG" == *-* ]]; then flags+=(--prerelease); fi
           gh release create "$TAG" \
@@ -229,7 +243,6 @@ jobs:
             "out/Nobetci-${VERSION}-macos-universal.dmg" \
             out/SHA256SUMS.txt \
             --repo "$GITHUB_REPOSITORY" \
-            --verify-tag \
             --title "Nöbetçi $TAG" \
             --notes-file out/RELEASE_NOTES.md \
             "${flags[@]}"

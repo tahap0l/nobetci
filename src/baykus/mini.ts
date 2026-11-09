@@ -1,6 +1,8 @@
 // Tiny owl head for session pills (13–18 px): ear tufts, two eyes, a beak and
 // a mood-tinted ring. Stateless; `t` (seconds) only drives small pulses.
 
+import { State } from "../core/state";
+import { drawMascot } from "./mascot";
 import { OWL_COLORS, type OwlMood } from "./owl";
 
 const TAU = Math.PI * 2;
@@ -65,6 +67,11 @@ export function drawOwlMini(
     ctx.beginPath();
     ctx.arc(cx, cy, rr, Math.PI * 0.3, Math.PI * 0.7);
     ctx.stroke();
+  }
+
+  if (drawMascot(ctx, State.settings.mascotTheme, cx, cy, size * 0.75, mood, t)) {
+    ctx.restore();
+    return;
   }
 
   // Head in units of u (u = 1 reaches the inside of the ring).
