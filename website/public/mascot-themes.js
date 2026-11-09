@@ -10,7 +10,7 @@ const animals = {
 };
 const outlines = {
   owl: "M6 27 6 8 21 16 39 16 54 8 54 27Q58 51 30 58Q2 51 6 27Z",
-  wolf: "M6 30 5 3 21 15 39 15 55 3 54 30 48 47 30 58 12 47Z",
+  wolf: "M7 27Q3 8 7 5Q11 3 21 15Q30 12 39 15Q49 3 53 5Q57 8 53 27Q61 39 49 48Q41 57 30 57Q19 57 11 48Q-1 39 7 27Z",
   hawk: "M5 31 9 16 22 9 44 11 56 5 51 23 55 37 43 49 30 56 13 48Z",
   octopus: "M12 33C4 3 55 2 48 32Q63 33 58 44T48 43Q49 60 39 58Q34 56 35 46Q30 64 24 55L24 46Q15 63 10 52L14 43Q0 51 2 41Q3 35 12 33Z",
   lion: "M30 2 41 7 51 6 54 16 59 24 56 34 58 45 48 49 40 57 30 55 20 58 12 50 3 45 5 34 1 24 7 16 10 7 21 8Z",
@@ -19,7 +19,7 @@ const outlines = {
 };
 const faces = {
   owl: "M10 31Q13 17 29 28Q45 17 50 31Q52 46 30 51Q8 46 10 31Z",
-  wolf: "M8 30 17 19 26 31 30 43 34 31 43 19 52 30 46 44 30 55 14 44Z",
+  wolf: "M8 35Q13 21 23 24Q27 25 30 31Q33 25 37 24Q47 21 52 35Q50 51 30 54Q10 51 8 35Z",
   hawk: "M9 30Q18 16 30 25Q43 15 52 29L45 42 33 50 30 41 22 47 14 41Z",
   octopus: "M13 30Q12 14 30 13Q48 14 47 30Q43 40 30 39Q17 40 13 30Z",
   lion: "M13 24Q12 15 21 15L30 21 39 15Q48 15 47 24L47 39 39 48 30 53 21 48 13 39Z",
@@ -38,12 +38,15 @@ function avatar(id, state = "idle") {
   svg.append(shape("path", { d: outlines[id], fill: face }));
   svg.append(shape("path", { d: faces[id], fill: accent }));
   for (const x of [21, 39]) {
+    if (id === "wolf") svg.append(shape("ellipse", { cx: x, cy: 30, rx: 7.1, ry: 7.8, fill: "#fff8ec" }));
     if (id === "owl") svg.append(shape("circle", { cx: x, cy: 29, r: 8, fill: "#eef4ff" }));
     if (state === "allowed") {
       svg.append(shape("path", { d: `M${x - 4} 30q4-7 8 0`, fill: "none", stroke: "#172033", "stroke-width": 2, "stroke-linecap": "round" }));
     } else {
-      svg.append(shape("ellipse", { cx: x, cy: 29, rx: 3.3, ry: state === "pending" ? 5.5 : 3.5, fill: "#172033" }));
-      svg.append(shape("circle", { cx: x - 1, cy: 27.5, r: 1.1, fill: "#fff9ee" }));
+      const eye = shape("g", { "data-demo-pupil": "", transform: state === "pending" ? "translate(2.8 0)" : "translate(0 0)" });
+      eye.append(shape("ellipse", { cx: x, cy: 29, rx: id === "wolf" ? 4.2 : 3.3, ry: state === "pending" ? 5.5 : 3.5, fill: "#172033" }));
+      eye.append(shape("circle", { cx: x - 1, cy: 27.5, r: 1.1, fill: "#fff9ee" }));
+      svg.append(eye);
     }
   }
   if (id === "wolf" || id === "lion") {

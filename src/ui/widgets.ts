@@ -7,7 +7,7 @@ import { h } from "./dom";
 const local = (tr: string, en: string) => getLang() === "tr" ? tr : en;
 
 export function widgetHeight(): number {
-  return 154;
+  return 104;
 }
 
 export function compactWidgetSummary(redraw: () => void) {
@@ -100,21 +100,14 @@ let focusUntil = 0;
 export function buildWidgets(view: "overview" | "empty", openSettings: (tab: string) => void) {
   const label = (tr: string, en: string) => h("span", { class: "island-card-label", text: local(tr, en) });
   const value = () => h("strong", { class: "island-card-value" });
-  const agentCount = value();
-  const agentStatus = h("span", { class: "island-card-hint" });
-  const agents = h("button", {
-    type: "button", class: "island-card island-card-agents", onclick: () => openSettings("chatgpt"),
-  }, label("Ajanlar", "Agents"), h("span", { class: "island-card-icon", text: "◉", "aria-hidden": "true" }),
-  agentCount, agentStatus);
   const focusTime = value();
-  const focusStatus = h("span", { class: "island-card-hint" });
   const focusToggle = h("button", { type: "button", class: "island-card-action" });
   const focusReset = h("button", {
     type: "button", class: "island-focus-reset", text: "↺",
     title: local("Sayacı sıfırla", "Reset timer"), "aria-label": local("Sayacı sıfırla", "Reset timer"),
   });
   const focus = h("div", { class: "island-card island-card-focus" },
-    label("Odak", "Focus"), focusToggle, focusTime, focusStatus, focusReset);
+    label("Odak", "Focus"), focusToggle, focusTime, focusReset);
 
   function refreshFocus() {
     if (focusUntil && Date.now() >= focusUntil) {
@@ -124,8 +117,6 @@ export function buildWidgets(view: "overview" | "empty", openSettings: (tab: str
     const remaining = Math.ceil((focusUntil ? focusUntil - Date.now() : focusRemaining) / 1_000);
     const clock = `${String(Math.floor(remaining / 60)).padStart(2, "0")}:${String(remaining % 60).padStart(2, "0")}`;
     if (focusTime.textContent !== clock) focusTime.textContent = clock;
-    focusStatus.textContent = focusUntil ? local("Odaklanıyorsun", "Focus in progress")
-      : remaining === 0 ? local("Süre doldu", "Time's up") : local("Başlamaya hazır", "Ready to start");
     const action = focusUntil ? local("Sayacı duraklat", "Pause timer") : local("Sayacı başlat", "Start timer");
     focusToggle.textContent = focusUntil ? "Ⅱ" : "▶";
     focusToggle.title = action;
@@ -160,8 +151,8 @@ export function buildWidgets(view: "overview" | "empty", openSettings: (tab: str
     "aria-label": local("Medya ayarları", "Media settings"), onclick: () => openSettings("genel"),
   });
   const media = h("div", { class: "island-card island-card-media" },
-    mediaHeading, mediaSetup, equalizer, mediaLabel, mediaValue);
-  const home = h("div", { class: "island-dashboard-page" }, agents, media, focus);
+    equalizer, h("div", { class: "media-track" }, mediaHeading, mediaLabel, mediaValue), mediaSetup);
+  const home = h("div", { class: "island-dashboard-page" }, media, focus);
   const calendar = buildCalendar();
   const carousel = h("div", {
     class: "island-widget-slides", tabindex: 0,
@@ -260,9 +251,6 @@ export function buildWidgets(view: "overview" | "empty", openSettings: (tab: str
     el.hidden = false;
     togglePage.hidden = false;
     refreshFocus();
-    const active = State.sessions.filter((session) => ["working", "thinking", "approval"].includes(session.state)).length;
-    agentCount.textContent = String(active);
-    agentStatus.textContent = active ? local("Aktif oturum", "Active sessions") : local("ChatGPT · Codex · Claude", "ChatGPT · Codex · Claude");
     if (State.mode !== "expanded" || State.view !== view || el.hidden || !el.isConnected) return;
     if (wake === undefined) {
       wake = window.setTimeout(() => {

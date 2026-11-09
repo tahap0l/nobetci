@@ -1,5 +1,8 @@
 <div align="center">
 
+<p align="center"><img src="docs/media/en/idle-island.png" width="720" alt="The smaller idle island with the wolf, horizontal music player, and focus timer"></p>
+
+
 <img src="src-tauri/icons/128x128@2x.png" width="96" height="96" alt="Nöbetçi's owl">
 
 # Nöbetçi
@@ -24,6 +27,7 @@ This development version keeps a compact island at the top of the screen. Click 
 
 - **Agents:** Claude Code, Codex and Cursor sessions and supported approval requests. The [ChatGPT Web bridge](integrations/chatgpt-web/README.md) uses a Chrome or Edge extension on Windows to show response status.
 - **Calendar:** View the current week and use the arrows to browse weeks. The idle compact island cycles through the date, weather, and the current track.
+- **Idle island:** A short status line, a horizontal Windows media player, and a compact focus timer. The wolf mascot follows your pointer and looks toward incoming requests. [Try the web demo](https://nobetci.pages.dev/demo/).
 - **Widgets:** Open Settings → General → Island widgets to enable weather and Windows media. Swipe horizontally or use ⇄ to switch cards.
 - **Mascots:** Choose one of seven mascots in Settings → General → Appearance.
 

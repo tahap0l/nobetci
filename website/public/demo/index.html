@@ -4,9 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Nöbetçi · Canlı demo</title>
-  <link rel="stylesheet" href="/demo/demo.css">
-  <script src="/mascot-themes.js" defer></script>
-  <script src="/demo/demo.js?v=2" defer></script>
+  <link rel="stylesheet" href="/demo/demo.css?v=215">
+  <script src="/mascot-themes.js?v=215" defer></script>
+  <script src="/demo/demo.js?v=215" defer></script>
 </head>
 <body data-theme="owl">
   <main>
@@ -25,7 +25,15 @@
         <div class="avatar-zone"><div class="halo"></div><div class="mascot" id="mascot" aria-hidden="true"></div></div>
         <div class="card" id="card">
           <div class="card-title"><span class="badge" id="badge">Hazır</span><h2 id="heading">Nöbetteyim</h2></div>
-          <p id="detail">Bir örnek istek gönderince komutu ve riskini burada göreceksin.</p>
+          <p id="detail">Oturum bekleniyor</p>
+          <div class="mini-widgets" id="widgets">
+            <div class="mini-player">
+              <span class="mini-beats" aria-hidden="true"><i></i><i></i><i></i></span>
+              <span class="mini-track"><strong>Gece Nöbeti</strong><small>Örnek parça</small></span>
+              <button id="music" type="button" aria-label="Örnek oynatmayı başlat" aria-pressed="false">▶</button>
+            </div>
+            <span class="mini-focus"><small>Odak</small><strong>25:00</strong></span>
+          </div>
           <div id="command" hidden>
             <div class="meta"><span>Claude Code · Bash</span><span>nobetci/</span></div>
             <pre><code>git status --short</code></pre>

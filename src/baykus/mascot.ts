@@ -2,7 +2,7 @@ import { MASCOT_THEMES, type MascotTheme } from "../core/mascot-theme";
 import type { OwlMood } from "./owl";
 
 const SILHOUETTES = {
-  wolf: "M6 30 5 3 21 15 39 15 55 3 54 30 48 47 30 58 12 47Z",
+  wolf: "M7 27Q3 8 7 5Q11 3 21 15Q30 12 39 15Q49 3 53 5Q57 8 53 27Q61 39 49 48Q41 57 30 57Q19 57 11 48Q-1 39 7 27Z",
   hawk: "M5 31 9 16 22 9 44 11 56 5 51 23 55 37 43 49 30 56 13 48Z",
   octopus: "M12 33C4 3 55 2 48 32Q63 33 58 44T48 43Q49 60 39 58Q34 56 35 46Q30 64 24 55L24 46Q15 63 10 52L14 43Q0 51 2 41Q3 35 12 33Z",
   lion: "M30 2 41 7 51 6 54 16 59 24 56 34 58 45 48 49 40 57 30 55 20 58 12 50 3 45 5 34 1 24 7 16 10 7 21 8Z",
@@ -14,7 +14,7 @@ const shapes = Object.fromEntries(
   Object.entries(SILHOUETTES).map(([key, shape]) => [key, new Path2D(shape)]),
 );
 const faces = {
-  wolf: new Path2D("M8 30 17 19 26 31 30 43 34 31 43 19 52 30 46 44 30 55 14 44Z"),
+  wolf: new Path2D("M8 35Q13 21 23 24Q27 25 30 31Q33 25 37 24Q47 21 52 35Q50 51 30 54Q10 51 8 35Z"),
   hawk: new Path2D("M9 30Q18 16 30 25Q43 15 52 29L45 42 33 50 30 41 22 47 14 41Z"),
   octopus: new Path2D("M13 30Q12 14 30 13Q48 14 47 30Q43 40 30 39Q17 40 13 30Z"),
   lion: new Path2D("M13 24Q12 15 21 15L30 21 39 15Q48 15 47 24L47 39 39 48 30 53 21 48 13 39Z"),
@@ -35,6 +35,8 @@ export function drawMascot(
   size: number,
   mood: OwlMood,
   time: number,
+  lookX = 0,
+  lookY = 0,
 ): boolean {
   if (theme === "owl" || !Object.prototype.hasOwnProperty.call(shapes, theme)) return false;
   const { accent, face } = MASCOT_THEMES[theme];
@@ -61,15 +63,26 @@ export function drawMascot(
     ctx.fillStyle = "#3c475c";
     ctx.fill(wolfEars);
   }
-  for (const x of [21, 39]) {
+  const wolf = theme === "wolf";
+  const gazeX = alert ? 1 : Math.max(-1, Math.min(1, lookX));
+  const gazeY = alert ? 0 : Math.max(-1, Math.min(1, lookY));
+  for (const x of [20, 40]) {
+    if (wolf && !sleeping) {
+      ctx.fillStyle = "#fff8ec";
+      ctx.beginPath();
+      ctx.ellipse(x, 32, 7.1, 7.8, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    const pupilX = x + gazeX * (wolf ? 2.8 : 1.7);
+    const pupilY = (wolf ? 32 : 29) + gazeY * 2.2;
     ctx.fillStyle = "#181a21";
     ctx.beginPath();
-    ctx.ellipse(x, 29, 3.6, sleeping ? 0.8 : alert ? 5.2 : 4, 0, 0, Math.PI * 2);
+    ctx.ellipse(pupilX, pupilY, wolf ? 4.4 : 3.6, sleeping ? 0.8 : alert ? 5.2 : 4, 0, 0, Math.PI * 2);
     ctx.fill();
     if (!sleeping && size >= 30) {
       ctx.fillStyle = "#fff9ee";
       ctx.beginPath();
-      ctx.arc(x - 1, 27.5, 1.1, 0, Math.PI * 2);
+      ctx.arc(pupilX - 1.2, pupilY - 1.5, 1.15, 0, Math.PI * 2);
       ctx.fill();
     }
   }

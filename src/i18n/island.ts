@@ -63,8 +63,8 @@ const tr = {
 
   // Empty
   "empty.title": "Nöbetteyim.",
-  "empty.hooked": "Şu an açık bir Claude Code oturumu yok. Bir oturum başladığında burada göreceksin.",
-  "empty.unhooked": "Claude Code oturumlarını görebilmem için önce hook'ları kurmam gerek.",
+  "empty.hooked": "Oturum bekleniyor",
+  "empty.unhooked": "Ajan bağlantısı gerekli",
   "empty.install": "Hook'ları kur",
 
   // Approval card
@@ -222,8 +222,8 @@ const en: { [K in keyof typeof tr]: string } = {
   "sd.started": "started {d} ago",
 
   "empty.title": "On watch.",
-  "empty.hooked": "No Claude Code session is open right now. You'll see one here as soon as it starts.",
-  "empty.unhooked": "To see your Claude Code sessions, I need to install the hooks first.",
+  "empty.hooked": "Waiting for a session",
+  "empty.unhooked": "Connect an agent to get started",
   "empty.install": "Install hooks",
 
   "ap.hiddenChar": "Invisible character",

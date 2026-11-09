@@ -24,8 +24,12 @@ Bu geliştirme sürümünde Nöbetçi ekranın üstünde küçük bir ada olarak
 
 - **Ajanlar:** Claude Code, Codex ve Cursor oturumları ile desteklenen izin istekleri. [ChatGPT Web bağlantısı](integrations/chatgpt-web/README.md) Windows’ta Chrome veya Edge eklentisiyle yanıt durumunu gösterir.
 - **Takvim:** Adada haftayı gör, oklarla önceki veya sonraki haftaya geç. Boştayken küçük ada tarihi, hava durumunu ve çalan parçayı sırayla gösterir.
+- **Boş ada:** Tek satır durum bilgisi, yatay Windows medya oynatıcısı ve küçük odak sayacı. Kurt maskotunun gözleri imleci ve izin kartını takip eder. [Web demosunu dene](https://nobetci.pages.dev/demo/).
 - **Kişisel kartlar:** Ayarlar → Genel → Ada bileşenleri bölümünden hava durumunu ve Windows medya kartını aç. Kartlar arasında yatay kaydırarak veya ⇄ düğmesiyle geç.
 - **Maskot:** Ayarlar → Genel → Görünüm bölümünde yedi maskottan birini seç.
+
+<p align="center"><img src="docs/media/tr/idle-island.png" width="720" alt="Kurt, yatay müzik oynatıcısı ve odak sayacıyla daha küçük boş ada"></p>
+
 
 
 Nöbetçi, ekranının üst kenarında siyah bir adada yaşayan küçük bir baykuş. Claude Code, Codex ve

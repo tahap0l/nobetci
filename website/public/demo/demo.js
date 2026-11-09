@@ -35,6 +35,7 @@ function show(state, badge, heading, detail) {
   byId("heading").textContent = heading;
   byId("detail").textContent = detail;
   byId("command").hidden = state === "idle";
+  byId("widgets").hidden = pending;
   byId("status").textContent = heading + ". " + detail;
   send.hidden = pending;
   deny.hidden = allow.hidden = !pending;
@@ -46,3 +47,25 @@ allow.addEventListener("click", () => show("allowed", "Onaylandı", "İzin veril
 deny.addEventListener("click", () => show("denied", "Reddedildi", "İstek durduruldu", "Simülasyonda Claude Code bu komutu çalıştırmaz."));
 
 window.addEventListener("pageshow", () => selectTheme(read()));
+
+const music = byId("music");
+music.addEventListener("click", () => {
+  const playing = music.getAttribute("aria-pressed") !== "true";
+  music.setAttribute("aria-pressed", String(playing));
+  music.setAttribute("aria-label", playing ? "Örnek oynatmayı duraklat" : "Örnek oynatmayı başlat");
+  music.textContent = playing ? "Ⅱ" : "▶";
+});
+function gaze(x, y) {
+  for (const eye of mascot.querySelectorAll("[data-demo-pupil]")) {
+    eye.setAttribute("transform", `translate(${x} ${y})`);
+  }
+}
+stage.addEventListener("pointermove", (event) => {
+  if (stage.dataset.state === "pending") return;
+  const box = mascot.getBoundingClientRect();
+  gaze(Math.tanh((event.clientX - box.left - box.width / 2) / 125) * 2.8,
+    Math.tanh((event.clientY - box.top - box.height / 2) / 100) * 2.2);
+});
+stage.addEventListener("pointerleave", () => {
+  if (stage.dataset.state !== "pending") gaze(0, 0);
+});

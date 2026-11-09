@@ -210,3 +210,6 @@ h1 em, h2 em { color: var(--cyan); font-style: normal; }
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
   .owl-companion { animation: none; }
 }
+
+.idle-feature { grid-column: 1 / -1; }
+.idle-preview { display: block; width: min(100%, 660px); height: auto; margin: 12px 0; border-radius: 12px; }

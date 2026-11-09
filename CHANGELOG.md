@@ -7,6 +7,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.1.5] - 2026-11-10
+
+- Slim down the idle island and replace the large music card with a horizontal player next to the focus timer.
+- Redraw the wolf with larger eyes that follow the pointer and look toward permission requests.
+- Refresh the website demo and README previews.
+
 ## [2.1.4] - 2026-11-10
 
 - Put sessions awaiting attention first and add keyboard search by project, agent, or terminal.
@@ -152,7 +158,8 @@ pipe relay, the reviewed-diff hook installer and the island window were adapted 
 [Coucou](https://github.com/Louis-CFM/coucou) (MIT). Everything they had, and much more, shipped
 publicly in 0.2.0.
 
-[Unreleased]: https://github.com/tahap0l/nobetci/compare/v2.1.4...HEAD
+[Unreleased]: https://github.com/tahap0l/nobetci/compare/v2.1.5...HEAD
+[2.1.5]: https://github.com/tahap0l/nobetci/compare/v2.1.4...v2.1.5
 [2.1.4]: https://github.com/tahap0l/nobetci/compare/v2.1.3...v2.1.4
 [2.1.3]: https://github.com/tahap0l/nobetci/compare/v2.1.2...v2.1.3
 [2.1.2]: https://github.com/tahap0l/nobetci/compare/v2.1.1...v2.1.2

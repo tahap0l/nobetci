@@ -436,14 +436,14 @@ function buildSession(actions: ViewActions): ViewHost {
 // ── Empty ─────────────────────────────────────────────────────────────────────
 
 function buildEmpty(actions: ViewActions): ViewHost {
-  const hint = h("p", { class: "empty-hint" });
+  const hint = h("span", { class: "empty-hint" });
   const setup = h("button", { class: "btn btn-primary", text: t("empty.install"), onclick: () => actions.openSettings("claude") });
   const widgets = buildWidgets("empty", actions.openSettings);
-  const agents = h("button", { class: "btn btn-small", text: "ChatGPT", onclick: () => actions.openSettings("chatgpt") });
-  const el = h("div", { class: "view view-empty" }, widgets.el, h("p", { class: "empty-title", text: t("empty.title") }), hint, h("div", { class: "empty-actions" }, setup, agents));
+  const status = h("div", { class: "empty-status" }, h("strong", { text: t("empty.title") }), hint, setup);
+  const el = h("div", { class: "view view-empty" }, status, widgets.el);
   return {
     el,
-    height: () => 150 + widgetHeight(),
+    height: () => HEADER_H + 42 + widgetHeight(),
     tick: widgets.refresh,
     sync() {
       widgets.refresh();

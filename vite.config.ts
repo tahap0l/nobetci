@@ -18,6 +18,7 @@ export default defineConfig(process.env.CF_PAGES === "1" ? {
       const images = {
         "owl.png": "src-tauri/icons/128x128.png",
         "overview.png": "docs/media/tr/overview.png",
+        "idle-island.png": "docs/media/tr/idle-island.png",
         "critical.png": "docs/media/tr/critical.png",
         "social.png": "docs/media/social.png",
       };

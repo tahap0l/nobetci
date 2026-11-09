@@ -912,7 +912,7 @@ mark.lvl-critical { background: #f4505e; color: #fff; }
 
 .island-dashboard-page {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 7px;
   min-width: 0;
 }
@@ -938,7 +938,7 @@ mark.lvl-critical { background: #f4505e; color: #fff; }
   background: linear-gradient(160deg, #17151a 12%, var(--card-glow) 100%);
   text-align: left;
 }
-.island-card-agents { --card-glow: #80472d; cursor: pointer; }
+
 .island-card-media {
   --card-glow: #54358d;
   background: radial-gradient(ellipse at 100% 0%, var(--card-glow), transparent 70%), #181321;
@@ -1026,4 +1026,27 @@ mark.lvl-critical { background: #f4505e; color: #fff; }
 }
 @media (prefers-reduced-motion: reduce) {
   .view.on .island-card { animation: none; }
+}
+
+.empty-status { display: flex; align-items: center; flex-wrap: wrap; gap: 5px 9px; padding: 5px 0 8px; }
+.empty-status .empty-hint { margin: 0; font-size: 12px; }
+.empty-status .btn { margin-left: auto; }
+.island-dashboard-page .island-card { height: 66px; border-radius: 12px; }
+.island-card-media { flex-direction: row; align-items: center; justify-content: flex-start; gap: 8px; }
+.island-card-media .media-track { flex: 1; min-width: 0; display: grid; }
+.island-card-media .island-card-label { position: static; font-size: 9px; }
+.island-card-media .media-equalizer { margin: 0; flex: none; }
+.island-card-media .island-card-value { font-size: 13px; }
+.island-card-media .island-card-action { position: static; flex: none; }
+.island-card-media .island-media-buttons { flex: none; margin: 0; gap: 2px; }
+.island-card-media .island-media-buttons .btn { padding-inline: 4px; min-width: 18px; }
+.island-card-media:has(.island-media-buttons:not([hidden])) .island-card-action { display: none; }
+.island-card-focus { min-width: 84px; padding: 8px; }
+.island-card-focus .island-card-label { top: 6px; left: 8px; }
+.island-card-focus .island-card-action { top: 5px; right: 5px; width: 20px; height: 20px; }
+.island-card-focus .island-card-value { font-size: 16px; }
+.island-card-focus .island-focus-reset { bottom: 4px; right: 4px; }
+@media (max-width: 390px) {
+  .island-dashboard-page { grid-template-columns: minmax(0, 1fr); }
+  .island-dashboard-page .island-card-focus { height: 26px; flex-direction: row; align-items: center; justify-content: center; }
 }
