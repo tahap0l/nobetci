@@ -115,6 +115,8 @@ pub struct Settings {
     /// "auto" follows the system display language; "tr" or "en" force one.
     pub language: String,
     pub mascot_theme: String,
+    pub island_media: bool,
+    pub island_weather_city: String,
     /// The first-run welcome has been completed or skipped.
     pub onboarded: bool,
     pub autostart: bool,
@@ -189,6 +191,8 @@ impl Default for Settings {
         Self {
             language: "auto".into(),
             mascot_theme: "owl".into(),
+            island_media: false,
+            island_weather_city: String::new(),
             onboarded: false,
             autostart: false,
             screen: "primary".into(),
@@ -258,6 +262,9 @@ impl Settings {
         }
         if !["owl", "wolf", "hawk", "octopus", "lion", "canary", "eagle"].contains(&self.mascot_theme.as_str()) {
             self.mascot_theme = d.mascot_theme;
+        }
+        if crate::widgets::city(&self.island_weather_city).is_none() {
+            self.island_weather_city.clear();
         }
         if !["auto", "tr", "en"].contains(&self.language.as_str()) {
             self.language = d.language;

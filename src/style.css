@@ -805,3 +805,43 @@ mark.lvl-critical { background: #f4505e; color: #fff; }
   font-size: 11px;
   overflow-wrap: anywhere;
 }
+
+.island-widgets {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.island-widgets[hidden],
+.island-widget[hidden],
+.island-media-buttons[hidden] {
+  display: none;
+}
+.island-widget {
+  display: grid;
+  align-content: center;
+  min-width: 0;
+  height: 60px;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+}
+.island-widget strong,
+.island-widget span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.island-widget span {
+  color: var(--muted);
+  font-size: 11px;
+}
+.island-media-buttons, .empty-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.island-media-buttons .btn {
+  padding: 1px 7px;
+}

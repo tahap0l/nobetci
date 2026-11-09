@@ -214,7 +214,23 @@ export type QuietReason = "dnd" | "hours" | "fullscreen" | null;
 
 // ── Commands ──────────────────────────────────────────────────────────────────
 
+export interface IslandMedia {
+  title: string;
+  artist: string;
+  source: string;
+  playing: boolean;
+}
+
+export interface IslandWeather {
+  temperature: number;
+  code: number;
+}
+
 export const Bridge = {
+  islandMedia: () => call<IslandMedia>("island_media"),
+  islandMediaControl: (source: string, action: "previous" | "toggle" | "next") =>
+    call<boolean>("island_media_control", { source, action }),
+  islandWeather: (cityId: string) => call<IslandWeather>("island_weather", { cityId }),
   boot: () => call<BootInfo>("boot"),
 
   /** Saves and returns the sanitised settings Rust actually kept. */

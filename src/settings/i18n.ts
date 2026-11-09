@@ -10,6 +10,13 @@ import { defineMessages, locale, plural, type Vars } from "../i18n/core";
 type Pair = readonly [tr: string, en: string];
 
 const M = {
+  "genel.widgets.title": ["Ada bileşenleri", "Island widgets"],
+  "genel.widgets.media": ["Çalan medya", "Now playing"],
+  "genel.widgets.mediaHint": ["Spotify ve Windows’a medya bilgisi gönderen tarayıcı sekmelerini gösterir.", "Shows Spotify and browser tabs that expose media to Windows."],
+  "genel.widgets.mediaWindows": ["Medya kontrolü Windows’ta kullanılabilir.", "Media controls are available on Windows."],
+  "genel.widgets.weather": ["Hava durumu", "Weather"],
+  "genel.widgets.weatherHint": ["Şehir seçersen Open-Meteo’ya yalnızca seçtiğin şehrin koordinatlarıyla istek gönderilir.", "Selecting a city sends its coordinates to Open-Meteo."],
+  "genel.widgets.off": ["Kapalı", "Off"],
   "genel.appearance": ["Görünüm", "Appearance"],
   "genel.mascotTheme": ["Maskot teması", "Mascot theme"],
   "genel.mascotThemeHint": ["Maskotu ve renkleri değiştir.", "Change the mascot and colors."],

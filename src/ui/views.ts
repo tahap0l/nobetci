@@ -17,6 +17,7 @@ import { toolLabel } from "../island/hooks";
 import { HEADER_H } from "../island/layout";
 import { clear, h } from "./dom";
 import { LEVEL_LABEL } from "./labels";
+import { buildWidgets, widgetHeight } from "./widgets";
 
 export interface ViewHost {
   el: HTMLElement;
@@ -217,7 +218,8 @@ const ROW_H = 44;
 
 function buildOverview(actions: ViewActions): ViewHost {
   const list = h("div", { class: "sessions" });
-  const el = h("div", { class: "view view-overview" }, list);
+  const widgets = buildWidgets("overview");
+  const el = h("div", { class: "view view-overview" }, widgets.el, list);
   let key = "";
 
   const row = (s: Session) =>
@@ -243,9 +245,10 @@ function buildOverview(actions: ViewActions): ViewHost {
     el,
     height: () => {
       const rows = Math.min(MAX_ROWS, State.sessions.length) + (State.sessions.length > MAX_ROWS ? 0.5 : 0);
-      return Math.max(150, HEADER_H + 14 + rows * ROW_H + 12);
+      return Math.max(150, HEADER_H + 14 + rows * ROW_H + 12) + widgetHeight();
     },
     sync() {
+      widgets.refresh();
       const shown = State.sessions.slice(0, MAX_ROWS);
       const next =
         shown.map((s) => `${s.id}:${s.state}:${s.name}:${s.steps.length}:${State.lastStep(s)}`).join("|") +
@@ -258,6 +261,7 @@ function buildOverview(actions: ViewActions): ViewHost {
       }
     },
     tick() {
+      widgets.refresh();
       const now = Date.now();
       for (const age of el.querySelectorAll<HTMLElement>(".session-age")) {
         const text = ago(now - Number(age.dataset.since));
@@ -365,11 +369,15 @@ function buildSession(actions: ViewActions): ViewHost {
 function buildEmpty(actions: ViewActions): ViewHost {
   const hint = h("p", { class: "empty-hint" });
   const setup = h("button", { class: "btn btn-primary", text: t("empty.install"), onclick: () => actions.openSettings("claude") });
-  const el = h("div", { class: "view view-empty" }, h("p", { class: "empty-title", text: t("empty.title") }), hint, setup);
+  const widgets = buildWidgets("empty");
+  const agents = h("button", { class: "btn btn-small", text: "Codex / Cursor", onclick: () => actions.openSettings("ajanlar") });
+  const el = h("div", { class: "view view-empty" }, widgets.el, h("p", { class: "empty-title", text: t("empty.title") }), hint, h("div", { class: "empty-actions" }, setup, agents));
   return {
     el,
-    height: () => 150,
+    height: () => 150 + widgetHeight(),
+    tick: widgets.refresh,
     sync() {
+      widgets.refresh();
       const hooked = State.settings.hooksInstalled;
       hint.textContent = hooked ? t("empty.hooked") : t("empty.unhooked");
       setup.style.display = hooked ? "none" : "";
