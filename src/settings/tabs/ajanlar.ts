@@ -14,6 +14,8 @@ interface ProviderState {
   provider: AgentProvider;
   status: AgentHookStatus | null;
   loaded: boolean;
+  testing?: boolean;
+  health?: { ok: boolean; text: string };
   busy: boolean;
   message: { ok: boolean; text: string } | null;
 }
@@ -65,6 +67,7 @@ async function openPreview(state: ProviderState, install: boolean) {
         try {
           const backup = await api.agentHooksApply(state.provider, install, preview.fingerprint);
           dialog.close();
+          state.health = undefined;
           state.message = { ok: true, text: t(install ? "agents.written" : "agents.removed", { backup }) };
           await refresh(state);
           renderTab();
@@ -95,6 +98,32 @@ async function openPreview(state: ProviderState, install: boolean) {
   }
 }
 
+async function checkHealth(state: ProviderState) {
+  state.testing = true;
+  state.health = undefined;
+  renderTab();
+  try {
+    const report = await api.hooksHealth(state.provider);
+    const roundtripMs = report?.roundtripMs;
+    const messages = [roundtripMs != null
+      ? t("agents.testRelay", { ms: roundtripMs })
+      : report?.error ?? t("agents.testFailed")];
+    if (report?.eventsMissing.length) {
+      messages.push(t("claude.health.missing", { list: report.eventsMissing.join(", ") }));
+    }
+    if (report?.stale) {
+      messages.push(t("agents.testUpdate"));
+    }
+    state.health = {
+      ok: roundtripMs != null && Boolean(report?.installed && !report.stale && !report.eventsMissing.length),
+      text: messages.join(" "),
+    };
+  } finally {
+    state.testing = false;
+    renderTab();
+  }
+}
+
 function providerCard(state: ProviderState): HTMLElement {
   const status = state.status;
   const controls = h("div", { class: "btn-row" });
@@ -106,6 +135,11 @@ function providerCard(state: ProviderState): HTMLElement {
   } else {
     controls.append(button(t("agents.install"), { kind: "primary", icon: "download", disabled: state.busy || !status?.hookReady, onClick: () => void openPreview(state, true) }));
   }
+
+  controls.append(button(t("claude.btn.health"), {
+    kind: "subtle", disabled: state.testing || state.busy || !status?.hookReady,
+    onClick: () => void checkHealth(state),
+  }));
 
   return card(
     { title: providerTitle(state.provider), icon: state.provider === "codex" ? "claude" : "cursor" },
@@ -130,6 +164,8 @@ function providerCard(state: ProviderState): HTMLElement {
             !status.hookReady ? notice("error", t("agents.relayMissing")) : null,
           ),
     state.provider === "codex" ? notice("info", t("agents.codexTrust")) : notice("warn", t("agents.cursorApproval")),
+    state.testing ? notice("info", t("agents.loading")) : null,
+    state.health ? notice(state.health.ok ? "ok" : "warn", state.health.text) : null,
     state.message ? notice(state.message.ok ? "ok" : "error", state.message.text) : null,
     controls,
   );

@@ -250,9 +250,14 @@ Then press **Health check** in **Settings → Claude Code**: it runs the relay e
 Claude Code would and times a ping through it. Claude Code reads hooks when a session
 starts, so restart any session that was already running.
 
-To connect Codex or Cursor, open **Settings → Other agents**, choose **Connect…**, review the
-settings-file diff and confirm. Codex may ask you to trust the new hooks from its `/hooks` screen.
-Codex prompt submissions and permission requests are tracked; Cursor prompt submissions and
+To connect local ChatGPT Work, Codex or Cursor, open **Settings → Other agents**, choose
+**Connect…**, review the settings-file diff and confirm. In ChatGPT desktop, review and trust
+the Nöbetçi hooks in **Settings → Hooks**. In the Codex CLI, use `/hooks`. **Health check**
+checks the installed entries and the relay connection. To verify that ChatGPT calls the hook,
+send a message in a local-only Work chat and look for the session on the island. Work Cloud
+does not run local hooks.
+Local Work and Codex prompt submissions and supported permission requests use the same hooks.
+Cursor prompt submissions and
 shell/MCP requests are tracked. Cursor requests fail closed if Nöbetçi cannot respond. Prompt text
 is shown in the timeline, but the agent hooks cannot rewrite it before the agent receives it.
 
