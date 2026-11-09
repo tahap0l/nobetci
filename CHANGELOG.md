@@ -7,7 +7,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-## [2.1.4] - 2026-11-09
+## [2.1.4] - 2026-11-10
+
+- Put sessions awaiting attention first and add keyboard search by project, agent, or terminal.
+- Show before-and-after excerpts for edit requests and require manual review for unrecognized or incomplete requests.
+- Verify physical holds for high-risk approvals and limit concurrent relay connections and initial message time.
+- Detect outdated Codex SessionEnd timeouts and keep other hooks when reinstalling. Refuse to write hook settings changed since preview.
+- Add a Spotify playback animation with reduced-motion support and a gallery of seven illustrated mascots.
 
 - Give ChatGPT a dedicated settings tab alongside Claude Code and link to it from the island.
 - Add a relay health check and report incomplete hook installations for local ChatGPT Work, Codex, and Cursor.
