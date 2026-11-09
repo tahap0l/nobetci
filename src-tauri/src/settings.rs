@@ -256,9 +256,7 @@ impl Settings {
         if !["none", "low", "medium"].contains(&self.auto_allow_max.as_str()) {
             self.auto_allow_max = d.auto_allow_max;
         }
-        if !["owl", "wolf", "hawk", "octopus", "lion", "canary", "eagle"]
-            .contains(&self.mascot_theme.as_str())
-        {
+        if !["owl", "wolf", "hawk", "octopus", "lion", "canary", "eagle"].contains(&self.mascot_theme.as_str()) {
             self.mascot_theme = d.mascot_theme;
         }
         if !["auto", "tr", "en"].contains(&self.language.as_str()) {
