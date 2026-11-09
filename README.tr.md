@@ -16,6 +16,17 @@
 
 </div>
 
+## İndir ve kullan
+
+**[Güncel Windows ve macOS kurulumları](https://github.com/tahap0l/nobetci/releases/latest)**
+
+Bu geliştirme sürümünde Nöbetçi ekranın üstünde küçük bir ada olarak açık kalır. Adaya tıklayarak ajan oturumlarını ve kartları açabilirsin. İzin isteği geldiğinde onay kartı öne çıkar.
+
+- **Ajanlar:** Claude Code, Codex ve Cursor oturumları ile desteklenen izin istekleri. [ChatGPT Web bağlantısı](integrations/chatgpt-web/README.md) Windows’ta Chrome veya Edge eklentisiyle yanıt durumunu gösterir.
+- **Kişisel kartlar:** Ayarlar → Genel → Ada bileşenleri bölümünden hava durumunu ve Windows medya kartını aç. Kartlar arasında yatay kaydırarak veya ⇄ düğmesiyle geç.
+- **Maskot:** Ayarlar → Genel → Görünüm bölümünde yedi maskottan birini seç.
+
+
 Nöbetçi, ekranının üst kenarında siyah bir adada yaşayan küçük bir baykuş. Claude Code, Codex ve
 Cursor oturumlarını ve gönderilen mesajları izler; desteklenen izin isteklerini adaya taşır.
 Claude Code tam risk incelemesine sahiptir; Codex ve Cursor desteği her ajanın hook yeteneklerine

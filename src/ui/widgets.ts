@@ -17,7 +17,19 @@ export function buildWidgets(view: "overview" | "empty") {
   const mediaLabel = h("strong");
   const mediaValue = h("span");
   const media = h("div", { class: "island-widget", hidden: true }, mediaLabel, mediaValue);
-  const el = h("div", { class: "island-widgets", hidden: true }, weather, media);
+  const carousel = h("div", {
+    class: "island-widget-slides", tabindex: 0,
+    "aria-label": local("Kaydırılabilir ada kartları", "Scrollable island cards"),
+  }, weather, media);
+  const togglePage = h("button", {
+    type: "button", class: "btn btn-small island-widget-page", hidden: true, text: "⇄",
+    "aria-label": local("Hava durumu ve medya arasında geç", "Switch between weather and media"),
+  });
+  togglePage.addEventListener("click", () => {
+    const left = carousel.scrollLeft > carousel.clientWidth / 2 ? 0 : carousel.clientWidth;
+    carousel.scrollTo({ left, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" });
+  });
+  const el = h("div", { class: "island-widgets", hidden: true }, carousel, togglePage);
   let currentMedia: IslandMedia | null = null;
   let city = "";
   let weatherAt = 0;
@@ -87,6 +99,7 @@ export function buildWidgets(view: "overview" | "empty") {
       media.hidden = !mediaOn;
     }
     el.hidden = !city && !mediaOn;
+    togglePage.hidden = !city || !mediaOn;
     if (State.mode !== "expanded" || State.view !== view || el.hidden || !el.isConnected) return;
     if (wake === undefined) {
       wake = window.setTimeout(() => {

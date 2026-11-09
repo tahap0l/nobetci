@@ -16,6 +16,17 @@
 
 </div>
 
+## Download and use
+
+**[Latest Windows and macOS installers](https://github.com/tahap0l/nobetci/releases/latest)**
+
+This development version keeps a compact island at the top of the screen. Click it to open agent sessions and widgets. Permission requests take priority and open the approval card.
+
+- **Agents:** Claude Code, Codex and Cursor sessions and supported approval requests. The [ChatGPT Web bridge](integrations/chatgpt-web/README.md) uses a Chrome or Edge extension on Windows to show response status.
+- **Widgets:** Open Settings → General → Island widgets to enable weather and Windows media. Swipe horizontally or use ⇄ to switch cards.
+- **Mascots:** Choose one of seven mascots in Settings → General → Appearance.
+
+
 Nöbetçi is a small owl on a black island at the top of your screen. It watches Claude Code, Codex
 and Cursor sessions, records submitted prompts and surfaces supported permission requests. Claude
 Code has the full safety review; Codex and Cursor support depends on each agent's hook API.

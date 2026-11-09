@@ -808,10 +808,27 @@ mark.lvl-critical { background: #f4505e; color: #fff; }
 
 .island-widgets {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+  align-items: center;
   margin-bottom: 8px;
 }
+.island-widget-slides {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  scroll-snap-type: x mandatory;
+}
+.island-widget-slides > * {
+  scroll-snap-align: start;
+}
+.island-widget-slides:focus-visible {
+  outline: 1px solid var(--accent, currentColor);
+  outline-offset: -1px;
+}
+.island-widget-page[hidden],
 .island-widgets[hidden],
 .island-widget[hidden],
 .island-media-buttons[hidden] {
