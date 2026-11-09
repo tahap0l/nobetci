@@ -3,30 +3,42 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="robots" content="noindex">
-  <title>Nöbetçi · Etkileşimli demo</title>
+  <title>Nöbetçi · Canlı demo</title>
   <link rel="stylesheet" href="/demo/demo.css">
-</head>
-<body>
-  <main>
-    <header>
-      <h1>Nöbetçi’yi dene</h1>
-      <p class="muted">Örnek bir Claude Code isteğine karar ver. Bu demo yalnızca tarayıcıda çalışır.</p>
-    </header>
-    <article aria-labelledby="request">
-      <h2 id="request">Komut onay bekliyor</h2>
-      <p class="muted">Claude Code · Bash · Düşük risk</p>
-      <p>Proje <code>nobetci/</code></p>
-      <pre><code>git status --short</code></pre>
-      <p>Değişen dosyaları listeler.</p>
-      <div class="actions">
-        <button id="deny" type="button">Reddet</button>
-        <button id="allow" type="button">Onayla</button>
-        <button id="reset" type="button" disabled>Yeniden dene</button>
-      </div>
-      <p id="result" role="status"></p>
-    </article>
-  </main>
   <script src="/demo/demo.js" defer></script>
+</head>
+<body data-theme="owl">
+  <main>
+    <nav><a href="/">← Nöbetçi</a><span>ETKİLEŞİMLİ DEMO</span></nav>
+    <header>
+      <h1>Son karar <em>sende.</em></h1>
+      <p>Maskotunu seç. Bir komut isteği gönder ve Nöbetçi’nin nasıl tepki verdiğini gör.</p>
+    </header>
+    <div class="layout">
+      <aside aria-labelledby="theme-heading">
+        <h2 id="theme-heading">Maskot teması</h2>
+        <div class="themes" id="themes" role="group" aria-labelledby="theme-heading"></div>
+      </aside>
+      <section class="stage" id="stage" data-state="idle" aria-labelledby="stage-heading">
+        <div class="stage-bar"><span id="stage-heading">NÖBETÇİ ADASI</span><span class="signal"></span></div>
+        <div class="avatar-zone"><div class="halo"></div><div class="mascot" id="mascot" aria-hidden="true"></div></div>
+        <div class="card" id="card">
+          <div class="card-title"><span class="badge" id="badge">Hazır</span><h2 id="heading">Nöbetteyim</h2></div>
+          <p id="detail">Bir örnek istek gönderince komutu ve riskini burada göreceksin.</p>
+          <div id="command" hidden>
+            <div class="meta"><span>Claude Code · Bash</span><span>nobetci/</span></div>
+            <pre><code>git status --short</code></pre>
+          </div>
+          <div class="actions">
+            <button class="primary" id="send" type="button">Örnek istek gönder <span aria-hidden="true">→</span></button>
+            <button class="deny" id="deny" type="button" hidden>Reddet</button>
+            <button class="allow" id="allow" type="button" hidden>Onayla</button>
+          </div>
+          <p id="status" role="status" class="sr-only"></p>
+        </div>
+        <p class="foot">Simülasyon · Bilgisayarında komut çalıştırmaz.</p>
+      </section>
+    </div>
+  </main>
 </body>
 </html>
