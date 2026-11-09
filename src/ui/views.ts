@@ -370,7 +370,7 @@ function buildEmpty(actions: ViewActions): ViewHost {
   const hint = h("p", { class: "empty-hint" });
   const setup = h("button", { class: "btn btn-primary", text: t("empty.install"), onclick: () => actions.openSettings("claude") });
   const widgets = buildWidgets("empty", actions.openSettings);
-  const agents = h("button", { class: "btn btn-small", text: "ChatGPT / Codex / Cursor", onclick: () => actions.openSettings("ajanlar") });
+  const agents = h("button", { class: "btn btn-small", text: "ChatGPT", onclick: () => actions.openSettings("chatgpt") });
   const el = h("div", { class: "view view-empty" }, widgets.el, h("p", { class: "empty-title", text: t("empty.title") }), hint, h("div", { class: "empty-actions" }, setup, agents));
   return {
     el,

@@ -7,11 +7,12 @@ import { h } from "../../ui/dom";
 import { api, errText } from "../api";
 import { t } from "../i18n";
 import { icon } from "../icons";
-import type { Tab } from "../nav";
+import { rerender, type Tab, type TabId } from "../nav";
 import { button, card, modal, notice, pill } from "../ui";
 
 interface ProviderState {
   provider: AgentProvider;
+  tab: TabId;
   status: AgentHookStatus | null;
   loaded: boolean;
   testing?: boolean;
@@ -20,10 +21,8 @@ interface ProviderState {
   message: { ok: boolean; text: string } | null;
 }
 
-const states: ProviderState[] = [
-  { provider: "codex", status: null, loaded: false, busy: false, message: null },
-  { provider: "cursor", status: null, loaded: false, busy: false, message: null },
-];
+const desktop: ProviderState = { provider: "codex", tab: "chatgpt", status: null, loaded: false, busy: false, message: null };
+const cursor: ProviderState = { provider: "cursor", tab: "ajanlar", status: null, loaded: false, busy: false, message: null };
 
 function providerTitle(provider: AgentProvider): string {
   return t(provider === "codex" ? "agents.codex" : "agents.cursor");
@@ -70,7 +69,7 @@ async function openPreview(state: ProviderState, install: boolean) {
           state.health = undefined;
           state.message = { ok: true, text: t(install ? "agents.written" : "agents.removed", { backup }) };
           await refresh(state);
-          renderTab();
+          rerender(state.tab);
         } catch (err) {
           error.replaceChildren(notice("error", errText(err)));
           confirm.disabled = false;
@@ -92,7 +91,7 @@ async function openPreview(state: ProviderState, install: boolean) {
     });
   } catch (err) {
     state.message = { ok: false, text: `${t("agents.previewFailed")}${errText(err)}` };
-    renderTab();
+    rerender(state.tab);
   } finally {
     state.busy = false;
   }
@@ -101,7 +100,7 @@ async function openPreview(state: ProviderState, install: boolean) {
 async function checkHealth(state: ProviderState) {
   state.testing = true;
   state.health = undefined;
-  renderTab();
+  rerender(state.tab);
   try {
     const report = await api.hooksHealth(state.provider);
     const roundtripMs = report?.roundtripMs;
@@ -120,7 +119,7 @@ async function checkHealth(state: ProviderState) {
     };
   } finally {
     state.testing = false;
-    renderTab();
+    rerender(state.tab);
   }
 }
 
@@ -171,9 +170,7 @@ function providerCard(state: ProviderState): HTMLElement {
   );
 }
 
-let root: HTMLElement | null = null;
-
-function renderTab(): HTMLElement {
+function renderChatGpt(): HTMLElement {
   const tr = getLang() === "tr";
   const chatgpt = card(
     { title: "ChatGPT Web", icon: "agents" },
@@ -184,27 +181,23 @@ function renderTab(): HTMLElement {
       kind: "primary", onClick: () => void api.openLocation("chatgpt-web"),
     }),
   );
-  const next = h(
-    "div",
-    { class: "tab-body" },
-    chatgpt,
-    notice("info", t("agents.intro")),
-    notice("warn", t("agents.promptLimit")),
-    providerCard(states[0]),
-    providerCard(states[1]),
-  );
-  if (root?.isConnected) root.replaceWith(next);
-  root = next;
-  return next;
+  return h("div", { class: "tab-body" }, providerCard(desktop), notice("info", t("agents.hooksEmpty")), chatgpt);
 }
+
+export const chatgptTab: Tab = {
+  id: "chatgpt",
+  title: () => "ChatGPT",
+  subtitle: () => t("agents.chatgptSubtitle"),
+  icon: "agents",
+  render: renderChatGpt,
+  onShow: () => { void refresh(desktop).then(() => rerender("chatgpt")); },
+};
 
 export const ajanlarTab: Tab = {
   id: "ajanlar",
   title: () => t("agents.title"),
   subtitle: () => t("agents.subtitle"),
-  icon: "agents",
-  render: renderTab,
-  onShow: () => {
-    void Promise.all(states.map(refresh)).then(() => renderTab());
-  },
+  icon: "cursor",
+  render: () => h("div", { class: "tab-body" }, notice("info", t("agents.intro")), providerCard(cursor)),
+  onShow: () => { void refresh(cursor).then(() => rerender("ajanlar")); },
 };

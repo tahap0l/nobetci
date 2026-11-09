@@ -25,7 +25,7 @@ import {
   type SaveState,
 } from "./store";
 import { bildirimlerTab } from "./tabs/bildirimler";
-import { ajanlarTab } from "./tabs/ajanlar";
+import { ajanlarTab, chatgptTab } from "./tabs/ajanlar";
 import { claudeTab } from "./tabs/claude";
 import { gecmisTab, historyChanged } from "./tabs/gecmis";
 import { genelTab } from "./tabs/genel";
@@ -39,6 +39,7 @@ import { openWizard } from "./wizard";
 const TABS: Record<TabId, Tab> = {
   genel: genelTab,
   claude: claudeTab,
+  chatgpt: chatgptTab,
   ajanlar: ajanlarTab,
   prompts: promptsTab,
   guvenlik: guvenlikTab,

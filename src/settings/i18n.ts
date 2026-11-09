@@ -200,8 +200,10 @@ const M = {
   "claude.subtitle": ["Hook bağlantısı, sağlık testi ve olaylar", "Hook connection, health check and events"],
   // ── Other coding agents ────────────────────────────────────────────────────
   "agents.title": ["Diğer ajanlar", "Other agents"],
-  "agents.subtitle": ["Codex ve Cursor oturumlarını bağla", "Connect Codex and Cursor sessions"],
-  "agents.intro": ["Codex ve Cursor oturumlarını, gönderdiğin mesajları ve desteklenen izin isteklerini Nöbetçi'de izle.", "Watch Codex and Cursor sessions, submitted prompts, and supported permission requests in Nöbetçi."],
+  "agents.subtitle": ["Cursor oturumlarını bağla", "Connect Cursor sessions"],
+  "agents.chatgptSubtitle": ["Masaüstü bağlantısı, sağlık testi ve web desteği", "Desktop connection, health check, and web support"],
+  "agents.hooksEmpty": ["ChatGPT masaüstünde Hook bulunamadı yazıyorsa Codex görünümünde bir yerel proje ekle. Ayarlar → Hook’lar ekranında listeyi yenile.", "If ChatGPT desktop shows No hooks found, add a local project in the Codex view and refresh Settings → Hooks."],
+  "agents.intro": ["Cursor oturumlarını ve desteklenen izin isteklerini Nöbetçi'de izle.", "Watch Cursor sessions and supported permission requests in Nöbetçi."],
   "agents.promptLimit": ["Mesaj gönderimlerini oturum akışında görürsün. Ajanların hook'ları metni otomatik değiştiremez; düzeltme için Mesaj Atölyesi'nde metni iyileştirip kendin yapıştır.", "Submitted prompts appear in the session timeline. These agents' hooks cannot replace prompt text; use Prompt Studio to improve it, then paste it yourself."],
   "agents.codexTrust": ["ChatGPT masaüstünde Ayarlar → Hooks bölümünde Nöbetçi girdilerini incele ve güven. Yerel Work ve Codex bu dosyayı kullanır. Work Cloud bu yerel hook’ları çalıştırmaz.", "In the ChatGPT desktop app, open Settings → Hooks to review and trust the Nöbetçi entries. Local Work and Codex use this file. Work Cloud does not run these local hooks."],
   "agents.testRelay": ["Relay → Nöbetçi çalışıyor ({ms} ms). Ajanın hook’u çağırdığını doğrulamak için yerel oturumdan mesaj gönder.", "Relay → Nöbetçi works ({ms} ms). Send a message from a local session to verify that the agent calls the hook."],
