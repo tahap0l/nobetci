@@ -7,6 +7,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.1.3] - 2026-11-09
+
+- Redesigned the expanded Dynamic Island with animated agent, media, and focus cards.
+- Added a 25-minute focus timer with pause and reset. Calendar and weather remain one swipe away.
+- Added a ChatGPT Web setup entry under Other agents.
+
 ## [2.1.2] - 2026-11-09
 
 - Keep the compact Dynamic Island visible while idle and show the date, weather, and active Windows media in rotation.
@@ -134,7 +140,8 @@ pipe relay, the reviewed-diff hook installer and the island window were adapted 
 [Coucou](https://github.com/Louis-CFM/coucou) (MIT). Everything they had, and much more, shipped
 publicly in 0.2.0.
 
-[Unreleased]: https://github.com/tahap0l/nobetci/compare/v2.1.2...HEAD
+[Unreleased]: https://github.com/tahap0l/nobetci/compare/v2.1.3...HEAD
+[2.1.3]: https://github.com/tahap0l/nobetci/compare/v2.1.2...v2.1.3
 [2.1.2]: https://github.com/tahap0l/nobetci/compare/v2.1.1...v2.1.2
 [2.1.1]: https://github.com/tahap0l/nobetci/compare/v2.1.0...v2.1.1
 [2.1.0]: https://github.com/tahap0l/nobetci/compare/v2.0.2...v2.1.0
