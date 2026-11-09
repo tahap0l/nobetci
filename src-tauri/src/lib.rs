@@ -352,22 +352,30 @@ struct HealthReport {
     error: Option<String>,
 }
 
-/// Checks the whole path: settings.json entries, the relay on disk, and a real
-/// round trip — the relay is run exactly as Claude Code would run it.
+/// Checks hook entries and sends a ping through the installed relay.
 #[tauri::command]
-async fn hooks_health(app: AppHandle) -> HealthReport {
-    let status = hooks::status();
-    let wanted = current(&app).hook_events;
-    let events_missing: Vec<String> = wanted.iter().filter(|e| !status.events.contains(e)).cloned().collect();
+async fn hooks_health(app: AppHandle, provider: Option<agent_hooks::Provider>) -> HealthReport {
+    let (installed, settings_path, events_installed, stale, wanted) = match provider {
+        Some(provider) => {
+            let status = agent_hooks::status(provider);
+            let wanted = provider.events().iter().map(|(event, _)| (*event).to_string()).collect();
+            (status.installed, status.settings_path, status.events, status.stale, wanted)
+        }
+        None => {
+            let status = hooks::status();
+            (status.installed, status.settings_path, status.events, status.stale, current(&app).hook_events)
+        }
+    };
+    let events_missing = wanted.into_iter().filter(|event| !events_installed.contains(event)).collect();
     let exe = settings::hook_exe_path();
     let mut report = HealthReport {
-        installed: status.installed,
+        installed,
         relay_path: exe.to_string_lossy().to_string(),
         relay_exists: exe.exists(),
-        settings_path: status.settings_path.clone(),
-        events_installed: status.events.clone(),
+        settings_path,
+        events_installed,
         events_missing,
-        stale: status.stale,
+        stale,
         roundtrip_ms: None,
         input_guard: inputguard::available(),
         error: None,
@@ -386,10 +394,12 @@ async fn hooks_health(app: AppHandle) -> HealthReport {
     let nonce = format!("{:x}-{}", audit::now_ms(), std::process::id());
     let payload = serde_json::json!({ "hook_event_name": pipe::PING_EVENT, "nonce": nonce, "cwd": "." }).to_string();
     let started = Instant::now();
-    let spawned = quiet_spawn(
-        Command::new(&exe).arg(pipe::PING_EVENT).stdin(Stdio::piped()).stdout(Stdio::null()).stderr(Stdio::null()),
-    )
-    .spawn();
+    let mut command = Command::new(&exe);
+    if let Some(provider) = provider {
+        command.arg(provider.name());
+    }
+    command.arg(pipe::PING_EVENT).stdin(Stdio::piped()).stdout(Stdio::null()).stderr(Stdio::null());
+    let spawned = quiet_spawn(&mut command).spawn();
     match spawned {
         Ok(mut child) => {
             if let Some(mut stdin) = child.stdin.take() {

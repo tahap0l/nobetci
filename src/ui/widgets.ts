@@ -103,7 +103,7 @@ export function buildWidgets(view: "overview" | "empty", openSettings: (tab: str
   const agentCount = value();
   const agentStatus = h("span", { class: "island-card-hint" });
   const agents = h("button", {
-    type: "button", class: "island-card island-card-agents", onclick: () => openSettings("ajanlar"),
+    type: "button", class: "island-card island-card-agents", onclick: () => openSettings("chatgpt"),
   }, label("Ajanlar", "Agents"), h("span", { class: "island-card-icon", text: "◉", "aria-hidden": "true" }),
   agentCount, agentStatus);
   const focusTime = value();

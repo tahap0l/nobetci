@@ -270,7 +270,7 @@ export const Bridge = {
   hooksApply: (install: boolean, fingerprint: string) =>
     callOrThrow<string>("hooks_apply", { install, fingerprint }),
   /** End-to-end check: settings.json entries, relay on disk, and a real ping. */
-  hooksHealth: () => call<HealthReport>("hooks_health"),
+  hooksHealth: (provider?: AgentProvider) => call<HealthReport>("hooks_health", provider ? { provider } : undefined),
   agentHooksStatus: (provider: AgentProvider) => call<AgentHookStatus>("agent_hooks_status", { provider }),
   agentHooksPreview: (provider: AgentProvider, install: boolean) =>
     callOrThrow<AgentHookPreview>("agent_hooks_preview", { provider, install }),

@@ -27,7 +27,7 @@ impl Provider {
         }
     }
 
-    fn events(self) -> &'static [(&'static str, u64)] {
+    pub(crate) fn events(self) -> &'static [(&'static str, u64)] {
         match self {
             Self::Codex => &[
                 ("SessionStart", 10),
@@ -56,6 +56,11 @@ impl Provider {
     }
 
     fn settings_path(self) -> PathBuf {
+        if self == Self::Codex {
+            if let Some(home) = std::env::var_os("CODEX_HOME").filter(|path| Path::new(path).is_absolute()) {
+                return PathBuf::from(home).join("hooks.json");
+            }
+        }
         let dir = match self {
             Self::Codex => ".codex",
             Self::Cursor => ".cursor",
@@ -237,6 +242,10 @@ pub fn status(provider: Provider) -> Status {
                 .any(|c| c != expected)
             });
         }
+    }
+    if !events.is_empty() {
+        stale |=
+            provider.events().iter().any(|(event, _)| !events.iter().any(|installed| installed.as_str() == *event));
     }
     let hook_path = settings::hook_exe_path();
     Status {
