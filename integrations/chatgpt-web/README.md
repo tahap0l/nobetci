@@ -6,7 +6,7 @@ aktarmaz. Yalnızca rastgele bir oturum kimliği ile çalışma durumunu yerel u
 
 ## Windows üzerinde deneme
 
-1. Bu değişikliği içeren bir Nöbetçi derlemesini kur ve uygulamayı aç. 2.1.1’in mevcut paketi bu köprüyü içermez.
+1. Nöbetçi 2.1.2 veya daha yeni bir sürümü kur ve uygulamayı aç.
 2. Chrome’da `chrome://extensions`, Edge’de `edge://extensions` sayfasını aç. Geliştirici modunu aç ve
    **Paketlenmemiş öğe yükle** ile buradaki `extension` klasörünü seç.
 3. Eklenti kimliğini kopyala. Bu dizinde PowerShell’de aşağıdaki komutu çalıştır. Edge için `-Browser Edge` kullan.
