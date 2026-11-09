@@ -233,6 +233,15 @@ function handle(island: Island, p: HookPayload) {
       if (p.prompt ?? p.message) State.step(s, `» ${p.prompt ?? p.message}`);
       break;
 
+    case "PreCompact":
+      if (s.state !== "approval") State.setState(s, "thinking");
+      State.step(s, t("step.compacting"));
+      break;
+
+    case "PostCompact":
+      State.step(s, t("step.compacted"));
+      break;
+
     case "PreToolUse": {
       const tool = p.tool_name ?? t("tool.generic");
       s.tools++;

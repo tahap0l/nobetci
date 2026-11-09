@@ -35,6 +35,8 @@ impl Provider {
                 ("UserPromptSubmit", 10),
                 ("PreToolUse", 10),
                 ("PostToolUse", 10),
+                ("PreCompact", 10),
+                ("PostCompact", 10),
                 ("PermissionRequest", 120),
                 ("Stop", 10),
                 ("SubagentStart", 10),

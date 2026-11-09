@@ -38,6 +38,8 @@ export interface Settings {
   /** "auto" follows the Windows display language (Turkish → tr, anything else → en). */
   language: "auto" | "tr" | "en";
   mascotTheme: import("./mascot-theme").MascotTheme;
+  islandMedia: boolean;
+  islandWeatherCity: string;
   /** The first-run welcome has been completed or skipped. */
   onboarded: boolean;
   autostart: boolean;
@@ -103,6 +105,8 @@ export const ALL_EVENTS = [
 export const DEFAULT_SETTINGS: Settings = {
   language: "auto",
   mascotTheme: "owl",
+  islandMedia: false,
+  islandWeatherCity: "",
   onboarded: false,
   autostart: false,
   screen: "primary",

@@ -115,6 +115,8 @@ const tr = {
   "session.generic": "Oturum",
 
   // Steps and flashes
+  "step.compacting": "Bağlam sıkıştırılıyor",
+  "step.compacted": "Bağlam sıkıştırıldı",
   "step.started": "Oturum başladı",
   "step.toolFailed": "⚠ araç başarısız",
   "step.turnDone": "✓ Tur bitti",
@@ -261,6 +263,8 @@ const en: { [K in keyof typeof tr]: string } = {
   "tool.generic": "Tool",
   "session.generic": "Session",
 
+  "step.compacting": "Compacting context",
+  "step.compacted": "Context compacted",
   "step.started": "Session started",
   "step.toolFailed": "⚠ tool failed",
   "step.turnDone": "✓ Turn finished",

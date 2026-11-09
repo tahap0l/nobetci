@@ -1,6 +1,6 @@
 # Nöbetçi Privacy Policy
 
-**Last updated: October 20, 2026**
+**Last updated: November 9, 2026**
 
 Nöbetçi is a desktop application that helps you review AI coding-agent permission requests and
 prepare messages for AI agents. It runs on your computer and does not require an account.
@@ -26,6 +26,12 @@ Prompt Studio sends a draft only after you choose a provider and select **Improv
 
 The rewritten message is shown for your review. You decide whether to copy it to another app.
 
+## Optional Island widgets
+
+Weather is off by default. Selecting a city enables forecast requests to Open-Meteo. It receives the
+selected city's coordinates and your connection's IP address, without device location or agent data.
+The Windows media widget reads the current media session locally and does not send or retain track details.
+
 ## Your choices
 
 You can use Nöbetçi without Prompt Studio, choose local Ollama, or choose OpenAI with your own API
@@ -41,7 +47,7 @@ open an issue at <https://github.com/tahap0l/nobetci/issues>.
 
 # Nöbetçi Gizlilik Politikası
 
-**Son güncelleme: 20 Ekim 2026**
+**Son güncelleme: 9 Kasım 2026**
 
 Nöbetçi, yapay zekâ kodlama ajanlarının izin isteklerini incelemene ve ajanlara göndereceğin
 mesajları hazırlamana yardımcı olan bir masaüstü uygulamasıdır. Bilgisayarında çalışır ve hesap
@@ -67,6 +73,12 @@ Mesaj Atölyesi taslağı yalnızca bir sağlayıcı seçip **Mesajı iyileştir
   koşullarına ve veri politikalarına tabidir.
 
 Düzenlenmiş mesajı önce sen incelersin. Başka bir uygulamaya kopyalamaya sen karar verirsin.
+
+## İsteğe bağlı ada bileşenleri
+
+Hava durumu varsayılan olarak kapalıdır. Şehir seçersen Open-Meteo'ya istek gönderilir. Open-Meteo
+seçtiğin şehrin koordinatlarını ve bağlantının IP adresini alır. Cihaz konumu veya ajan verisi
+gönderilmez. Windows medya bileşeni oturumu yerel olarak okur ve parça bilgilerini göndermez veya saklamaz.
 
 ## Seçimlerin
 

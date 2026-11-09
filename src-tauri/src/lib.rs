@@ -22,6 +22,7 @@ mod rules;
 mod settings;
 mod sys;
 mod tray;
+mod widgets;
 #[cfg(windows)]
 mod win_user;
 
@@ -816,6 +817,9 @@ pub fn run() {
             hooks_apply,
             hooks_health,
             agent_hooks_status,
+            widgets::island_weather,
+            widgets::island_media,
+            widgets::island_media_control,
             agent_hooks_preview,
             agent_hooks_apply,
             prompts::rewrite_prompt,

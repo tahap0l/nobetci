@@ -1212,6 +1212,9 @@ export function createMockApi(): Api {
 
   const api: Api = {
     mock: true,
+    islandMedia: async () => null,
+    islandMediaControl: async () => false,
+    islandWeather: async () => null,
     onEvent: async <T>(name: string, handler: (payload: T) => void) => {
       const set = listeners.get(name) ?? new Set();
       const fn = (p: unknown) => handler(p as T);

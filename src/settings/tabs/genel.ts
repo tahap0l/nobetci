@@ -2,7 +2,8 @@
 // island lives and how long it stays.
 
 import { applyMascotPalette, MASCOT_THEMES, type MascotTheme } from "../../core/mascot-theme";
-import { getLang } from "../../i18n/core";
+import { WEATHER_CITIES } from "../../core/island-widgets";
+import { getLang, getPlatform } from "../../i18n/core";
 import type { AuditStats } from "../../core/bridge";
 import type { Settings } from "../../core/settings-model";
 import { h } from "../../ui/dom";
@@ -128,6 +129,14 @@ function render(): HTMLElement {
   const s = settings();
   const preview = screenPreview(s.position);
   const lang = getLang();
+  const weather = h("select", {
+    "aria-label": t("genel.widgets.weather"),
+    "data-fk": "islandWeatherCity",
+    class: "mascot-theme-picker",
+  }, h("option", { value: "", text: t("genel.widgets.off") }));
+  for (const [id, name] of Object.entries(WEATHER_CITIES)) weather.append(h("option", { value: id, text: name }));
+  weather.value = s.islandWeatherCity;
+  weather.addEventListener("change", () => update((x) => (x.islandWeatherCity = weather.value)));
   const appearance = t("genel.appearance");
   const themeLabel = t("genel.mascotTheme");
   const picker = h("select", { "aria-label": themeLabel, "data-fk": "mascotTheme", class: "mascot-theme-picker" });
@@ -151,6 +160,19 @@ function render(): HTMLElement {
     card(
       { title: appearance, icon: "eye" },
       row(themeLabel, t("genel.mascotThemeHint"), picker),
+    ),
+    card(
+      { title: t("genel.widgets.title"), icon: "eye" },
+      getPlatform() === "windows"
+        ? row(
+          t("genel.widgets.media"),
+          t("genel.widgets.mediaHint"),
+          toggle(s.islandMedia, (v) => update((x) => (x.islandMedia = v)), {
+            label: t("genel.widgets.media"), fk: "islandMedia",
+          }),
+        )
+        : h("p", { text: t("genel.widgets.mediaWindows") }),
+      row(t("genel.widgets.weather"), t("genel.widgets.weatherHint"), weather),
     ),
     glance(),
     card(
