@@ -218,7 +218,7 @@ const ROW_H = 44;
 
 function buildOverview(actions: ViewActions): ViewHost {
   const list = h("div", { class: "sessions" });
-  const widgets = buildWidgets("overview");
+  const widgets = buildWidgets("overview", actions.openSettings);
   const el = h("div", { class: "view view-overview" }, widgets.el, list);
   let key = "";
 
@@ -369,8 +369,8 @@ function buildSession(actions: ViewActions): ViewHost {
 function buildEmpty(actions: ViewActions): ViewHost {
   const hint = h("p", { class: "empty-hint" });
   const setup = h("button", { class: "btn btn-primary", text: t("empty.install"), onclick: () => actions.openSettings("claude") });
-  const widgets = buildWidgets("empty");
-  const agents = h("button", { class: "btn btn-small", text: "Codex / Cursor", onclick: () => actions.openSettings("ajanlar") });
+  const widgets = buildWidgets("empty", actions.openSettings);
+  const agents = h("button", { class: "btn btn-small", text: "ChatGPT / Codex / Cursor", onclick: () => actions.openSettings("ajanlar") });
   const el = h("div", { class: "view view-empty" }, widgets.el, h("p", { class: "empty-title", text: t("empty.title") }), hint, h("div", { class: "empty-actions" }, setup, agents));
   return {
     el,

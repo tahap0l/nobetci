@@ -265,6 +265,13 @@ fn find_on_path(stem: &str) -> Option<std::path::PathBuf> {
 /// Shows a file or folder of ours in Explorer / Finder.
 #[tauri::command]
 fn open_location(what: String) -> bool {
+    if what == "chatgpt-web" {
+        let url = "https://github.com/tahap0l/nobetci/tree/main/integrations/chatgpt-web";
+        #[cfg(windows)]
+        return Command::new("rundll32.exe").args(["url.dll,FileProtocolHandler", url]).spawn().is_ok();
+        #[cfg(target_os = "macos")]
+        return Command::new("/usr/bin/open").arg(url).spawn().is_ok();
+    }
     let (path, select) = match what.as_str() {
         "log" => (settings::local_dir().join("nobetci.log"), true),
         "audit" => (settings::local_dir().join("audit.jsonl"), true),
