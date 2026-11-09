@@ -12,6 +12,7 @@
     <link rel="icon" type="image/png" href="/assets/owl.png" />
     <link rel="preload" href="/assets/overview.png" as="image" />
     <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="/home-themes.css" />
     <title>Nöbetçi — Son karar sende</title>
   </head>
   <body>
@@ -43,6 +44,10 @@
               <a class="button button-primary" href="https://github.com/tahap0l/nobetci/releases/latest" target="_blank" rel="noreferrer"><span data-i18n="download">GitHub'dan indir</span><span aria-hidden="true">↗</span></a>
               <a class="button button-secondary" href="#features" data-i18n="explore">Neler yapabildiğine bak</a>
               <a class="button button-secondary" href="/demo/" data-i18n="tryDemo">Canlı demoyu dene</a>
+            </div>
+            <div class="home-theme">
+              <label for="home-theme-picker" id="home-theme-label">Site teması</label>
+              <select id="home-theme-picker" aria-labelledby="home-theme-label"></select>
             </div>
             <div class="hero-meta"><span class="meta-check">✓</span><span data-i18n="heroMeta">Ücretsiz · MIT lisansı · Hesap gerekmez</span></div>
           </div>
@@ -140,5 +145,7 @@
       <span class="owl-hint" data-i18n="owlHint">Tıkla, selam versin</span>
     </button>
     <script src="/site.js" defer></script>
+    <script src="/mascot-themes.js" defer></script>
+    <script src="/home-themes.js" defer></script>
   </body>
 </html>
