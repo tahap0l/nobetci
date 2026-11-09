@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Nöbetçi · Etkileşimli demo</title>
+  <link rel="stylesheet" href="/demo/demo.css">
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Nöbetçi’yi dene</h1>
+      <p class="muted">Örnek bir Claude Code isteğine karar ver. Bu demo yalnızca tarayıcıda çalışır.</p>
+    </header>
+    <article aria-labelledby="request">
+      <h2 id="request">Komut onay bekliyor</h2>
+      <p class="muted">Claude Code · Bash · Düşük risk</p>
+      <p>Proje <code>nobetci/</code></p>
+      <pre><code>git status --short</code></pre>
+      <p>Değişen dosyaları listeler.</p>
+      <div class="actions">
+        <button id="deny" type="button">Reddet</button>
+        <button id="allow" type="button">Onayla</button>
+        <button id="reset" type="button" disabled>Yeniden dene</button>
+      </div>
+      <p id="result" role="status"></p>
+    </article>
+  </main>
+  <script src="/demo/demo.js" defer></script>
+</body>
+</html>
