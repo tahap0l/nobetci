@@ -30,7 +30,7 @@ use serde::Serialize;
 use serde_json::{json, Value};
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, Semaphore};
 
 use crate::audit::{self, Entry, Log};
 use crate::i18n::pick;
@@ -46,6 +46,8 @@ const DECISION_TIMEOUT: Duration = Duration::from_secs(108);
 /// How long the island gets to say "the card is up" (or "it is queued").
 const ACK_TIMEOUT: Duration = Duration::from_millis(800);
 const MAX_PAYLOAD: usize = 1 << 20;
+const FRAME_TIMEOUT: Duration = Duration::from_secs(2);
+static CONNECTIONS: Semaphore = Semaphore::const_new(64);
 /// The event name the health check sends through the real relay.
 pub const PING_EVENT: &str = "NobetciPing";
 
@@ -70,6 +72,7 @@ pub enum Reply {
 struct Waiting {
     tx: mpsc::Sender<Reply>,
     level: Level,
+    queued_at: std::time::Instant,
     session: String,
     tool: String,
     target: String,
@@ -129,26 +132,37 @@ struct AutoDecision<'a> {
     note: Option<&'a str>,
 }
 
-async fn handle<C: Conn>(app: AppHandle, mut pipe: C) {
-    let mut buf = Vec::new();
+async fn read_frame(pipe: &mut (impl AsyncRead + Unpin)) -> Option<Vec<u8>> {
+    let mut frame = Vec::new();
     let mut chunk = [0u8; 4096];
     loop {
-        match pipe.read(&mut chunk).await {
-            Ok(0) => break,
-            Ok(n) => {
-                buf.extend_from_slice(&chunk[..n]);
-                if buf.contains(&b'\n') || buf.len() > MAX_PAYLOAD {
-                    break;
-                }
-            }
-            Err(_) => return,
+        let n = pipe.read(&mut chunk).await.ok()?;
+        if n == 0 {
+            return None;
+        }
+        let newline = chunk[..n].iter().position(|&b| b == b'\n');
+        let end = newline.unwrap_or(n);
+        if frame.len() + end > MAX_PAYLOAD {
+            return None;
+        }
+        frame.extend_from_slice(&chunk[..end]);
+        if newline.is_some() {
+            return Some(frame);
         }
     }
-    let line = match buf.iter().position(|b| *b == b'\n') {
-        Some(i) => &buf[..i],
-        None => &buf[..],
-    };
-    let Ok(mut payload) = serde_json::from_slice::<Value>(line) else { return };
+}
+
+fn accept<C: Conn>(app: AppHandle, pipe: C) {
+    let Ok(permit) = CONNECTIONS.try_acquire() else { return };
+    tauri::async_runtime::spawn(async move {
+        let _permit = permit;
+        handle(app, pipe).await;
+    });
+}
+
+async fn handle<C: Conn>(app: AppHandle, mut pipe: C) {
+    let Ok(Some(line)) = tokio::time::timeout(FRAME_TIMEOUT, read_frame(&mut pipe)).await else { return };
+    let Ok(mut payload) = serde_json::from_slice::<Value>(&line) else { return };
     if !payload.is_object() {
         return;
     }
@@ -238,11 +252,24 @@ async fn handle<C: Conn>(app: AppHandle, mut pipe: C) {
     }
 
     let (tx, mut rx) = mpsc::channel::<Reply>(4);
-    app.state::<Pending>().0.lock().unwrap().insert(
-        id.clone(),
-        Waiting { tx, level: a.level, session: session.clone(), tool: tool.clone(), target: a.target.clone() },
-    );
-    inputguard::arm(true);
+    {
+        let pending = app.state::<Pending>();
+        let mut map = pending.0.lock().unwrap();
+        if map.is_empty() {
+            inputguard::arm(true);
+        }
+        map.insert(
+            id.clone(),
+            Waiting {
+                tx,
+                level: a.level,
+                queued_at: std::time::Instant::now(),
+                session: session.clone(),
+                tool: tool.clone(),
+                target: a.target.clone(),
+            },
+        );
+    }
     payload["request_id"] = json!(id);
     payload["risk"] = serde_json::to_value(a).unwrap_or(Value::Null);
     payload["rule_note"] = json!(eval.note);
@@ -428,11 +455,11 @@ pub struct Choice<'a> {
 
 /// Called by the island's Allow / Deny controls and the global shortcuts.
 pub fn answer(app: &AppHandle, request_id: &str, c: Choice) -> Result<(), String> {
-    let (level, session, tool, target) = {
+    let (level, queued_at, session, tool, target) = {
         let pending = app.state::<Pending>();
         let map = pending.0.lock().unwrap();
         match map.get(request_id) {
-            Some(w) => (w.level, w.session.clone(), w.tool.clone(), w.target.clone()),
+            Some(w) => (w.level, w.queued_at, w.session.clone(), w.tool.clone(), w.target.clone()),
             None => return Err("not_pending".into()),
         }
     };
@@ -447,15 +474,18 @@ pub fn answer(app: &AppHandle, request_id: &str, c: Choice) -> Result<(), String
     // moment ago. A click is fresh within seconds; a hold takes its own time.
     if word == "allow" && by == "user" {
         let settings = app.state::<crate::Shared>().settings.lock().unwrap().clone();
-        if settings.input_guard {
-            let held = c.decision == "allow_confirmed";
+        let held = level >= Level::High;
+        if settings.input_guard || held {
             let hold_ms = if level == Level::Critical { settings.hold_critical_ms } else { settings.hold_ms };
-            let window = Duration::from_millis(if held { u64::from(hold_ms) + 3_000 } else { 3_000 });
-            if let Err(why) = inputguard::check(window, anchor_rect(app, c.anchor)) {
+            let minimum = if held { Duration::from_millis(u64::from(hold_ms)) } else { Duration::ZERO };
+            if let Err(why) = inputguard::check_and_consume(minimum, queued_at, anchor_rect(app, c.anchor)) {
                 log::line(format!("SUSPICIOUS: approval id={request_id} without a physical click ({why}) — refused"));
-                return Err("input_not_physical".into());
+                return Err(match why {
+                    "hold_incomplete" | "guard_unavailable" => why,
+                    _ => "input_not_physical",
+                }
+                .into());
             }
-            inputguard::consume();
         }
     }
 
@@ -482,6 +512,20 @@ pub fn answer(app: &AppHandle, request_id: &str, c: Choice) -> Result<(), String
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn relay_frames_must_be_terminated_and_bounded() {
+        let runtime = tokio::runtime::Builder::new_current_thread().build().unwrap();
+        runtime.block_on(async {
+            assert_eq!(read_frame(&mut &b"{}\nignored"[..]).await, Some(b"{}".to_vec()));
+            assert!(read_frame(&mut &b"{}"[..]).await.is_none());
+            let mut limit = vec![b'x'; MAX_PAYLOAD];
+            limit.push(b'\n');
+            assert_eq!(read_frame(&mut limit.as_slice()).await.unwrap().len(), MAX_PAYLOAD);
+            limit.insert(0, b'x');
+            assert!(read_frame(&mut limit.as_slice()).await.is_none());
+        });
+    }
 
     #[test]
     fn high_risk_needs_a_confirmed_allow() {

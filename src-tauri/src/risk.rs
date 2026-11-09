@@ -61,6 +61,8 @@ pub struct Assessment {
     pub preview: Option<String>,
     pub findings: Vec<Finding>,
     pub truncated: bool,
+    #[serde(skip)]
+    pub manual_review: bool,
 }
 
 /// Groups rules that mean more together than apart.
@@ -960,6 +962,18 @@ pub fn assess_with(tool: &str, input: &Value, cwd: &str, truncated: bool, off: &
         ));
     }
 
+    let manual_review = kind == Kind::Other || target.trim().is_empty();
+    if manual_review {
+        found.push((
+            Finding {
+                category: "unrecognized_request",
+                level: Medium,
+                label: i18n::pick("Unrecognized or incomplete request", "Tanınmayan veya eksik istek"),
+                excerpt: String::new(),
+            },
+            Tag::None,
+        ));
+    }
     let mut findings: Vec<Finding> = Vec::new();
     for (f, _) in found {
         if !findings.iter().any(|x| x.label == f.label) {
@@ -969,7 +983,7 @@ pub fn assess_with(tool: &str, input: &Value, cwd: &str, truncated: bool, off: &
     findings.sort_by_key(|f| std::cmp::Reverse(f.level));
     let level = findings.first().map(|f| f.level).unwrap_or(Low);
 
-    Assessment { level, kind, target, preview, findings, truncated }
+    Assessment { level, kind, target, preview, findings, truncated, manual_review }
 }
 
 fn excerpt_long(s: &str, max: usize) -> String {
@@ -988,6 +1002,16 @@ mod tests {
 
     fn cmd(c: &str) -> Level {
         assess("Bash", &json!({ "command": c }), CWD, false).level
+    }
+
+    #[test]
+    fn unrecognized_requests_are_flagged_and_everyday_commands_stay_low() {
+        let unknown = assess("FutureTool", &serde_json::json!({"arg": "x"}), CWD, false);
+        assert!(unknown.manual_review);
+        assert_eq!(unknown.level, Medium);
+        let everyday = assess("Bash", &serde_json::json!({"command": "npm test"}), CWD, false);
+        assert!(!everyday.manual_review);
+        assert_eq!(everyday.level, Low);
     }
 
     fn write(path: &str, content: &str) -> Level {

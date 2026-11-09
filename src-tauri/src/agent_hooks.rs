@@ -186,27 +186,10 @@ fn parse(bytes: &[u8], path: &str) -> Result<Value, String> {
     }
 }
 
-fn read(provider: Provider) -> Result<Value, String> {
-    let path = provider.settings_path();
-    match std::fs::read(&path) {
-        Ok(bytes) => parse(&bytes, &path.display().to_string()),
-        Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(json!({})),
-        Err(err) if is_tr() => Err(format!("{} okunamadı: {err}", path.display())),
-        Err(err) => Err(format!("Can't read {}: {err}", path.display())),
-    }
-}
-
-fn fingerprint(bytes: &[u8]) -> String {
-    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
-    for b in bytes {
-        hash ^= *b as u64;
-        hash = hash.wrapping_mul(0x1000_0000_01b3);
-    }
-    format!("{hash:016x}")
-}
-
-fn current_fingerprint(provider: Provider) -> String {
-    fingerprint(&std::fs::read(provider.settings_path()).unwrap_or_default())
+fn snapshot(path: &Path) -> Result<(Value, Option<Vec<u8>>), String> {
+    let bytes = crate::hooks::settings_bytes(path)?;
+    let value = parse(bytes.as_deref().unwrap_or_default(), &path.display().to_string())?;
+    Ok((value, bytes))
 }
 
 fn stamp() -> String {
@@ -219,7 +202,7 @@ fn backup_path(provider: Provider) -> PathBuf {
 }
 
 pub fn status(provider: Provider) -> Status {
-    let current = read(provider).unwrap_or_else(|_| json!({}));
+    let current = snapshot(&provider.settings_path()).map(|(value, _)| value).unwrap_or_else(|_| json!({}));
     let mut events = Vec::new();
     let mut stale = false;
     if let Some(hooks) = current.get("hooks").and_then(Value::as_object) {
@@ -260,7 +243,7 @@ pub fn status(provider: Provider) -> Status {
 }
 
 pub fn preview(provider: Provider, install: bool) -> Result<Preview, String> {
-    let current = read(provider)?;
+    let (current, bytes) = snapshot(&provider.settings_path())?;
     let next = merged(provider, &current, install)?;
     let mut current_text = serde_json::to_string_pretty(&current).unwrap_or_else(|_| "{}".into());
     let mut next_text = serde_json::to_string_pretty(&next).unwrap_or_else(|_| "{}".into());
@@ -270,50 +253,40 @@ pub fn preview(provider: Provider, install: bool) -> Result<Preview, String> {
         diff: unified_diff(&current_text, &next_text),
         backup: backup_path(provider).to_string_lossy().to_string(),
         settings_path: provider.settings_path().to_string_lossy().to_string(),
-        fingerprint: current_fingerprint(provider),
+        fingerprint: crate::hooks::fingerprint(bytes.as_deref().unwrap_or_default()),
     })
 }
 
 pub fn write(provider: Provider, install: bool, expected_fingerprint: &str) -> Result<String, String> {
     let path = provider.settings_path();
-    let current = read(provider)?;
-    if current_fingerprint(provider) != expected_fingerprint {
-        return Err(if is_tr() {
-            format!("{} önizlemeden sonra değişti. Yeni farkı incele.", path.display())
-        } else {
-            format!("{} changed since the preview. Review the new diff.", path.display())
-        });
+    let (current, bytes) = snapshot(&path)?;
+    if crate::hooks::fingerprint(bytes.as_deref().unwrap_or_default()) != expected_fingerprint {
+        return Err(crate::hooks::settings_changed(&path));
     }
     let next = merged(provider, &current, install)?;
-    let dir = path.parent().unwrap_or(Path::new("."));
-    std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    write_snapshot(provider, &path, bytes.as_deref(), &next)
+}
+
+fn write_snapshot(provider: Provider, path: &Path, bytes: Option<&[u8]>, next: &Value) -> Result<String, String> {
     let backup = backup_path(provider);
-    if path.exists() {
-        std::fs::copy(&path, &backup).map_err(|e| {
-            if is_tr() {
-                format!("Yedek alınamadı: {e}")
-            } else {
-                format!("Backup failed: {e}")
-            }
-        })?;
-    }
-    let mut text = serde_json::to_string_pretty(&next).map_err(|e| e.to_string())?;
+    let mut text = serde_json::to_string_pretty(next).map_err(|e| e.to_string())?;
     text.push('\n');
-    let temp = path.with_extension(format!("json.nobetci-{}", std::process::id()));
-    std::fs::write(&temp, text).map_err(|e| e.to_string())?;
-    if let Err(err) = std::fs::rename(&temp, &path) {
-        let _ = std::fs::remove_file(&temp);
-        return Err(err.to_string());
-    }
+    crate::hooks::replace_settings(path, bytes, &backup, &text)?;
     Ok(backup.to_string_lossy().to_string())
 }
 
 pub fn remove_for_uninstall(provider: Provider) -> Result<Option<String>, String> {
-    if !status(provider).installed {
+    let path = provider.settings_path();
+    let (current, bytes) = snapshot(&path)?;
+    let installed =
+        current.get("hooks").and_then(Value::as_object).into_iter().flatten().any(|(event, list)| {
+            list.as_array().into_iter().flatten().any(|entry| entry_is_ours(provider, event, entry))
+        });
+    if !installed {
         return Ok(None);
     }
-    let fingerprint = current_fingerprint(provider);
-    write(provider, false, &fingerprint).map(Some)
+    let next = merged(provider, &current, false)?;
+    write_snapshot(provider, &path, bytes.as_deref(), &next).map(Some)
 }
 
 fn unified_diff(before: &str, after: &str) -> String {

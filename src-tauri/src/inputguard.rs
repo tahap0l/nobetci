@@ -48,6 +48,7 @@ pub struct Press {
     pub at: Instant,
     /// Came from a real device, not from a program.
     pub physical: bool,
+    pub released_at: Option<Instant>,
     pub x: f64,
     pub y: f64,
 }
@@ -78,7 +79,7 @@ static GUARD: LazyLock<Guard> = LazyLock::new(|| Guard { available: AtomicBool::
 
 /// Called by the platform half for every left-button press while armed.
 fn record(physical: bool, x: f64, y: f64) {
-    *GUARD.last.lock().unwrap() = Some(Press { at: Instant::now(), physical, x, y });
+    *GUARD.last.lock().unwrap() = Some(Press { at: Instant::now(), physical, released_at: None, x, y });
 }
 
 fn set_available(ok: bool) {
@@ -99,10 +100,11 @@ pub fn arm(on: bool) {
     imp::arm(on);
 }
 
-/// Forgets the last press: one real click backs one approval, not the next card
-/// in the queue as well.
-pub fn consume() {
-    *GUARD.last.lock().unwrap() = None;
+/// Keep a released press for ordinary clicks, which reach the app on mouse up.
+fn release() {
+    if let Some(press) = GUARD.last.lock().unwrap().as_mut() {
+        press.released_at.get_or_insert_with(Instant::now);
+    }
 }
 
 pub fn available() -> bool {
@@ -114,24 +116,29 @@ pub fn island_rect(win: &WebviewWindow, x: f64, y: f64, w: f64, h: f64) -> Optio
     imp::island_rect(win, x, y, w, h)
 }
 
-/// Whether an approval arriving now is backed by a recent physical click on the
-/// island. `window` is how far back the press may be (a click: a few seconds; a
-/// hold: the hold time plus slack); `on` is where it has to have landed.
-pub fn check(window: Duration, on: Option<Rect>) -> Result<(), &'static str> {
+/// Verify and consume the press atomically so it can back only one approval.
+pub fn check_and_consume(minimum: Duration, queued_at: Instant, on: Option<Rect>) -> Result<(), &'static str> {
     if !available() {
-        return Ok(());
+        return if minimum.is_zero() { Ok(()) } else { Err("guard_unavailable") };
     }
-    judge(*GUARD.last.lock().unwrap(), Instant::now(), window, on)
+    let mut last = GUARD.last.lock().unwrap();
+    let press = last.filter(|press| press.at >= queued_at);
+    judge(press, Instant::now(), minimum, on)?;
+    *last = None;
+    Ok(())
 }
 
-fn judge(last: Option<Press>, now: Instant, window: Duration, on: Option<Rect>) -> Result<(), &'static str> {
+fn judge(last: Option<Press>, now: Instant, minimum: Duration, on: Option<Rect>) -> Result<(), &'static str> {
     match last {
         None => Err("no_click"),
         Some(p) if !p.physical => Err("synthetic_click"),
-        Some(p) if now.saturating_duration_since(p.at) > window => Err("stale_click"),
+        Some(p) if now.saturating_duration_since(p.at) > minimum + Duration::from_secs(3) => Err("stale_click"),
+        Some(p) if !minimum.is_zero() && p.released_at.unwrap_or(now).saturating_duration_since(p.at) < minimum => {
+            Err("hold_incomplete")
+        }
         // A real click somewhere else does not vouch for an invoke on our button.
         // (NaN — a press in another window — is never inside anything.)
-        Some(p) if on.is_some_and(|r| !r.contains(p.x, p.y)) => Err("click_elsewhere"),
+        Some(p) if !on.is_some_and(|r| r.contains(p.x, p.y)) => Err("click_elsewhere"),
         Some(_) => Ok(()),
     }
 }
@@ -143,10 +150,19 @@ mod tests {
     #[test]
     fn only_a_recent_physical_press_on_the_island_counts() {
         let now = Instant::now();
-        let window = Duration::from_secs(5);
+        let window = Duration::ZERO;
         let island = Some(Rect { left: 100.0, top: 0.0, right: 820.0, bottom: 460.0 });
-        let press = |at, physical, x, y| Some(Press { at, physical, x, y });
+        let press = |at, physical, x, y| Some(Press { at, physical, released_at: None, x, y });
         assert_eq!(judge(None, now, window, island), Err("no_click"));
+        let minimum = Duration::from_secs(1);
+        let down = press(now, true, 300.0, 100.0).unwrap();
+        assert_eq!(judge(Some(down), now, minimum, island), Err("hold_incomplete"));
+        assert_eq!(judge(Some(down), now + minimum, minimum, island), Ok(()));
+        let released = Press { released_at: Some(now), ..down };
+        assert_eq!(judge(Some(released), now + minimum, minimum, island), Err("hold_incomplete"));
+        assert_eq!(judge(Some(released), now + minimum, window, island), Ok(()));
+        let completed = Press { released_at: Some(now + minimum), ..down };
+        assert_eq!(judge(Some(completed), now + minimum, minimum, island), Ok(()));
         assert_eq!(judge(press(now, false, 300.0, 100.0), now, window, island), Err("synthetic_click"));
         if let Some(old) = now.checked_sub(Duration::from_secs(9)) {
             assert_eq!(judge(press(old, true, 300.0, 100.0), now, window, island), Err("stale_click"));
@@ -154,7 +170,7 @@ mod tests {
         assert_eq!(judge(press(now, true, 1500.0, 900.0), now, window, island), Err("click_elsewhere"));
         assert_eq!(judge(press(now, true, f64::NAN, f64::NAN), now, window, island), Err("click_elsewhere"));
         assert_eq!(judge(press(now, true, 300.0, 100.0), now, window, island), Ok(()));
-        // Without a known rectangle only time and origin count.
-        assert_eq!(judge(press(now, true, 1500.0, 900.0), now, window, None), Ok(()));
+        // An unknown rectangle cannot establish that the press landed on the button.
+        assert_eq!(judge(press(now, true, 1500.0, 900.0), now, window, None), Err("click_elsewhere"));
     }
 }

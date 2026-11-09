@@ -10,6 +10,7 @@
 // slashes and anything with PowerShell or cmd in it breaks; on macOS it runs
 // them through sh, and the path ("Application Support") has a space in it.
 
+use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use serde::Serialize;
@@ -74,15 +75,66 @@ pub fn settings_path() -> PathBuf {
 /// we cannot parse — is reported, because the alternative is treating somebody's
 /// unreadable settings as an empty object and then writing that back over them.
 fn read_settings() -> Result<Value, String> {
-    let path = settings_path();
-    match std::fs::read(&path) {
-        Ok(bytes) => parse_settings(&bytes, &path.display().to_string()),
-        Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(json!({})),
-        // A lock, a permission problem, a bad drive: all of them mean we do not
-        // know what is in there, and not knowing is not the same as empty.
+    snapshot(&settings_path()).map(|(value, _)| value)
+}
+
+fn snapshot(path: &Path) -> Result<(Value, Option<Vec<u8>>), String> {
+    let bytes = settings_bytes(path)?;
+    let value = parse_settings(bytes.as_deref().unwrap_or_default(), &path.display().to_string())?;
+    Ok((value, bytes))
+}
+
+pub(crate) fn settings_bytes(path: &Path) -> Result<Option<Vec<u8>>, String> {
+    match std::fs::read(path) {
+        Ok(bytes) => Ok(Some(bytes)),
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(None),
         Err(err) if is_tr() => Err(format!("{} okunamadı: {err}", path.display())),
         Err(err) => Err(format!("Can't read {}: {err}", path.display())),
     }
+}
+
+pub(crate) fn settings_changed(path: &Path) -> String {
+    if is_tr() {
+        format!("{} önizlemeden sonra değişti. Yeni farkı incele.", path.display())
+    } else {
+        format!("{} changed since the preview. Review the new diff.", path.display())
+    }
+}
+
+pub(crate) fn replace_settings(path: &Path, snapshot: Option<&[u8]>, backup: &Path, text: &str) -> Result<(), String> {
+    static WRITE: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let _lock = WRITE.lock().unwrap();
+    let dir = path.parent().unwrap_or(Path::new("."));
+    std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    let temp = path.with_extension(format!("json.nobetci-{}", std::process::id()));
+    let result = (|| {
+        if settings_bytes(path)?.as_deref() != snapshot {
+            return Err(settings_changed(path));
+        }
+        write_private(&temp, text.as_bytes()).map_err(|e| e.to_string())?;
+        if let Some(bytes) = snapshot {
+            write_private(backup, bytes).map_err(|e| e.to_string())?;
+        }
+        if settings_bytes(path)?.as_deref() != snapshot {
+            return Err(settings_changed(path));
+        }
+        std::fs::rename(&temp, path).map_err(|e| e.to_string())
+    })();
+    if result.is_err() {
+        let _ = std::fs::remove_file(&temp);
+    }
+    result
+}
+
+fn write_private(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    options.open(path)?.write_all(bytes)
 }
 
 /// The parsing half of `read_settings`, split out so it can be tested without a
@@ -215,20 +267,13 @@ fn backup_path() -> PathBuf {
 
 /// Identifies the exact bytes a preview was computed from. FNV-1a is plenty:
 /// the question is only "is this still the file I showed the user?".
-fn fingerprint(bytes: &[u8]) -> String {
+pub(crate) fn fingerprint(bytes: &[u8]) -> String {
     let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
     for b in bytes {
         hash ^= *b as u64;
         hash = hash.wrapping_mul(0x1000_0000_01b3);
     }
     format!("{hash:016x}")
-}
-
-fn current_fingerprint() -> String {
-    match std::fs::read(settings_path()) {
-        Ok(bytes) => fingerprint(&bytes),
-        Err(_) => fingerprint(b""),
-    }
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
@@ -268,13 +313,13 @@ pub fn status() -> HookStatus {
 }
 
 pub fn preview(install: bool, events: &[String]) -> Result<HookPreview, String> {
-    let current = read_settings()?;
+    let (current, bytes) = snapshot(&settings_path())?;
     let next = if install { merged(&current, events) } else { without_ours(&current) };
     Ok(HookPreview {
         diff: unified_diff(&pretty(&current), &pretty(&next)),
         backup: backup_path().to_string_lossy().to_string(),
         settings_path: settings_path().to_string_lossy().to_string(),
-        fingerprint: current_fingerprint(),
+        fingerprint: fingerprint(bytes.as_deref().unwrap_or_default()),
     })
 }
 
@@ -284,65 +329,39 @@ pub fn preview(install: bool, events: &[String]) -> Result<HookPreview, String> 
 /// in between — another tool, another window, the user's own editor — we stop
 /// and make them look at a fresh diff, because the only thing worse than not
 /// installing the hooks is silently reverting somebody else's edit.
-pub fn write(install: bool, fingerprint: &str, events: &[String]) -> Result<String, String> {
+pub fn write(install: bool, expected_fingerprint: &str, events: &[String]) -> Result<String, String> {
     let path = settings_path();
-    let dir = path.parent().unwrap_or(Path::new("."));
-    std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
-
-    // Read before the backup: an unreadable file must abort before we touch
-    // anything at all.
-    let current = read_settings()?;
-    if current_fingerprint() != fingerprint {
-        return Err(if is_tr() {
-            format!("{} önizlemeden sonra değişti. Hiçbir şey yazılmadı — yeni farkı incele.", path.display())
-        } else {
-            format!("{} changed since the preview. Nothing was written — review the new diff.", path.display())
-        });
+    let (current, bytes) = snapshot(&path)?;
+    if fingerprint(bytes.as_deref().unwrap_or_default()) != expected_fingerprint {
+        return Err(settings_changed(&path));
     }
-    replace_with(&path, &current, install, events)
+    let next = if install { merged(&current, events) } else { without_ours(&current) };
+    write_snapshot(&path, bytes.as_deref(), &next)
 }
 
-/// Removes every Nöbetçi entry, with a dated backup — no preview. Only for the
-/// uninstaller: the user asked for Nöbetçi to go, and hooks pointing at a relay
-/// that no longer exists would make Claude Code report an error on every event.
+/// Removes every Nöbetçi entry, with a dated backup.
 pub fn remove_for_uninstall() -> Result<Option<String>, String> {
     let path = settings_path();
-    if !path.exists() {
+    let (current, bytes) = snapshot(&path)?;
+    let installed = current
+        .get("hooks")
+        .and_then(Value::as_object)
+        .into_iter()
+        .flat_map(|hooks| hooks.values())
+        .filter_map(Value::as_array)
+        .flatten()
+        .any(entry_is_ours);
+    if !installed {
         return Ok(None);
     }
-    let current = read_settings()?;
-    if !status().installed {
-        return Ok(None);
-    }
-    replace_with(&path, &current, false, &[]).map(Some)
+    write_snapshot(&path, bytes.as_deref(), &without_ours(&current)).map(Some)
 }
 
-/// Backs up `path`, then writes `current` with our hooks added or removed.
-fn replace_with(path: &Path, current: &Value, install: bool, events: &[String]) -> Result<String, String> {
+fn write_snapshot(path: &Path, bytes: Option<&[u8]>, next: &Value) -> Result<String, String> {
     let backup = backup_path();
-    if path.exists() {
-        std::fs::copy(path, &backup).map_err(|e| {
-            if is_tr() {
-                format!("yedek alınamadı: {e}")
-            } else {
-                format!("backup failed: {e}")
-            }
-        })?;
-    }
-
-    let next = if install { merged(current, events) } else { without_ours(current) };
-    let mut text = pretty(&next);
+    let mut text = pretty(next);
     text.push('\n');
-
-    // Write beside the target and rename over it: a crash or a full disk leaves
-    // the original settings.json intact rather than half a file.
-    let temp = path.with_extension(format!("json.nobetci-{}", std::process::id()));
-    let failed = |e: std::io::Error| if is_tr() { format!("yazılamadı: {e}") } else { format!("write failed: {e}") };
-    std::fs::write(&temp, text.as_bytes()).map_err(failed)?;
-    if let Err(err) = std::fs::rename(&temp, path) {
-        let _ = std::fs::remove_file(&temp);
-        return Err(failed(err));
-    }
+    replace_settings(path, bytes, &backup, &text)?;
     Ok(backup.to_string_lossy().to_string())
 }
 

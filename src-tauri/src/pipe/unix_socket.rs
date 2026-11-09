@@ -149,8 +149,7 @@ pub fn start(app: AppHandle) {
                     continue;
                 }
             }
-            let app = app.clone();
-            tauri::async_runtime::spawn(async move { super::handle(app, stream).await });
+            super::accept(app.clone(), stream);
         }
     });
 }

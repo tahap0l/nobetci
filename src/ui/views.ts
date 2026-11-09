@@ -215,6 +215,14 @@ function buildHeader(actions: ViewActions): ViewHost {
 
 const MAX_ROWS = 5;
 const ROW_H = 44;
+const QUIET_SESSION_MS = 3 * 60_000;
+
+function sessionLabel(session: Session, now: number): string {
+  const active = session.state === "working" || session.state === "thinking";
+  return active && now - session.lastEventAt >= QUIET_SESSION_MS
+    ? t("ov.noRecentEvents")
+    : stateLabel(session.state);
+}
 
 function buildOverview(actions: ViewActions): ViewHost {
   const list = h("div", { class: "sessions" });
@@ -225,7 +233,7 @@ function buildOverview(actions: ViewActions): ViewHost {
   const row = (s: Session) =>
     h(
       "button",
-      { class: `session state-${s.state}`, title: t("ov.details"), onclick: () => actions.showSession(s.id) },
+      { class: `session state-${s.state}`, "data-session-id": s.id, title: t("ov.details"), onclick: () => actions.showSession(s.id) },
       miniCanvas(s, 20),
       h(
         "span",
@@ -234,8 +242,8 @@ function buildOverview(actions: ViewActions): ViewHost {
           "span",
           { class: "session-top" },
           h("span", { class: "session-name", text: s.name }),
-          h("span", { class: "session-state", text: stateLabel(s.state) }),
-          h("span", { class: "session-age", "data-since": s.stateSince }),
+          h("span", { class: "session-state", text: sessionLabel(s, Date.now()) }),
+          h("span", { class: "session-age", "data-since": s.lastEventAt }),
         ),
         h("span", { class: "session-step", text: State.lastStep(s) || "—" }),
       ),
@@ -251,7 +259,7 @@ function buildOverview(actions: ViewActions): ViewHost {
       widgets.refresh();
       const shown = State.sessions.slice(0, MAX_ROWS);
       const next =
-        shown.map((s) => `${s.id}:${s.state}:${s.name}:${s.steps.length}:${State.lastStep(s)}`).join("|") +
+        shown.map((s) => `${s.id}:${s.state}:${s.name}:${s.steps.length}:${s.lastEventAt}:${State.lastStep(s)}`).join("|") +
         `#${State.sessions.length}`;
       if (next === key) return;
       key = next;
@@ -266,6 +274,14 @@ function buildOverview(actions: ViewActions): ViewHost {
       for (const age of el.querySelectorAll<HTMLElement>(".session-age")) {
         const text = ago(now - Number(age.dataset.since));
         if (age.textContent !== text) age.textContent = text;
+        age.title = t("ov.lastEvent", { age: text });
+        const row = age.closest<HTMLElement>("[data-session-id]");
+        const session = row?.dataset.sessionId ? State.session(row.dataset.sessionId) : undefined;
+        const label = row?.querySelector(".session-state");
+        if (session && label) {
+          const state = sessionLabel(session, now);
+          if (label.textContent !== state) label.textContent = state;
+        }
       }
     },
   };
@@ -325,7 +341,7 @@ function buildSession(actions: ViewActions): ViewHost {
       }
       name.textContent = s.name;
       name.title = s.cwd;
-      state.textContent = stateLabel(s.state);
+      state.textContent = sessionLabel(s, Date.now());
       state.className = `session-state st-${s.state}`;
       goBtn.style.display = s.parents.length ? "" : "none";
       goBtn.title = s.terminal ? t("sd.gotoTitle", { terminal: s.terminal }) : t("sd.gotoTitleAny");
@@ -355,6 +371,12 @@ function buildSession(actions: ViewActions): ViewHost {
       );
     },
     tick() {
+      const session = State.session(shownId);
+      if (session) {
+        const label = sessionLabel(session, Date.now());
+        if (state.textContent !== label) state.textContent = label;
+        state.title = t("ov.lastEvent", { age: ago(Date.now() - session.lastEventAt) });
+      }
       const age = el.querySelector<HTMLElement>(".detail-age");
       if (age) {
         const text = t("sd.started", { d: duration(Date.now() - Number(age.dataset.started)) });

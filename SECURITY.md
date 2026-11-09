@@ -147,9 +147,10 @@ plus 3 seconds for a hold — and landed on the Allow button. A press is spent b
 backs, so one real click can't vouch for a second card waiting in the queue. Otherwise the approval
 is refused, logged as suspicious, and the card itself says that something may have tried to approve
 on your behalf.
-The guard stops recording as soon as nothing is waiting. It is on by default and can be switched
-off in **Settings → Safety**. If the platform listener can't start, the guard stands down rather
-than refusing every approval; the health check shows whether it's active.
+Rust measures the physical hold for HIGH and CRITICAL requests. If the mouse is released early
+or physical input cannot be verified, use the terminal to decide. The guard stops recording
+when no requests are waiting. **Settings → Safety** can turn off physical click verification
+for LOW and MEDIUM approvals. The health check shows whether the platform listener is active.
 
 **The allow hotkey is LOW-only.** Global hotkeys can be triggered by any program that fakes
 keystrokes. The allow hotkey is therefore not set by default, and even when it is, Rust refuses it
@@ -236,9 +237,9 @@ pressing. On macOS it rests on the event's source process id, which the system r
 posted events. Clicks that macOS itself makes on your behalf — Mouse Keys, for instance — look
 like hardware, and a program with Accessibility access can switch such features on; that access
 already means broad control over your Mac, so keep the list short. The macOS guard is new and
-hasn't yet been tested against every way of making a click. With the guard switched off — which accessibility tools,
-remote-control software and touchscreens may require — any program that can send input can
-press, or hold, Allow for you.
+hasn't yet been tested against every way of making a click. If you turn off physical click
+verification for accessibility, remote control or a touchscreen, a program that can send input
+can approve LOW and MEDIUM requests through the island.
 
 **Redaction is best effort.** It recognises common formats; an unusual secret can slip through.
 The approval card always shows the full request, so a screenshot or a screen share can expose a

@@ -97,8 +97,7 @@ pub fn start(app: AppHandle) {
                 }
             };
             let connected = std::mem::replace(&mut server, next);
-            let app = app.clone();
-            tauri::async_runtime::spawn(async move { super::handle(app, connected).await });
+            super::accept(app.clone(), connected);
         }
     });
 }

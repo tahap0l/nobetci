@@ -178,7 +178,8 @@ pub fn evaluate(req: &Request, settings: &Settings, grants: &SessionGrants) -> E
     let cap = ceiling(settings);
     // The rule that re-scored the request, if one did; reported with the outcome.
     let mut rescored_by: Option<String> = None;
-    let may_auto_allow = |l: Level| cap.is_some_and(|c| l <= c);
+    let manual_review = a.manual_review;
+    let may_auto_allow = |l: Level| !manual_review && cap.is_some_and(|c| l <= c);
     let verdict = |outcome, by, rule: Option<String>, note: Option<String>, message: Option<String>, a: Assessment| {
         Evaluation { assessment: a, outcome, by, rule, note, message, policy: policy.clone() }
     };
@@ -435,6 +436,18 @@ mod tests {
         grants.grant("s1", "Bash", "git push --force");
         let req = Request { tool: "Bash", input: &risky, cwd: CWD, session: "s1", truncated: false };
         assert_eq!(evaluate(&req, &s, &grants).outcome, Outcome::Ask, "high stays with a person");
+    }
+
+    #[test]
+    fn unknown_and_incomplete_requests_need_manual_review() {
+        for (tool, input, pattern) in [("FutureTool", json!({"arg": "x"}), "x"), ("Bash", json!({"command": " "}), " ")]
+        {
+            let settings =
+                with_rule(UserRule { pattern: pattern.into(), action: "allow".into(), ..UserRule::default() });
+            let result = run(&settings, tool, input);
+            assert!(result.assessment.manual_review);
+            assert_eq!(result.outcome, Outcome::Ask);
+        }
     }
 
     #[test]

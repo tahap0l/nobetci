@@ -53,13 +53,20 @@ fn install() {
             let ev = unsafe { event.as_ref() };
             if ev.r#type() == NSEventType::LeftMouseDown {
                 note(ev);
+            } else if ev.r#type() == NSEventType::LeftMouseUp {
+                super::release();
             }
         }
         // Always pass the event on untouched.
         event.as_ptr()
     });
     // SAFETY: the block returns the event it was given, a valid pointer.
-    let monitor = unsafe { NSEvent::addLocalMonitorForEventsMatchingMask_handler(NSEventMask::LeftMouseDown, &block) };
+    let monitor = unsafe {
+        NSEvent::addLocalMonitorForEventsMatchingMask_handler(
+            NSEventMask::LeftMouseDown | NSEventMask::LeftMouseUp,
+            &block,
+        )
+    };
     match monitor {
         Some(m) => {
             // Lives as long as the app does.

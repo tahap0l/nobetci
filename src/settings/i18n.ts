@@ -374,8 +374,8 @@ const M = {
   "claude.health.guardOk": ["Fiziksel tıklama koruması hazır", "Physical-click guard ready"],
   "claude.health.guardFail": ["Fiziksel tıklama koruması çalışmıyor", "Physical-click guard isn't working"],
   "claude.health.guardFailText": [
-    "Ham fare girdisi alınamadı; bu bilgisayarda onaylar fiziksel tıklamayla korunmuyor.",
-    "Couldn't register for raw mouse input, so approvals aren't click-guarded on this machine.",
+    "Fare girdisi doğrulanamıyor. Yüksek ve kritik riskli isteklerde kararı terminalden ver.",
+    "Mouse input could not be verified. Decide on high and critical risk requests in the terminal.",
   ],
   "claude.lost": [
     "Hook'lar daha önce kuruluydu ama artık ~/.claude/settings.json'da yok — muhtemelen başka bir araç dosyayı yeniden yazdı. Nöbetçi şu an izin isteklerini göremiyor.",
@@ -460,7 +460,7 @@ const M = {
     "Onaylar gerçek bir fare tıklamasından gelmeli. Başka bir programın ürettiği tıklamalar (SendInput) ya da düğmeye UI Automation ile basılması reddedilir ve ada seni uyarır.",
     "Approvals must come from a real mouse click. Clicks synthesised by another program (SendInput) or a press through UI Automation are refused, and the island warns you.",
   ],
-  "guv.guardRow": ["Sadece gerçek tıklamalar onaylayabilir", "Only real clicks can approve"],
+  "guv.guardRow": ["Düşük ve orta riskte fiziksel tıklamayı doğrula", "Verify physical clicks for low and medium risk"],
   "guv.guardRowHint": [
     "Açık kalması önerilir: kötü niyetli bir program “İzin ver”e senin yerine basamaz.",
     "Keep it on: a malicious program can't press “Allow” for you.",
@@ -470,8 +470,8 @@ const M = {
     "If you approve through accessibility or remote-control tools (on-screen keyboard, voice control) or a touchscreen, you may need to turn this off.",
   ],
   "guv.guardOff": [
-    "Kapalıyken başka bir program da senin yerine “İzin ver”e basabilir.",
-    "While it's off, another program could press “Allow” for you.",
+    "Kapalıyken düşük ve orta riskli istekleri başka bir program onaylayabilir. Yüksek ve kritik riskte fiziksel basılı tutma gerekir.",
+    "While it's off, another program could approve low and medium risk requests. High and critical risk still require a physical hold.",
   ],
   "guv.catTitle": ["Risk kategorileri", "Risk categories"],
   "guv.catDesc": [

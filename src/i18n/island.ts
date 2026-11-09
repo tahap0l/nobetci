@@ -39,6 +39,9 @@ const tr = {
 
   // Overview
   "ov.details": "Ayrıntılar",
+  "ov.lastEvent": "Son olay {age} önce",
+  "ov.noRecentEvents": "Uzun süredir olay yok",
+  "fl.guardUnavailable": "Fiziksel basılı tutma doğrulanamıyor. Kararı terminalden ver.",
   "ov.more": "+{n} oturum daha",
 
   // Session detail
@@ -193,6 +196,9 @@ const en: { [K in keyof typeof tr]: string } = {
   "hdr.close": "Close",
 
   "ov.details": "Details",
+  "ov.lastEvent": "Last event {age} ago",
+  "ov.noRecentEvents": "No recent events",
+  "fl.guardUnavailable": "The physical hold cannot be verified. Decide in the terminal.",
   "ov.more": "+{n} more sessions",
 
   "sd.back": "Back",

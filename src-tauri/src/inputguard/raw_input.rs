@@ -27,6 +27,7 @@ use super::Rect;
 
 /// RI_MOUSE_LEFT_BUTTON_DOWN in RAWMOUSE::usButtonFlags.
 const LEFT_DOWN: u16 = 0x0001;
+const LEFT_UP: u16 = 0x0002;
 /// Our own message: wParam 1 = start listening, 0 = stop.
 const WM_ARM: u32 = WM_APP + 1;
 
@@ -68,6 +69,9 @@ fn on_raw_input(lparam: LPARAM) {
         let mut p = POINT::default();
         let _ = unsafe { GetCursorPos(&mut p) };
         super::record(physical, p.x as f64, p.y as f64);
+    }
+    if flags & LEFT_UP != 0 {
+        super::release();
     }
 }
 

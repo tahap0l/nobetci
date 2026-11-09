@@ -369,6 +369,11 @@ export class Island {
             this.showApprovals();
             void Bridge.log(`card warning shown for req=${requestId}`);
             break;
+          case "guard_unavailable":
+            State.cardWarning = { requestId, text: t("fl.guardUnavailable") };
+            this.showApprovals();
+            break;
+          case "hold_incomplete":
           case "hold_required":
             this.flash(t("fl.holdRequired"), "error");
             break;
