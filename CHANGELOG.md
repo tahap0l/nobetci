@@ -7,6 +7,19 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- Give the wolf, hawk, octopus, lion, canary, and eagle a full body and every movement the owl has. On
+  the island and in the greeting they now breathe, blink, follow the pointer, wave at a permission
+  request, bristle at a risky one, hop when a session finishes, doze, and get dizzy when poked, each with
+  its own ears, face, limbs, feet, and tail.
+- Redraw the same six mascots for session rows and the settings gallery in the owl's style: flat colors, a
+  dark outline, large rimmed eyes, and the owl's expressions. The website and web demo use the same
+  drawings.
+- Draw the island's tab, focus timer, calendar, and media settings icons, and the website's feature
+  icons, as line icons instead of font symbols, so they look the same on every system.
+- Refresh the README hero and overview images and add a picture of all seven mascots.
+
 ## [2.1.6] - 2026-11-10
 
 ### Fixed

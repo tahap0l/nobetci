@@ -2,7 +2,7 @@ import { Bridge, type IslandMedia, type IslandWeather } from "../core/bridge";
 import { WEATHER_CITIES } from "../core/island-widgets";
 import { State } from "../core/state";
 import { getLang, getPlatform } from "../i18n/core";
-import { h } from "./dom";
+import { h, icon } from "./dom";
 
 const local = (tr: string, en: string) => getLang() === "tr" ? tr : en;
 const MEDIA_ICONS = {
@@ -11,10 +11,21 @@ const MEDIA_ICONS = {
   pause: "M5 4h4v12H5zm6 0h4v12h-4z",
   next: "M4 4l9 6-9 6zm10 0h2v12h-2z",
 } as const;
+// Stroked 24×24 paths for `icon()`. Drawn here rather than typed as symbol
+// characters, whose shape, size and colour depend on the fonts installed.
+const LINE_ICONS = {
+  music: "M9 18V5l11-2v13M9 18a3 3 0 1 1-6 0 3 3 0 0 1 6 0zM20 16a3 3 0 1 1-6 0 3 3 0 0 1 6 0z",
+  calendar: "M5 5h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2zM8 3v4M16 3v4M3 10h18",
+  sun: "M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4",
+  sliders: "M4 7h9M17 7h3M4 17h3M11 17h9M15 4.5v5M9 14.5v5",
+  reset: "M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5",
+  previous: "M15 18l-6-6 6-6",
+  next: "M9 18l6-6-6-6",
+} as const;
 const DASHBOARD_TABS = [
-  ["media", "Medya ve odak", "Media & focus", "♫"],
-  ["calendar", "Takvim", "Calendar", "▦"],
-  ["weather", "Hava durumu", "Weather", "☀"],
+  ["media", "Medya ve odak", "Media & focus", LINE_ICONS.music],
+  ["calendar", "Takvim", "Calendar", LINE_ICONS.calendar],
+  ["weather", "Hava durumu", "Weather", LINE_ICONS.sun],
 ] as const;
 
 function mediaIcon(name: keyof typeof MEDIA_ICONS): SVGSVGElement {
@@ -113,8 +124,8 @@ function buildCalendar() {
   };
   const move = (step: number, label: string) => h("button", {
     type: "button", class: "island-calendar-button", title: label, "aria-label": label,
-    text: step < 0 ? "‹" : "›", onclick: () => { offset += step; refresh(); },
-  });
+    onclick: () => { offset += step; refresh(); },
+  }, icon(step < 0 ? LINE_ICONS.previous : LINE_ICONS.next, 13));
   const header = h("div", { class: "island-calendar-head" }, caption,
     move(-1, local("Önceki hafta", "Previous week")), move(1, local("Sonraki hafta", "Next week")));
   return { el: h("div", { class: "island-calendar" }, header, table), refresh };
@@ -129,9 +140,10 @@ export function buildWidgets(view: "overview" | "empty", openSettings: (tab: str
   const focusTime = value();
   const focusToggle = h("button", { type: "button", class: "island-card-action" });
   const focusReset = h("button", {
-    type: "button", class: "island-focus-reset", text: "↺",
+    type: "button", class: "island-focus-reset",
     title: local("Sayacı sıfırla", "Reset timer"), "aria-label": local("Sayacı sıfırla", "Reset timer"),
-  });
+  }, icon(LINE_ICONS.reset, 12));
+  let focusGlyph: "play" | "pause" | undefined;
   const focus = h("div", { class: "island-card island-card-focus" },
     label("Odak", "Focus"), focusToggle, focusTime, focusReset);
 
@@ -144,7 +156,11 @@ export function buildWidgets(view: "overview" | "empty", openSettings: (tab: str
     const clock = `${String(Math.floor(remaining / 60)).padStart(2, "0")}:${String(remaining % 60).padStart(2, "0")}`;
     if (focusTime.textContent !== clock) focusTime.textContent = clock;
     const action = focusUntil ? local("Sayacı duraklat", "Pause timer") : local("Sayacı başlat", "Start timer");
-    focusToggle.textContent = focusUntil ? "Ⅱ" : "▶";
+    const glyph = focusUntil ? "pause" : "play";
+    if (focusGlyph !== glyph) {
+      focusGlyph = glyph;
+      focusToggle.replaceChildren(mediaIcon(glyph));
+    }
     focusToggle.title = action;
     focusToggle.setAttribute("aria-label", action);
   }
@@ -190,9 +206,9 @@ export function buildWidgets(view: "overview" | "empty", openSettings: (tab: str
   const mediaLabel = value();
   const mediaValue = h("span", { class: "island-card-hint" });
   const mediaSetup = h("button", {
-    type: "button", class: "island-card-action", text: "♪", title: local("Medya ayarları", "Media settings"),
+    type: "button", class: "island-card-action", title: local("Medya ayarları", "Media settings"),
     "aria-label": local("Medya ayarları", "Media settings"), onclick: () => openSettings("genel"),
-  });
+  }, icon(LINE_ICONS.sliders, 13));
   const media = h("div", { class: "island-card island-card-media" },
     cover, h("div", { class: "media-track" }, mediaHeading, mediaLabel, mediaValue), mediaSetup);
   const home = h("div", { class: "island-dashboard-media" }, media, focus);
@@ -203,11 +219,11 @@ export function buildWidgets(view: "overview" | "empty", openSettings: (tab: str
       h("div", { class: "island-dashboard-content" }, content));
   });
   const viewport = h("div", { class: "island-widget-slides" }, ...panels);
-  const tabs = DASHBOARD_TABS.map(([key, tr, en, icon], i) => {
+  const tabs = DASHBOARD_TABS.map(([key, tr, en, path], i) => {
     const id = `${view}-${key}`;
     return h("button", { type: "button", class: "island-widget-tab", role: "tab", id: `${id}-tab`,
       "aria-controls": `${id}-panel`, onclick: () => selectPage(i) },
-      h("span", { "aria-hidden": "true", text: icon }), local(tr, en));
+      icon(path, 13), local(tr, en));
   });
   const navigation = h("div", { class: "island-widget-tabs", role: "tablist",
     "aria-label": local("Ada kartları", "Island cards") }, ...tabs);

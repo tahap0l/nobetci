@@ -1,4 +1,6 @@
-// Nöbetçi's night-watch owl — a small Canvas 2D character engine.
+// Nöbetçi's night-watch owl — a small Canvas 2D character engine. The owl is
+// the default; the other mascots are skins (skins.ts) on the same engine, so
+// they share every movement below.
 //
 // Geometry is authored in "owl units": the body box is 100 × 100 units centred
 // on the origin (y grows downwards) and draw() maps it onto the caller's w × w
@@ -7,6 +9,10 @@
 // update() owns all time; draw() is a pure function of the current state.
 
 import { Ease, Spring, clamp, lerp, seg } from "../core/anim";
+import type { MascotTheme } from "../core/mascot-theme";
+import { OWL_COLORS, SKINS, type Skin } from "./skins";
+
+export { OWL_COLORS };
 
 export type OwlMood =
   | "idle"
@@ -24,34 +30,7 @@ export type OwlEmote = "happy" | "love" | "annoyed" | "surprised" | "hoot";
 
 const TAU = Math.PI * 2;
 
-// ── Palette ─────────────────────────────────────────────────────────────────
-
-export const OWL_COLORS = {
-  headTop: "#6E4428",
-  headBottom: "#8E5C36",
-  bodyTop: "#7C4D2D",
-  bodyBottom: "#C08952",
-  belly: "#D8AC72",
-  bellyMark: "#9B683B",
-  wing: "#5E3921",
-  wingTip: "#7A4B2B",
-  wingEdge: "#A87647",
-  tuftInner: "#4A2B17",
-  disc: "#F3E3C6",
-  discRim: "#A9753F",
-  lid: "#D9BE93",
-  line: "#34200F",
-  irisRim: "#2A170B",
-  iris: "#F7B52F",
-  irisAmber: "#FF9116",
-  irisRed: "#FF4550",
-  pupil: "#140B05",
-  beak: "#DE8C45",
-  beakDark: "#8A4A1E",
-  mouth: "#3A1B0C",
-  feet: "#D7934C",
-  blush: "#FF8FA6",
-} as const;
+// ── Effects palette (the mascot palettes live in skins.ts) ─────────────────
 
 const FX = {
   z: "#B9C5FF",
@@ -79,27 +58,25 @@ function rgb(r: number, g: number, b: number): string {
 }
 
 // Iris colours are quantised to a small grid so tint blends never allocate
-// a new colour string per frame.
+// a new colour string per frame. One grid per skin: each has its own iris.
 const IRIS_STEPS = 16;
-const irisCache: string[] = [];
-const [IR0, IG0, IB0] = hexToRGB(OWL_COLORS.iris);
-const [IR1, IG1, IB1] = hexToRGB(OWL_COLORS.irisAmber);
-const [IR2, IG2, IB2] = hexToRGB(OWL_COLORS.irisRed);
+const irisCaches = new Map<Skin, string[]>();
 
-function irisColor(amber: number, red: number): string {
+function irisColor(skin: Skin, amber: number, red: number): string {
+  let cache = irisCaches.get(skin);
+  if (!cache) irisCaches.set(skin, (cache = []));
   const ai = Math.round(clamp(amber, 0, 1) * IRIS_STEPS);
   const ri = Math.round(clamp(red, 0, 1) * IRIS_STEPS);
   const key = ai * (IRIS_STEPS + 1) + ri;
-  let c = irisCache[key];
+  let c = cache[key];
   if (c === undefined) {
+    const [r0, g0, b0] = hexToRGB(skin.colors.iris);
+    const [r1, g1, b1] = hexToRGB(skin.colors.irisAmber);
+    const [r2, g2, b2] = hexToRGB(skin.colors.irisRed);
     const a = ai / IRIS_STEPS;
     const r = ri / IRIS_STEPS;
-    c = rgb(
-      lerp(lerp(IR0, IR1, a), IR2, r),
-      lerp(lerp(IG0, IG1, a), IG2, r),
-      lerp(lerp(IB0, IB1, a), IB2, r),
-    );
-    irisCache[key] = c;
+    c = rgb(lerp(lerp(r0, r1, a), r2, r), lerp(lerp(g0, g1, a), g2, r), lerp(lerp(b0, b1, a), b2, r));
+    cache[key] = c;
   }
   return c;
 }
@@ -119,12 +96,12 @@ const BODY_EGG = 0.1; // widens the lower half into an egg
 const EYE_X = 13.8;
 const EYE_Y = -15;
 const EYE_R = 10.4;
-const DISC_R = 16.6;
 const PHI_EYE = Math.asin(EYE_X / HEAD_A);
 const COS_EYE = Math.cos(PHI_EYE);
 const PHI_TUFT = 0.74;
 const SIN_TUFT = Math.sin(PHI_TUFT);
 const WING_X = 25;
+const TENTACLES = [-25, -8.5, 8.5, 25] as const; // the octopus's skirt, x of each lobe
 const WING_Y = 12;
 
 const DIZZY_EP = 2.4; // one swivel + wobble after three quick pokes
@@ -300,6 +277,7 @@ export class OwlEngine {
 
   private _accent: string | null = null;
   private accentDark = "";
+  private skin: Skin = SKINS.owl;
 
   private mood: OwlMood = "idle";
   private t = 0;
@@ -377,6 +355,14 @@ export class OwlEngine {
   }
 
   // ── Inputs ──────────────────────────────────────────────────────────────
+
+  /** Which mascot to draw. Movement, moods and emotes are the same for all of them. */
+  setSkin(theme: MascotTheme): void {
+    const skin = Object.prototype.hasOwnProperty.call(SKINS, theme) ? SKINS[theme] : SKINS.owl;
+    if (skin === this.skin) return;
+    this.skin = skin;
+    this.cacheCtx = null; // gradients are per palette
+  }
 
   setMood(m: OwlMood): void {
     if (m === this.mood || !MOOD_POSE[m]) return;
@@ -627,7 +613,7 @@ export class OwlEngine {
 
   private buildCache(ctx: CanvasRenderingContext2D): void {
     this.cacheCtx = ctx;
-    const C = OWL_COLORS;
+    const C = this.skin.colors;
     const gh = ctx.createLinearGradient(0, -44, 0, 12);
     gh.addColorStop(0, C.headTop);
     gh.addColorStop(1, C.headBottom);
@@ -716,6 +702,9 @@ export class OwlEngine {
     ctx.scale(sx, sy);
     ctx.translate(0, -GROUND);
 
+    // A tail wags when the mascot is pleased and sways a little otherwise.
+    const pleased = clamp(sp[P.happy].value, 0, 1) + (this.emote === "love" ? 0.8 : 0);
+    this.drawTail(ctx, Math.sin(t * 10) * 0.22 * Math.min(1, pleased) + Math.sin(t * 1.4) * 0.05, lod);
     this.drawBody(ctx, lod, px, puff);
     this.drawWing(ctx, -1, wingL, 0, lod, px);
     this.drawWing(ctx, 1, wingR, waveWiggle + wiggleR, lod, px);
@@ -740,8 +729,83 @@ export class OwlEngine {
     ctx.restore();
   }
 
+  /** Behind the body: a wolf's brush, a lion's tufted tail, a bird's tail feathers. */
+  private drawTail(ctx: CanvasRenderingContext2D, wag: number, lod: number): void {
+    const C = this.skin.colors;
+    switch (this.skin.tail) {
+      case "bushy":
+        ctx.save();
+        ctx.translate(19, 41);
+        ctx.rotate(wag);
+        ctx.beginPath();
+        ctx.moveTo(-2, 1);
+        ctx.bezierCurveTo(11, 6, 27, 0, 27, -21);
+        ctx.bezierCurveTo(21, -12, 9, -11, -3, -9);
+        ctx.closePath();
+        ctx.fillStyle = this.gWing;
+        ctx.fill();
+        if (lod >= 1) {
+          ctx.beginPath();
+          ctx.moveTo(27, -21);
+          ctx.bezierCurveTo(27.5, -11, 22, -4, 15, -2.5);
+          ctx.bezierCurveTo(20, -8, 23.5, -13, 27, -21);
+          ctx.fillStyle = C.belly;
+          ctx.fill();
+        }
+        ctx.restore();
+        break;
+      case "tuft":
+        ctx.save();
+        ctx.translate(20, 42);
+        ctx.rotate(wag);
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.quadraticCurveTo(17, 3, 22, -13);
+        ctx.strokeStyle = C.bodyTop;
+        ctx.lineWidth = 3.6;
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.ellipse(22.6, -17, 4.4, 6.2, 0.22, 0, TAU);
+        ctx.fillStyle = C.mark;
+        ctx.fill();
+        ctx.restore();
+        break;
+      case "fan":
+        ctx.save();
+        ctx.translate(0, 40);
+        ctx.rotate(wag * 0.5);
+        ctx.beginPath();
+        ctx.moveTo(-8, 0);
+        ctx.lineTo(8, 0);
+        ctx.lineTo(11, 11);
+        ctx.lineTo(4, 10);
+        ctx.lineTo(0, 13);
+        ctx.lineTo(-4, 10);
+        ctx.lineTo(-11, 11);
+        ctx.closePath();
+        ctx.fillStyle = C.wing;
+        ctx.fill();
+        ctx.restore();
+        break;
+      default:
+        break;
+    }
+  }
+
   private drawBody(ctx: CanvasRenderingContext2D, lod: number, px: number, puff: number): void {
-    const C = OWL_COLORS;
+    const C = this.skin.colors;
+    const skin = this.skin;
+    if (skin.feet === "tentacles") {
+      // A skirt of tentacles under the mantle.
+      ctx.beginPath();
+      for (const x of TENTACLES) {
+        const y = Math.abs(x) > 10 ? 40.5 : 44;
+        ctx.moveTo(x + 9, y);
+        ctx.arc(x, y, 9, 0, TAU);
+      }
+      ctx.fillStyle = this.gBody;
+      ctx.fill();
+    }
     const n = lod === 0 ? 32 : lod === 1 ? 48 : 64;
     const spikes = n / 4;
     const amp = 0.09 * puff;
@@ -759,6 +823,20 @@ export class OwlEngine {
     ctx.fillStyle = this.gBody;
     ctx.fill();
 
+    if (skin.feet === "tentacles") {
+      if (lod >= 1) {
+        ctx.beginPath();
+        for (const x of TENTACLES) {
+          const y = (Math.abs(x) > 10 ? 40.5 : 44) + 4.2;
+          ctx.moveTo(x + 1.9, y);
+          ctx.arc(x, y, 1.9, 0, TAU);
+        }
+        ctx.fillStyle = C.feet;
+        ctx.fill();
+      }
+      return;
+    }
+
     // Belly patch and chevron feather marks.
     ctx.beginPath();
     ctx.ellipse(0, 31, 19.5, 15.5, 0, 0, TAU);
@@ -766,7 +844,29 @@ export class OwlEngine {
     ctx.globalAlpha = lod === 0 ? 0.55 : 0.8;
     ctx.fill();
     ctx.globalAlpha = 1;
-    if (lod >= 1) {
+    if (lod >= 1 && skin.feet === "paws") {
+      ctx.beginPath();
+      for (let side = -1; side <= 1; side += 2) {
+        ctx.moveTo(side * 10.5 + 6.8, GROUND - 0.6);
+        ctx.ellipse(side * 10.5, GROUND - 0.6, 6.8, 3.8, 0, 0, TAU);
+      }
+      ctx.fillStyle = C.feet;
+      ctx.fill();
+      if (lod === 2) {
+        ctx.beginPath();
+        for (let side = -1; side <= 1; side += 2) {
+          for (let k = -1; k <= 1; k += 2) {
+            ctx.moveTo(side * 10.5 + k * 2.2, GROUND - 1.6);
+            ctx.lineTo(side * 10.5 + k * 2.2, GROUND + 1.6);
+          }
+        }
+        ctx.strokeStyle = C.bellyMark;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
+    } else if (lod >= 1 && skin.belly !== "chevrons") {
+      this.drawTalons(ctx);
+    } else if (lod >= 1) {
       ctx.beginPath();
       const rows = lod === 2 ? 3 : 2;
       for (let r = 0; r < rows; r++) {
@@ -784,24 +884,28 @@ export class OwlEngine {
       ctx.lineWidth = Math.max(1.3, 0.8 * px);
       ctx.stroke();
 
-      // Feet.
-      ctx.beginPath();
-      for (let side = -1; side <= 1; side += 2) {
-        for (let k = -1; k <= 1; k++) {
-          const x = side * 10 + k * 3.6;
-          ctx.moveTo(x + 2.5, GROUND);
-          ctx.ellipse(x, GROUND, 2.5, 2.1, 0, 0, TAU);
-        }
-      }
-      ctx.fillStyle = C.feet;
-      ctx.fill();
+      this.drawTalons(ctx);
     }
+  }
+
+  private drawTalons(ctx: CanvasRenderingContext2D): void {
+    ctx.beginPath();
+    for (let side = -1; side <= 1; side += 2) {
+      for (let k = -1; k <= 1; k++) {
+        const x = side * 10 + k * 3.6;
+        ctx.moveTo(x + 2.5, GROUND);
+        ctx.ellipse(x, GROUND, 2.5, 2.1, 0, 0, TAU);
+      }
+    }
+    ctx.fillStyle = this.skin.colors.feet;
+    ctx.fill();
   }
 
   private drawWing(
     ctx: CanvasRenderingContext2D, side: number, raise: number, wiggle: number, lod: number, px: number,
   ): void {
-    const C = OWL_COLORS;
+    const C = this.skin.colors;
+    const limbs = this.skin.limbs;
     const r = clamp(raise, 0, 1.5);
     const ang = 0.12 + r * 2.05 + wiggle;
     const len = 1 - 0.24 * Math.min(r, 1); // raised wings foreshorten
@@ -810,6 +914,39 @@ export class OwlEngine {
     if (side > 0) ctx.scale(-1, 1);
     ctx.rotate(ang);
     ctx.scale(1, len);
+    if (limbs !== "wings") {
+      // Arms end in a paw, tentacles in a rounded tip with suckers.
+      const arm = limbs === "arms";
+      ctx.beginPath();
+      ctx.moveTo(0, -3);
+      if (arm) {
+        ctx.bezierCurveTo(-8.5, 1, -9, 16, -4.6, 24);
+        ctx.quadraticCurveTo(-1.6, 28.5, 1.6, 24.5);
+        ctx.bezierCurveTo(4.6, 18, 5.4, 5, 0, -3);
+      } else {
+        ctx.bezierCurveTo(-8.5, 1, -9.5, 19, -4, 28.5);
+        ctx.quadraticCurveTo(-1.5, 32, 1.2, 29);
+        ctx.bezierCurveTo(4.4, 22, 5.4, 5, 0, -3);
+      }
+      ctx.closePath();
+      ctx.fillStyle = this.gWing;
+      ctx.fill();
+      if (lod >= 1) {
+        ctx.beginPath();
+        if (arm) {
+          ctx.ellipse(-1.6, 23.6, 4.3, 3.9, 0, 0, TAU);
+        } else {
+          for (let k = 0; k < 3; k++) {
+            ctx.moveTo(-1.4 + 1.5, 11 + k * 6.6);
+            ctx.arc(-1.4, 11 + k * 6.6, 1.5, 0, TAU);
+          }
+        }
+        ctx.fillStyle = C.feet;
+        ctx.fill();
+      }
+      ctx.restore();
+      return;
+    }
     ctx.beginPath();
     ctx.moveTo(0, -3);
     ctx.bezierCurveTo(-9.5, 1, -10, 19, -1.5, 30.5);
@@ -844,7 +981,8 @@ export class OwlEngine {
   private drawHead(
     ctx: CanvasRenderingContext2D, lod: number, px: number, puff: number, tuft: number, quiver: number,
   ): void {
-    const C = OWL_COLORS;
+    const C = this.skin.colors;
+    const ears = this.skin.ears;
     const yaw = this.fYaw;
 
     // Ear tufts sit behind the head and slide with its yaw.
@@ -852,7 +990,106 @@ export class OwlEngine {
     const down = Math.max(0, -tuft);
     const L = 15 * (1 + 0.26 * up - 0.18 * down) * (1 + 0.22 * this.fSmall);
     const lean0 = 0.42 - 0.3 * up + 1.08 * down + quiver;
-    for (let side = -1; side <= 1; side += 2) {
+
+    if (this.skin.mane) {
+      // A scalloped mane all round the head; it fluffs up with the feather puff.
+      const lobes = lod === 0 ? 10 : 14;
+      const rr = 8.2 * (1 + 0.22 * puff);
+      ctx.beginPath();
+      for (let i = 0; i < lobes; i++) {
+        const a = ((i + 0.5) / lobes) * TAU;
+        const x = Math.cos(a) * (HEAD_A - 0.5);
+        const y = HEAD_CY + Math.sin(a) * (HEAD_B + 2.5);
+        ctx.moveTo(x + rr, y);
+        ctx.arc(x, y, rr, 0, TAU);
+      }
+      ctx.fillStyle = C.mark;
+      ctx.fill();
+    }
+    if (ears === "pointed") {
+      // Cheek ruffs: two fur points either side of the jaw.
+      ctx.beginPath();
+      for (let side = -1; side <= 1; side += 2) {
+        const k = side * (1 + 0.12 * puff);
+        ctx.moveTo(side * 27, -13);
+        ctx.lineTo(k * 43.5, -2);
+        ctx.lineTo(side * 33, 0);
+        ctx.lineTo(k * 38, 8);
+        ctx.lineTo(side * 22, 10);
+        ctx.closePath();
+      }
+      ctx.fillStyle = C.headBottom;
+      ctx.fill();
+    }
+    if (ears === "crest") {
+      // Three crest feathers on the crown: they stand up when alert and flatten when low.
+      const bx = HEAD_A * Math.sin(yaw) * 0.55 + 3;
+      const by = headTopY(bx) + 3.5;
+      const CL = 10.5 * (1 + 0.4 * up - 0.3 * down) * (1 + 0.22 * this.fSmall);
+      ctx.fillStyle = C.headTop;
+      for (let k = -1; k <= 1; k++) {
+        const l = CL * (k === 0 ? 1.18 : 1);
+        ctx.save();
+        ctx.translate(bx + k * 2.6, by);
+        ctx.rotate(k * (0.5 - 0.22 * up + 0.35 * down) + 0.18 + 0.5 * down + quiver);
+        ctx.beginPath();
+        ctx.moveTo(-2.6, 2);
+        ctx.quadraticCurveTo(-3.2, -l * 0.6, 0.8, -l);
+        ctx.quadraticCurveTo(3.6, -l * 0.5, 2.6, 2);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+    for (let side = -1; side <= 1 && (ears === "pointed" || ears === "round"); side += 2) {
+      const phi = side * PHI_TUFT + yaw;
+      const sn = Math.sin(phi);
+      const bx = HEAD_A * sn;
+      const by = headTopY(bx) + 3;
+      const facing = 0.55 + 0.45 * Math.abs(Math.cos(phi));
+      ctx.save();
+      ctx.translate(bx, by);
+      if (sn < 0) ctx.scale(-1, 1);
+      if (ears === "pointed") {
+        // Tall triangular ears: pricked when alert, laid back when low.
+        const EL = 19 * (1 + 0.16 * up - 0.2 * down) * (1 + 0.22 * this.fSmall);
+        const hw = 10.5 * facing;
+        ctx.rotate((0.24 - 0.2 * up + 0.95 * down + quiver) * Math.min(1.4, Math.abs(sn) / SIN_TUFT));
+        ctx.beginPath();
+        ctx.moveTo(-hw, 6);
+        ctx.quadraticCurveTo(-hw * 0.62, -EL * 0.5, hw * 0.08, -EL);
+        ctx.quadraticCurveTo(hw * 0.86, -EL * 0.42, hw, 6);
+        ctx.closePath();
+        ctx.fillStyle = C.headTop;
+        ctx.fill();
+        if (lod >= 1) {
+          ctx.beginPath();
+          ctx.moveTo(-hw * 0.5, 4);
+          ctx.quadraticCurveTo(-hw * 0.3, -EL * 0.4, hw * 0.1, -EL * 0.74);
+          ctx.quadraticCurveTo(hw * 0.5, -EL * 0.34, hw * 0.56, 4);
+          ctx.closePath();
+          ctx.fillStyle = C.tuftInner;
+          ctx.fill();
+        }
+      } else {
+        // Round ears sitting on the mane.
+        const er = 7.6 * (1 + 0.22 * this.fSmall);
+        ctx.translate(1.5, -2.5 - 2.2 * up + 2.4 * down);
+        ctx.rotate(quiver);
+        ctx.beginPath();
+        ctx.ellipse(0, 0, er * facing, er, 0, 0, TAU);
+        ctx.fillStyle = C.headTop;
+        ctx.fill();
+        if (lod >= 1) {
+          ctx.beginPath();
+          ctx.ellipse(0, 0.6, er * 0.52 * facing, er * 0.52, 0, 0, TAU);
+          ctx.fillStyle = C.shade;
+          ctx.fill();
+        }
+      }
+      ctx.restore();
+    }
+    for (let side = -1; side <= 1 && ears === "tufts"; side += 2) {
       const phi = side * PHI_TUFT + yaw;
       const sn = Math.sin(phi);
       const bx = HEAD_A * sn;
@@ -908,7 +1145,7 @@ export class OwlEngine {
 
   private discPath(
     ctx: CanvasRenderingContext2D,
-    xL: number, fL: number, xR: number, fR: number, x0: number, y: number, R: number,
+    xL: number, fL: number, xR: number, fR: number, x0: number, y: number, R: number, chin: boolean,
   ): void {
     ctx.beginPath();
     if (fL > 0) {
@@ -919,7 +1156,7 @@ export class OwlEngine {
       ctx.moveTo(xR + R * fR, y);
       ctx.ellipse(xR, y, R * fR, R, 0, 0, TAU);
     }
-    if (fL > 0 && fR > 0) {
+    if (chin && fL > 0 && fR > 0) {
       // Heart-shaped chin: same winding as the ellipses so the union fills.
       ctx.moveTo(xR - R * fR * 0.62, y + R * 0.78);
       ctx.lineTo(x0, y + R + 4.5);
@@ -929,7 +1166,8 @@ export class OwlEngine {
   }
 
   private drawFace(ctx: CanvasRenderingContext2D, lod: number, px: number): void {
-    const C = OWL_COLORS;
+    const C = this.skin.colors;
+    const skin = this.skin;
     const sp = this.springs;
     const yaw = this.fYaw;
     const py = -this.pitch.value * 3.2;
@@ -945,17 +1183,20 @@ export class OwlEngine {
     const x0 = HEAD_A * Math.sin(yaw);
     const ey = EYE_Y + py;
 
+    this.drawMarks(ctx, x0, c0, ey, lod);
+
     // Facial disc with a darker rim.
+    const disc = skin.disc;
     if (lod >= 1) {
-      this.discPath(ctx, xL, fL, xR, fR, x0, ey, DISC_R + 1.8);
+      this.discPath(ctx, xL, fL, xR, fR, x0, ey, disc.r + disc.rim, disc.chin);
       ctx.fillStyle = C.discRim;
       ctx.fill();
     }
-    this.discPath(ctx, xL, fL, xR, fR, x0, ey, DISC_R);
+    this.discPath(ctx, xL, fL, xR, fR, x0, ey, disc.r, disc.chin);
     ctx.fillStyle = C.disc;
     ctx.fill();
 
-    const blush = sp[P.blush].value;
+    const blush = Math.max(sp[P.blush].value, skin.blush);
     if (blush > 0.02) {
       ctx.globalAlpha = 0.55 * Math.min(1, blush);
       ctx.fillStyle = C.blush;
@@ -981,6 +1222,7 @@ export class OwlEngine {
       ctx.translate(xL, ey);
       ctx.scale(fL, 1);
       this.drawEye(ctx, -1, r, open * (1 - squint) * (1 - this.blinkClose(-1)), lod, px);
+      if (skin.brow) this.drawBrow(ctx, -1, r);
       ctx.restore();
     }
     if (fR > 0.02) {
@@ -988,6 +1230,7 @@ export class OwlEngine {
       ctx.translate(xR, ey);
       ctx.scale(fR, 1);
       this.drawEye(ctx, 1, r, open * (1 - this.blinkClose(1)), lod, px);
+      if (skin.brow) this.drawBrow(ctx, 1, r);
       ctx.restore();
     }
 
@@ -1014,10 +1257,83 @@ export class OwlEngine {
     }
   }
 
+  /** Head markings under the eyes: they slide with the head's yaw like the face does. */
+  private drawMarks(ctx: CanvasRenderingContext2D, x0: number, c0: number, ey: number, lod: number): void {
+    const C = this.skin.colors;
+    const top = HEAD_CY - HEAD_B - 4;
+    const edge = HEAD_A + 3;
+    switch (this.skin.marks) {
+      case "blaze":
+        // Pale cheeks and a dark blaze running down between the eyes.
+        ctx.beginPath();
+        ctx.ellipse(x0, ey + 19, 31, 17.5, 0, 0, TAU);
+        ctx.fillStyle = C.shade;
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(x0 - 18, top);
+        ctx.lineTo(x0 + 18, top);
+        ctx.quadraticCurveTo(x0 + 9, ey - 17, x0, ey - 3);
+        ctx.quadraticCurveTo(x0 - 9, ey - 17, x0 - 18, top);
+        ctx.closePath();
+        ctx.fillStyle = C.mark;
+        ctx.fill();
+        break;
+      case "cap":
+      case "crown": {
+        // A raptor's throat patch (hawk) and the cap over its brow.
+        const cap = this.skin.marks === "cap";
+        if (cap) {
+          ctx.beginPath();
+          ctx.ellipse(x0, HEAD_CY + HEAD_B - 3, 25, 14.5, 0, 0, TAU);
+          ctx.fillStyle = C.shade;
+          ctx.fill();
+        }
+        const dip = cap ? ey - 2 : ey - 9;
+        const side = cap ? HEAD_CY - 7 : HEAD_CY - 13;
+        ctx.beginPath();
+        ctx.moveTo(-edge, top);
+        ctx.lineTo(edge, top);
+        ctx.lineTo(edge, side);
+        ctx.quadraticCurveTo(x0 + 17, side - 9, x0, dip);
+        ctx.quadraticCurveTo(x0 - 17, side - 9, -edge, side);
+        ctx.closePath();
+        ctx.fillStyle = cap ? C.mark : C.shade;
+        ctx.fill();
+        break;
+      }
+      case "spots":
+        if (lod === 0 || c0 <= 0.05) break;
+        ctx.beginPath();
+        for (const [dx, dy, r] of [[-17, -19, 3.4], [-9, -24, 1.9], [13, -22, 2.6], [21, -15, 1.7]] as const) {
+          ctx.moveTo(x0 + dx * c0 + r * c0, HEAD_CY + dy);
+          ctx.ellipse(x0 + dx * c0, HEAD_CY + dy, r * c0, r, 0, 0, TAU);
+        }
+        ctx.fillStyle = C.shade;
+        ctx.fill();
+        break;
+      default:
+        break;
+    }
+  }
+
+  /** A raptor's brow: a dark bar over the eye, low at the beak. Drawn in the eye's own frame. */
+  private drawBrow(ctx: CanvasRenderingContext2D, side: number, r: number): void {
+    const out = side * (r + 3.4);
+    const inn = -side * r * 0.82;
+    ctx.beginPath();
+    ctx.moveTo(out, -r - 3.4);
+    ctx.lineTo(inn, -r * 0.62);
+    ctx.lineTo(inn, -r * 0.62 + 4);
+    ctx.lineTo(out, -r + 0.2);
+    ctx.closePath();
+    ctx.fillStyle = this.skin.colors.mark;
+    ctx.fill();
+  }
+
   private drawEye(
     ctx: CanvasRenderingContext2D, side: number, r: number, openIn: number, lod: number, px: number,
   ): void {
-    const C = OWL_COLORS;
+    const C = this.skin.colors;
     const sp = this.springs;
     const happy = clamp(sp[P.happy].value, 0, 1);
     const spiral = Math.max(clamp(sp[P.spiral].value, 0, 1), this.fDizzy);
@@ -1052,7 +1368,7 @@ export class OwlEngine {
     ctx.beginPath();
     ctx.arc(0, 0, r + rim, 0, TAU);
     ctx.fill();
-    ctx.fillStyle = irisColor(sp[P.amber].value, sp[P.red].value);
+    ctx.fillStyle = irisColor(this.skin, sp[P.amber].value, sp[P.red].value);
     ctx.beginPath();
     ctx.arc(0, 0, r, 0, TAU);
     ctx.fill();
@@ -1155,7 +1471,67 @@ export class OwlEngine {
   }
 
   private drawBeak(ctx: CanvasRenderingContext2D, open: number, lod: number, px: number): void {
-    const C = OWL_COLORS;
+    const C = this.skin.colors;
+    const kind = this.skin.muzzle;
+    if (kind === "snout" || kind === "jowls") {
+      // A soft muzzle with a nose; the mouth opens for a howl or a roar.
+      ctx.beginPath();
+      if (kind === "snout") {
+        ctx.ellipse(0, -3.4, 8.6, 6.4, 0, 0, TAU);
+      } else {
+        ctx.ellipse(-4.3, -2.8, 5.6, 5.3, 0, 0, TAU);
+        ctx.moveTo(4.3 + 5.6, -2.8);
+        ctx.ellipse(4.3, -2.8, 5.6, 5.3, 0, 0, TAU);
+      }
+      ctx.fillStyle = C.muzzle;
+      ctx.fill();
+      if (open > 0.02) {
+        ctx.beginPath();
+        ctx.ellipse(0, -1.4 + 1.6 * open, 3 + 0.6 * open, 0.8 + 3 * open, 0, 0, TAU);
+        ctx.fillStyle = C.mouth;
+        ctx.fill();
+      } else if (lod >= 1) {
+        ctx.beginPath();
+        ctx.moveTo(0, -5.2);
+        ctx.lineTo(0, -2.6);
+        ctx.moveTo(-3.8, -1.6);
+        ctx.quadraticCurveTo(-1.8, -0.4, 0, -2.6);
+        ctx.quadraticCurveTo(1.8, -0.4, 3.8, -1.6);
+        ctx.strokeStyle = C.line;
+        ctx.lineWidth = Math.max(1.1, 0.5 * px);
+        ctx.stroke();
+      }
+      const nw = kind === "snout" ? 3.4 : 3.9;
+      ctx.beginPath();
+      ctx.moveTo(-nw, -8.6);
+      ctx.quadraticCurveTo(0, -10, nw, -8.6);
+      ctx.quadraticCurveTo(nw * 0.6, -5.4, 0, -4.9);
+      ctx.quadraticCurveTo(-nw * 0.6, -5.4, -nw, -8.6);
+      ctx.closePath();
+      ctx.fillStyle = C.nose;
+      ctx.fill();
+      return;
+    }
+    if (kind === "smile") {
+      ctx.beginPath();
+      if (open > 0.02) {
+        ctx.ellipse(0, -2.6, 2.2 + 0.8 * open, 0.9 + 2.8 * open, 0, 0, TAU);
+        ctx.fillStyle = C.mouth;
+        ctx.fill();
+      } else {
+        ctx.moveTo(-4.2, -3.6);
+        ctx.quadraticCurveTo(0, 0.6, 4.2, -3.6);
+        ctx.strokeStyle = C.line;
+        ctx.lineWidth = Math.max(1.6, 0.7 * px);
+        ctx.stroke();
+      }
+      return;
+    }
+    if (kind === "hooked") {
+      // The same beak, heavier, with a dark hooked tip.
+      ctx.translate(0, 2.2);
+      ctx.scale(1.34, 1.36);
+    }
     if (open > 0.02) {
       const my = -1.6 + 3 * open;
       const mh = 1 + 4.4 * open;
@@ -1189,6 +1565,16 @@ export class OwlEngine {
         ctx.strokeStyle = "rgba(255,230,190,0.55)";
         ctx.lineWidth = 0.9;
         ctx.stroke();
+      }
+      if (kind === "hooked") {
+        ctx.beginPath();
+        ctx.moveTo(-hw * 0.5, -3.3);
+        ctx.quadraticCurveTo(0, -1.9, hw * 0.5, -3.3);
+        ctx.quadraticCurveTo(hw * 0.3, -0.9, 0, tip);
+        ctx.quadraticCurveTo(-hw * 0.3, -0.9, -hw * 0.5, -3.3);
+        ctx.closePath();
+        ctx.fillStyle = C.beakDark;
+        ctx.fill();
       }
     }
   }

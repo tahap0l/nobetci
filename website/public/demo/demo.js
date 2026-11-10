@@ -65,7 +65,7 @@ music.addEventListener("click", () => {
   const playing = music.getAttribute("aria-pressed") !== "true";
   music.setAttribute("aria-pressed", String(playing));
   music.setAttribute("aria-label", playing ? "Örnek oynatmayı duraklat" : "Örnek oynatmayı başlat");
-  music.textContent = playing ? "Ⅱ" : "▶";
+  music.querySelector("path").setAttribute("d", playing ? "M6.5 4.5h4v15h-4zM13.5 4.5h4v15h-4z" : "M7 4.5v15l12.5-7.5z");
 });
 stage.addEventListener("pointermove", (event) => {
   if (stage.dataset.state !== "idle") return;

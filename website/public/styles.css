@@ -67,7 +67,7 @@ h1 em, h2 em { color: var(--cyan); font-style: normal; }
 .window-mark { justify-self: end; color: #667891; font-size: .55rem; letter-spacing: 2px; }
 .app-screenshot { display: block; width: 100%; height: auto; aspect-ratio: 18 / 5; object-fit: cover; object-position: top; }
 .window-caption { display: flex; align-items: center; gap: 9px; padding: 13px 16px; border-top: 1px solid rgba(255,255,255,.07); color: #c2ccda; font-size: .78rem; }
-.caption-icon { color: var(--cyan); }
+.caption-icon { display: inline-grid; place-items: center; color: var(--cyan); }
 .floating-note { position: absolute; z-index: 2; right: -16px; bottom: 2px; display: flex; align-items: center; gap: 11px; padding: 13px 17px; border: 1px solid rgba(180,198,224,.17); border-radius: 13px; background: rgba(15,28,43,.94); box-shadow: 0 18px 42px rgba(0,0,0,.38); }
 .note-icon { display: grid; width: 30px; height: 30px; place-items: center; border-radius: 9px; background: rgba(140,232,186,.13); color: var(--green); }
 .floating-note strong, .floating-note small { display: block; }

@@ -908,7 +908,7 @@ mark.lvl-critical { background: #f4505e; color: #fff; }
   white-space: nowrap;
   transition: background-color 160ms, border-color 160ms, color 160ms;
 }
-.island-widget-tab span { font-size: 13px; line-height: 1; }
+.island-widget-tab svg { flex: none; }
 .island-widget-tab:hover { background: #ffffff0f; }
 .island-widget-tab[aria-selected="true"] {
   background: color-mix(in srgb, var(--dash-accent) 17%, transparent);
@@ -980,8 +980,6 @@ mark.lvl-critical { background: #f4505e; color: #fff; }
   border: 1px solid var(--line);
   border-radius: 7px;
   background: #ffffff09;
-  font-size: 17px;
-  line-height: 1;
 }
 .island-calendar-button:hover { background: #ffffff21; }
 .island-calendar-table, .island-weather-table {
@@ -1125,6 +1123,9 @@ mark.lvl-critical { background: #f4505e; color: #fff; }
   background: #ffffff24;
 }
 .island-card-action[hidden] { display: none; }
+.island-card-action { padding: 0; }
+.island-card-focus .island-card-action svg { width: 10px; height: 10px; fill: currentColor; }
+.island-focus-reset { display: grid; place-items: center; padding: 2px; }
 .island-card-action, .island-focus-reset { cursor: pointer; }
 .island-card-value, .island-card-hint {
   max-width: 100%;

@@ -70,7 +70,7 @@ export function drawOwlMini(
     ctx.stroke();
   }
 
-  if (drawMascot(ctx, theme, cx, cy, size * 0.75, mood, t)) {
+  if (drawMascot(ctx, theme, cx, cy, size * 0.8, mood, t)) {
     ctx.restore();
     return;
   }

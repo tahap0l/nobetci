@@ -27,7 +27,9 @@ Nöbetçi ekranın üstünde küçük bir ada olarak durur. Adaya tıklayarak aj
 - **Ajan takibi.** Claude Code, Codex ve Cursor oturumlarını ve desteklenen izin isteklerini izle. Windows’ta Chrome veya Edge’deki ChatGPT yanıt durumunu görebilirsin. [ChatGPT Web kurulumu](integrations/chatgpt-web/README.md)
 - **Üç ada sekmesi.** **Medya ve odak**, **Takvim** ve **Hava durumu** sekmelerine dokun veya kartları yukarı kaydır. Takvimde oklarla haftalar arasında gez, hava durumu tablosunda seçtiğin şehrin sıcaklığını ve güncel koşullarını gör.
 - **Medya ve odak.** Windows medya kartı Spotify ve desteklenen diğer kaynaklarda çalan parçayı ve varsa kapak görselini gösterir. 25 dakikalık odak sayacı duraklatılabilir ve sıfırlanabilir. **Ayarlar → Genel → Ada bileşenleri** bölümünden hava durumu için şehir seçebilir ve medya kartını açabilirsin.
-- **Yedi maskot teması.** **Ayarlar → Genel → Görünüm** bölümünden maskot seçerek kart renklerini ve geçişlerini değiştir. Web demosunda maskotların izin ve risk tepkilerini deneyebilirsin.
+- **Yedi maskot.** Baykuş, kurt, şahin, ahtapot, aslan, kanarya ve kartal aynı şekilde hareket eder ve tepki verir: izin isteğinde el sallar, riskli istekte kabarır, oturum bitince zıplar, çalışan bir şey yokken uyuklar. Maskotu **Ayarlar → Genel → Görünüm** bölümünden seç; kart renkleri ve geçişler de ona göre değişir. Tepkileri web demosunda deneyebilirsin.
+
+<p align="center"><img src="docs/media/tr/mascots.png" width="720" alt="Yedi maskot yan yana, her biri farklı bir ruh halinde: baykuş boşta, kurt izin isteğine el sallıyor, şahin alarmda, ahtapot düşünüyor, aslan mutlu, kanarya sevinçli, kartal şaşkın"></p>
 
 <p align="center"><img src="docs/media/tr/idle-island.png" width="720" alt="Oturum listesinin üzerinde Medya ve odak, Takvim ve Hava durumu sekmeleri bulunan açık ada"></p>
 
