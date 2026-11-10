@@ -5,6 +5,7 @@ import { resolve } from "node:path";
 // Two pages: the island and the settings window. Sounds are synthesised at
 // runtime (src/core/sound.ts), so there are no audio assets to ship.
 const websiteRoot = resolve(__dirname, "website");
+const websiteBase = process.env.NOBETCI_WEBSITE_BASE ?? "/";
 
 export default defineConfig(process.env.CF_PAGES === "1" ? {
   root: websiteRoot,
@@ -12,8 +13,11 @@ export default defineConfig(process.env.CF_PAGES === "1" ? {
     name: "nobetci-website-images",
     generateBundle(_, bundle) {
       for (const key of Object.keys(bundle)) delete bundle[key];
-      for (const name of ["index.html", "privacy.html", "404.html"]) {
-        this.emitFile({ type: "asset", fileName: name, source: readFileSync(resolve(websiteRoot, name)) });
+      for (const name of ["index.html", "privacy.html", "404.html", "demo/index.html"]) {
+        const input = name.startsWith("demo/") ? `public/${name}` : name;
+        const html = readFileSync(resolve(websiteRoot, input), "utf8");
+        const source = html.replace(/\b(href|src|content)="\/(?!\/)/g, (_, attr) => `${attr}="${websiteBase}`);
+        this.emitFile({ type: "asset", fileName: name, source });
       }
       const images = {
         "owl.png": "src-tauri/icons/128x128.png",
