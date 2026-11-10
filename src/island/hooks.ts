@@ -19,6 +19,8 @@ interface HookPayload {
   request_id?: string;
   session_id?: string;
   agent_name?: string;
+  agent_id?: string;
+  agent_type?: string;
   cwd?: string;
   message?: string;
   /** Notification only: permission_prompt, idle_prompt, agent_needs_input, quota_… */
@@ -309,11 +311,13 @@ function handle(island: Island, p: HookPayload) {
       break;
 
     case "SubagentStart":
-      State.step(s, t("step.subStart"));
+      if (p.agent_id) s.subagents.add(p.agent_id);
+      State.step(s, [t("step.subStart"), p.agent_type].filter(Boolean).join(" · "));
       break;
 
     case "SubagentStop":
-      State.step(s, t("step.subStop"));
+      if (p.agent_id) s.subagents.delete(p.agent_id);
+      State.step(s, [t("step.subStop"), p.agent_type].filter(Boolean).join(" · "));
       break;
 
     case "SessionEnd":

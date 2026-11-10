@@ -347,6 +347,7 @@ struct HealthReport {
     stale: bool,
     /// Time for a ping through the real relay and pipe; null when it never arrived.
     roundtrip_ms: Option<u64>,
+    codex_activity: Option<pipe::AgentActivity>,
     /// The physical-click guard could register for raw mouse input.
     input_guard: bool,
     error: Option<String>,
@@ -377,6 +378,7 @@ async fn hooks_health(app: AppHandle, provider: Option<agent_hooks::Provider>) -
         events_missing,
         stale,
         roundtrip_ms: None,
+        codex_activity: None,
         input_guard: inputguard::available(),
         error: None,
     };
@@ -407,7 +409,7 @@ async fn hooks_health(app: AppHandle, provider: Option<agent_hooks::Provider>) -
             }
             let deadline = started + Duration::from_secs(3);
             while Instant::now() < deadline {
-                let arrived = app.state::<Health>().0.lock().unwrap().as_ref().is_some_and(|(n, _)| *n == nonce);
+                let arrived = app.state::<Health>().ping.lock().unwrap().as_deref() == Some(nonce.as_str());
                 if arrived {
                     report.roundtrip_ms = Some(started.elapsed().as_millis() as u64);
                     break;
@@ -432,6 +434,9 @@ async fn hooks_health(app: AppHandle, provider: Option<agent_hooks::Provider>) -
                 format!("Couldn't start the relay: {err}")
             })
         }
+    }
+    if provider == Some(agent_hooks::Provider::Codex) {
+        report.codex_activity = app.state::<Health>().codex_activity.lock().unwrap().clone();
     }
     report
 }

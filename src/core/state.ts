@@ -46,6 +46,7 @@ export interface Session {
   /** Terminal program the session runs in, when the relay could tell. */
   terminal: string;
   tools: number;
+  subagents: Set<string>;
   approved: number;
   denied: number;
   automatic: number;
@@ -153,6 +154,7 @@ class AppState {
         parents: [],
         terminal: "",
         tools: 0,
+        subagents: new Set(),
         approved: 0,
         denied: 0,
         automatic: 0,

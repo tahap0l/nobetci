@@ -258,8 +258,9 @@ Open **Settings → ChatGPT** to connect local ChatGPT Work and Codex, or **Sett
 for Cursor. Choose **Connect…**, review the settings-file diff and confirm. In ChatGPT desktop, review and trust
 the Nöbetçi hooks in **Settings → Hooks**. If the list is empty, add a local project in the
 Codex view and refresh it. In the Codex CLI, use `/hooks`. **Health check**
-checks the installed entries and the relay connection. To verify that ChatGPT calls the hook,
-send a message in a local-only Work chat and look for the session on the island. Work Cloud
+shows the relay test and the last event received from Codex separately. If Windows reports
+outdated entries, choose **Update connection…** and review the changed hooks in ChatGPT or
+Codex. Send a message in a new local chat and rerun **Health check** to verify delivery. Work Cloud
 does not run local hooks.
 Local Work and Codex prompt submissions and supported permission requests use the same hooks.
 Cursor prompt submissions and

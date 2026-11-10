@@ -5,6 +5,23 @@ import { getLang, getPlatform } from "../i18n/core";
 import { h } from "./dom";
 
 const local = (tr: string, en: string) => getLang() === "tr" ? tr : en;
+const MEDIA_ICONS = {
+  previous: "M4 4h2v12H4zm3 6 9-6v12z",
+  play: "M6 3.5v13l11-6.5z",
+  pause: "M5 4h4v12H5zm6 0h4v12h-4z",
+  next: "M4 4l9 6-9 6zm10 0h2v12h-2z",
+} as const;
+
+function mediaIcon(name: keyof typeof MEDIA_ICONS): SVGSVGElement {
+  const ns = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(ns, "svg");
+  svg.setAttribute("viewBox", "0 0 20 20");
+  svg.setAttribute("aria-hidden", "true");
+  const path = document.createElementNS(ns, "path");
+  path.setAttribute("d", MEDIA_ICONS[name]);
+  svg.append(path);
+  return svg;
+}
 
 export function widgetHeight(): number {
   return 104;
@@ -144,6 +161,9 @@ export function buildWidgets(view: "overview" | "empty", openSettings: (tab: str
   const mediaHeading = label("Müzik", "Music");
   const equalizer = h("span", { class: "media-equalizer", "aria-hidden": "true" },
     h("i"), h("i"), h("i"), h("i"));
+  const artwork = h("img", { class: "media-artwork", alt: "", hidden: true });
+  artwork.addEventListener("error", () => { artwork.hidden = true; });
+  const cover = h("div", { class: "media-cover", "aria-hidden": "true" }, artwork, equalizer);
   const mediaLabel = value();
   const mediaValue = h("span", { class: "island-card-hint" });
   const mediaSetup = h("button", {
@@ -151,7 +171,7 @@ export function buildWidgets(view: "overview" | "empty", openSettings: (tab: str
     "aria-label": local("Medya ayarları", "Media settings"), onclick: () => openSettings("genel"),
   });
   const media = h("div", { class: "island-card island-card-media" },
-    equalizer, h("div", { class: "media-track" }, mediaHeading, mediaLabel, mediaValue), mediaSetup);
+    cover, h("div", { class: "media-track" }, mediaHeading, mediaLabel, mediaValue), mediaSetup);
   const home = h("div", { class: "island-dashboard-page" }, media, focus);
   const calendar = buildCalendar();
   const carousel = h("div", {
@@ -179,24 +199,35 @@ export function buildWidgets(view: "overview" | "empty", openSettings: (tab: str
   let wake: number | undefined;
   let mediaEnabled: boolean | undefined;
 
-  const action = (glyph: string, label: string, name: "previous" | "toggle" | "next") => {
-    const button = h("button", { type: "button", class: "btn btn-small", text: glyph, title: label, "aria-label": label });
+  const action = (glyph: keyof typeof MEDIA_ICONS, label: string, name: "previous" | "toggle" | "next") => {
+    const button = h("button", {
+      type: "button", class: name === "toggle" ? "media-button media-toggle" : "media-button",
+      title: label, "aria-label": label,
+    }, mediaIcon(glyph));
     button.addEventListener("click", async () => {
       if (!currentMedia || busy) return;
+      const source = currentMedia.source;
       busy = true;
+      mediaVersion++;
+      controls.setAttribute("aria-busy", "true");
+      let ok = false;
       try {
-        const ok = await Bridge.islandMediaControl(currentMedia.source, name);
-        if (!ok) mediaValue.textContent = local("Medya komutu uygulanamadı", "Media command unavailable");
+        ok = Boolean(await Bridge.islandMediaControl(source, name));
+        if (!ok && currentMedia?.source === source) {
+          mediaValue.textContent = local("Medya komutu uygulanamadı", "Media command unavailable");
+        }
       } finally {
         busy = false;
-        mediaAt = Date.now() + 500;
+        controls.removeAttribute("aria-busy");
+        mediaAt = ok ? 0 : Date.now() + 2_000;
+        refresh();
       }
     });
     return button;
   };
-  const back = action("‹", local("Önceki parça", "Previous track"), "previous");
-  const play = action("⏯", local("Oynat veya duraklat", "Play or pause"), "toggle");
-  const next = action("›", local("Sonraki parça", "Next track"), "next");
+  const back = action("previous", local("Önceki parça", "Previous track"), "previous");
+  const play = action("play", local("Oynat", "Play"), "toggle");
+  const next = action("next", local("Sonraki parça", "Next track"), "next");
   const controls = h("div", { class: "island-media-buttons", hidden: true }, back, play, next);
   media.append(controls);
 
@@ -205,14 +236,32 @@ export function buildWidgets(view: "overview" | "empty", openSettings: (tab: str
     const spotify = result?.source.toLowerCase().includes("spotify") ?? false;
     media.classList.toggle("is-spotify", spotify);
     media.classList.toggle("is-playing", result?.playing ?? false);
-    mediaHeading.textContent = spotify ? "Spotify" : local("Müzik", "Music");
-    mediaLabel.textContent = result?.title || local("Medya", "Media");
+    const provider = spotify ? "Spotify" : local("Müzik", "Music");
+    const playback = result?.playing ? local("Çalıyor", "Playing") : local("Duraklatıldı", "Paused");
+    mediaHeading.textContent = result ? `${provider} · ${playback}` : provider;
+    mediaLabel.textContent = result?.title || local("Şimdi çalan", "Now playing");
     mediaLabel.title = result?.title || "";
-    mediaValue.textContent = result ? result.artist : local("Etkin medya bulunamadı", "No active media");
-    play.textContent = result?.playing ? "Ⅱ" : "▶";
+    mediaValue.textContent = result?.artist || (result ? "" : local("Etkin medya bulunamadı", "No active media"));
+    mediaValue.title = result?.artist || "";
+    if (result?.artwork) {
+      if (artwork.getAttribute("src") !== result.artwork) {
+        artwork.src = result.artwork;
+        artwork.hidden = false;
+      }
+    } else {
+      artwork.hidden = true;
+      artwork.removeAttribute("src");
+    }
+    if (play.dataset.playing !== String(Boolean(result?.playing))) {
+      play.dataset.playing = String(Boolean(result?.playing));
+      play.replaceChildren(mediaIcon(result?.playing ? "pause" : "play"));
+    }
     const playLabel = result?.playing ? local("Duraklat", "Pause") : local("Oynat", "Play");
     play.title = playLabel;
     play.setAttribute("aria-label", playLabel);
+    back.disabled = !result?.canPrevious;
+    play.disabled = !result?.canToggle;
+    next.disabled = !result?.canNext;
     controls.hidden = !result;
   }
 
@@ -271,7 +320,7 @@ export function buildWidgets(view: "overview" | "empty", openSettings: (tab: str
     if (mediaOn && !busy && now >= mediaAt) {
       const version = ++mediaVersion;
       mediaAt = now + 4_000;
-      void Bridge.islandMedia().then((result) => {
+      void Bridge.islandMedia(true).then((result) => {
         if (mediaVersion === version) drawMedia(result);
       });
     }

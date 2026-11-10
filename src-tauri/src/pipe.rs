@@ -82,9 +82,18 @@ struct Waiting {
 #[derive(Default)]
 pub struct Pending(Mutex<HashMap<String, Waiting>>);
 
-/// The last health-check ping that made it through the pipe: (nonce, when).
 #[derive(Default)]
-pub struct Health(pub Mutex<Option<(String, u64)>>);
+pub struct Health {
+    pub ping: Mutex<Option<String>>,
+    pub codex_activity: Mutex<Option<AgentActivity>>,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentActivity {
+    pub event: String,
+    pub at: u64,
+}
 
 static COUNTER: AtomicU64 = AtomicU64::new(1);
 
@@ -170,9 +179,13 @@ async fn handle<C: Conn>(app: AppHandle, mut pipe: C) {
     let event = str_of(&payload, "hook_event_name").to_string();
     if event == PING_EVENT {
         let nonce = str_of(&payload, "nonce").to_string();
-        *app.state::<Health>().0.lock().unwrap() = Some((nonce, audit::now_ms()));
+        *app.state::<Health>().ping.lock().unwrap() = Some(nonce);
         pipe.close();
         return;
+    }
+    if !event.is_empty() && str_of(&payload, "agent_name") == "Codex" {
+        *app.state::<Health>().codex_activity.lock().unwrap() =
+            Some(AgentActivity { event: event.clone(), at: audit::now_ms() });
     }
 
     let settings = app.state::<Shared>().settings.lock().unwrap().clone();

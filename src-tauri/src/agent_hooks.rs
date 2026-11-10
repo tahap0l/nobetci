@@ -91,9 +91,15 @@ pub struct Preview {
 }
 
 fn command(provider: Provider, event: &str) -> String {
-    let exe = settings::hook_exe_path().to_string_lossy().replace('\\', "/");
+    let path = settings::hook_exe_path();
+    let exe = path.to_string_lossy();
     #[cfg(windows)]
-    let quoted = format!("\"{exe}\"");
+    let quoted = match provider {
+        // Codex executes hooks through PowerShell on native Windows. A
+        // quoted path by itself is a string expression, not a command.
+        Provider::Codex => format!("& '{}'", exe.replace('\'', "''")),
+        Provider::Cursor => format!("\"{}\"", exe.replace('\\', "/")),
+    };
     #[cfg(not(windows))]
     let quoted = format!("'{}'", exe.replace('\'', r"'\''"));
     format!("{quoted} {} {event}", provider.name())
@@ -363,6 +369,22 @@ mod tests {
         let repaired = &result["hooks"]["SessionEnd"][1]["hooks"][0];
         assert_eq!(repaired["timeout"], 3);
         assert!(!hook_is_stale(Provider::Codex, "SessionEnd", repaired));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn codex_repair_replaces_the_legacy_windows_command() {
+        let exe = settings::hook_exe_path().to_string_lossy().replace('\\', "/");
+        let old = json!({ "type": "command", "command": format!("\"{exe}\" codex Stop"), "timeout": 10 });
+        assert!(hook_is_stale(Provider::Codex, "Stop", &old));
+        let existing = json!({ "hooks": { "Stop": [{ "hooks": [old] }] } });
+        let repaired = merged(Provider::Codex, &existing, true).unwrap();
+        let hooks = repaired["hooks"]["Stop"].as_array().unwrap();
+        assert_eq!(hooks.len(), 1);
+        let command = hooks[0]["hooks"][0]["command"].as_str().unwrap();
+        assert!(command.starts_with("& '"));
+        assert!(command.ends_with("' codex Stop"));
+        assert_eq!(merged(Provider::Codex, &repaired, true).unwrap(), repaired);
     }
 
     #[test]

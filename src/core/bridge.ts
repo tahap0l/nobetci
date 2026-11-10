@@ -86,6 +86,7 @@ export interface HealthReport {
   stale: boolean;
   /** Ping through the real relay and pipe; null when it never arrived. */
   roundtripMs: number | null;
+  codexActivity: { event: string; at: number } | null;
   /** The physical-click guard could register for raw mouse input. */
   inputGuard: boolean;
   error: string | null;
@@ -220,6 +221,10 @@ export interface IslandMedia {
   artist: string;
   source: string;
   playing: boolean;
+  artwork: string | null;
+  canPrevious: boolean;
+  canToggle: boolean;
+  canNext: boolean;
 }
 
 export interface IslandWeather {
@@ -228,7 +233,7 @@ export interface IslandWeather {
 }
 
 export const Bridge = {
-  islandMedia: () => call<IslandMedia>("island_media"),
+  islandMedia: (includeArtwork = false) => call<IslandMedia>("island_media", { includeArtwork }),
   islandMediaControl: (source: string, action: "previous" | "toggle" | "next") =>
     call<boolean>("island_media_control", { source, action }),
   islandWeather: (cityId: string) => call<IslandWeather>("island_weather", { cityId }),

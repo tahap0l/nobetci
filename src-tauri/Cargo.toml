@@ -28,8 +28,10 @@ regex = "1"
 reqwest = { version = "0.13", features = ["json"] }
 
 [target.'cfg(windows)'.dependencies]
+base64 = "0.22"
 windows = { version = "0.61", features = [
   "Media_Control",
+  "Storage_Streams",
   "Win32_Foundation",
   "Win32_Globalization",
   "Win32_Graphics_Gdi",

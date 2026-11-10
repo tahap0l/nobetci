@@ -56,17 +56,27 @@ pub struct Media {
     artist: String,
     source: String,
     playing: bool,
+    artwork: Option<String>,
+    can_previous: bool,
+    can_toggle: bool,
+    can_next: bool,
 }
 
 #[tauri::command]
-pub async fn island_media(app: AppHandle) -> Option<Media> {
+pub async fn island_media(app: AppHandle, include_artwork: Option<bool>) -> Option<Media> {
     if !super::current(&app).island_media {
         return None;
     }
     #[cfg(windows)]
-    return tauri::async_runtime::spawn_blocking(windows_media::read).await.ok().flatten();
+    return tauri::async_runtime::spawn_blocking(move || windows_media::read(include_artwork.unwrap_or(false)))
+        .await
+        .ok()
+        .flatten();
     #[cfg(not(windows))]
-    None
+    {
+        let _ = include_artwork;
+        None
+    }
 }
 
 #[tauri::command]
@@ -88,28 +98,56 @@ pub async fn island_media_control(app: AppHandle, source: String, action: String
 #[cfg(windows)]
 mod windows_media {
     use super::Media;
+    use base64::{engine::general_purpose::STANDARD, Engine};
     use windows::Media::Control::{
         GlobalSystemMediaTransportControlsSession as Session,
         GlobalSystemMediaTransportControlsSessionManager as Manager,
+        GlobalSystemMediaTransportControlsSessionMediaProperties as Properties,
         GlobalSystemMediaTransportControlsSessionPlaybackStatus as PlaybackStatus,
     };
+    use windows::Storage::Streams::DataReader;
 
     fn current() -> Option<Session> {
         Manager::RequestAsync().ok()?.get().ok()?.GetCurrentSession().ok()
     }
 
-    pub fn read() -> Option<Media> {
+    fn artwork(properties: &Properties) -> Option<String> {
+        let stream = properties.Thumbnail().ok()?.OpenReadAsync().ok()?.get().ok()?;
+        let size = stream.Size().ok()?;
+        if size == 0 || size > 512 * 1024 {
+            return None;
+        }
+        let content_type = stream.ContentType().ok()?.to_string();
+        if !matches!(content_type.as_str(), "image/jpeg" | "image/png" | "image/webp") {
+            return None;
+        }
+        let reader = DataReader::CreateDataReader(&stream.GetInputStreamAt(0).ok()?).ok()?;
+        if u64::from(reader.LoadAsync(size as u32).ok()?.get().ok()?) != size {
+            return None;
+        }
+        let mut bytes = vec![0; size as usize];
+        reader.ReadBytes(&mut bytes).ok()?;
+        Some(format!("data:{content_type};base64,{}", STANDARD.encode(bytes)))
+    }
+
+    pub fn read(include_artwork: bool) -> Option<Media> {
         let session = current()?;
         let properties = session.TryGetMediaPropertiesAsync().ok()?.get().ok()?;
         let title = properties.Title().ok()?.to_string();
         if title.trim().is_empty() {
             return None;
         }
+        let playback = session.GetPlaybackInfo().ok()?;
+        let controls = playback.Controls().ok();
         Some(Media {
             title,
             artist: properties.Artist().ok()?.to_string(),
             source: session.SourceAppUserModelId().ok()?.to_string(),
-            playing: session.GetPlaybackInfo().ok()?.PlaybackStatus().ok()? == PlaybackStatus::Playing,
+            playing: playback.PlaybackStatus().ok()? == PlaybackStatus::Playing,
+            artwork: include_artwork.then(|| artwork(&properties)).flatten(),
+            can_previous: controls.as_ref().and_then(|c| c.IsPreviousEnabled().ok()).unwrap_or(false),
+            can_toggle: controls.as_ref().and_then(|c| c.IsPlayPauseToggleEnabled().ok()).unwrap_or(false),
+            can_next: controls.as_ref().and_then(|c| c.IsNextEnabled().ok()).unwrap_or(false),
         })
     }
 

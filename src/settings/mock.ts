@@ -1320,6 +1320,7 @@ export function createMockApi(): Api {
         eventsMissing: missing,
         stale: hookStatus.stale,
         roundtripMs: 23,
+        codexActivity: null,
         inputGuard: q.get("noguard") !== "1",
         error: null,
       };

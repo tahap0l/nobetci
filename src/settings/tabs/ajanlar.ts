@@ -113,8 +113,17 @@ async function checkHealth(state: ProviderState) {
     if (report?.stale) {
       messages.push(t("agents.testUpdate"));
     }
+    const activity = report?.codexActivity;
+    if (state.provider === "codex") {
+      messages.push(activity
+        ? t("agents.testCodexEvent", {
+            event: activity.event, time: new Date(activity.at).toLocaleTimeString(getLang()),
+          })
+        : t("agents.testCodexWaiting"));
+    }
     state.health = {
-      ok: roundtripMs != null && Boolean(report?.installed && !report.stale && !report.eventsMissing.length),
+      ok: roundtripMs != null && Boolean(report?.installed && !report.stale && !report.eventsMissing.length)
+        && (state.provider !== "codex" || Boolean(activity)),
       text: messages.join(" "),
     };
   } finally {
@@ -162,7 +171,9 @@ function providerCard(state: ProviderState): HTMLElement {
             ),
             !status.hookReady ? notice("error", t("agents.relayMissing")) : null,
           ),
-    state.provider === "codex" ? notice("info", t("agents.codexTrust")) : notice("warn", t("agents.cursorApproval")),
+    state.provider === "codex"
+      ? notice(status?.stale ? "warn" : "info", t(status?.stale ? "agents.codexRepair" : "agents.codexTrust"))
+      : notice("warn", t("agents.cursorApproval")),
     state.testing ? notice("info", t("agents.loading")) : null,
     state.health ? notice(state.health.ok ? "ok" : "warn", state.health.text) : null,
     state.message ? notice(state.message.ok ? "ok" : "error", state.message.text) : null,

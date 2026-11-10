@@ -252,9 +252,11 @@ Ardından **Ayarlar → Claude Code** sayfasında **Sağlık testi**'ne bas: rel
 çalıştırdığı gibi çalıştırır ve bir ping'in gidiş-dönüş süresini ölçer. Claude
 Code hook'ları oturum başlarken okur; o sırada açık olan oturumları yeniden başlat.
 
-Codex veya Cursor'ı bağlamak için **Ayarlar → Diğer ajanlar** sayfasını aç, **Bağla…**'ya bas,
-ayar dosyasındaki farkı incele ve onayla. Codex, `/hooks` ekranında yeni hook'lara güvenmeni
-isteyebilir. Codex mesajları ve izin istekleri; Cursor mesajları ile komut/MCP istekleri izlenir.
+Codex için **Ayarlar → ChatGPT**, Cursor için **Ayarlar → Diğer ajanlar** sayfasını aç.
+**Bağla…** veya **Bağlantıyı güncelle…** ile ayar dosyasındaki farkı incele ve onayla.
+Windows’ta güncellemeden sonra değişen hook’ları ChatGPT’nin Hook ayarlarında veya Codex’in
+`/hooks` ekranında yeniden inceleyip güvenilir olarak işaretle. Yeni bir yerel oturumda mesaj
+gönder. **Sağlık testi**, Nöbetçi’nin test sinyalini ve Codex’ten gelen son olayı ayrı ayrı gösterir.
 Nöbetçi yanıt veremezse Cursor istekleri güvenlik için reddedilir. Mesajlar oturum akışında görünür;
 ajan hook'ları gönderilen metni alıcıya ulaşmadan değiştiremez.
 

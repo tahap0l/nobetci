@@ -393,12 +393,13 @@ function buildSession(actions: ViewActions): ViewHost {
       goBtn.style.display = s.parents.length ? "" : "none";
       goBtn.title = s.terminal ? t("sd.gotoTitle", { terminal: s.terminal }) : t("sd.gotoTitleAny");
 
-      const next = `${s.steps.length}:${State.lastStep(s)}:${s.tools}:${s.approved}:${s.denied}`;
+      const next = `${s.steps.length}:${State.lastStep(s)}:${s.tools}:${s.approved}:${s.denied}:${s.subagents.size}`;
       if (next === key) return;
       key = next;
       const bits = [
         s.terminal || null,
         t("sd.tools", { n: s.tools }),
+        s.subagents.size ? t("sd.subagents", { n: s.subagents.size }) : null,
         t("sd.allowed", { n: s.approved }),
         t("sd.denied", { n: s.denied }),
         s.automatic ? t("sd.auto", { n: s.automatic }) : null,

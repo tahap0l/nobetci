@@ -940,12 +940,43 @@ mark.lvl-critical { background: #f4505e; color: #fff; }
 }
 
 .island-card-media {
-  --card-glow: #54358d;
-  background: radial-gradient(ellipse at 100% 0%, var(--card-glow), transparent 70%), #181321;
+  --media-accent: #cebaff;
+  --card-glow: #3c2c60;
+  background: radial-gradient(ellipse at 0% 0%, var(--card-glow), transparent 82%), #181321;
 }
 .island-card-media.is-spotify {
-  --card-glow: #22784f;
-  background-color: #10241b;
+  --media-accent: #78efae;
+  --card-glow: #1b4c39;
+  background-color: #101c16;
+}
+.media-cover {
+  position: relative;
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 39px;
+  height: 39px;
+  overflow: hidden;
+  border: 1px solid #ffffff21;
+  border-radius: 8px;
+  background: linear-gradient(145deg, #ffffff23, #0007);
+}
+.media-artwork {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.media-cover:has(.media-artwork:not([hidden])) .media-equalizer {
+  position: absolute;
+  right: 1px;
+  bottom: 1px;
+  gap: 2px;
+  height: 13px;
+  padding: 2px 3px;
+  border-radius: 3px;
+  background: #000c;
 }
 .media-equalizer {
   display: flex;
@@ -953,9 +984,9 @@ mark.lvl-critical { background: #f4505e; color: #fff; }
   gap: 3px;
   height: 21px;
   margin-bottom: 5px;
-  color: #c6afff;
+  color: var(--media-accent);
 }
-.is-spotify .media-equalizer { color: #6af5ab; }
+.media-cover:has(.media-artwork:not([hidden])) .media-equalizer i { width: 2px; height: 8px; }
 .media-equalizer i {
   width: 3px;
   height: 16px;
@@ -1012,10 +1043,7 @@ mark.lvl-critical { background: #f4505e; color: #fff; }
   text-overflow: ellipsis;
 }
 .island-card-value { font-size: 20px; line-height: 1.15; }
-.island-card-media .island-card-value { font-size: 16px; }
 .island-card-hint { font-size: 10px; color: #fff1fa; }
-.island-card-media .island-media-buttons { margin-top: 4px; }
-.island-card-media .island-media-buttons .btn { height: 20px; }
 .island-focus-reset {
   position: absolute;
   bottom: 7px;
@@ -1034,12 +1062,37 @@ mark.lvl-critical { background: #f4505e; color: #fff; }
 .island-dashboard-page .island-card { height: 66px; border-radius: 12px; }
 .island-card-media { flex-direction: row; align-items: center; justify-content: flex-start; gap: 8px; }
 .island-card-media .media-track { flex: 1; min-width: 0; display: grid; }
-.island-card-media .island-card-label { position: static; font-size: 9px; }
+.island-card-media .island-card-label {
+  position: static;
+  font-size: 9px;
+  font-weight: 650;
+  color: var(--media-accent);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .island-card-media .media-equalizer { margin: 0; flex: none; }
 .island-card-media .island-card-value { font-size: 13px; }
 .island-card-media .island-card-action { position: static; flex: none; }
 .island-card-media .island-media-buttons { flex: none; margin: 0; gap: 2px; }
-.island-card-media .island-media-buttons .btn { padding-inline: 4px; min-width: 18px; }
+.media-button {
+  display: grid;
+  place-items: center;
+  width: 23px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+}
+.media-button svg { width: 16px; height: 16px; fill: currentColor; }
+.media-button:hover:not(:disabled) { background: #ffffff21; }
+.media-button:focus-visible { outline: 2px solid var(--media-accent); outline-offset: 2px; }
+.media-button:disabled { opacity: .38; cursor: default; }
+.media-toggle { width: 28px; color: #121917; background: var(--media-accent); }
+.media-toggle:hover:not(:disabled) { background: color-mix(in srgb, var(--media-accent), white 25%); }
 .island-card-media:has(.island-media-buttons:not([hidden])) .island-card-action { display: none; }
 .island-card-focus { min-width: 84px; padding: 8px; }
 .island-card-focus .island-card-label { top: 6px; left: 8px; }
