@@ -28,24 +28,24 @@ button:focus-visible,a:focus-visible{outline:3px solid var(--accent);outline-off
 .theme{display:flex;align-items:center;gap:8px;text-align:left;padding:5px 9px;background:transparent;border-color:transparent}
 .theme svg{width:24px;height:24px}
 .theme:hover,.theme[aria-pressed=true]{background:var(--surface);border-color:var(--accent)}
-.stage{position:relative;padding:15px clamp(13px,4vw,28px);overflow:hidden;background:radial-gradient(ellipse at 50% 29%,var(--surface),#10131d 77%)}
-.signal{width:8px;height:8px;background:var(--accent);border-radius:50%;box-shadow:0 0 15px var(--accent)}
+.stage{--signal-color:var(--accent);position:relative;padding:15px clamp(13px,4vw,28px);overflow:hidden;background:radial-gradient(ellipse at 50% 29%,var(--surface),#10131d 77%)}
+.stage[data-state=pending]{--signal-color:#ffd28a}
+.stage[data-state=danger]{--signal-color:#ff9a76}
+.stage[data-state=allowed]{--signal-color:#90edbb}
+.stage[data-state=denied]{--signal-color:#ffabb3}
+.signal{width:8px;height:8px;background:var(--signal-color);border-radius:50%;box-shadow:0 0 15px var(--signal-color)}
 .avatar-zone{display:grid;place-items:center;position:relative;height:151px}
-.halo{position:absolute;width:130px;height:130px;border:1px solid var(--accent);border-radius:50%;opacity:.3}
-.mascot{width:100px;height:100px;filter:drop-shadow(0 12px 22px var(--surface));animation:float 3s ease-in-out infinite}
+.halo{position:absolute;width:130px;height:130px;border:1px solid var(--signal-color);border-radius:50%;opacity:.45}
+.mascot{width:108px;height:108px;filter:drop-shadow(0 12px 22px var(--surface))}
 .mascot svg{width:100%;height:100%}
-.stage[data-state=pending] .halo{animation:pulse 1.4s ease-out infinite}
-.stage[data-state=pending] .mascot{animation:arrive .5s cubic-bezier(.2,.9,.35,1.25) both}
-.stage[data-state=allowed] .mascot{animation:celebrate .55s ease-out}
-.stage[data-state=denied] .mascot{animation:shake .45s ease-out}
+.mascot-signal{position:absolute;top:calc(50% + 27px);left:calc(50% + 35px);display:grid;place-items:center;width:31px;height:31px;border:1px solid var(--signal-color);border-radius:50%;background:#121823;color:var(--signal-color);font-size:1.15rem;font-weight:800;line-height:1}
+.stage:is([data-state=pending],[data-state=danger]) .halo{animation:pulse 1.8s ease-out infinite}
 .card{position:relative;border:1px solid #34415a;border-radius:16px;background:#141a28;padding:16px;min-height:154px}
-.stage[data-state=pending] .card{animation:slide-in .4s ease-out}
+.stage:is([data-state=pending],[data-state=danger]) .card{animation:slide-in .4s ease-out}
 .card h2{font-size:1.12rem}
 .card p{margin-top:8px;color:#c0c8d8;font-size:.9rem}
 .badge{display:inline-block;border:1px solid #626c81;border-radius:30px;padding:2px 8px;font-size:.68rem;color:#d4dbea}
-.stage[data-state=pending] .badge{color:#ffd28a;border-color:#ab7836}
-.stage[data-state=allowed] .badge{color:#90edbb;border-color:#4c956f}
-.stage[data-state=denied] .badge{color:#ffabb3;border-color:#ad626c}
+.stage:not([data-state=idle]) .badge{color:var(--signal-color);border-color:var(--signal-color)}
 .meta{margin-top:13px;letter-spacing:.035em}
 pre{margin:6px 0 0;border-radius:9px;padding:8px 12px;background:#0a0d15;color:#eef2ff;white-space:pre-wrap}
 .actions{flex-wrap:wrap;margin-top:13px}
@@ -55,11 +55,7 @@ pre{margin:6px 0 0;border-radius:9px;padding:8px 12px;background:#0a0d15;color:#
 .deny{background:#ffacb5;color:#32151b;border-color:#ffacb5}
 .foot{text-align:center;color:#aeb7cb;font-size:.74rem;margin-top:10px}
 .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
-@keyframes float{50%{transform:translateY(-7px)}}
-@keyframes pulse{from{transform:scale(.8);opacity:.6}to{transform:scale(1.26);opacity:0}}
-@keyframes arrive{0%{transform:translateY(16px) scale(.86)}65%{transform:translateY(-11px) scale(1.08)}100%{transform:none}}
-@keyframes celebrate{35%{transform:translateY(-16px) rotate(-9deg)}70%{transform:rotate(5deg)}}
-@keyframes shake{25%,75%{transform:translateX(-5px) rotate(-5deg)}50%{transform:translateX(5px) rotate(5deg)}}
+@keyframes pulse{from{transform:scale(.94);opacity:.6}to{transform:scale(1.16);opacity:.25}}
 @keyframes slide-in{from{opacity:.55;transform:translateY(10px)}}
 @media(max-width:660px){.layout{grid-template-columns:1fr}.themes{grid-template-columns:repeat(auto-fit,minmax(83px,1fr))}.theme{font-size:.78rem;padding:5px}.theme svg{width:20px;height:20px}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;scroll-behavior:auto!important}}

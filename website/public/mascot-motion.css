@@ -1,0 +1,52 @@
+.mascot-art { overflow: visible; }
+.mascot-head, .mascot-eye { transform-box: fill-box; transform-origin: center; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .is-animated[data-expression=idle] .mascot-head { animation: mascot-breathe var(--mascot-tempo, 3.6s) ease-in-out infinite; }
+  .is-animated[data-expression=idle] .mascot-eye { animation: mascot-blink var(--blink-tempo, 5s) ease-in-out infinite; }
+  .is-animated[data-expression=pending] .mascot-head { animation: mascot-listen .45s ease-out both; }
+  .is-animated[data-expression=danger] .mascot-head { animation: mascot-recoil .6s ease-out both; }
+  .is-animated[data-expression=denied] .mascot-head { animation: mascot-no .65s ease-out both; }
+  .is-animated:is([data-expression=allowed], [data-expression=greeting]) .mascot-head {
+    animation: mascot-cheer .65s cubic-bezier(.25,.72,.32,1) both;
+  }
+  .is-animated[data-animal=wolf] { --mascot-tilt: 7deg; --blink-tempo: 5.7s; }
+  .is-animated[data-animal=hawk] { --mascot-tilt: -8deg; --mascot-tempo: 2.8s; }
+  .is-animated[data-animal=octopus] { --mascot-tilt: 4deg; --mascot-tempo: 4.2s; }
+  .is-animated[data-animal=lion] { --mascot-tilt: -5deg; --blink-tempo: 6s; }
+  .is-animated[data-animal=canary] { --mascot-tilt: 10deg; --mascot-tempo: 2.5s; }
+  .is-animated[data-animal=eagle] { --mascot-tilt: -10deg; --blink-tempo: 4.7s; }
+  .owl-companion:not(.is-spinning) :is(.owl-eye-white, .owl-iris, .owl-pupil) {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: mascot-blink 5s ease-in-out infinite;
+  }
+}
+
+@keyframes mascot-breathe {
+  50% { transform: translateY(-2px) rotate(var(--mascot-tilt, 5deg)); }
+}
+@keyframes mascot-blink {
+  0%, 90%, 100% { scale: 1; }
+  93%, 95% { scale: 1 .1; }
+}
+@keyframes mascot-listen {
+  35% { transform: translateY(-6px) rotate(var(--mascot-tilt, 5deg)) scale(1.05); }
+  100% { transform: rotate(-4deg); }
+}
+@keyframes mascot-recoil {
+  25% { transform: translateY(5px) rotate(-12deg) scale(.88); }
+  58% { transform: translateY(-4px) rotate(7deg) scale(1.07); }
+  100% { transform: translateY(-2px) scale(1.04); }
+}
+@keyframes mascot-no {
+  22% { transform: translateX(-6px) rotate(-12deg); }
+  42% { transform: translateX(5px) rotate(10deg); }
+  67% { transform: translateX(-3px) rotate(-5deg); }
+  100% { transform: translateY(4px) rotate(-5deg); }
+}
+@keyframes mascot-cheer {
+  22% { transform: translateY(3px) scale(1.06,.91); }
+  48% { transform: translateY(-8px) rotate(var(--mascot-tilt, 5deg)) scale(1.05); }
+  78% { transform: translateY(2px) scale(1.03,.95); }
+}

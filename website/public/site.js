@@ -91,7 +91,9 @@ const owlHead = owlCompanion?.querySelector(".owl-head");
 const owlPupils = owlCompanion?.querySelectorAll("[data-owl-pupil]");
 
 if (owlCompanion && owlHead && owlPupils?.length) {
+  const motion = matchMedia("(prefers-reduced-motion: reduce)");
   window.addEventListener("pointermove", (event) => {
+    if (motion.matches || (document.documentElement.dataset.mascotTheme ?? "owl") !== "owl") return;
     const bounds = owlCompanion.getBoundingClientRect();
     const centerX = bounds.left + bounds.width / 2;
     const centerY = bounds.top + bounds.height / 2;
@@ -104,6 +106,7 @@ if (owlCompanion && owlHead && owlPupils?.length) {
   }, { passive: true });
 
   owlCompanion.addEventListener("click", () => {
+    if (motion.matches || (document.documentElement.dataset.mascotTheme ?? "owl") !== "owl") return;
     owlCompanion.classList.remove("is-spinning");
     void owlCompanion.offsetWidth;
     owlCompanion.classList.add("is-spinning");

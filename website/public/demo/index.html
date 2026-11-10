@@ -4,9 +4,10 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Nöbetçi · Canlı demo</title>
-  <link rel="stylesheet" href="/demo/demo.css?v=215">
-  <script src="/mascot-themes.js?v=215" defer></script>
-  <script src="/demo/demo.js?v=215" defer></script>
+  <link rel="stylesheet" href="/demo/demo.css?v=mascots">
+  <link rel="stylesheet" href="/mascot-motion.css?v=mascots">
+  <script src="/mascot-themes.js?v=mascots" defer></script>
+  <script src="/demo/demo.js?v=mascots" defer></script>
 </head>
 <body data-theme="owl">
   <main>
@@ -22,7 +23,11 @@
       </aside>
       <section class="stage" id="stage" data-state="idle" aria-labelledby="stage-heading">
         <div class="stage-bar"><span id="stage-heading">NÖBETÇİ ADASI</span><span class="signal"></span></div>
-        <div class="avatar-zone"><div class="halo"></div><div class="mascot" id="mascot" aria-hidden="true"></div></div>
+        <div class="avatar-zone" aria-hidden="true">
+          <div class="halo"></div>
+          <div class="mascot" id="mascot"></div>
+          <span class="mascot-signal" id="mascot-signal" hidden></span>
+        </div>
         <div class="card" id="card">
           <div class="card-title"><span class="badge" id="badge">Hazır</span><h2 id="heading">Nöbetteyim</h2></div>
           <p id="detail">Oturum bekleniyor</p>
@@ -36,10 +41,11 @@
           </div>
           <div id="command" hidden>
             <div class="meta"><span>Claude Code · Bash</span><span>nobetci/</span></div>
-            <pre><code>git status --short</code></pre>
+            <pre><code id="example-command">git status --short</code></pre>
           </div>
           <div class="actions">
             <button class="primary" id="send" type="button">Örnek istek gönder <span aria-hidden="true">→</span></button>
+            <button id="send-risky" type="button">Riskli isteği göster</button>
             <button class="deny" id="deny" type="button" hidden>Reddet</button>
             <button class="allow" id="allow" type="button" hidden>Onayla</button>
           </div>

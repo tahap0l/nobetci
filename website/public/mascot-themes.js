@@ -32,30 +32,78 @@ function shape(tag, props) {
   for (const [name, value] of Object.entries(props)) node.setAttribute(name, value);
   return node;
 }
-function avatar(id, state = "idle") {
+const details = {
+  wolf: "M9 9 18 18 11 24ZM51 9 42 18 49 24Z",
+  hawk: "M14 17Q27 9 43 15L49 12 44 20Q30 15 14 17Z",
+  octopus: "M13 45a1.8 1.8 0 1 0 0-3.6 1.8 1.8 0 0 0 0 3.6Zm11 2a1.8 1.8 0 1 0 0-3.6 1.8 1.8 0 0 0 0 3.6Zm12 0a1.8 1.8 0 1 0 0-3.6 1.8 1.8 0 0 0 0 3.6Zm11-2a1.8 1.8 0 1 0 0-3.6 1.8 1.8 0 0 0 0 3.6Z",
+  lion: "M9 20 14 25 11 29ZM51 20 46 25 49 29ZM13 44l7 1-2 5Zm34 0-7 1 2 5Z",
+  canary: "M11 24Q18 12 33 13L29 18Q18 18 11 24Z",
+  eagle: "M9 21Q18 7 34 10Q46 11 51 22Q35 13 9 21Z",
+};
+const ink = "#172033";
+const line = { fill: "none", stroke: ink, "stroke-width": 2.2, "stroke-linecap": "round" };
+
+function avatar(id, state = "idle", animated = false) {
   const [, accent, face] = animals[id];
-  const svg = shape("svg", { viewBox: "0 0 60 60", "aria-hidden": "true" });
-  svg.append(shape("path", { d: outlines[id], fill: face }));
-  svg.append(shape("path", { d: faces[id], fill: accent }));
+  const svg = shape("svg", {
+    viewBox: "0 0 60 60", "aria-hidden": "true", focusable: "false",
+    "data-animal": id, "data-expression": state,
+    class: animated ? "mascot-art is-animated" : "mascot-art",
+  });
+  const head = shape("g", { class: "mascot-head" });
+  const pending = state === "pending" || state === "danger";
+  const worried = state === "denied";
+  const happy = state === "allowed" || state === "greeting";
+  svg.append(head);
+  head.append(shape("path", { d: outlines[id], fill: face, stroke: "#ffffff42", "stroke-width": .7 }));
+  head.append(shape("path", { d: faces[id], fill: accent }));
+  if (details[id]) head.append(shape("path", { d: details[id], fill: id === "wolf" ? "#3c475c" : "#fff9e790" }));
   for (const x of [21, 39]) {
-    if (id === "wolf") svg.append(shape("ellipse", { cx: x, cy: 30, rx: 7.1, ry: 7.8, fill: "#fff8ec" }));
-    if (id === "owl") svg.append(shape("circle", { cx: x, cy: 29, r: 8, fill: "#eef4ff" }));
-    if (state === "allowed") {
-      svg.append(shape("path", { d: `M${x - 4} 30q4-7 8 0`, fill: "none", stroke: "#172033", "stroke-width": 2, "stroke-linecap": "round" }));
-    } else {
-      const eye = shape("g", { "data-demo-pupil": "", transform: state === "pending" ? "translate(2.8 0)" : "translate(0 0)" });
-      eye.append(shape("ellipse", { cx: x, cy: 29, rx: id === "wolf" ? 4.2 : 3.3, ry: state === "pending" ? 5.5 : 3.5, fill: "#172033" }));
-      eye.append(shape("circle", { cx: x - 1, cy: 27.5, r: 1.1, fill: "#fff9ee" }));
-      svg.append(eye);
+    const socket = shape("g", { class: "mascot-eye" });
+    if (pending || worried) {
+      const outer = x < 30 ? x - 5 : x + 5;
+      const inner = x < 30 ? x + 4 : x - 4;
+      const brow = worried || state === "danger"
+        ? `M${outer} 23Q${x} 21 ${inner} 17`
+        : `M${x - 4} 20q4-3 8 0`;
+      head.append(shape("path", { ...line, d: brow }));
     }
+    if (happy) {
+      socket.append(shape("path", { ...line, d: `M${x - 4} 30q4-7 8 0` }));
+    } else {
+      const wide = id === "wolf" || id === "owl";
+      socket.append(shape("ellipse", { cx: x, cy: 29.5, rx: wide ? 7 : 5.4, ry: pending ? 7.1 : 5.9, fill: "#fff9ee" }));
+      const eye = shape("g", { "data-mascot-pupil": "", transform: pending ? "translate(1.7 1.2)" : worried ? "translate(0 1.6)" : "translate(0 0)" });
+      eye.append(shape("ellipse", { cx: x, cy: 29, rx: pending ? 2.7 : 3.1, ry: pending ? 4.2 : 3.5, fill: ink }));
+      eye.append(shape("circle", { cx: x - 1, cy: 27.5, r: 1.05, fill: "#fff9ee" }));
+      socket.append(eye);
+    }
+    head.append(socket);
   }
   if (id === "wolf" || id === "lion") {
-    svg.append(shape("path", { d: "M15 36Q30 42 45 36Q42 49 30 51Q18 49 15 36Z", fill: "#f4e9da" }));
-    svg.append(shape("ellipse", { cx: 30, cy: 39, rx: 4.5, ry: 2.7, fill: "#172033" }));
-  } else if (id !== "octopus") {
-    svg.append(shape("path", { d: id === "hawk" || id === "eagle" ? "M19 34Q32 27 43 35Q43 43 33 47L34 40 24 42Z" : "M21 34Q30 29 39 34L30 46Z", fill: "#e5a14e" }));
+    head.append(shape("path", { d: "M15 36Q30 42 45 36Q42 49 30 51Q18 49 15 36Z", fill: "#f4e9da" }));
+    head.append(shape("ellipse", { cx: 30, cy: 39, rx: 4.5, ry: 2.7, fill: ink }));
+    if (pending) head.append(shape("ellipse", { cx: 30, cy: 45, rx: 2.5, ry: 2.8, fill: ink }));
+    else head.append(shape("path", { ...line, d: worried ? "M26 47Q30 42 34 47" : happy ? "M25 43Q30 50 35 43" : "M27 44h6" }));
+  } else if (id === "octopus") {
+    if (pending) head.append(shape("ellipse", { cx: 30, cy: 36.5, rx: 2.6, ry: 3.3, fill: ink }));
+    else head.append(shape("path", { ...line, d: worried ? "M26 39Q30 33 34 39" : "M26 36Q30 41 34 36" }));
+  } else {
+    const hooked = id === "hawk" || id === "eagle";
+    const beak = hooked ? "M21 36Q32 31 40 37Q40 44 33 47L34 42 25 43Z" : "M22 37Q30 32 38 37L30 46Z";
+    head.append(shape("path", { d: beak, fill: "#f3ad54" }));
+    if (pending) head.append(shape("ellipse", { cx: 30, cy: 39.6, rx: 2.4, ry: 2.6, fill: ink }));
+    else if (worried) head.append(shape("path", { ...line, d: "M26 41Q30 37 34 41" }));
   }
   return svg;
+}
+
+const motion = matchMedia("(prefers-reduced-motion: reduce)");
+function gaze(container, x, y) {
+  const move = motion.matches ? "translate(0 0)" : `translate(${x} ${y})`;
+  for (const pupil of container.querySelectorAll("[data-mascot-pupil]")) {
+    pupil.setAttribute("transform", move);
+  }
 }
 
 function read() {
@@ -68,5 +116,5 @@ function read() {
 function save(id) {
   try { localStorage.setItem("nobetci-demo-theme", id); } catch { /* storage is optional */ }
 }
-window.NobetciThemes = { animals, avatar, read, save };
+window.NobetciThemes = { animals, avatar, gaze, read, save };
 })();
