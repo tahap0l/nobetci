@@ -1,6 +1,6 @@
 <div align="center">
 
-<p align="center"><img src="docs/media/en/idle-island.png" width="720" alt="The smaller idle island with the wolf, horizontal music player, and focus timer"></p>
+<p align="center"><img src="docs/media/en/idle-island.png" width="720" alt="The expanded island with Media and focus, Calendar, and Weather tabs above the session list"></p>
 
 
 <img src="src-tauri/icons/128x128@2x.png" width="96" height="96" alt="Nöbetçi's owl">
@@ -23,14 +23,14 @@
 
 **[Latest Windows and macOS installers](https://github.com/tahap0l/nobetci/releases/latest)**
 
-This development version keeps a compact island at the top of the screen. Click it to open agent sessions and widgets. Permission requests take priority and open the approval card.
+[Website](https://tahap0l.github.io/nobetci/) · [Interactive web demo](https://tahap0l.github.io/nobetci/demo/)
 
-- **Agents:** Claude Code, Codex and Cursor sessions and supported approval requests. The [ChatGPT Web bridge](integrations/chatgpt-web/README.md) uses a Chrome or Edge extension on Windows to show response status.
-- **Calendar:** View the current week and use the arrows to browse weeks. The idle compact island cycles through the date, weather, and the current track.
-- **Idle island:** A short status line, a horizontal Windows media player, and a compact focus timer. The wolf mascot follows your pointer and looks toward incoming requests. [Try the web demo](https://nobetci.pages.dev/demo/).
-- **Widgets:** Open Settings → General → Island widgets to enable weather and Windows media. Swipe horizontally or use ⇄ to switch cards.
-- **Mascots:** Choose one of seven mascots in Settings → General → Appearance.
+Nöbetçi sits at the top of the screen. Click the compact island to open your agent sessions and cards. Permission requests open the approval card first.
 
+- **Agent monitoring.** Track Claude Code, Codex, and Cursor sessions and supported permission requests. On Windows, you can see ChatGPT response status from Chrome or Edge. [ChatGPT Web setup](integrations/chatgpt-web/README.md)
+- **Three island tabs.** Use **Media & focus**, **Calendar**, and **Weather**, or swipe up on the card area. Browse weeks with the calendar arrows and see the selected city's conditions and temperature in a table.
+- **Media and focus.** The Windows player shows Spotify or other supported media with artwork when available. The 25-minute focus timer can be paused or reset. Choose a weather city and enable media under **Settings → General → Island widgets**.
+- **Seven mascot themes.** Choose a mascot under **Settings → General → Appearance** to change the card colors and transitions. Try the risk and approval reactions in the web demo.
 
 Nöbetçi is a small owl on a black island at the top of your screen. It watches Claude Code, Codex
 and Cursor sessions, records submitted prompts and surfaces supported permission requests. Claude
@@ -63,7 +63,7 @@ edge of the screen.
 - **Every session on its own row.** Parallel Claude Code sessions — in Windows Terminal,
   Terminal.app, iTerm2, VS Code, Cursor or anywhere else — each get a row: what it's doing, for how long, and whether it's done,
   failed or waiting for you.
-- **Session detail.** A timeline of recent steps, counters (tools, approvals, denials, automatic
+- **Session detail.** A timeline of recent steps, active subagents, counters (tools, approvals, denials, automatic
   decisions) and **Go to window**, which brings the session's terminal or editor to the front.
 - **Opens when it matters.** A permission request, an error or a question from Claude opens the
   island; a finished session can too, if you like. Otherwise it stays out of the way.

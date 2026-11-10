@@ -7,6 +7,22 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.1.6] - 2026-11-10
+
+### Fixed
+
+- Launch Windows Codex hooks with PowerShell's call operator. The health check distinguishes the
+  relay test signal from the last live Codex event. Review and trust the repaired hooks again after updating.
+- Keep the session list reachable when the expanded island is crowded.
+- Publish the website and demo on GitHub Pages as an alternate address.
+
+### Changed
+
+- Split the expanded island into Media & focus, Calendar, and Weather with vertical navigation,
+  themed transitions, and table layouts for the weekly calendar and current weather.
+- Show media artwork and supported playback controls on Windows, and count active subagents in session details.
+- Animate all seven web mascots with distinct reactions to pending, risky, approved, and denied requests.
+
 ## [2.1.5] - 2026-11-10
 
 - Slim down the idle island and replace the large music card with a horizontal player next to the focus timer.
@@ -158,7 +174,8 @@ pipe relay, the reviewed-diff hook installer and the island window were adapted 
 [Coucou](https://github.com/Louis-CFM/coucou) (MIT). Everything they had, and much more, shipped
 publicly in 0.2.0.
 
-[Unreleased]: https://github.com/tahap0l/nobetci/compare/v2.1.5...HEAD
+[Unreleased]: https://github.com/tahap0l/nobetci/compare/v2.1.6...HEAD
+[2.1.6]: https://github.com/tahap0l/nobetci/compare/v2.1.5...v2.1.6
 [2.1.5]: https://github.com/tahap0l/nobetci/compare/v2.1.4...v2.1.5
 [2.1.4]: https://github.com/tahap0l/nobetci/compare/v2.1.3...v2.1.4
 [2.1.3]: https://github.com/tahap0l/nobetci/compare/v2.1.2...v2.1.3

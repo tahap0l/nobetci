@@ -20,15 +20,16 @@
 
 **[Güncel Windows ve macOS kurulumları](https://github.com/tahap0l/nobetci/releases/latest)**
 
-Bu geliştirme sürümünde Nöbetçi ekranın üstünde küçük bir ada olarak açık kalır. Adaya tıklayarak ajan oturumlarını ve kartları açabilirsin. İzin isteği geldiğinde onay kartı öne çıkar.
+[Web sitesi](https://tahap0l.github.io/nobetci/) · [Etkileşimli web demosu](https://tahap0l.github.io/nobetci/demo/)
 
-- **Ajanlar:** Claude Code, Codex ve Cursor oturumları ile desteklenen izin istekleri. [ChatGPT Web bağlantısı](integrations/chatgpt-web/README.md) Windows’ta Chrome veya Edge eklentisiyle yanıt durumunu gösterir.
-- **Takvim:** Adada haftayı gör, oklarla önceki veya sonraki haftaya geç. Boştayken küçük ada tarihi, hava durumunu ve çalan parçayı sırayla gösterir.
-- **Boş ada:** Tek satır durum bilgisi, yatay Windows medya oynatıcısı ve küçük odak sayacı. Kurt maskotunun gözleri imleci ve izin kartını takip eder. [Web demosunu dene](https://nobetci.pages.dev/demo/).
-- **Kişisel kartlar:** Ayarlar → Genel → Ada bileşenleri bölümünden hava durumunu ve Windows medya kartını aç. Kartlar arasında yatay kaydırarak veya ⇄ düğmesiyle geç.
-- **Maskot:** Ayarlar → Genel → Görünüm bölümünde yedi maskottan birini seç.
+Nöbetçi ekranın üstünde küçük bir ada olarak durur. Adaya tıklayarak ajan oturumlarını ve kartları açabilirsin. İzin isteği geldiğinde onay kartı öne çıkar.
 
-<p align="center"><img src="docs/media/tr/idle-island.png" width="720" alt="Kurt, yatay müzik oynatıcısı ve odak sayacıyla daha küçük boş ada"></p>
+- **Ajan takibi.** Claude Code, Codex ve Cursor oturumlarını ve desteklenen izin isteklerini izle. Windows’ta Chrome veya Edge’deki ChatGPT yanıt durumunu görebilirsin. [ChatGPT Web kurulumu](integrations/chatgpt-web/README.md)
+- **Üç ada sekmesi.** **Medya ve odak**, **Takvim** ve **Hava durumu** sekmelerine dokun veya kartları yukarı kaydır. Takvimde oklarla haftalar arasında gez, hava durumu tablosunda seçtiğin şehrin sıcaklığını ve güncel koşullarını gör.
+- **Medya ve odak.** Windows medya kartı Spotify ve desteklenen diğer kaynaklarda çalan parçayı ve varsa kapak görselini gösterir. 25 dakikalık odak sayacı duraklatılabilir ve sıfırlanabilir. **Ayarlar → Genel → Ada bileşenleri** bölümünden hava durumu için şehir seçebilir ve medya kartını açabilirsin.
+- **Yedi maskot teması.** **Ayarlar → Genel → Görünüm** bölümünden maskot seçerek kart renklerini ve geçişlerini değiştir. Web demosunda maskotların izin ve risk tepkilerini deneyebilirsin.
+
+<p align="center"><img src="docs/media/tr/idle-island.png" width="720" alt="Oturum listesinin üzerinde Medya ve odak, Takvim ve Hava durumu sekmeleri bulunan açık ada"></p>
 
 
 
@@ -59,7 +60,7 @@ butonu bilerek basılı tutman gerekir. Sana ihtiyaç olmadığında ekranın ü
 - **Her oturum ayrı satırda.** Paralel Claude Code oturumları — Windows Terminal'de,
   Terminal.app'te, iTerm2'de, VS Code'da, Cursor'da ya da başka bir yerde — kendi satırında görünür: ne yapıyor, ne zamandır, bitti mi,
   hata mı verdi, seni mi bekliyor.
-- **Oturum detayı.** Son adımların zaman çizelgesi, sayaçlar (araç, izin, ret, otomatik karar) ve
+- **Oturum detayı.** Son adımların zaman çizelgesi, etkin alt ajanlar, sayaçlar (araç, izin, ret, otomatik karar) ve
   oturumun terminalini ya da editörünü öne getiren **Pencereye git**.
 - **Sadece gerektiğinde açılır.** İzin isteği, hata ya da Claude'un bir sorusu adayı açar;
   istersen biten oturum da. Geri kalan zamanda yoluna çıkmaz.

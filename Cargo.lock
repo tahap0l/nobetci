@@ -2382,7 +2382,7 @@ checksum = "650eef8c711430f1a879fdd01d4745a7deea475becfb90269c06775983bbf086"
 
 [[package]]
 name = "nobetci"
-version = "2.1.5"
+version = "2.1.6"
 dependencies = [
  "base64 0.22.1",
  "block2",
@@ -2409,7 +2409,7 @@ dependencies = [
 
 [[package]]
 name = "nobetci-hook"
-version = "2.1.5"
+version = "2.1.6"
 dependencies = [
  "libc",
  "serde_json",
