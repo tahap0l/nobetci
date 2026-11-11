@@ -38,6 +38,7 @@ button:focus-visible,a:focus-visible{outline:3px solid var(--accent);outline-off
 .halo{position:absolute;width:130px;height:130px;border:1px solid var(--signal-color);border-radius:50%;opacity:.45}
 .mascot{width:108px;height:108px;filter:drop-shadow(0 12px 22px var(--surface))}
 .mascot svg{width:100%;height:100%}
+.mascot.is-live{width:116px;height:150px;cursor:pointer;pointer-events:auto}
 .mascot-signal{position:absolute;top:calc(50% + 27px);left:calc(50% + 35px);display:grid;place-items:center;width:31px;height:31px;border:1px solid var(--signal-color);border-radius:50%;background:#121823;color:var(--signal-color);font-size:1.15rem;font-weight:800;line-height:1}
 .stage:is([data-state=pending],[data-state=danger]) .halo{animation:pulse 1.8s ease-out infinite}
 .card{position:relative;border:1px solid #34415a;border-radius:16px;background:#141a28;padding:16px;min-height:154px}

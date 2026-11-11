@@ -1,5 +1,6 @@
 // Renders the README screenshots from a running dev server with headless
-// Microsoft Edge, in English and Turkish, into docs/media/<lang>/<name>.png.
+// Microsoft Edge (or any Chromium-based browser), in English and Turkish, into
+// docs/media/<lang>/<name>.png.
 //
 //   npm run dev                                   # terminal 1: the UI with demo data
 //   node scripts/screenshots.mjs                  # terminal 2: every image, both languages
@@ -7,11 +8,13 @@
 //
 // Environment:
 //   NOBETCI_URL    dev server to capture (default http://127.0.0.1:1420)
-//   NOBETCI_EDGE   path to msedge.exe (default: where Windows installs it)
+//   NOBETCI_EDGE   path to msedge.exe (default: where Windows installs it); on
+//                  macOS and Linux, the path to Edge, Chrome or Chromium
 //   NOBETCI_SCALE  device scale factor, e.g. 2 for high-DPI images (default 1)
 //   NOBETCI_OUT    output directory, relative to the repo root (default docs/media)
 //
 // Dependency-free on purpose: Node built-ins and the Edge that ships with Windows.
+// Text is set in the system font, so images taken on another system differ in type.
 
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
@@ -33,13 +36,18 @@ const edge =
 
 /** The island panel (PANEL_W × PANEL_H in src/island/layout.ts). */
 const ISLAND = { width: 720, height: 460 };
+/** The top of the island at 16:9, for the README's first image and the website. */
+const HERO = { width: 720, height: 405 };
 /** The settings window's inner size (create_settings_window in src-tauri/src/lib.rs). */
 const SETTINGS = { width: 1000, height: 740 };
 
 const SHOTS = [
   { name: "critical", path: "?demo=critical", size: ISLAND },
   { name: "low", path: "?demo=low", size: ISLAND },
-  { name: "overview", path: "?demo=overview", size: ISLAND },
+  { name: "overview", path: "?demo=overview", size: HERO },
+  { name: "idle-island", path: "?demo=overview&theme=wolf&media=1", size: HERO },
+  // Drawn at twice the size: the mascots are the whole picture.
+  { name: "mascots", path: "?demo=mascots", size: { width: 720, height: 210 }, scale: 2 },
   { name: "session", path: "?demo=session", size: ISLAND },
   { name: "compact", path: "?demo=compact", size: ISLAND },
   { name: "settings-rules", path: "settings.html?tab=kurallar", size: SETTINGS },
@@ -123,7 +131,11 @@ function runEdge(args) {
   return new Promise((done) => {
     const child = spawn(edge, args, { stdio: "ignore", windowsHide: true });
     const timer = setTimeout(() => {
-      spawnSync("taskkill", ["/PID", String(child.pid), "/T", "/F"], { stdio: "ignore", windowsHide: true });
+      if (process.platform === "win32") {
+        spawnSync("taskkill", ["/PID", String(child.pid), "/T", "/F"], { stdio: "ignore", windowsHide: true });
+      } else {
+        child.kill("SIGKILL");
+      }
       done({ ok: false, why: `timed out after ${TIMEOUT_MS / 1000} s` });
     }, TIMEOUT_MS);
     child.on("error", (err) => {
@@ -143,8 +155,13 @@ function shown(file) {
 
 async function main() {
   const { langs, shots } = selection(process.argv.slice(2));
-  if (process.platform !== "win32") fail("This script drives Microsoft Edge on Windows.");
-  if (!edge || !existsSync(edge)) fail("Microsoft Edge not found. Set NOBETCI_EDGE to the full path of msedge.exe.");
+  if (!edge || !existsSync(edge)) {
+    fail(
+      process.platform === "win32"
+        ? "Microsoft Edge not found. Set NOBETCI_EDGE to the full path of msedge.exe."
+        : "Set NOBETCI_EDGE to the full path of Edge, Chrome or Chromium.",
+    );
+  }
   if (!Number.isFinite(scale) || scale <= 0) fail(`NOBETCI_SCALE must be a positive number, got "${process.env.NOBETCI_SCALE}".`);
   if (!(await serverUp(base))) {
     fail(`No dev server at ${base} — start one with \`npm run dev\`, or point NOBETCI_URL at yours.`);
@@ -173,7 +190,9 @@ async function main() {
           "--hide-scrollbars",
           `--user-data-dir=${profile}`,
           `--window-size=${shot.size.width},${shot.size.height}`,
-          `--force-device-scale-factor=${scale}`,
+          `--force-device-scale-factor=${scale * (shot.scale ?? 1)}`,
+          // Chromium refuses to start its sandbox as root (containers, CI).
+          ...(process.getuid?.() === 0 ? ["--no-sandbox"] : []),
           "--virtual-time-budget=6000",
           `--screenshot=${file}`,
           `--lang=${LANGS[lang].locale}`,

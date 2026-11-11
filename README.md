@@ -30,7 +30,9 @@ Nöbetçi sits at the top of the screen. Click the compact island to open your a
 - **Agent monitoring.** Track Claude Code, Codex, and Cursor sessions and supported permission requests. On Windows, you can see ChatGPT response status from Chrome or Edge. [ChatGPT Web setup](integrations/chatgpt-web/README.md)
 - **Three island tabs.** Use **Media & focus**, **Calendar**, and **Weather**, or swipe up on the card area. Browse weeks with the calendar arrows and see the selected city's conditions and temperature in a table.
 - **Media and focus.** The Windows player shows Spotify or other supported media with artwork when available. The 25-minute focus timer can be paused or reset. Choose a weather city and enable media under **Settings → General → Island widgets**.
-- **Seven mascot themes.** Choose a mascot under **Settings → General → Appearance** to change the card colors and transitions. Try the risk and approval reactions in the web demo.
+- **Seven mascots.** The owl, a wolf, a hawk, an octopus, a lion, a canary and an eagle move and react the same way: they wave at a permission request, bristle at a risky one, hop when a session finishes and doze when nothing is running. Choose one under **Settings → General → Appearance**; it also sets the card colors and transitions. Try the reactions in the web demo.
+
+<p align="center"><img src="docs/media/en/mascots.png" width="720" alt="The seven mascots side by side, each in a different mood: the owl idle, the wolf waving at a permission request, the hawk alarmed, the octopus thinking, the lion happy, the canary delighted and the eagle puzzled"></p>
 
 Nöbetçi is a small owl on a black island at the top of your screen. It watches Claude Code, Codex
 and Cursor sessions, records submitted prompts and surfaces supported permission requests. Claude
@@ -565,7 +567,8 @@ npm run pack:mac     # the macOS disk image (universal), into release/
 With `npm run dev` running:
 
 - `http://127.0.0.1:1420/?demo=critical` shows the island with fake sessions and requests. Other
-  demos: `low`, `write`, `hidden`, `deny-menu`, `overview`, `session`, `compact`, `empty`.
+  demos: `low`, `write`, `hidden`, `deny-menu`, `overview`, `session`, `compact`, `empty`, `mascots`.
+  Add `&theme=wolf` (or another mascot) to see it on the island.
 - `http://127.0.0.1:1420/settings.html?tab=kurallar` opens Settings with mock data. Tabs:
   `genel`, `claude`, `prompts`, `guvenlik`, `kurallar`, `bildirimler`, `gecmis`, `hakkinda`, plus
   `hosgeldin` for the welcome wizard.

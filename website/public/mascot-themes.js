@@ -8,23 +8,123 @@ const animals = {
   canary: ["Kanarya", "#f4e66f", "#c7a132"],
   eagle: ["Kartal", "#a5d7ff", "#7c98b8"],
 };
-const outlines = {
-  owl: "M6 27 6 8 21 16 39 16 54 8 54 27Q58 51 30 58Q2 51 6 27Z",
-  wolf: "M7 27Q3 8 7 5Q11 3 21 15Q30 12 39 15Q49 3 53 5Q57 8 53 27Q61 39 49 48Q41 57 30 57Q19 57 11 48Q-1 39 7 27Z",
-  hawk: "M5 31 9 16 22 9 44 11 56 5 51 23 55 37 43 49 30 56 13 48Z",
-  octopus: "M12 33C4 3 55 2 48 32Q63 33 58 44T48 43Q49 60 39 58Q34 56 35 46Q30 64 24 55L24 46Q15 63 10 52L14 43Q0 51 2 41Q3 35 12 33Z",
-  lion: "M30 2 41 7 51 6 54 16 59 24 56 34 58 45 48 49 40 57 30 55 20 58 12 50 3 45 5 34 1 24 7 16 10 7 21 8Z",
-  canary: "M7 38Q4 12 25 11Q29 6 38 7L36 13Q53 17 54 34Q55 54 30 55Q11 55 7 38Z",
-  eagle: "M4 28 9 13 24 5 42 7 55 18 56 38 48 49 38 47 31 57 24 49 13 51 8 42Z",
-};
-const faces = {
-  owl: "M10 31Q13 17 29 28Q45 17 50 31Q52 46 30 51Q8 46 10 31Z",
-  wolf: "M8 35Q13 21 23 24Q27 25 30 31Q33 25 37 24Q47 21 52 35Q50 51 30 54Q10 51 8 35Z",
-  hawk: "M9 30Q18 16 30 25Q43 15 52 29L45 42 33 50 30 41 22 47 14 41Z",
-  octopus: "M13 30Q12 14 30 13Q48 14 47 30Q43 40 30 39Q17 40 13 30Z",
-  lion: "M13 24Q12 15 21 15L30 21 39 15Q48 15 47 24L47 39 39 48 30 53 21 48 13 39Z",
-  canary: "M11 35Q12 23 28 20Q45 18 49 34Q45 50 30 52Q15 51 11 35Z",
-  eagle: "M8 30 14 17Q24 11 34 13L49 19 53 34 45 46 37 42 32 53 22 46 15 49Z",
+// The desktop app's mascot heads (src/baykus/mascot.ts and, for the owl,
+// src/baykus/mini.ts), kept in step by hand: flat fills, one dark outline,
+// big rimmed eyes. Each lives in a 100 × 100 box.
+const dot = (x, y, r) => `M${x - r} ${y}a${r} ${r} 0 1 0 ${2 * r} 0a${r} ${r} 0 1 0 ${-2 * r} 0Z`;
+const at = (side, dx) => 50 + side * dx;
+const mirror = (points) => points(-1) + points(1);
+const amber = "#F7B52F";
+const designs = {
+  owl: {
+    outline: "#1B110A",
+    body: [
+      ["#8E5C36", mirror((s) => `M${at(s, 12)} 34L${at(s, 33)} 9L${at(s, 40)} 50Z`)],
+      ["#8E5C36", "M10 57a40 31 0 1 0 80 0a40 31 0 1 0 -80 0Z"],
+    ],
+    marks: [
+      ["#4A2B17", mirror((s) => `M${at(s, 19)} 33L${at(s, 31)} 18L${at(s, 34)} 38Z`)],
+      ["#F3E3C6", dot(31, 54, 19.5) + dot(69, 54, 19.5)],
+    ],
+    face: [["#DE8C45", "M43.5 63H56.5L50 78Z"]],
+    eye: { x: 19, y: 54, r: 14, white: "#F3E3C6", iris: amber, lid: "#D9BE93" },
+  },
+  wolf: {
+    outline: "#1A1E27",
+    body: [
+      ["#8D99A9", mirror((s) => `M${at(s, 36)} 42L${at(s, 33)} 5L${at(s, 6)} 27Z`)],
+      ["#8D99A9", "M50 19C72 19 87 33 90 51L97 63L86 67C80 84 65 93 50 93C35 93 20 84 14 67L3 63L10 51C13 33 28 19 50 19Z"],
+    ],
+    marks: [
+      ["#566273", mirror((s) => `M${at(s, 30)} 31L${at(s, 29)} 14L${at(s, 14)} 27Z`)],
+      ["#566273", "M50 19C58 19 65 21 71 24C62 27 55 33 50 43C45 33 38 27 29 24C35 21 42 19 50 19Z"],
+      ["#F4EFE7", "M50 47C57 55 72 53 82 60C77 80 63 89 50 89C37 89 23 80 18 60C28 53 43 55 50 47Z"],
+    ],
+    face: [["#1D2129", "M43 67Q50 63 57 67Q56 74 50 76Q44 74 43 67Z"]],
+    lines: "M50 76V80M50 80Q45 86 39 82M50 80Q55 86 61 82",
+    eye: { x: 19.5, y: 50, r: 15, white: "#FFF8EC", iris: amber, lid: "#8D99A9" },
+  },
+  hawk: {
+    outline: "#24130A",
+    body: [["#A9653C", "M50 11C75 11 89 30 89 52C89 76 71 93 50 93C29 93 11 76 11 52C11 30 25 11 50 11Z"]],
+    marks: [
+      ["#F3E3C6", "M50 60C60 53 77 55 84 63C79 80 65 89 50 89C35 89 21 80 16 63C23 55 40 53 50 60Z"],
+      ["#6E3E22", "M50 11C66 11 79 19 85 32C74 29 60 33 50 45C40 33 26 29 15 32C21 19 34 11 50 11Z"],
+    ],
+    strokes: ["#A9653C", "M36 80l4 4l4-4M46 84l4 4l4-4M56 80l4 4l4-4"],
+    face: [
+      ["#6E3E22", mirror((s) => `M${at(s, 37)} 37L${at(s, 4)} 47L${at(s, 4)} 53L${at(s, 34)} 44Z`)],
+      ["#F2B544", "M41 62Q50 54 59 62Q60 73 50 83Q40 73 41 62Z"],
+      ["#F9D77E", "M43 61Q50 56 57 61Q50 64 43 61Z"],
+      ["#4A2C17", "M44.5 72Q50 76 55.5 72Q54 78 50 83Q46 78 44.5 72Z"],
+    ],
+    eye: { x: 19.5, y: 54, r: 14, white: "#FFF6DF", iris: amber, lid: "#C98A5E" },
+  },
+  eagle: {
+    outline: "#161B27",
+    body: [
+      ["#3A4560", "M12 72C18 58 82 58 88 72C90 88 72 97 50 97C28 97 10 88 12 72Z"],
+      ["#F6F2E8", "M50 9C73 9 87 26 87 48C87 62 81 71 74 78L66 72L60 83L50 76L40 83L34 72L26 78C19 71 13 62 13 48C13 26 27 9 50 9Z"],
+    ],
+    marks: [["#D3DDEA", "M50 9C65 9 77 16 83 28C71 22 60 23 50 32C40 23 29 22 17 28C23 16 35 9 50 9Z"]],
+    face: [
+      ["#3A4560", mirror((s) => `M${at(s, 35)} 30L${at(s, 4)} 41L${at(s, 4)} 47L${at(s, 32)} 37Z`)],
+      ["#F5B82E", "M39 54Q50 46 61 54Q63 69 50 80Q37 69 39 54Z"],
+      ["#FBDD86", "M41 54Q50 48 59 54Q50 58 41 54Z"],
+      ["#B9781A", dot(46, 63, 1.4) + dot(54, 63, 1.4)],
+    ],
+    eye: { x: 19, y: 47, r: 13.5, white: "#FFFBEF", iris: "#F7C93A", lid: "#DAD5C8" },
+  },
+  canary: {
+    outline: "#2B2208",
+    body: [
+      ["#E2B22E", mirror((s) => `M${at(s, 33)} 52Q${at(s, 47)} 66 ${at(s, 34)} 80Q${at(s, 28)} 66 ${at(s, 33)} 52Z`)],
+      ["#F6D643", "M45 20Q43 4 53 3Q50 9 54 14Q60 5 66 9Q59 14 58 22Z"],
+      ["#F6D643", "M50 16C73 16 88 33 88 55C88 77 72 92 50 92C28 92 12 77 12 55C12 33 27 16 50 16Z"],
+    ],
+    marks: [["#FCEB95", "M50 54C64 54 74 62 74 72C74 82 64 88 50 88C36 88 26 82 26 72C26 62 36 54 50 54Z"]],
+    face: [
+      ["#EE8E3A", "M42 57Q50 53 58 57L50 69Z"],
+      ["#C96A1E", "M44.5 61Q50 64 55.5 61L50 69Z"],
+    ],
+    eye: { x: 19, y: 44, r: 13.5, white: "#FFFBEA", iris: "#7A5220", lid: "#F6D643" },
+    blush: [27, 61, 5],
+  },
+  lion: {
+    outline: "#2A1608",
+    body: [[
+      "#B4631F",
+      Array.from({ length: 12 }, (_, i) => {
+        const a = (i / 12) * Math.PI * 2;
+        return dot(Math.round((50 + Math.cos(a) * 34) * 10) / 10, Math.round((53 + Math.sin(a) * 34) * 10) / 10, 12);
+      }).join("") + dot(50, 53, 36),
+    ]],
+    marks: [
+      ["#F2B95C", mirror((s) => dot(at(s, 24), 30, 9))],
+      ["#8E4A16", mirror((s) => dot(at(s, 24), 30, 4.5))],
+      ["#F2B95C", "M50 26C68 26 80 39 80 55C80 72 67 84 50 84C33 84 20 72 20 55C20 39 32 26 50 26Z"],
+      ["#FBEBCB", dot(43, 70, 9) + dot(57, 70, 9) + "M40 72H60Q58 83 50 83Q42 83 40 72Z"],
+    ],
+    face: [["#5A2E14", "M43 62Q50 59 57 62Q56 68 50 71Q44 68 43 62Z"]],
+    lines: "M50 71V75M50 75Q46 80 41 77M50 75Q54 80 59 77",
+    eye: { x: 15.5, y: 48, r: 12, white: "#FFF8EC", iris: amber, lid: "#F2B95C" },
+  },
+  octopus: {
+    outline: "#1F1433",
+    body: [[
+      "#A775D2",
+      dot(17, 76, 11) + dot(38, 83, 11) + dot(62, 83, 11) + dot(83, 76, 11) +
+        "M50 8C75 8 89 27 89 49C89 65 82 76 72 82H28C18 76 11 65 11 49C11 27 25 8 50 8Z",
+    ]],
+    marks: [
+      ["#C8A2EA", dot(29, 22, 4.5) + dot(68, 17, 3.2) + dot(77, 29, 2.4) + dot(38, 14, 2)],
+      ["#61DDCB", dot(17, 79, 2.6) + dot(38, 86, 2.6) + dot(62, 86, 2.6) + dot(83, 79, 2.6)],
+    ],
+    face: [],
+    lines: "M44 66Q50 71 56 66",
+    eye: { x: 19, y: 45, r: 14, white: "#FFFAF2", iris: "#5B3A8C", lid: "#A775D2" },
+    blush: [29, 63, 4.5],
+  },
 };
 const ns = "http://www.w3.org/2000/svg";
 function shape(tag, props) {
@@ -32,70 +132,83 @@ function shape(tag, props) {
   for (const [name, value] of Object.entries(props)) node.setAttribute(name, value);
   return node;
 }
-const details = {
-  wolf: "M9 9 18 18 11 24ZM51 9 42 18 49 24Z",
-  hawk: "M14 17Q27 9 43 15L49 12 44 20Q30 15 14 17Z",
-  octopus: "M13 45a1.8 1.8 0 1 0 0-3.6 1.8 1.8 0 0 0 0 3.6Zm11 2a1.8 1.8 0 1 0 0-3.6 1.8 1.8 0 0 0 0 3.6Zm12 0a1.8 1.8 0 1 0 0-3.6 1.8 1.8 0 0 0 0 3.6Zm11-2a1.8 1.8 0 1 0 0-3.6 1.8 1.8 0 0 0 0 3.6Z",
-  lion: "M9 20 14 25 11 29ZM51 20 46 25 49 29ZM13 44l7 1-2 5Zm34 0-7 1 2 5Z",
-  canary: "M11 24Q18 12 33 13L29 18Q18 18 11 24Z",
-  eagle: "M9 21Q18 7 34 10Q46 11 51 22Q35 13 9 21Z",
-};
-const ink = "#172033";
-const line = { fill: "none", stroke: ink, "stroke-width": 2.2, "stroke-linecap": "round" };
+let clips = 0;
 
 function avatar(id, state = "idle", animated = false) {
-  const [, accent, face] = animals[id];
   const svg = shape("svg", {
-    viewBox: "0 0 60 60", "aria-hidden": "true", focusable: "false",
+    viewBox: "0 0 100 100", "aria-hidden": "true", focusable: "false",
     "data-animal": id, "data-expression": state,
     class: animated ? "mascot-art is-animated" : "mascot-art",
   });
   const head = shape("g", { class: "mascot-head" });
-  const pending = state === "pending" || state === "danger";
+  svg.append(head);
+  drawDesign(head, designs[id], state);
+  return svg;
+}
+
+function drawDesign(head, design, state) {
+  const pending = state === "pending";
+  const danger = state === "danger";
   const worried = state === "denied";
   const happy = state === "allowed" || state === "greeting";
-  svg.append(head);
-  head.append(shape("path", { d: outlines[id], fill: face, stroke: "#ffffff42", "stroke-width": .7 }));
-  head.append(shape("path", { d: faces[id], fill: accent }));
-  if (details[id]) head.append(shape("path", { d: details[id], fill: id === "wolf" ? "#3c475c" : "#fff9e790" }));
-  for (const x of [21, 39]) {
+  const round = { "stroke-linejoin": "round", "stroke-linecap": "round" };
+  // One outline around the whole silhouette: stroke it, then fill over the inner half.
+  head.append(shape("path", {
+    d: design.body.map(([, d]) => d).join(""), fill: "none", stroke: design.outline, "stroke-width": 6, ...round,
+  }));
+  for (const [fill, d] of [...design.body, ...design.marks]) head.append(shape("path", { d, fill }));
+  if (design.strokes) {
+    head.append(shape("path", { d: design.strokes[1], fill: "none", stroke: design.strokes[0], "stroke-width": 2.2, ...round }));
+  }
+  if (design.blush) {
+    const [x, y, r] = design.blush;
+    head.append(shape("path", { d: dot(x, y, r) + dot(100 - x, y, r), fill: "#FF8FA6", opacity: .55 }));
+  }
+  const { x: dx, y, r, white, lid } = design.eye;
+  const stroke = Math.max(2.4, r * .24);
+  for (const side of [-1, 1]) {
+    const x = 50 + side * dx;
     const socket = shape("g", { class: "mascot-eye" });
-    if (pending || worried) {
-      const outer = x < 30 ? x - 5 : x + 5;
-      const inner = x < 30 ? x + 4 : x - 4;
-      const brow = worried || state === "danger"
-        ? `M${outer} 23Q${x} 21 ${inner} 17`
-        : `M${x - 4} 20q4-3 8 0`;
-      head.append(shape("path", { ...line, d: brow }));
-    }
+    socket.append(shape("circle", { cx: x, cy: y, r, fill: white, stroke: design.outline, "stroke-width": 1.8 }));
     if (happy) {
-      socket.append(shape("path", { ...line, d: `M${x - 4} 30q4-7 8 0` }));
+      socket.append(shape("path", {
+        d: `M${x - r * .62} ${y + r * .12}Q${x} ${y - r * .62} ${x + r * .62} ${y + r * .12}`,
+        fill: "none", stroke: design.outline, "stroke-width": stroke, ...round,
+      }));
     } else {
-      const wide = id === "wolf" || id === "owl";
-      socket.append(shape("ellipse", { cx: x, cy: 29.5, rx: wide ? 7 : 5.4, ry: pending ? 7.1 : 5.9, fill: "#fff9ee" }));
-      const eye = shape("g", { "data-mascot-pupil": "", transform: pending ? "translate(1.7 1.2)" : worried ? "translate(0 1.6)" : "translate(0 0)" });
-      eye.append(shape("ellipse", { cx: x, cy: 29, rx: pending ? 2.7 : 3.1, ry: pending ? 4.2 : 3.5, fill: ink }));
-      eye.append(shape("circle", { cx: x - 1, cy: 27.5, r: 1.05, fill: "#fff9ee" }));
+      const ir = r * (pending ? .8 : .74);
+      const reach = r - ir;
+      const iy = y + (worried ? reach * .8 : 0);
+      const eye = shape("g", { "data-mascot-pupil": "", transform: pending || danger ? `translate(${reach} 0)` : "translate(0 0)" });
+      eye.append(shape("circle", {
+        cx: x, cy: iy, r: ir, fill: danger ? "#FF4550" : pending ? "#FF9116" : design.eye.iris,
+        stroke: "#2A170B", "stroke-width": 1.6,
+      }));
+      eye.append(shape("circle", { cx: x, cy: iy, r: ir * (danger ? .46 : .6), fill: "#140B05" }));
+      eye.append(shape("path", { d: dot(x - ir * .34, iy - ir * .38, ir * .24) + dot(x + ir * .3, iy + ir * .34, ir * .11), fill: "#fff" }));
       socket.append(eye);
+      if (danger || worried) {
+        // Lids: stern when a request is dangerous, sad when it was denied.
+        const slant = (danger ? .7 : -.6) * r * .6 * side;
+        const y0 = y - r + .4 * 2 * r;
+        const clip = shape("clipPath", { id: `mascot-lid-${++clips}` });
+        clip.append(shape("circle", { cx: x, cy: y, r }));
+        const cover = shape("g", { "clip-path": `url(#${clip.id})` });
+        cover.append(shape("path", {
+          d: `M${x - r} ${y - r - 1}H${x + r}V${y0 - slant}L${x - r} ${y0 + slant}Z`, fill: lid,
+        }));
+        cover.append(shape("path", {
+          d: `M${x + r} ${y0 - slant}L${x - r} ${y0 + slant}`, fill: "none", stroke: design.outline, "stroke-width": stroke,
+        }));
+        socket.append(clip, cover);
+      }
     }
     head.append(socket);
   }
-  if (id === "wolf" || id === "lion") {
-    head.append(shape("path", { d: "M15 36Q30 42 45 36Q42 49 30 51Q18 49 15 36Z", fill: "#f4e9da" }));
-    head.append(shape("ellipse", { cx: 30, cy: 39, rx: 4.5, ry: 2.7, fill: ink }));
-    if (pending) head.append(shape("ellipse", { cx: 30, cy: 45, rx: 2.5, ry: 2.8, fill: ink }));
-    else head.append(shape("path", { ...line, d: worried ? "M26 47Q30 42 34 47" : happy ? "M25 43Q30 50 35 43" : "M27 44h6" }));
-  } else if (id === "octopus") {
-    if (pending) head.append(shape("ellipse", { cx: 30, cy: 36.5, rx: 2.6, ry: 3.3, fill: ink }));
-    else head.append(shape("path", { ...line, d: worried ? "M26 39Q30 33 34 39" : "M26 36Q30 41 34 36" }));
-  } else {
-    const hooked = id === "hawk" || id === "eagle";
-    const beak = hooked ? "M21 36Q32 31 40 37Q40 44 33 47L34 42 25 43Z" : "M22 37Q30 32 38 37L30 46Z";
-    head.append(shape("path", { d: beak, fill: "#f3ad54" }));
-    if (pending) head.append(shape("ellipse", { cx: 30, cy: 39.6, rx: 2.4, ry: 2.6, fill: ink }));
-    else if (worried) head.append(shape("path", { ...line, d: "M26 41Q30 37 34 41" }));
+  for (const [fill, d] of design.face) head.append(shape("path", { d, fill }));
+  if (design.lines) {
+    head.append(shape("path", { d: design.lines, fill: "none", stroke: design.outline, "stroke-width": 2.2, ...round }));
   }
-  return svg;
 }
 
 const motion = matchMedia("(prefers-reduced-motion: reduce)");

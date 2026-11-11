@@ -31,3 +31,22 @@ export function h<K extends keyof HTMLElementTagNameMap>(
 export function clear(el: Element) {
   while (el.firstChild) el.removeChild(el.firstChild);
 }
+
+/** A 24×24 stroked line icon from a path string — built node by node, never from markup. */
+export function icon(path: string, size = 14): SVGSVGElement {
+  const NS = "http://www.w3.org/2000/svg";
+  const el = document.createElementNS(NS, "svg");
+  el.setAttribute("viewBox", "0 0 24 24");
+  el.setAttribute("width", String(size));
+  el.setAttribute("height", String(size));
+  el.setAttribute("aria-hidden", "true");
+  const p = document.createElementNS(NS, "path");
+  p.setAttribute("d", path);
+  p.setAttribute("fill", "none");
+  p.setAttribute("stroke", "currentColor");
+  p.setAttribute("stroke-width", "2");
+  p.setAttribute("stroke-linecap", "round");
+  p.setAttribute("stroke-linejoin", "round");
+  el.append(p);
+  return el;
+}

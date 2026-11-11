@@ -4,7 +4,6 @@
 
 import { OwlEngine } from "../baykus/owl";
 import { applyMascotPalette } from "../core/mascot-theme";
-import { drawMascot } from "../baykus/mascot";
 import { OwlGreeting } from "../baykus/greeting";
 import { Spring, Tracked } from "../core/anim";
 import { Bridge, IS_TAURI, type DecisionOptions } from "../core/bridge";
@@ -654,9 +653,8 @@ export class Island {
     this.owl.update(dt);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, w, hCss);
-    if (!drawMascot(ctx, State.settings.mascotTheme, w / 2, hCss / 2, w * 0.86, State.mood, performance.now() / 1000, this.owl.lookX, -this.owl.lookY)) {
-      this.owl.draw(ctx, w, hCss);
-    }
+    this.owl.setSkin(State.settings.mascotTheme);
+    this.owl.draw(ctx, w, hCss);
   }
 
   private updateGlow(on: boolean) {
