@@ -7,6 +7,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.1.7] - 2026-11-11
+
 ### Changed
 
 - Give the wolf, hawk, octopus, lion, canary, and eagle a full body and every movement the owl has. On
@@ -191,7 +193,8 @@ pipe relay, the reviewed-diff hook installer and the island window were adapted 
 [Coucou](https://github.com/Louis-CFM/coucou) (MIT). Everything they had, and much more, shipped
 publicly in 0.2.0.
 
-[Unreleased]: https://github.com/tahap0l/nobetci/compare/v2.1.6...HEAD
+[Unreleased]: https://github.com/tahap0l/nobetci/compare/v2.1.7...HEAD
+[2.1.7]: https://github.com/tahap0l/nobetci/compare/v2.1.6...v2.1.7
 [2.1.6]: https://github.com/tahap0l/nobetci/compare/v2.1.5...v2.1.6
 [2.1.5]: https://github.com/tahap0l/nobetci/compare/v2.1.4...v2.1.5
 [2.1.4]: https://github.com/tahap0l/nobetci/compare/v2.1.3...v2.1.4
