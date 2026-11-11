@@ -3,6 +3,7 @@
 .home-theme select:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
 .home-mascot{display:none;width:100%;height:100%}
 .home-mascot svg{display:block;width:100%;height:100%}
+.owl-companion.is-live .home-mascot{display:block}
 :root[data-mascot-theme=wolf]{--bg:#171b23;--bg-deep:#0f1218;--panel:#232b36;--cyan:#c3cfdf;--purple:#9da9ba}
 :root[data-mascot-theme=hawk]{--bg:#251911;--bg-deep:#160f0b;--panel:#37251a;--cyan:#f1aa78;--purple:#ffd1ab}
 :root[data-mascot-theme=octopus]{--bg:#21182e;--bg-deep:#140e1e;--panel:#302340;--cyan:#76e7d7;--purple:#c4a5ff}

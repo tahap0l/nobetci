@@ -1,13 +1,17 @@
 // Browser-only demo scenarios for `npm run dev`: open /?demo=<name> (optionally
-// with &lang=en|tr) to see a view without Claude Code or Rust. Only reachable
+// with &lang=en|tr, &theme=<mascot> and &media=1 for a playing media card) to
+// see a view without Claude Code or Rust. Only reachable
 // behind import.meta.env.DEV, so a production build drops this file entirely.
 // The data is made up — neutral paths and project names, fit for screenshots.
 
-import type { RiskAssessment, RiskFinding } from "./core/bridge";
+import { OwlEngine, type OwlEmote, type OwlMood } from "./baykus/owl";
+import { Bridge, type RiskAssessment, type RiskFinding } from "./core/bridge";
+import { applyMascotPalette, MASCOT_THEMES, type MascotTheme } from "./core/mascot-theme";
 import { State } from "./core/state";
 import { getLang } from "./i18n/core";
 import { injectHook } from "./island/hooks";
 import type { Island } from "./island/island";
+import { h } from "./ui/dom";
 
 const L = (tr: string, en: string) => (getLang() === "tr" ? tr : en);
 const HOME = "C:\\Users\\dev\\src";
@@ -84,10 +88,59 @@ function approval(island: Island, id: string, session: string, tool: string, ris
   });
 }
 
+/** The seven mascots side by side, each caught in a different mood (the README's mascot picture). */
+function mascotLineup() {
+  const cast: [MascotTheme, OwlMood, OwlEmote?][] = [
+    ["owl", "idle"], ["wolf", "approval"], ["hawk", "danger"], ["octopus", "thinking"],
+    ["lion", "finished"], ["canary", "idle", "love"], ["eagle", "question"],
+  ];
+  const dpr = window.devicePixelRatio || 1;
+  const row = h("div", {
+    style:
+      "position:fixed;inset:0;z-index:9999;display:grid;grid-template-columns:repeat(7,1fr);align-items:end;" +
+      "padding:0 10px 14px;background:#0b0c11;font:600 12px/1.2 system-ui,sans-serif;color:rgba(242,242,244,.72)",
+  });
+  for (const [theme, mood, emote] of cast) {
+    // A fixed seed and a fixed number of steps: the picture is the same on every run.
+    const engine = new OwlEngine(11);
+    engine.setSkin(theme);
+    engine.setMood(mood);
+    for (let i = 0; i < 150; i++) {
+      if (i === 110 && emote) engine.triggerEmote(emote);
+      engine.update(1 / 60);
+    }
+    const canvas = h("canvas", { width: Math.round(100 * dpr), height: Math.round(160 * dpr), style: "width:100px;height:160px" });
+    const ctx = canvas.getContext("2d");
+    if (ctx) {
+      ctx.scale(dpr, dpr);
+      ctx.translate(4, 0);
+      engine.draw(ctx, 92, 160);
+    }
+    row.append(h("div", { style: "display:grid;justify-items:center;gap:2px" }, canvas, MASCOT_THEMES[theme][getLang()]));
+  }
+  document.body.append(row);
+}
+
 export function runDemo(island: Island, name: string) {
   document.body.style.background = "linear-gradient(180deg, #2b3140, #1b1f29)";
   State.settings.hooksInstalled = name !== "empty";
+  const params = new URLSearchParams(location.search);
+  const theme = params.get("theme");
+  if (theme && Object.prototype.hasOwnProperty.call(MASCOT_THEMES, theme)) {
+    State.settings.mascotTheme = theme as MascotTheme;
+    applyMascotPalette(State.settings.mascotTheme);
+  }
+  if (params.has("media")) {
+    State.settings.islandMedia = true;
+    Bridge.islandMedia = async () => ({
+      title: "Night Watch", artist: "Nöbetçi", source: "Spotify.exe", playing: true, artwork: null,
+      canPrevious: true, canToggle: true, canNext: true,
+    });
+  }
   switch (name) {
+    case "mascots":
+      mascotLineup();
+      break;
     case "overview":
       sessions(island);
       island.setView("overview");

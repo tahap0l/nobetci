@@ -706,8 +706,12 @@ export class OwlEngine {
     const pleased = clamp(sp[P.happy].value, 0, 1) + (this.emote === "love" ? 0.8 : 0);
     this.drawTail(ctx, Math.sin(t * 10) * 0.22 * Math.min(1, pleased) + Math.sin(t * 1.4) * 0.05, lod);
     this.drawBody(ctx, lod, px, puff);
-    this.drawWing(ctx, -1, wingL, 0, lod, px);
-    this.drawWing(ctx, 1, wingR, waveWiggle + wiggleR, lod, px);
+    // Wings fold behind the head; arms would vanish behind a mane or cheek ruff, so they go in front.
+    const armsInFront = this.skin.limbs === "arms";
+    if (!armsInFront) {
+      this.drawWing(ctx, -1, wingL, 0, lod, px);
+      this.drawWing(ctx, 1, wingR, waveWiggle + wiggleR, lod, px);
+    }
 
     // Head.
     const workBob = -Math.abs(Math.sin(t * 3.6)) * 1.2 * W[M_WORK];
@@ -721,6 +725,10 @@ export class OwlEngine {
     ctx.translate(0, -NECK_Y);
     this.drawHead(ctx, lod, px, puff, sp[P.tuft].value, quiver);
     ctx.restore();
+    if (armsInFront) {
+      this.drawWing(ctx, -1, wingL, 0, lod, px);
+      this.drawWing(ctx, 1, wingR, waveWiggle + wiggleR, lod, px);
+    }
 
     if (this._accent !== null) this.drawCollar(ctx, lod, px, headDy);
     ctx.restore();

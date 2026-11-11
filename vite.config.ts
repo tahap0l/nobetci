@@ -6,13 +6,23 @@ import { resolve } from "node:path";
 // runtime (src/core/sound.ts), so there are no audio assets to ship.
 const websiteRoot = resolve(__dirname, "website");
 const websiteBase = process.env.NOBETCI_WEBSITE_BASE ?? "/";
+/** The app's mascot engine (src/baykus), bundled for the website's pages. */
+const MASCOT_ENGINE = "mascot-engine.js";
 
 export default defineConfig(process.env.CF_PAGES === "1" ? {
   root: websiteRoot,
   plugins: [{
     name: "nobetci-website-images",
+    // The pages ask for the built file name; in the dev server it is the source.
+    configureServer(server) {
+      server.middlewares.use((req, _res, next) => {
+        if (req.url?.startsWith(`/${MASCOT_ENGINE}`)) req.url = req.url.replace(MASCOT_ENGINE, "mascot-engine.ts");
+        next();
+      });
+    },
     generateBundle(_, bundle) {
-      for (const key of Object.keys(bundle)) delete bundle[key];
+      // The pages are plain HTML with scripts from public/; the only bundle is the mascot engine.
+      for (const key of Object.keys(bundle)) if (key !== MASCOT_ENGINE) delete bundle[key];
       for (const name of ["index.html", "privacy.html", "404.html", "demo/index.html"]) {
         const input = name.startsWith("demo/") ? `public/${name}` : name;
         const html = readFileSync(resolve(websiteRoot, input), "utf8");
@@ -35,7 +45,8 @@ export default defineConfig(process.env.CF_PAGES === "1" ? {
     outDir: resolve(__dirname, "dist"),
     emptyOutDir: true,
     rollupOptions: {
-      input: resolve(websiteRoot, "public/site.js"),
+      input: resolve(websiteRoot, "mascot-engine.ts"),
+      output: { entryFileNames: MASCOT_ENGINE },
     },
   },
 } : {

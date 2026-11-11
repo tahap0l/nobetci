@@ -7,7 +7,7 @@ approve permission requests, each scored by a risk engine.
 ## Build & test
 - `npm test` — Rust unit tests (risk engine, rules, history, relay, decision rules, quiet hours). Run after any change to `src-tauri/src/*.rs` or `hook/`.
 - `npx tsc --noEmit` — typecheck the front end.
-- `npm run dev` then `http://127.0.0.1:1420/?demo=<critical|write|low|overview|session|compact|empty>` — island without Rust; `settings.html?tab=<id>` — settings with mock data.
+- `npm run dev` then `http://127.0.0.1:1420/?demo=<critical|write|low|overview|session|compact|empty|mascots>` (`&theme=<mascot>` picks the mascot) — island without Rust; `settings.html?tab=<id>` — settings with mock data.
 - Claude's own Bash tool is sandboxed: the relay's same-user check refuses the pipe there. Feed fake hook events from PowerShell.
 - `npm run pack` — Windows installer into `release/`; `npm run pack:mac` — universal macOS disk image (on a Mac). CI builds and tests both OSes.
 

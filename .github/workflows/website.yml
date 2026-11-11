@@ -6,6 +6,10 @@ on:
     paths:
       - website/**
       - docs/media/**
+      # The mascot engine bundled into the site.
+      - src/baykus/**
+      - src/core/anim.ts
+      - src/core/mascot-theme.ts
       - src-tauri/icons/128x128.png
       - vite.config.ts
       - package*.json

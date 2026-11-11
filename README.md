@@ -567,7 +567,8 @@ npm run pack:mac     # the macOS disk image (universal), into release/
 With `npm run dev` running:
 
 - `http://127.0.0.1:1420/?demo=critical` shows the island with fake sessions and requests. Other
-  demos: `low`, `write`, `hidden`, `deny-menu`, `overview`, `session`, `compact`, `empty`.
+  demos: `low`, `write`, `hidden`, `deny-menu`, `overview`, `session`, `compact`, `empty`, `mascots`.
+  Add `&theme=wolf` (or another mascot) to see it on the island.
 - `http://127.0.0.1:1420/settings.html?tab=kurallar` opens Settings with mock data. Tabs:
   `genel`, `claude`, `prompts`, `guvenlik`, `kurallar`, `bildirimler`, `gecmis`, `hakkinda`, plus
   `hosgeldin` for the welcome wizard.

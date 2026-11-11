@@ -18,7 +18,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   drawings.
 - Draw the island's tab, focus timer, calendar, and media settings icons, and the website's feature
   icons, as line icons instead of font symbols, so they look the same on every system.
-- Refresh the README hero and overview images and add a picture of all seven mascots.
+- Show the same animated, full-body mascots on the website: the home page companion and the web demo now
+  run the app's own mascot engine, and fall back to the drawn heads if it does not load.
+- Refresh every README image and add a picture of all seven mascots. `npm run screenshots` now renders
+  all of them, including the first image and the mascot picture, and runs on macOS and Linux with any
+  Chromium-based browser.
 
 ## [2.1.6] - 2026-11-10
 

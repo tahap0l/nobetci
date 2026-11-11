@@ -567,7 +567,8 @@ npm run pack:mac     # macOS disk görüntüsü (universal), release/ klasörün
 `npm run dev` çalışırken:
 
 - `http://127.0.0.1:1420/?demo=critical` adayı sahte oturumlar ve isteklerle gösterir. Diğer
-  demolar: `low`, `write`, `hidden`, `deny-menu`, `overview`, `session`, `compact`, `empty`.
+  demolar: `low`, `write`, `hidden`, `deny-menu`, `overview`, `session`, `compact`, `empty`, `mascots`.
+  Adada başka bir maskotu görmek için `&theme=wolf` (ya da başka bir maskot) ekle.
 - `http://127.0.0.1:1420/settings.html?tab=kurallar` Ayarlar'ı sahte verilerle açar. Sekmeler:
   `genel`, `claude`, `prompts`, `guvenlik`, `kurallar`, `bildirimler`, `gecmis`, `hakkinda`; hoş geldin
   sihirbazı için `hosgeldin`.

@@ -83,8 +83,9 @@ that only one OS compiles is easy to break from the other: if you touch `#[cfg(w
 **In the browser** (`npm run dev`):
 
 - `/?demo=critical` shows the island with fake sessions and requests. The other demos are `low`,
-  `write`, `hidden` (whitespace obfuscation), `deny-menu`, `overview`, `session`, `compact` and
-  `empty`.
+  `write`, `hidden` (whitespace obfuscation), `deny-menu`, `overview`, `session`, `compact`,
+  `empty` and `mascots` (all seven mascots side by side). `&theme=wolf` (or any other mascot)
+  picks the mascot and `&media=1` fills the media card.
 - `/settings.html?tab=kurallar` opens Settings with mock data. Tabs: `genel`, `claude`,
   `guvenlik`, `kurallar`, `bildirimler`, `gecmis`, `hakkinda`, plus `hosgeldin` for the welcome
   wizard. Some tabs take extra switches for screenshots; look for `devParam()` calls.
@@ -120,7 +121,9 @@ socket (the relay's same-user check refuses it there), so run these from a norma
 ### Screenshots
 
 `npm run screenshots` drives headless Microsoft Edge against a running dev server and writes every
-README image in English and Turkish into `docs/media/en/` and `docs/media/tr/`:
+README image in English and Turkish into `docs/media/en/` and `docs/media/tr/`. On macOS and
+Linux, point `NOBETCI_EDGE` at Edge, Chrome or Chromium. Text is set in the system font, so
+regenerate every image on the same system to keep them alike:
 
 ```powershell
 npm run dev                                  # terminal 1
