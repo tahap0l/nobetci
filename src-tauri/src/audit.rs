@@ -11,6 +11,8 @@ use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
 
+use crate::i18n::pick;
+
 /// Longest target kept per line; the card shows more, the history needs less.
 const MAX_TARGET: usize = 4000;
 
@@ -323,9 +325,13 @@ fn cell(s: &str) -> String {
 }
 
 pub fn to_csv(entries: &[Entry], tz_offset_min: i32) -> String {
-    let mut out = String::from(
-        "\u{FEFF}zaman,proje,oturum,araç,tür,risk,karar,karar_veren,kural,hedef,bulgular,mesaj,süre_ms\r\n",
-    );
+    // The header follows the app's language, like the labels in the rows below it.
+    let mut out = String::from("\u{FEFF}");
+    out.push_str(pick(
+        "time,project,session,tool,kind,risk,decision,decided_by,rule,target,findings,message,duration_ms",
+        "zaman,proje,oturum,araç,tür,risk,karar,karar_veren,kural,hedef,bulgular,mesaj,süre_ms",
+    ));
+    out.push_str("\r\n");
     for e in entries {
         let row = [
             local_stamp(e.ts, tz_offset_min),
@@ -446,6 +452,9 @@ mod tests {
         let e = entry(0, "high", "deny", "user", "=HYPERLINK(\"http://x\")");
         let csv = to_csv(&[e], 0);
         assert!(csv.starts_with('\u{FEFF}'));
+        let header = csv.trim_start_matches('\u{FEFF}').lines().next().unwrap();
+        assert!(header.starts_with("time,project,") || header.starts_with("zaman,proje,"), "{header}");
+        assert_eq!(header.split(',').count(), 13, "one name per column");
         assert!(csv.contains("\"'=HYPERLINK(\"\"http://x\"\")\""));
         assert!(csv.contains("1970-01-01 00:00:00"));
     }

@@ -100,6 +100,8 @@ export const ALL_EVENTS = [
   "StopFailure",
   "SubagentStart",
   "SubagentStop",
+  "PreCompact",
+  "PostCompact",
 ] as const;
 
 export const DEFAULT_SETTINGS: Settings = {

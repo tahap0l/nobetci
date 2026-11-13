@@ -316,7 +316,13 @@ export class Island {
     if (State.paused) {
       // Paused means nobody is watching: every waiting request goes back to the
       // terminal now rather than timing out on a card nobody reads.
-      for (const a of State.approvals) void Bridge.approvalDecline(a.requestId);
+      for (const a of State.approvals) {
+        void Bridge.approvalDecline(a.requestId);
+        // The terminal has the question now; the row must not keep saying
+        // "waiting for approval" for as long as the pause lasts.
+        const s = State.session(a.sessionId);
+        if (s?.state === "approval") State.setState(s, "working");
+      }
       State.approvals = [];
       this.fsm.pinned = false;
       if (State.view === "approval") State.view = State.defaultView();

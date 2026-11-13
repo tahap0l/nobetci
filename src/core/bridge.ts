@@ -130,6 +130,8 @@ export interface Evaluation {
   note: string | null;
   message: string | null;
   policy: "trusted" | "normal" | "strict";
+  /** Whether "don't ask again in this session" could take effect for this request. */
+  grantable: boolean;
 }
 
 export interface AuditEntry {

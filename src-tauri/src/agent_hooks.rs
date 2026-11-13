@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
-use crate::i18n::is_tr;
+use crate::i18n::{is_tr, pick};
 use crate::settings;
 
 const MARKER: &str = "nobetci-hook";
@@ -315,7 +315,7 @@ pub fn remove_for_uninstall(provider: Provider) -> Result<Option<String>, String
 fn unified_diff(before: &str, after: &str) -> String {
     let old: Vec<&str> = before.lines().collect();
     let new: Vec<&str> = after.lines().collect();
-    let mut out = String::from("--- mevcut\n+++ Nöbetçi\n");
+    let mut out = format!("--- {}\n+++ Nöbetçi\n", pick("current", "mevcut"));
     let mut prefix = 0;
     while prefix < old.len().min(new.len()) && old[prefix] == new[prefix] {
         prefix += 1;
