@@ -7,6 +7,38 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- Never approve a request automatically when the risk engine scored it HIGH or CRITICAL, even after
+  a re-scoring rule lowered it. A broad rule such as "git push → LOW" used to let a force push
+  through on its own in a trusted project; now it is a plain click. "Don't ask again in this
+  session" is only offered where it can take effect.
+- Score MCP tools by their name even when an argument is called `url` or `command`, and check those
+  arguments with the web and command rules as well. `mcp__notion__delete_page` with a `url` was
+  scored as an ordinary LOW web request.
+- Show and match every MCP argument: the card, rules and session grants used to see only the first
+  600 characters.
+- Flag downloaded code run through a longer pipe (`curl … | tee x | bash`, CRITICAL) and fetched
+  then run in the same command (`curl -o x.sh … && bash x.sh`, `chmod +x`, `source`, HIGH).
+- Treat Claude Code's `WebSearch` as a known web request instead of an unrecognized one.
+- Close a card when the request was answered in the terminal. Claude Code sends `PostToolUse`
+  with a `tool_use_id` that `PermissionRequest` never has, so the card stayed until it timed out.
+  Long commands, cut by the relay in the later event, are matched too.
+- Stop keeping a record of every answered request in the island's memory, and stop showing
+  "waiting for approval" on sessions whose requests were handed to the terminal by Pause.
+- Keep a copy of a settings file that cannot be read before falling back to defaults, accept a
+  UTF-8 BOM in it, and write it atomically, so a crash or a hand edit no longer wipes every rule.
+- Give every rule its own id; rules added in the same millisecond shared one.
+- Write the CSV export's header and the Codex/Cursor diff header in the app's language.
+
+### Changed
+
+- Offer Claude Code's `PreCompact` and `PostCompact` events, which the island already shows.
+- Build the front end for Safari 14 on macOS, the WebView macOS 11 ships.
+- Update Vite to 8, TypeScript to 7, the Tauri plugins and the CI actions; this clears the two
+  high-severity advisories `npm audit` reported for Vite 6. Building from source now needs
+  Node.js 22 or newer (20.19 also works).
+
 ## [2.1.7] - 2026-11-11
 
 ### Changed
