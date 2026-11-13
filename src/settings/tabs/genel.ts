@@ -15,7 +15,7 @@ import { icon, type IconName } from "../icons";
 import { languagePicker } from "../lang";
 import { app, go, rerender, type Tab, type TabId } from "../nav";
 import { settings, update } from "../store";
-import { card, fmtMinutes, fmtNum, fmtPct, row, segmented, slider, toggle } from "../ui";
+import { button, card, fmtMinutes, fmtNum, fmtPct, row, segmented, slider, toast, toggle } from "../ui";
 
 let week: AuditStats | null = null;
 let loading = false;
@@ -170,6 +170,25 @@ function render(): HTMLElement {
     card(
       { title: appearance, icon: "eye" },
       row(themeLabel, t("genel.mascotThemeHint"), picker),
+    ),
+    card(
+      { title: t("genel.buddy.title"), icon: "eye", desc: t("genel.buddy.desc") },
+      row(
+        t("genel.buddy.show"),
+        t("genel.buddy.showHint"),
+        toggle(s.buddy, (v) => update((x) => (x.buddy = v)), { label: t("genel.buddy.show"), fk: "buddy" }),
+      ),
+      row(
+        t("genel.buddy.reset"),
+        t("genel.buddy.resetHint"),
+        button(t("genel.buddy.resetButton"), {
+          small: true,
+          fk: "buddyReset",
+          onClick: () => {
+            void api.buddyResetPosition().then(() => toast(t("genel.buddy.resetDone")));
+          },
+        }),
+      ),
     ),
     card(
       { title: t("genel.widgets.title"), icon: "eye" },

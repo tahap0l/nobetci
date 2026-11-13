@@ -73,6 +73,7 @@ export default defineConfig(process.env.CF_PAGES === "1" ? {
       input: {
         island: resolve(root, "index.html"),
         settings: resolve(root, "settings.html"),
+        buddy: resolve(root, "buddy.html"),
       },
     },
   },

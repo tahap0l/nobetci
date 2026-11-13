@@ -31,6 +31,11 @@ Nöbetçi ekranın üstünde küçük bir ada olarak durur. Adaya tıklayarak aj
 
 <p align="center"><img src="docs/media/tr/mascots.png" width="720" alt="Yedi maskot yan yana, her biri farklı bir ruh halinde: baykuş boşta, kurt izin isteğine el sallıyor, şahin alarmda, ahtapot düşünüyor, aslan mutlu, kanarya sevinçli, kartal şaşkın"></p>
 
+- **Masaüstünde bir maskot.** Maskotu fareyle ekranın istediğin yerine sürükle; bıraktığın yerde kalır, taşırken kanatlarını açar, bırakınca zıplayarak konar. Adanın ruh hâlini taşır, tıklayınca dürtülür, çift tıklayınca adayı açar. **Ayarlar → Genel → Masaüstü maskotu** bölümünden ya da tepsi menüsünden açıp kapatabilirsin. Yalnızca gösterir; kararlar yine adadaki kartta verilir.
+- **Her karar yüzüne yansır.** Onaylayınca maskot gülümser, iki kez başını sallar, kanatlarını kaldırıp zıplar; parıltılar içinde yeşil bir tik kendini çizer. Reddedince kaşlarını çatar, kulaklarını geri yatırır, başını iki yana sallar ve kırmızı bir çarpı belirirken burnundan soluyarak hırslanır.
+
+<p align="center"><img src="docs/media/tr/reactions.png" width="720" alt="Kararlara tepki veren altı maskot: baykuş, kurt ve kanarya onaydan sonra yeşil tikin altında gülümsüyor; baykuş, aslan ve şahin retten sonra kırmızı çarpının altında kaşlarını çatıyor"></p>
+
 <p align="center"><img src="docs/media/tr/idle-island.png" width="720" alt="Oturum listesinin üzerinde Medya ve odak, Takvim ve Hava durumu sekmeleri bulunan açık ada"></p>
 
 

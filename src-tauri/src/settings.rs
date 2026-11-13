@@ -132,6 +132,11 @@ pub struct Settings {
     pub stale_minutes: u32,
     /// Open the island when a session finishes (otherwise just a compact flash).
     pub expand_on_finish: bool,
+    /// The desktop mascot: a copy of the island's mascot that can be dragged anywhere.
+    pub buddy: bool,
+    /// Where the desktop mascot was left, physical desktop pixels; null = the corner.
+    /// Kept by Rust as the window moves; the settings window never edits it.
+    pub buddy_pos: Option<[i32; 2]>,
 
     // ── Prompt review ────────────────────────────────────────────────────────
     /// "ollama" (local) or "openai" (only used after an explicit review click).
@@ -202,6 +207,8 @@ impl Default for Settings {
             auto_close_interval: 15.0,
             stale_minutes: 45,
             expand_on_finish: false,
+            buddy: true,
+            buddy_pos: None,
 
             prompt_provider: "ollama".into(),
             ollama_model: "gemma4".into(),
@@ -420,6 +427,10 @@ mod tests {
         assert_eq!(s.hold_ms, 900);
         assert_eq!(s.hook_events.len(), ALL_EVENTS.len());
         assert_eq!(s.hotkeys.deny, "Ctrl+Alt+D");
+        assert!(s.buddy, "the desktop mascot is on for people upgrading");
+        assert_eq!(s.buddy_pos, None, "and starts in its corner");
+        let placed: Settings = serde_json::from_str(r#"{"buddyPos":[1530,812]}"#).unwrap();
+        assert_eq!(placed.sanitized().buddy_pos, Some([1530, 812]));
     }
 
     #[test]

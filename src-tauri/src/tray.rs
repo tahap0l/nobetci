@@ -1,4 +1,4 @@
-// Notification-area icon: Open, Settings, Pause, Do not disturb, Quit.
+// Notification-area icon: Open, Settings, Pause, Do not disturb, Desktop mascot, Quit.
 
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::TrayIconBuilder;
@@ -15,10 +15,17 @@ fn menu(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
     let pause = MenuItem::with_id(app, "pause", pick("Pause / resume", "Duraklat / devam et"), true, None::<&str>)?;
     let dnd =
         MenuItem::with_id(app, "dnd", pick("Do not disturb on / off", "Rahatsız etme aç / kapat"), true, None::<&str>)?;
+    let buddy = MenuItem::with_id(
+        app,
+        "buddy",
+        pick("Desktop mascot on / off", "Masaüstü maskotu aç / kapat"),
+        true,
+        None::<&str>,
+    )?;
     let quit = MenuItem::with_id(app, "quit", pick("Quit", "Çıkış"), true, None::<&str>)?;
     let sep1 = PredefinedMenuItem::separator(app)?;
     let sep2 = PredefinedMenuItem::separator(app)?;
-    Menu::with_items(app, &[&open, &sep1, &settings, &pause, &dnd, &sep2, &quit])
+    Menu::with_items(app, &[&open, &sep1, &settings, &pause, &dnd, &buddy, &sep2, &quit])
 }
 
 pub fn build(app: &AppHandle) -> tauri::Result<()> {
@@ -27,6 +34,7 @@ pub fn build(app: &AppHandle) -> tauri::Result<()> {
             "quit" => app.exit(0),
             "settings" => crate::show_settings_window(app, None),
             "dnd" => crate::toggle_dnd(app),
+            "buddy" => crate::toggle_buddy(app),
             id => {
                 let _ = app.emit_to(WINDOW_LABEL, "tray", id.to_string());
             }

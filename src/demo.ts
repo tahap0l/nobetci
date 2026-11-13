@@ -121,6 +121,42 @@ function mascotLineup() {
   document.body.append(row);
 }
 
+/**
+ * What a decision looks like: three mascots approving and three denying, each
+ * caught mid-reaction (the README's reactions picture).
+ */
+function reactionLineup() {
+  const cast: [MascotTheme, OwlEmote, number][] = [
+    ["owl", "approve", 0.62], ["wolf", "approve", 0.5], ["canary", "approve", 0.7],
+    ["owl", "deny", 0.55], ["lion", "deny", 0.62], ["hawk", "deny", 0.48],
+  ];
+  const dpr = window.devicePixelRatio || 1;
+  const row = h("div", {
+    style:
+      "position:fixed;inset:0;z-index:9999;display:grid;grid-template-columns:repeat(6,1fr);align-items:end;" +
+      "padding:0 10px 14px;background:#0b0c11;font:600 12px/1.2 system-ui,sans-serif;color:rgba(242,242,244,.72)",
+  });
+  for (const [theme, emote, at] of cast) {
+    // A fixed seed and fixed steps: the picture is the same on every run.
+    const engine = new OwlEngine(11);
+    engine.setSkin(theme);
+    engine.setMood("approval");
+    for (let i = 0; i < 90; i++) engine.update(1 / 60);
+    engine.triggerEmote(emote);
+    for (let i = 0; i < Math.round(at * 60); i++) engine.update(1 / 60);
+    const canvas = h("canvas", { width: Math.round(110 * dpr), height: Math.round(170 * dpr), style: "width:110px;height:170px" });
+    const ctx = canvas.getContext("2d");
+    if (ctx) {
+      ctx.scale(dpr, dpr);
+      ctx.translate(9, 0);
+      engine.draw(ctx, 92, 170);
+    }
+    const caption = emote === "approve" ? L("Onaylandı", "Approved") : L("Reddedildi", "Denied");
+    row.append(h("div", { style: "display:grid;justify-items:center;gap:2px" }, canvas, caption));
+  }
+  document.body.append(row);
+}
+
 export function runDemo(island: Island, name: string) {
   document.body.style.background = "linear-gradient(180deg, #2b3140, #1b1f29)";
   State.settings.hooksInstalled = name !== "empty";
@@ -140,6 +176,9 @@ export function runDemo(island: Island, name: string) {
   switch (name) {
     case "mascots":
       mascotLineup();
+      break;
+    case "reactions":
+      reactionLineup();
       break;
     case "overview":
       sessions(island);

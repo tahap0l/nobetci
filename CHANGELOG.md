@@ -7,6 +7,23 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-11-14
+
+### Added
+
+- A desktop mascot: the island's mascot in a window of its own that you drag anywhere on the
+  screen with the mouse. It remembers where you left it (and comes back to a corner if that display
+  is gone), spreads its wings while carried and lands with a bounce, shares the island's mood, pokes
+  back on a click and opens the island on a double click. It never takes keyboard focus, falls
+  asleep after two minutes of calm and then stops drawing. Switch it in **Settings → General →
+  Desktop mascot** or from the tray menu; it can also be sent back to its corner from there.
+  Decisions are still made only on the island's card.
+- New reactions to decisions, for all seven mascots. Approving: smiling eyes and rosy cheeks, two
+  nods, two hops with the wings up, and a green tick that draws itself in a burst of sparkles.
+  Denying: a frown with narrowed eyes and pinned-back ears, bristling feathers, a head shake, huffs
+  of steam and a red cross. Requests a rule denies get the same reaction. The web demo plays them
+  too.
+
 ### Fixed
 
 - Never approve a request automatically when the risk engine scored it HIGH or CRITICAL, even after
@@ -225,7 +242,8 @@ pipe relay, the reviewed-diff hook installer and the island window were adapted 
 [Coucou](https://github.com/Louis-CFM/coucou) (MIT). Everything they had, and much more, shipped
 publicly in 0.2.0.
 
-[Unreleased]: https://github.com/tahap0l/nobetci/compare/v2.1.7...HEAD
+[Unreleased]: https://github.com/tahap0l/nobetci/compare/v2.2.0...HEAD
+[2.2.0]: https://github.com/tahap0l/nobetci/compare/v2.1.7...v2.2.0
 [2.1.7]: https://github.com/tahap0l/nobetci/compare/v2.1.6...v2.1.7
 [2.1.6]: https://github.com/tahap0l/nobetci/compare/v2.1.5...v2.1.6
 [2.1.5]: https://github.com/tahap0l/nobetci/compare/v2.1.4...v2.1.5

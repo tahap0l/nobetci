@@ -26,7 +26,11 @@ export type OwlMood =
   | "sleeping"
   | "dizzy";
 
-export type OwlEmote = "happy" | "love" | "annoyed" | "surprised" | "hoot";
+/**
+ * One-shot reactions. `approve` and `deny` are what a person's decision on a
+ * permission request looks like: a cheer with a nod, or a stern head shake.
+ */
+export type OwlEmote = "happy" | "love" | "annoyed" | "surprised" | "hoot" | "approve" | "deny";
 
 const TAU = Math.PI * 2;
 
@@ -41,6 +45,10 @@ const FX = {
   star: "#FFD65A",
   heart: "#FF6B8E",
   sound: "#FFE9C8",
+  ok: "#3DDC84",
+  no: "#FF5A67",
+  ink: "#FFFFFF",
+  huff: "#E8ECF4",
 } as const;
 
 /** Parse "#rgb", "#rrggbb" or "#rrggbbaa" (the "#" is optional). Invalid input yields black. */
@@ -108,6 +116,10 @@ const DIZZY_EP = 2.4; // one swivel + wobble after three quick pokes
 const BLINK_DUR = 0.3;
 const POKE_DUR = 0.45;
 const WAVE_DUR = 1.1;
+const APPROVE_DUR = 1.8;
+const DENY_DUR = 1.7;
+/** The "no" head shake inside a deny, seconds. */
+const SHAKE_DUR = 1.05;
 
 // Scratch buffer for sampled outlines (shared: drawing is synchronous).
 const PTS = new Float32Array(2 * 72);
@@ -246,6 +258,22 @@ const EMOTES: Record<OwlEmote, EmoteDef> = {
     pose: overlayPose({ open: 1, slant: 0, eye: 1.3, pupil: 0.52, tuft: 1, puff: 0.8, happy: 0, squint: 0 }),
   },
   hoot: { dur: 1.4, pose: overlayPose({ open: 0.78, slant: 0, tuft: 0.25, happy: 0, squint: 0 }) },
+  // Delighted: smiling eyes, rosy cheeks, ears up, both wings in the air.
+  approve: {
+    dur: APPROVE_DUR,
+    pose: overlayPose({
+      happy: 1, blush: 0.85, tuft: 1, wingL: 1, wingR: 1, eye: 1.06, slant: 0, squint: 0,
+      spiral: 0, red: 0, amber: 0, puff: 0.15, gazeY: 0.2,
+    }),
+  },
+  // Stern: narrowed, frowning eyes, ears pinned back, feathers bristling.
+  deny: {
+    dur: DENY_DUR,
+    pose: overlayPose({
+      open: 0.52, slant: 0.85, tuft: -0.6, puff: 0.75, eye: 0.96, pupil: 0.8, happy: 0, spiral: 0,
+      red: 0.5, amber: 0, blush: 0, gazeX: 0, gazeY: 0, wingL: 0.35, wingR: 0.35,
+    }),
+  },
 };
 
 let seedCounter = 0x2f6b1;
@@ -414,6 +442,20 @@ export class OwlEngine {
         this.squash.velocity -= 2.5;
         break;
       case "hoot":
+        break;
+      case "approve":
+        // Two little jumps for joy, flapping all the way.
+        this.startHop(8, 0.34, 2);
+        this.flapT = 0;
+        this.flapDur = 0.95;
+        this.flapN = 3;
+        this.ruffle.velocity += 3;
+        break;
+      case "deny":
+        // Puffs up and plants its feet.
+        this.squash.velocity += 4;
+        this.ruffle.velocity += 8;
+        this.blinkT = -1;
         break;
     }
   }
@@ -644,6 +686,19 @@ export class OwlEngine {
     const spin = ep > 0 ? OwlEngine.spin(this.dizzyT) * ep : OwlEngine.spin(this.spinT) * W[M_DIZZY];
     this.fDizzy = dz;
     this.fYaw = this.yaw.value + spin;
+    // Body language for a decision: shake the head for "no", nod twice for "yes".
+    let emoteNod = 0;
+    let emoteRoll = 0;
+    if (this.emote === "deny" && this.emoteT < SHAKE_DUR) {
+      const u = this.emoteT;
+      const env = envelope(u, SHAKE_DUR, 0.1, 0.4);
+      this.fYaw += Math.sin(u * 16) * 0.5 * env;
+      emoteRoll = Math.sin(u * 16 + 0.6) * 0.06 * env;
+    } else if (this.emote === "approve") {
+      const u = this.emoteT;
+      emoteNod = 3.6 * (bump(u, 0.08, 0.4) + 0.8 * bump(u, 0.46, 0.78));
+      emoteRoll = Math.sin(u * 7) * 0.08 * envelope(u, APPROVE_DUR, 0.15, 0.5);
+    }
 
     let beak = 0;
     if (this.emote === "hoot") beak = bump(this.emoteT, 0.12, 0.48) + bump(this.emoteT, 0.6, 1.0);
@@ -715,9 +770,9 @@ export class OwlEngine {
 
     // Head.
     const workBob = -Math.abs(Math.sin(t * 3.6)) * 1.2 * W[M_WORK];
-    const headDy = sp[P.nod].value - 0.75 * breath - beak * 2.2 + workBob;
+    const headDy = sp[P.nod].value - 0.75 * breath - beak * 2.2 + workBob + emoteNod;
     const roll =
-      sp[P.tilt].value + this.jolt.value * 0.12 + this.yaw.value * 0.12 +
+      emoteRoll + sp[P.tilt].value + this.jolt.value * 0.12 + this.yaw.value * 0.12 +
       Math.sin(t * 5.2) * 0.13 * dz + Math.sin(t * 2) * 0.04 * W[M_FINISHED];
     ctx.save();
     ctx.translate(0, NECK_Y + headDy);
@@ -1757,6 +1812,10 @@ export class OwlEngine {
         ctx.bezierCurveTo(x + sz * 0.32, y - sz * 0.52, x + sz * 0.6, y - sz * 0.02, x, y + sz * 0.38);
         ctx.fill();
       }
+    } else if (this.emote === "approve") {
+      this.drawApproveFx(ctx, this.emoteT, k, lw, lod);
+    } else if (this.emote === "deny") {
+      this.drawDenyFx(ctx, this.emoteT, k, lw, lod);
     } else if (this.emote === "hoot") {
       const u = this.emoteT;
       ctx.strokeStyle = FX.sound;
@@ -1777,5 +1836,103 @@ export class OwlEngine {
       }
     }
     ctx.globalAlpha = 1;
+  }
+
+  /** A green badge with a tick that draws itself, and sparkles bursting outwards. */
+  private drawApproveFx(ctx: CanvasRenderingContext2D, u: number, k: number, lw: number, lod: number): void {
+    const fade = 1 - seg(u, APPROVE_DUR - 0.45, APPROVE_DUR);
+    const pop = u < 0.32 ? Ease.back(seg(u, 0, 0.32)) : 1;
+    const r = 9.5 * k * pop;
+    const x = 0;
+    const y = -55 - (k - 1) * 4 - 4 * Ease.out(seg(u, 0, 0.5));
+    if (r > 0.1) {
+      ctx.globalAlpha = fade;
+      ctx.fillStyle = FX.ok;
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, TAU);
+      ctx.fill();
+      // The tick draws itself in two strokes.
+      const d = seg(u, 0.12, 0.5);
+      ctx.strokeStyle = FX.ink;
+      ctx.lineWidth = Math.max(lw * 1.25, r * 0.22);
+      ctx.beginPath();
+      const a = [x - r * 0.45, y + r * 0.02];
+      const b = [x - r * 0.12, y + r * 0.34];
+      const c = [x + r * 0.5, y - r * 0.32];
+      const first = Math.min(1, d / 0.35);
+      ctx.moveTo(a[0], a[1]);
+      ctx.lineTo(lerp(a[0], b[0], first), lerp(a[1], b[1], first));
+      if (d > 0.35) {
+        const second = (d - 0.35) / 0.65;
+        ctx.lineTo(lerp(b[0], c[0], second), lerp(b[1], c[1], second));
+      }
+      ctx.stroke();
+    }
+    if (lod === 0) return;
+    // Sparkles: eight four-point stars flying out from the badge and twinkling away.
+    ctx.fillStyle = FX.star;
+    for (let i = 0; i < 8; i++) {
+      const q = seg(u, 0.18 + (i % 2) * 0.06, 1.25 + (i % 3) * 0.1);
+      if (q <= 0 || q >= 1) continue;
+      const ang = (i / 8) * TAU + 0.3;
+      const dist = (14 + 24 * Ease.out(q)) * k;
+      const sx = x + Math.cos(ang) * dist;
+      const sy = y + Math.sin(ang) * dist * 0.8 + 8 * q * q;
+      const sz = (i % 2 ? 2.6 : 3.6) * k * (1 - q) * (0.7 + 0.3 * Math.sin(u * 30 + i));
+      ctx.globalAlpha = fade * (1 - q * 0.6);
+      ctx.beginPath();
+      ctx.moveTo(sx, sy - sz);
+      ctx.quadraticCurveTo(sx, sy, sx + sz, sy);
+      ctx.quadraticCurveTo(sx, sy, sx, sy + sz);
+      ctx.quadraticCurveTo(sx, sy, sx - sz, sy);
+      ctx.quadraticCurveTo(sx, sy, sx, sy - sz);
+      ctx.fill();
+    }
+  }
+
+  /** A red badge with a cross that shakes along with the head, and huffs of steam. */
+  private drawDenyFx(ctx: CanvasRenderingContext2D, u: number, k: number, lw: number, lod: number): void {
+    const fade = 1 - seg(u, DENY_DUR - 0.4, DENY_DUR);
+    const pop = u < 0.28 ? Ease.back(seg(u, 0, 0.28)) : 1;
+    const r = 9.5 * k * pop;
+    const shake = u < SHAKE_DUR ? Math.sin(u * 16) * 3 * envelope(u, SHAKE_DUR, 0.1, 0.4) : 0;
+    const x = shake;
+    const y = -55 - (k - 1) * 4;
+    if (r > 0.1) {
+      ctx.globalAlpha = fade;
+      ctx.fillStyle = FX.no;
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, TAU);
+      ctx.fill();
+      const d = seg(u, 0.1, 0.42);
+      const arm = r * 0.4;
+      ctx.strokeStyle = FX.ink;
+      ctx.lineWidth = Math.max(lw * 1.25, r * 0.22);
+      ctx.beginPath();
+      const one = Math.min(1, d * 2);
+      ctx.moveTo(x - arm, y - arm);
+      ctx.lineTo(x - arm + 2 * arm * one, y - arm + 2 * arm * one);
+      if (d > 0.5) {
+        const two = (d - 0.5) * 2;
+        ctx.moveTo(x + arm, y - arm);
+        ctx.lineTo(x + arm - 2 * arm * two, y - arm + 2 * arm * two);
+      }
+      ctx.stroke();
+    }
+    if (lod === 0) return;
+    // Two huffs puffing out from either side of the head.
+    ctx.fillStyle = FX.huff;
+    for (let side = -1; side <= 1; side += 2) {
+      for (let j = 0; j < 3; j++) {
+        const q = seg(u, 0.25 + j * 0.12, 0.95 + j * 0.12);
+        if (q <= 0 || q >= 1) continue;
+        const px = side * (40 + 16 * Ease.out(q) + j * 2);
+        const py = -12 - 10 * q - j * 3;
+        ctx.globalAlpha = fade * 0.7 * (1 - q);
+        ctx.beginPath();
+        ctx.arc(px, py, (2.6 + 3.4 * q) * k * (1 - j * 0.18), 0, TAU);
+        ctx.fill();
+      }
+    }
   }
 }

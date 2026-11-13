@@ -2386,7 +2386,7 @@ dependencies = [
 
 [[package]]
 name = "nobetci"
-version = "2.1.7"
+version = "2.2.0"
 dependencies = [
  "base64 0.22.1",
  "block2",
@@ -2413,7 +2413,7 @@ dependencies = [
 
 [[package]]
 name = "nobetci-hook"
-version = "2.1.7"
+version = "2.2.0"
 dependencies = [
  "libc",
  "serde_json",
