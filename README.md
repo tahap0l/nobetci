@@ -632,13 +632,6 @@ Ideas, not promises:
 - **Linux**, plus full-screen quiet and an island that never takes focus on macOS.
 - **Sharper rules** — more coverage and fewer false positives. Reports are very welcome.
 
-## Credits
-
-Nöbetçi began as a fork of [Coucou](https://github.com/Louis-CFM/coucou) by Louis Raillé (MIT). The
-named-pipe relay, the pipe server, the reviewed-diff hook installer, the transparent island window
-and its open/close state machine were carried over and adapted. The owl, the icons, the
-synthesised sounds, the risk engine and everything built on it are original to Nöbetçi; Coucou's
-name, character, icons and sounds are not used. [NOTICE.md](NOTICE.md) has the details.
 
 ## License
 
