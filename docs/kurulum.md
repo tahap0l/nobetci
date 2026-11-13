@@ -233,7 +233,7 @@ Code → Kaldır…** ile hook'ları silmek ya da normal yoldan kaldırmak. Alte
 
 ## 12. Kaynaktan derleme
 
-Gerekenler: MSVC araç zinciriyle [Rust](https://rustup.rs), Node.js 20+, "Desktop development with
+Gerekenler: MSVC araç zinciriyle [Rust](https://rustup.rs), Node.js 22+, "Desktop development with
 C++" iş yüküyle [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/).
 
 ```powershell
@@ -245,7 +245,7 @@ npm run pack      # → release\Nobetci-<sürüm>-setup.exe
 ```
 
 Mac'te: Xcode Command Line Tools (`xcode-select --install`), iki Apple hedefiyle Rust
-(`rustup target add aarch64-apple-darwin x86_64-apple-darwin`) ve Node.js 20 ya da üstünü kur;
+(`rustup target add aarch64-apple-darwin x86_64-apple-darwin`) ve Node.js 22 ya da üstünü kur;
 sonra `npm ci`, `npm test` ve `npm run pack:mac` (→ `release/Nobetci-<sürüm>-macos-universal.dmg`).
 
 Ayrıntılar için [CONTRIBUTING.md](../CONTRIBUTING.md).

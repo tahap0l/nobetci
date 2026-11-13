@@ -23,11 +23,14 @@
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2",
-    "typescript": "^5.6.0",
-    "vite": "^6"
+    "typescript": "^7.0.0",
+    "vite": "^8"
   },
   "dependencies": {
     "@tauri-apps/api": "^2"
+  },
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
   },
   "description": "A watchful owl for AI coding agents — monitors Claude Code, Codex and Cursor sessions and permission requests.",
   "license": "MIT",

@@ -228,7 +228,7 @@ of the `~/.claude/settings.json.bak-*` backups.
 
 ## 12. Build from source
 
-You need [Rust](https://rustup.rs) with the MSVC toolchain, Node.js 20+, and the
+You need [Rust](https://rustup.rs) with the MSVC toolchain, Node.js 22+, and the
 [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) with the
 "Desktop development with C++" workload.
 
@@ -241,7 +241,7 @@ npm run pack      # → release\Nobetci-<version>-setup.exe
 ```
 
 On a Mac: install the Xcode Command Line Tools (`xcode-select --install`), Rust with both Apple
-targets (`rustup target add aarch64-apple-darwin x86_64-apple-darwin`) and Node.js 20 or newer,
+targets (`rustup target add aarch64-apple-darwin x86_64-apple-darwin`) and Node.js 22 or newer,
 then `npm ci`, `npm test` and `npm run pack:mac` (→ `release/Nobetci-<version>-macos-universal.dmg`).
 
 See [CONTRIBUTING.md](../CONTRIBUTING.md) for more.

@@ -21,7 +21,7 @@ welcome in English or Turkish.
 On **Windows 10 or 11** (64-bit) you need:
 
 - [Rust](https://rustup.rs), stable, with the MSVC toolchain (`rustup` installs it by default);
-- Node.js 20 or newer (CI uses 22);
+- Node.js 22 or newer (CI uses 22);
 - the [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) with
   the "Desktop development with C++" workload;
 - the Microsoft Edge WebView2 runtime (already part of Windows 11 and current Windows 10).
@@ -31,7 +31,7 @@ On **macOS 11 or later** you need:
 - the Xcode Command Line Tools (`xcode-select --install`);
 - [Rust](https://rustup.rs), stable, plus both Apple targets for the universal build:
   `rustup target add aarch64-apple-darwin x86_64-apple-darwin`;
-- Node.js 20 or newer.
+- Node.js 22 or newer.
 
 Then, on either:
 

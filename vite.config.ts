@@ -4,7 +4,8 @@ import { resolve } from "node:path";
 
 // Two pages: the island and the settings window. Sounds are synthesised at
 // runtime (src/core/sound.ts), so there are no audio assets to ship.
-const websiteRoot = resolve(__dirname, "website");
+const root = import.meta.dirname;
+const websiteRoot = resolve(root, "website");
 const websiteBase = process.env.NOBETCI_WEBSITE_BASE ?? "/";
 /** The app's mascot engine (src/baykus), bundled for the website's pages. */
 const MASCOT_ENGINE = "mascot-engine.js";
@@ -37,14 +38,14 @@ export default defineConfig(process.env.CF_PAGES === "1" ? {
         "social.png": "docs/media/social.png",
       };
       for (const [name, path] of Object.entries(images)) {
-        this.emitFile({ type: "asset", fileName: `assets/${name}`, source: readFileSync(resolve(__dirname, path)) });
+        this.emitFile({ type: "asset", fileName: `assets/${name}`, source: readFileSync(resolve(root, path)) });
       }
     },
   }],
   build: {
-    outDir: resolve(__dirname, "dist"),
+    outDir: resolve(root, "dist"),
     emptyOutDir: true,
-    rollupOptions: {
+    rolldownOptions: {
       input: resolve(websiteRoot, "mascot-engine.ts"),
       output: { entryFileNames: MASCOT_ENGINE },
     },
@@ -61,14 +62,17 @@ export default defineConfig(process.env.CF_PAGES === "1" ? {
   },
   envPrefix: ["VITE_", "TAURI_ENV_"],
   build: {
-    target: "chrome110",
-    minify: "esbuild",
+    // Windows runs the pages in WebView2 (evergreen Chromium); macOS in the
+    // system WKWebView, which on macOS 11 — the oldest release the app supports
+    // (tauri.macos.conf.json) — is Safari 14. Tauri says which one it builds for;
+    // anything else gets the stricter target.
+    target: process.env.TAURI_ENV_PLATFORM === "windows" ? "chrome110" : "safari14",
     sourcemap: false,
     emptyOutDir: true,
-    rollupOptions: {
+    rolldownOptions: {
       input: {
-        island: resolve(__dirname, "index.html"),
-        settings: resolve(__dirname, "settings.html"),
+        island: resolve(root, "index.html"),
+        settings: resolve(root, "settings.html"),
       },
     },
   },
