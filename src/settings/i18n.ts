@@ -313,6 +313,11 @@ const M = {
   ],
   "claude.ev.SubagentStart": ["Bir alt ajan başladı.", "A subagent started."],
   "claude.ev.SubagentStop": ["Alt ajan bitti.", "A subagent finished."],
+  "claude.ev.PreCompact": [
+    "Bağlam sıkıştırılmak üzere — adımlarda “sıkıştırılıyor” görünür.",
+    "The context is about to be compacted — the steps show “compacting”.",
+  ],
+  "claude.ev.PostCompact": ["Bağlam sıkıştırıldı.", "The context was compacted."],
   "claude.written": [
     "Yazıldı. Yedek: {backup}. Açık Claude Code oturumları hook'ları yeniden başlatınca görür.",
     "Written. Backup: {backup}. Running Claude Code sessions pick up the hooks after a restart.",
@@ -706,8 +711,8 @@ const M = {
     "No pattern and any tool: this rule approves every request under the ceiling.",
   ],
   "editor.rescoreNote": [
-    "Kural yanlış alarmı sakinleştirebilir, ama KRİTİK bir bulgu en az YÜKSEK kalır — yine basılı tutman gerekir.",
-    "A rule can calm a false alarm, but a CRITICAL finding stays at least HIGH — it still needs a press-and-hold.",
+    "Kural yanlış alarmı sakinleştirebilir, ama KRİTİK bir bulgu en az YÜKSEK kalır — yine basılı tutman gerekir. Motorun YÜKSEK ya da KRİTİK bulduğu istek, seviyesi düşürülse de otomatik onaylanmaz.",
+    "A rule can calm a false alarm, but a CRITICAL finding stays at least HIGH — it still needs a press-and-hold. A request the engine found HIGH or CRITICAL is never approved automatically, even when lowered.",
   ],
   "editor.denyNote": [
     "Reddetme her seviyede çalışır; istek sana hiç gelmez, Claude aşağıdaki mesajı alır.",

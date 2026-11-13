@@ -10,7 +10,8 @@
 // the history (`audit`).
 //
 // Claude Code is never blocked by us. Three things guarantee it:
-//   * nobetci-hook gives the connection 300 ms and exits cleanly if we are closed;
+//   * nobetci-hook gives up on connecting within 300 ms (2 s for the whole
+//     event) and exits cleanly if we are closed;
 //   * we only wait for a person once the island has *confirmed* the card is on
 //     screen (or queued), so a paused island or a webview that is not listening
 //     costs a few hundred milliseconds, not two minutes;
@@ -72,6 +73,8 @@ pub enum Reply {
 struct Waiting {
     tx: mpsc::Sender<Reply>,
     level: Level,
+    /// The rules would honour a session grant for this request.
+    grantable: bool,
     queued_at: std::time::Instant,
     session: String,
     tool: String,
@@ -276,6 +279,7 @@ async fn handle<C: Conn>(app: AppHandle, mut pipe: C) {
             Waiting {
                 tx,
                 level: a.level,
+                grantable: eval.grantable,
                 queued_at: std::time::Instant::now(),
                 session: session.clone(),
                 tool: tool.clone(),
@@ -287,6 +291,7 @@ async fn handle<C: Conn>(app: AppHandle, mut pipe: C) {
     payload["risk"] = serde_json::to_value(a).unwrap_or(Value::Null);
     payload["rule_note"] = json!(eval.note);
     payload["policy"] = json!(eval.policy);
+    payload["grantable"] = json!(eval.grantable);
     let _ = app.emit_to(WINDOW_LABEL, "hook", payload);
 
     let outcome = wait_for_decision(&id, &mut rx).await;
@@ -468,11 +473,11 @@ pub struct Choice<'a> {
 
 /// Called by the island's Allow / Deny controls and the global shortcuts.
 pub fn answer(app: &AppHandle, request_id: &str, c: Choice) -> Result<(), String> {
-    let (level, queued_at, session, tool, target) = {
+    let (level, grantable, queued_at, session, tool, target) = {
         let pending = app.state::<Pending>();
         let map = pending.0.lock().unwrap();
         match map.get(request_id) {
-            Some(w) => (w.level, w.queued_at, w.session.clone(), w.tool.clone(), w.target.clone()),
+            Some(w) => (w.level, w.grantable, w.queued_at, w.session.clone(), w.tool.clone(), w.target.clone()),
             None => return Err("not_pending".into()),
         }
     };
@@ -503,7 +508,7 @@ pub fn answer(app: &AppHandle, request_id: &str, c: Choice) -> Result<(), String
     }
 
     let (reply, message) = if word == "allow" {
-        if c.remember && level <= Level::Medium {
+        if c.remember && grantable && level <= Level::Medium {
             app.state::<SessionGrants>().grant(&session, &tool, &target);
         }
         (json!({ "behavior": "allow" }), String::new())

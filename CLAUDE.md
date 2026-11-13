@@ -5,7 +5,7 @@ black island at the top of the screen shows Claude Code sessions and lets the us
 approve permission requests, each scored by a risk engine.
 
 ## Build & test
-- `npm test` — Rust unit tests (risk engine, rules, history, relay, decision rules, quiet hours). Run after any change to `src-tauri/src/*.rs` or `hook/`.
+- `npm test` — Rust unit tests (risk engine, rules, history, relay, decision rules, quiet hours). Run after any change to `src-tauri/src/*.rs` or `hook/`. Windows and macOS only: neither crate builds on Linux.
 - `npx tsc --noEmit` — typecheck the front end.
 - `npm run dev` then `http://127.0.0.1:1420/?demo=<critical|write|low|overview|session|compact|empty|mascots>` (`&theme=<mascot>` picks the mascot) — island without Rust; `settings.html?tab=<id>` — settings with mock data.
 - Claude's own Bash tool is sandboxed: the relay's same-user check refuses the pipe there. Feed fake hook events from PowerShell.
@@ -15,15 +15,16 @@ approve permission requests, each scored by a risk engine.
 - **Never block Claude Code.** The relay exits silently if the app is closed; only PermissionRequest waits, and never past its budget.
 - **Never write `~/.claude/settings.json` without a reviewed diff**: dated backup, merge, show the diff, write only after an explicit click, refuse if the file changed since the preview.
 - **High/critical approvals need a hold** — enforced in `pipe.rs::resolve`, not just the UI. Never add an "always allow".
-- **Nothing high or critical is ever auto-approved** — rules, trusted projects and session grants are capped in `rules.rs` (`auto_allow_max` ≤ medium, sanitised in `settings.rs`). Rules may always deny.
+- **Nothing high or critical is ever auto-approved** — rules, trusted projects and session grants are capped in `rules.rs` (`auto_allow_max` ≤ medium, sanitised in `settings.rs`). The cap looks at the engine's own level too: a rule that re-scores a high request to low makes it a plain click, never an automatic pass. Rules may always deny.
 - Every PermissionRequest outcome is written to the history (`audit.rs`); CSV export must stay formula-safe.
 - Relay ↔ app speak a small JSON line (`{"behavior":"deny","message":…,"interrupt":…,"stop":…}`); only `hook/src/main.rs` knows Claude Code's output format.
 - **No innerHTML.** The approval card shows attacker-controllable text in a window that can approve commands. Build DOM with `h()` / text nodes only.
-- What the card shows must be what runs: never truncate approval payloads silently (`nobetci_truncated` flag → high risk).
-- No telemetry. Network access is limited to an explicit Prompt Studio provider call: Ollama on
-  loopback (cloud-tagged models may forward the draft) or OpenAI after the user selects it and asks
-  for a rewrite. Optional API keys stay in the OS credential store, never settings JSON, logs or
-  audit. Drafts and rewrites are not persisted.
+- What the card shows must be what runs: never truncate approval payloads silently (`nobetci_truncated` flag → high risk). The assessment's `target` is the whole command, path, URL or argument object — rules and session grants match on it.
+- No telemetry. Network access is limited to two things the user switches on: an explicit Prompt
+  Studio provider call — Ollama on loopback (cloud-tagged models may forward the draft) or OpenAI
+  after the user selects it and asks for a rewrite — and the island's weather card, which asks
+  Open-Meteo for the chosen city's forecast (off until a city is picked). Optional API keys stay in
+  the OS credential store, never settings JSON, logs or audit. Drafts and rewrites are not persisted.
 - 0 % CPU while hidden: the frame loop stops and the cursor poll parks.
 - The owl, icons and sounds are original. Do not import anything from Coucou's Mochi, icons or sounds (not MIT).
 - **Every user-visible string exists in Turkish and English.** Front end: `defineMessages(tr, en)` from `src/i18n/core.ts` (island strings in `src/i18n/island.ts`, settings strings under `src/settings/`); Rust: `i18n::pick(en, tr)`. The language follows the `language` setting ("auto" = the system language). Wording that differs on a Mac goes in a `key@mac` entry next to the key. Code comments are English.

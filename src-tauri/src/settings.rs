@@ -27,6 +27,8 @@ pub const ALL_EVENTS: &[&str] = &[
     "StopFailure",
     "SubagentStart",
     "SubagentStop",
+    "PreCompact",
+    "PostCompact",
 ];
 
 /// A user rule: when a request matches, decide or re-score it before anyone asks.
@@ -90,7 +92,7 @@ pub struct Hotkeys {
     pub toggle: String,
     /// Deny the request on the card.
     pub deny: String,
-    /// Allow the request on the card — only ever for low or medium risk.
+    /// Allow the request on the card — only ever for low risk.
     pub allow: String,
     /// Toggle do-not-disturb.
     pub dnd: String,
@@ -287,9 +289,20 @@ impl Settings {
         self.hook_events.retain(|e| ALL_EVENTS.contains(&e.as_str()));
         self.deny_reasons.retain(|r| !r.trim().is_empty());
         self.deny_reasons.truncate(12);
-        for r in &mut self.rules {
-            if r.id.is_empty() {
-                r.id = format!("r{:x}", crate::audit::now_ms());
+        // The settings window finds a rule by its id, so every rule needs one of
+        // its own: a hand-written or imported file may have none, or repeats.
+        let stamp = crate::audit::now_ms();
+        let mut seen = std::collections::HashSet::new();
+        for (i, r) in self.rules.iter_mut().enumerate() {
+            if r.id.is_empty() || !seen.insert(r.id.clone()) {
+                let mut n = i;
+                r.id = loop {
+                    let id = format!("r{stamp:x}-{n}");
+                    if seen.insert(id.clone()) {
+                        break id;
+                    }
+                    n += 1;
+                };
             }
         }
         self
@@ -343,18 +356,56 @@ pub fn settings_path() -> PathBuf {
 }
 
 pub fn load() -> Settings {
-    match std::fs::read(settings_path()) {
-        Ok(bytes) => serde_json::from_slice::<Settings>(&bytes).unwrap_or_default().sanitized(),
-        Err(_) => Settings::default(),
+    load_from(&settings_path(), crate::log::line)
+}
+
+/// Reads the preferences at `path`; defaults when there is no file yet.
+///
+/// A file that is there but cannot be parsed — a typo from a hand edit, a write
+/// cut short — also gives defaults, but a copy of it is kept first: the next
+/// save replaces settings.json, and with it would go every rule and project
+/// policy the user had. `report` gets one line saying so.
+fn load_from(path: &std::path::Path, report: impl FnOnce(String)) -> Settings {
+    let Ok(bytes) = std::fs::read(path) else { return Settings::default() };
+    // Notepad and PowerShell 5 save UTF-8 with a BOM, which serde_json refuses.
+    let text = bytes.strip_prefix(&[0xEF, 0xBB, 0xBF]).unwrap_or(&bytes);
+    match serde_json::from_slice::<Settings>(text) {
+        Ok(settings) => settings.sanitized(),
+        Err(err) => {
+            let kept = path.with_file_name(format!("settings.json.unreadable-{}", crate::sys::local_time().compact()));
+            report(match std::fs::copy(path, &kept) {
+                Ok(_) => format!(
+                    "settings.json could not be read ({err}); starting from defaults, the file is kept as {}",
+                    kept.display()
+                ),
+                Err(copy) => {
+                    format!("settings.json could not be read ({err}); starting from defaults (no copy kept: {copy})")
+                }
+            });
+            Settings::default()
+        }
     }
 }
 
 pub fn save(settings: &Settings) -> std::io::Result<()> {
-    let dir = config_dir();
-    std::fs::create_dir_all(&dir)?;
+    save_to(&settings_path(), settings)
+}
+
+/// Writes the preferences to a temporary file and renames it into place, so a
+/// crash or a full disk mid-write leaves the previous settings.json intact
+/// instead of a truncated one that would load as defaults.
+fn save_to(path: &std::path::Path, settings: &Settings) -> std::io::Result<()> {
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
     let json =
         serde_json::to_vec_pretty(settings).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-    std::fs::write(settings_path(), json)
+    let temp = path.with_extension(format!("json.tmp-{}", std::process::id()));
+    let written = std::fs::write(&temp, json).and_then(|_| std::fs::rename(&temp, path));
+    if written.is_err() {
+        let _ = std::fs::remove_file(&temp);
+    }
+    written
 }
 
 #[cfg(test)]
@@ -387,5 +438,70 @@ mod tests {
         assert_eq!(s.auto_allow_max, "low", "high can never be auto-allowed");
         assert_eq!(s.position, "center");
         assert_eq!(s.hook_events, vec!["Stop".to_string()]);
+    }
+
+    #[test]
+    fn every_rule_gets_an_id_of_its_own() {
+        let rule = |id: &str| UserRule { id: id.into(), ..UserRule::default() };
+        let s =
+            Settings { rules: vec![rule(""), rule("keep"), rule(""), rule("keep"), rule("")], ..Settings::default() }
+                .sanitized();
+        let ids: std::collections::HashSet<&str> = s.rules.iter().map(|r| r.id.as_str()).collect();
+        assert_eq!(ids.len(), 5, "ids must be unique: {ids:?}");
+        assert!(s.rules.iter().all(|r| !r.id.is_empty()));
+        assert_eq!(s.rules[1].id, "keep", "an id that is already unique stays");
+    }
+
+    #[test]
+    fn saving_and_loading_round_trips_and_survives_a_bom() {
+        let dir = std::env::temp_dir().join(format!("nobetci-settings-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let path = dir.join("settings.json");
+
+        let load_from = |path: &std::path::Path| load_from(path, |line| panic!("nothing to report, got: {line}"));
+        assert_eq!(load_from(&path).hold_ms, Settings::default().hold_ms, "no file yet: defaults");
+
+        let wanted = Settings {
+            hold_ms: 900,
+            rules: vec![UserRule { id: "r1".into(), pattern: "npm".into(), ..UserRule::default() }],
+            ..Settings::default()
+        };
+        save_to(&path, &wanted).unwrap();
+        let back = load_from(&path);
+        assert_eq!((back.hold_ms, &back.rules), (900, &wanted.rules));
+        let leftovers: Vec<_> = std::fs::read_dir(&dir).unwrap().flatten().map(|e| e.file_name()).collect();
+        assert_eq!(leftovers.len(), 1, "no temporary file stays behind: {leftovers:?}");
+
+        // Saved by Notepad or PowerShell 5: UTF-8 with a BOM.
+        let mut bom = vec![0xEF, 0xBB, 0xBF];
+        bom.extend_from_slice(br#"{"holdMs":700}"#);
+        std::fs::write(&path, bom).unwrap();
+        assert_eq!(load_from(&path).hold_ms, 700);
+
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn an_unreadable_file_is_kept_before_defaults_take_over() {
+        let dir = std::env::temp_dir().join(format!("nobetci-settings-bad-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("settings.json");
+        let broken = br#"{"holdMs": 900, "rules": [ { "pattern": "npm" "#;
+        std::fs::write(&path, broken).unwrap();
+
+        let mut reported = String::new();
+        assert_eq!(load_from(&path, |line| reported = line).hold_ms, Settings::default().hold_ms);
+        assert!(reported.contains("settings.json.unreadable-"), "the log must say where the file went: {reported}");
+        let kept: Vec<_> = std::fs::read_dir(&dir)
+            .unwrap()
+            .flatten()
+            .map(|e| e.path())
+            .filter(|p| p.file_name().is_some_and(|n| n.to_string_lossy().starts_with("settings.json.unreadable-")))
+            .collect();
+        assert_eq!(kept.len(), 1, "the unreadable file must be kept");
+        assert_eq!(std::fs::read(&kept[0]).unwrap(), broken);
+
+        let _ = std::fs::remove_dir_all(dir);
     }
 }

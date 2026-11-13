@@ -213,7 +213,7 @@ Nöbetçi menü çubuğunda yaşar, Dock'ta simgesi olmaz. Ayrıntılar
 
 ### Kaynaktan derleme
 
-[Rust](https://rustup.rs) (MSVC araç zinciriyle), Node.js 20 ya da üstü ve "Desktop development
+[Rust](https://rustup.rs) (MSVC araç zinciriyle), Node.js 22 ya da üstü ve "Desktop development
 with C++" iş yüküyle [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/)
 gerekir.
 
@@ -226,7 +226,7 @@ npm run pack     # → release\Nobetci-<sürüm>-setup.exe
 ```
 
 Mac'te Xcode Command Line Tools (`xcode-select --install`), iki Apple hedefiyle Rust
-(`rustup target add aarch64-apple-darwin x86_64-apple-darwin`) ve Node.js 20 ya da üstü gerekir;
+(`rustup target add aarch64-apple-darwin x86_64-apple-darwin`) ve Node.js 22 ya da üstü gerekir;
 `npm run pack:mac`, `release/Nobetci-<sürüm>-macos-universal.dmg` dosyasını üretir.
 
 ## İlk çalıştırma
@@ -371,7 +371,8 @@ dizgileri için ORTA, şifresiz `http://` için DÜŞÜK.
 **MCP araçları** — araç adı silme, kaldırma, çöpe atma, yok etme, düşürme, temizleme ya da iptal
 söylüyorsa (delete, remove, trash, destroy, drop, purge, revoke) YÜKSEK; bir şey gönderiyor,
 yayınlıyor, oluşturuyor, güncelliyor, yüklüyor, ödüyor, dağıtıyor ya da çalıştırıyorsa ORTA;
-gerisi DÜŞÜK.
+gerisi DÜŞÜK. Argümanlarında bir `command` ya da `url` varsa o da yukarıdaki komut ve web
+kurallarıyla ayrıca denetlenir.
 
 **Birleşimler** — aynı istekte bir sır ve dışarı giden bir yol varsa KRİTİK, sığması için
 kesilmek zorunda kalınan bir istek YÜKSEK. Bu ikisi kapatılamaz; diğer bütün kategoriler
@@ -393,7 +394,7 @@ Kurallar, kart gösterilmeden önce yukarıdan aşağı denenir; ilk eşleşen k
 | **İzin verebilir** | Sadece otomatik izin tavanına kadar. Daha riskli bir eşleşme yine sana gelir; hangi kuralın izin vermek istediği de yazılır. |
 | **Reddedebilir** | Her seviyede. İstek sana hiç gelmez, Claude senin mesajını alır. |
 | **Her zaman sordurabilir** | Güvenilir bir projenin ya da oturum izninin geçireceği yerde bile. |
-| **Yeniden puanlayabilir** | Seviyeyi DÜŞÜK'ten KRİTİK'e kadar ayarlar — yanlış alarmlar için kullanışlı. KRİTİK bir bulgu asla YÜKSEK'in altına inmez, yani yine basılı tutman gerekir. |
+| **Yeniden puanlayabilir** | Seviyeyi DÜŞÜK'ten KRİTİK'e kadar ayarlar — yanlış alarmlar için kullanışlı. KRİTİK bir bulgu asla YÜKSEK'in altına inmez, yani yine basılı tutman gerekir. Motorun kendisinin YÜKSEK ya da KRİTİK bulduğu bir istek, kural seviyesini düşürse bile asla otomatik onaylanmaz: tek tıkla onaylanır hâle gelir, sessizce geçmez. |
 
 Şablonlar iyi bir başlangıç: `npm test`'e ve salt okuyan git komutlarına izin ver, `git push --force`
 ve paket yayınlamayı yasakla, Claude'u `.env` dosyalarından uzak tut, `rm -rf`'yi her zaman

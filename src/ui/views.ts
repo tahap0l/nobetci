@@ -707,10 +707,9 @@ function buildApproval(actions: ViewActions): ViewHost {
     allowLabel.textContent = hold ? t("ap.holdAllow") : t("ap.allow");
     allowBtn.classList.toggle("needs-hold", hold);
     remember.checked = false;
-    // A session grant is an automatic approval: offer it only within the ceiling.
-    const ceiling = State.settings.autoAllowMax;
-    const grantable = r.level === "low" ? ceiling !== "none" : r.level === "medium" && ceiling === "medium";
-    rememberRow.style.display = grantable ? "" : "none";
+    // A session grant is an automatic approval: offer it only where Rust would
+    // honour one (within the ceiling, never for what the engine found high).
+    rememberRow.style.display = a.grantable ? "" : "none";
     closeMenu();
     holdReset();
   };

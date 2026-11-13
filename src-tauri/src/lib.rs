@@ -1,8 +1,8 @@
 // Nöbetçi — app wiring and the commands the two windows call.
 //
-// Network access is limited to the explicit prompt-review provider call. Optional
-// API credentials use the OS vault. Safety decisions (risk, rules, hold) stay in
-// Rust; the windows only ask.
+// Network access is limited to the explicit prompt-review provider call and the
+// opt-in weather card (widgets.rs). Optional API credentials use the OS vault.
+// Safety decisions (risk, rules, hold) stay in Rust; the windows only ask.
 
 mod agent_hooks;
 mod audit;

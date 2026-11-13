@@ -214,7 +214,7 @@ has the details.
 
 ### Build from source
 
-You need [Rust](https://rustup.rs) with the MSVC toolchain, Node.js 20 or newer, and the
+You need [Rust](https://rustup.rs) with the MSVC toolchain, Node.js 22 or newer, and the
 [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) with the
 "Desktop development with C++" workload.
 
@@ -227,7 +227,7 @@ npm run pack     # → release\Nobetci-<version>-setup.exe
 ```
 
 On a Mac you need the Xcode Command Line Tools (`xcode-select --install`), Rust with both Apple
-targets (`rustup target add aarch64-apple-darwin x86_64-apple-darwin`) and Node.js 20 or newer;
+targets (`rustup target add aarch64-apple-darwin x86_64-apple-darwin`) and Node.js 22 or newer;
 `npm run pack:mac` builds `release/Nobetci-<version>-macos-universal.dmg`.
 
 ## First run
@@ -376,7 +376,8 @@ strings, LOW for plain `http://`.
 
 **MCP tools** — HIGH when the tool name says delete, remove, trash, destroy, drop, purge or
 revoke; MEDIUM when it sends, posts, publishes, creates, updates, uploads, pays, deploys or runs
-something; LOW otherwise.
+something; LOW otherwise. A `command` or `url` among its arguments is also checked with the command
+and web rules above.
 
 **Combinations** — a secret and a way out in the same request is CRITICAL, and a request that had
 to be cut to fit is HIGH. These two can't be switched off; every other category can, in
@@ -398,7 +399,7 @@ Rules are checked from top to bottom before a card is shown, and the first match
 | **Allow** | Only up to the auto-allow ceiling. A riskier match still comes to you, with a note saying which rule wanted to allow it. |
 | **Deny** | At any level. The request never reaches you, and Claude gets your message. |
 | **Always ask** | Even where a trusted project or a session grant would have let it through. |
-| **Re-score** | Set the level from LOW to CRITICAL — useful for a false alarm. A CRITICAL finding never drops below HIGH, so it still needs a hold. |
+| **Re-score** | Set the level from LOW to CRITICAL — useful for a false alarm. A CRITICAL finding never drops below HIGH, so it still needs a hold. A request the engine itself scored HIGH or CRITICAL is never approved automatically, even after a rule lowers it: it becomes a plain click, not a silent pass. |
 
 The templates are a good start: allow `npm test` and read-only git commands, forbid
 `git push --force` and package publishing, keep Claude away from `.env` files, make `rm -rf`

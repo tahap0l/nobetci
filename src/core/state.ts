@@ -52,6 +52,16 @@ export interface Session {
   automatic: number;
 }
 
+/** What identifies the tool call behind a request, to recognise the event that resolves it. */
+export interface CallSignature {
+  /** Claude Code's id for the call; empty when the event carries none. */
+  toolUseId: string;
+  /** Tool name and input, whole. */
+  content: string;
+  /** Tool name and input with every string clipped, for when the relay cut one side. */
+  prefix: string;
+}
+
 export interface Approval {
   requestId: string;
   sessionId: string;
@@ -60,6 +70,10 @@ export interface Approval {
   /** Why the rules sent it to a person (a rule wanting to allow, a strict project…). */
   note: string | null;
   policy: "trusted" | "normal" | "strict";
+  /** Whether "don't ask again in this session" can take effect, as Rust decided. */
+  grantable: boolean;
+  /** Lives and dies with the card, so nothing is kept for answered requests. */
+  signature: CallSignature;
   receivedAt: number;
   /** When the relay gives up and the terminal takes over. */
   expiresAt: number;

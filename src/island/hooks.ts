@@ -9,7 +9,7 @@
 import { Bridge, onEvent, type NotifyKind, type QuietReason, type RiskAssessment, type RiskLevel } from "../core/bridge";
 import { Sound } from "../core/sound";
 import {
-  DECISION_WINDOW_MS, MAX_QUEUE, State, needsHold, type Session,
+  DECISION_WINDOW_MS, LEVEL_ORDER, MAX_QUEUE, State, needsHold, type CallSignature, type Session,
 } from "../core/state";
 import { t } from "../i18n/island";
 import type { Island } from "./island";
@@ -36,8 +36,12 @@ interface HookPayload {
   risk?: RiskAssessment;
   rule_note?: string | null;
   policy?: "trusted" | "normal" | "strict";
+  /** Whether a session grant would be honoured for this request (set by Rust). */
+  grantable?: boolean;
   nobetci_parents?: { pid: number; name: string }[];
   nobetci_quiet?: QuietReason;
+  /** The relay had to cut a field of this event. */
+  nobetci_truncated?: boolean;
 }
 
 /** Sent by Rust when a rule, a trusted project or a session grant decided. */
@@ -53,11 +57,43 @@ interface AutoDecision {
   note: string | null;
 }
 
-/** tool_use_id, or tool + input: lets a PostToolUse recognise the request it resolves. */
-const signatures = new Map<string, string>();
+/**
+ * Longest string prefix compared when the relay cut one side. It forwards a
+ * permission request whole but caps the fields of display-only events at
+ * 2 000 bytes — never fewer than 500 characters.
+ */
+const SIGNATURE_PREFIX = 400;
 
-function signature(p: HookPayload): string {
-  return p.tool_use_id || `${p.tool_name ?? ""}\u0000${JSON.stringify(p.tool_input ?? {})}`;
+function clipped(value: unknown): unknown {
+  if (typeof value === "string") return value.slice(0, SIGNATURE_PREFIX);
+  if (Array.isArray(value)) return value.map(clipped);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, clipped(v)]));
+  }
+  return value;
+}
+
+/** Lets a PostToolUse recognise the permission request it resolves. */
+export function callSignature(p: HookPayload): CallSignature {
+  const tool = p.tool_name ?? "";
+  const input = p.tool_input ?? {};
+  return {
+    toolUseId: p.tool_use_id ?? "",
+    content: `${tool}\u0000${JSON.stringify(input)}`,
+    prefix: `${tool}\u0000${JSON.stringify(clipped(input))}`,
+  };
+}
+
+/**
+ * Whether `done` (a PostToolUse) is the call `request` asked about.
+ *
+ * Claude Code gives PreToolUse and PostToolUse a tool_use_id but PermissionRequest
+ * none, so the id only decides when both sides carry one. Otherwise the tool and
+ * its input do — whole, or by prefix when the relay cut the later event.
+ */
+export function sameCall(request: CallSignature, done: CallSignature, doneWasCut = false): boolean {
+  if (request.toolUseId && done.toolUseId) return request.toolUseId === done.toolUseId;
+  return doneWasCut ? request.prefix === done.prefix : request.content === done.content;
 }
 
 export function lastPathComponent(p: string): string {
@@ -149,12 +185,12 @@ function sessionFor(p: HookPayload): Session {
 }
 
 /** Drops a session's cards: the request was answered somewhere else. */
-function releaseApprovals(sessionId: string, match?: string) {
+function releaseApprovals(sessionId: string, done?: HookPayload) {
+  const match = done && callSignature(done);
   for (const a of [...State.approvals]) {
     if (a.sessionId !== sessionId) continue;
-    if (match && signatures.get(a.requestId) !== match) continue;
+    if (match && !sameCall(a.signature, match, done.nobetci_truncated === true)) continue;
     State.removeApproval(a.requestId);
-    signatures.delete(a.requestId);
     void Bridge.approvalDecline(a.requestId, "resolved");
   }
 }
@@ -185,7 +221,6 @@ export function registerHookHandlers(island: Island) {
     for (const a of [...State.approvals]) {
       if (now >= a.expiresAt) {
         State.removeApproval(a.requestId);
-        signatures.delete(a.requestId);
         const s = State.session(a.sessionId);
         if (s && s.state === "approval") State.setState(s, "working");
         if (s) State.step(s, t("step.timeout"));
@@ -254,7 +289,7 @@ function handle(island: Island, p: HookPayload) {
 
     case "PostToolUse":
     case "PostToolUseFailure": {
-      releaseApprovals(s.id, signature(p));
+      releaseApprovals(s.id, p);
       if (!State.approvals.some((a) => a.sessionId === s.id)) State.setState(s, "working");
       if (event === "PostToolUseFailure") State.step(s, t("step.toolFailed"));
       island.afterApprovalChange();
@@ -328,6 +363,12 @@ function handle(island: Island, p: HookPayload) {
   }
 }
 
+/** The browser preview has no Rust to say what is grantable: go by the ceiling alone. */
+function withinCeiling(level: RiskLevel): boolean {
+  const ceiling = State.settings.autoAllowMax;
+  return ceiling !== "none" && LEVEL_ORDER[level] <= LEVEL_ORDER[ceiling];
+}
+
 function onPermissionRequest(island: Island, p: HookPayload) {
   const requestId = p.request_id ?? "";
   if (!requestId) return;
@@ -352,10 +393,11 @@ function onPermissionRequest(island: Island, p: HookPayload) {
     risk: p.risk,
     note: p.rule_note ?? null,
     policy: p.policy ?? "normal",
+    grantable: p.grantable ?? withinCeiling(p.risk.level),
+    signature: callSignature(p),
     receivedAt: now,
     expiresAt: now + DECISION_WINDOW_MS,
   });
-  signatures.set(requestId, signature(p));
   // Queued is as good as shown: a person can act on it, so the long wait begins.
   void Bridge.approvalAck(requestId);
 

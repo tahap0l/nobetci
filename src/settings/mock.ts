@@ -29,6 +29,8 @@ import type {
 } from "../core/bridge";
 import { ALL_EVENTS, DEFAULT_SETTINGS, type Settings, type UserRule } from "../core/settings-model";
 import { getLang, type Lang } from "../i18n/core";
+// The preview shows the version being built, so screenshots never carry a stale one.
+import { version } from "../../package.json";
 import type { Api } from "./api";
 
 type Group = CategoryInfo["group"];
@@ -685,7 +687,10 @@ function evaluate(tool: string, input: Record<string, unknown>, cwd: string, s: 
     note = L(["Sıkı proje: risk bir seviye yükseltildi.", "Strict project: risk raised one level."]);
   }
   const cap = s.autoAllowMax === "low" ? 0 : s.autoAllowMax === "medium" ? 1 : -1;
-  const mayAuto = (l: RiskLevel) => cap >= 0 && RANK[l] <= cap;
+  // As in Rust: what the engine itself found high or critical is never
+  // approved automatically, even after a rule re-scores it.
+  const engineRank = RANK[a.level];
+  const mayAuto = (l: RiskLevel) => engineRank < RANK.high && cap >= 0 && RANK[l] <= cap;
   const v = (
     outcome: Evaluation["outcome"],
     by: Evaluation["by"],
@@ -700,6 +705,7 @@ function evaluate(tool: string, input: Record<string, unknown>, cwd: string, s: 
     note: n,
     message,
     policy: policy as Evaluation["policy"],
+    grantable: RANK[a.level] <= RANK.medium && mayAuto(a.level),
   });
   const rule = s.rules.find((x) => ruleMatches(x, tool, a.target, cwd));
   // Rust reports a re-scoring rule with whatever outcome follows.
@@ -1227,7 +1233,7 @@ export function createMockApi(): Api {
       systemLang,
       hooksLost: lost,
       screen: { x: 0, y: 0, width: 1920, height: 1080, scale: 1.5 },
-      version: "2.0.2",
+      version,
       hookPath: hookStatus.hookPath,
       platform,
       fullscreenSupported: platform === "windows",
