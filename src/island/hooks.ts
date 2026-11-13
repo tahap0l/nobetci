@@ -325,7 +325,7 @@ function handle(island: Island, p: HookPayload) {
       releaseApprovals(s.id);
       State.setState(s, "finished");
       State.step(s, t("step.turnDone"));
-      island.owl.triggerEmote("happy");
+      island.react("happy");
       Sound.play("finish");
       toast("finished", t("fl.finished", { name: s.name }), State.lastStep(s));
       if (!quiet) {
@@ -406,7 +406,7 @@ function onPermissionRequest(island: Island, p: HookPayload) {
   const risky = needsHold(p.risk.level);
   if (first) {
     Sound.play(risky ? "danger" : "approval");
-    island.owl.triggerEmote(risky ? "surprised" : "hoot");
+    island.react(risky ? "surprised" : "hoot");
   } else {
     Sound.play("blip");
   }
@@ -439,6 +439,7 @@ function onAutoDecision(island: Island, d: AutoDecision) {
     s.denied++;
     State.step(s, t("step.autoDeny", { who, target: d.target }));
     if (!State.isQuiet) island.flash(t("fl.autoDeny", { who, target: d.target }), "error");
+    island.react("deny");
     Sound.play("deny");
   }
 }

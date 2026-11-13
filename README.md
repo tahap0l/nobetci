@@ -34,6 +34,11 @@ Nöbetçi sits at the top of the screen. Click the compact island to open your a
 
 <p align="center"><img src="docs/media/en/mascots.png" width="720" alt="The seven mascots side by side, each in a different mood: the owl idle, the wolf waving at a permission request, the hawk alarmed, the octopus thinking, the lion happy, the canary delighted and the eagle puzzled"></p>
 
+- **A mascot on your desktop.** Drag the mascot anywhere on the screen with the mouse; it stays where you leave it, spreads its wings while you carry it and lands with a bounce. It shares the island's mood, pokes back when clicked and opens the island on a double click. Turn it on or off under **Settings → General → Desktop mascot** or from the tray menu. It only shows: decisions are still made on the island's card.
+- **Every decision shows on its face.** Approve, and the mascot beams, nods twice, hops with its wings up and a green tick draws itself in a burst of sparkles. Deny, and it frowns, pins its ears back, shakes its head and huffs while a red cross pops up.
+
+<p align="center"><img src="docs/media/en/reactions.png" width="720" alt="Six mascots reacting to decisions: the owl, wolf and canary beaming under a green tick after an approval; the owl, lion and hawk frowning under a red cross after a denial"></p>
+
 Nöbetçi is a small owl on a black island at the top of your screen. It watches Claude Code, Codex
 and Cursor sessions, records submitted prompts and surfaces supported permission requests. Claude
 Code has the full safety review; Codex and Cursor support depends on each agent's hook API.

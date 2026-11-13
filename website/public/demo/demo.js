@@ -16,7 +16,8 @@ mascot.classList.toggle("is-live", Boolean(live));
 function react(state) {
   if (!live) return mascot.replaceChildren(avatar(theme, state, true));
   live.setMood(moods[state] ?? "idle");
-  if (state === "denied") live.emote("annoyed");
+  if (state === "denied") live.emote("deny");
+  else if (state === "allowed") live.emote("approve");
 }
 if (live) mascot.addEventListener("click", () => live.poke());
 

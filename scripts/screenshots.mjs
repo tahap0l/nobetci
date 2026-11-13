@@ -48,6 +48,7 @@ const SHOTS = [
   { name: "idle-island", path: "?demo=overview&theme=wolf&media=1", size: HERO },
   // Drawn at twice the size: the mascots are the whole picture.
   { name: "mascots", path: "?demo=mascots", size: { width: 720, height: 210 }, scale: 2 },
+  { name: "reactions", path: "?demo=reactions", size: { width: 720, height: 210 }, scale: 2 },
   { name: "session", path: "?demo=session", size: ISLAND },
   { name: "compact", path: "?demo=compact", size: ISLAND },
   { name: "settings-rules", path: "settings.html?tab=kurallar", size: SETTINGS },

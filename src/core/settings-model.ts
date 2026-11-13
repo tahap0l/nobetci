@@ -48,6 +48,10 @@ export interface Settings {
   autoCloseInterval: number;
   staleMinutes: number;
   expandOnFinish: boolean;
+  /** The desktop mascot, dragged anywhere on screen. */
+  buddy: boolean;
+  /** Where it was left (physical desktop pixels), kept by Rust; null = the corner. */
+  buddyPos: [number, number] | null;
   // Prompt review
   promptProvider: "ollama" | "openai";
   ollamaModel: string;
@@ -116,6 +120,8 @@ export const DEFAULT_SETTINGS: Settings = {
   autoCloseInterval: 15,
   staleMinutes: 45,
   expandOnFinish: false,
+  buddy: true,
+  buddyPos: null,
   promptProvider: "ollama",
   ollamaModel: "gemma4",
   openaiModel: "gpt-6-luna",

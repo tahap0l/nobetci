@@ -20,6 +20,23 @@ const M = {
   "genel.appearance": ["Görünüm", "Appearance"],
   "genel.mascotTheme": ["Maskot teması", "Mascot theme"],
   "genel.mascotThemeHint": ["Maskotu ve renkleri değiştir.", "Change the mascot and colors."],
+  "genel.buddy.title": ["Masaüstü maskotu", "Desktop mascot"],
+  "genel.buddy.desc": [
+    "Maskotun ekranda serbest dolaşan bir kopyası: fareyle istediğin yere sürükle. Adanın ruh hâlini taşır, onay ve retlere tepki verir; kararlar yine adadaki kartta verilir.",
+    "A copy of the mascot that roams free on your screen: drag it anywhere with the mouse. It shares the island's mood and reacts to approvals and denials; decisions are still made on the island's card.",
+  ],
+  "genel.buddy.show": ["Masaüstü maskotunu göster", "Show the desktop mascot"],
+  "genel.buddy.showHint": [
+    "Tek tık dürter, çift tık adayı açar. Tepsi menüsünden de açıp kapatabilirsin.",
+    "A click pokes it, a double click opens the island. You can also switch it from the tray menu.",
+  ],
+  "genel.buddy.reset": ["Konumu sıfırla", "Reset position"],
+  "genel.buddy.resetHint": [
+    "Maskotu ana ekranın sağ alt köşesine geri getirir.",
+    "Brings the mascot back to the bottom-right corner of the main display.",
+  ],
+  "genel.buddy.resetButton": ["Köşeye getir", "Back to the corner"],
+  "genel.buddy.resetDone": ["Maskot köşeye döndü.", "The mascot is back in its corner."],
   // ── Common ──────────────────────────────────────────────────────────────────
   "common.cancel": ["Vazgeç", "Cancel"],
   "common.close": ["Kapat", "Close"],

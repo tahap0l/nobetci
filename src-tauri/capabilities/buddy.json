@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "buddy",
+  "description": "The desktop mascot: the island's events, plus moving its own window when it is dragged.",
+  "windows": ["buddy"],
+  "permissions": ["core:default", "core:window:allow-start-dragging"]
+}

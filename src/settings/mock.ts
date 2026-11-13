@@ -1218,6 +1218,9 @@ export function createMockApi(): Api {
 
   const api: Api = {
     mock: true,
+    toBuddy: async () => {},
+    buddyOpenIsland: async () => null,
+    buddyResetPosition: async () => null,
     islandMedia: async () => null,
     islandMediaControl: async () => false,
     islandWeather: async () => null,

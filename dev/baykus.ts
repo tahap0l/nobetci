@@ -14,7 +14,7 @@ const MOODS: OwlMood[] = [
   "idle", "working", "thinking", "approval", "danger",
   "question", "error", "finished", "sleeping", "dizzy",
 ];
-const EMOTES: OwlEmote[] = ["happy", "love", "annoyed", "surprised", "hoot"];
+const EMOTES: OwlEmote[] = ["happy", "love", "annoyed", "surprised", "hoot", "approve", "deny"];
 const SIZES = [20, 56, 140];
 const OVERHANG = 40;
 const STRIP_CELL = 30;

@@ -2,11 +2,11 @@
 // frame loop. The loop only runs while something is moving, and never while the
 // island is hidden — a sleeping Nöbetçi costs no CPU.
 
-import { OwlEngine } from "../baykus/owl";
+import { OwlEngine, type OwlEmote } from "../baykus/owl";
 import { applyMascotPalette } from "../core/mascot-theme";
 import { OwlGreeting } from "../baykus/greeting";
 import { Spring, Tracked } from "../core/anim";
-import { Bridge, IS_TAURI, type DecisionOptions } from "../core/bridge";
+import { Bridge, IS_TAURI, onEvent, type DecisionOptions } from "../core/bridge";
 import { Sound } from "../core/sound";
 import { State, type FlashTone, type IslandMode, type IslandView } from "../core/state";
 import { t } from "../i18n/island";
@@ -60,6 +60,7 @@ export class Island {
   private pushedRect = { x: -1, y: -1, w: -1, h: -1 };
   private flashTimer: number | null = null;
   private lastMood = "";
+  private lastAccent: string | null = null;
 
   constructor(root: HTMLElement) {
     this.root = root;
@@ -73,6 +74,18 @@ export class Island {
       this.dirty = true;
       this.ensureRunning();
     });
+    // The desktop mascot asks where things stand when it (re)loads.
+    void onEvent<null>("buddy-ready", () => {
+      void Bridge.toBuddy("buddy-mood", this.lastMood || State.mood);
+      void Bridge.toBuddy("buddy-accent", this.lastAccent);
+    });
+  }
+
+  /** A one-shot reaction, played by the island's mascot and the desktop one alike. */
+  react(emote: OwlEmote) {
+    this.owl.triggerEmote(emote);
+    void Bridge.toBuddy("buddy-emote", emote);
+    this.ensureRunning();
   }
 
   // ── DOM ─────────────────────────────────────────────────────────────────────
@@ -341,7 +354,7 @@ export class Island {
       .then(() => {
         const denied = decision === "deny";
         Sound.play(denied ? "deny" : "allow");
-        this.owl.triggerEmote(denied ? "annoyed" : "happy");
+        this.react(denied ? "deny" : "approve");
         const s = State.session(a.sessionId);
         if (s) {
           if (denied) s.denied++;
@@ -368,7 +381,7 @@ export class Island {
           case "input_not_physical":
             // Something tried to approve without a real click. Keep the card, say
             // it loudly, on the card itself: this is exactly what the guard exists for.
-            this.owl.triggerEmote("surprised");
+            this.react("surprised");
             State.cardWarning = { requestId, text: t("fl.notPhysical") };
             this.flash(t("fl.notPhysical"), "error");
             this.showApprovals();
@@ -711,9 +724,15 @@ export class Island {
     if (mood !== this.lastMood) {
       this.lastMood = mood;
       this.owl.setMood(mood);
+      void Bridge.toBuddy("buddy-mood", mood);
     }
     const a = State.currentApproval;
-    this.owl.accent = a ? State.session(a.sessionId)?.accent ?? null : null;
+    const accent = a ? State.session(a.sessionId)?.accent ?? null : null;
+    this.owl.accent = accent;
+    if (accent !== this.lastAccent) {
+      this.lastAccent = accent;
+      void Bridge.toBuddy("buddy-accent", accent);
+    }
   }
 
   /**

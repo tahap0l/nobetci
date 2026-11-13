@@ -6,6 +6,7 @@
 
 mod agent_hooks;
 mod audit;
+mod buddy;
 mod focus;
 mod hooks;
 mod hotkeys;
@@ -110,10 +111,13 @@ fn boot(app: AppHandle, shared: State<Shared>) -> BootInfo {
 
 /// Stores new preferences and applies whatever they change.
 fn store(app: &AppHandle, next: Settings) -> Settings {
-    let next = next.sanitized();
+    let mut next = next.sanitized();
     let shared = app.state::<Shared>();
     let prev = {
         let mut cur = shared.settings.lock().unwrap();
+        // Only the mascot's window moves it; a settings window opened before the
+        // last drag must not put it back where it was.
+        next.buddy_pos = cur.buddy_pos;
         std::mem::replace(&mut *cur, next.clone())
     };
     if let Err(err) = settings::save(&next) {
@@ -125,6 +129,9 @@ fn store(app: &AppHandle, next: Settings) -> Settings {
         if let Err(err) = result {
             log::line(format!("autostart: {err}"));
         }
+    }
+    if prev.buddy != next.buddy {
+        buddy::apply(app, next.buddy);
     }
     if prev.screen != next.screen || prev.position != next.position {
         let collapsed = shared.gate.collapsed.load(Ordering::Relaxed);
@@ -148,6 +155,13 @@ fn store(app: &AppHandle, next: Settings) -> Settings {
 #[tauri::command]
 fn save_settings(app: AppHandle, settings: Settings) -> Settings {
     store(&app, settings)
+}
+
+/// Shows or hides the desktop mascot (tray menu).
+pub fn toggle_buddy(app: &AppHandle) {
+    let mut s = current(app);
+    s.buddy = !s.buddy;
+    store(app, s);
 }
 
 /// Flips do-not-disturb (island button, tray, or its hotkey).
@@ -697,21 +711,21 @@ const BROWSER_ARGS: &str =
 
 /// In a dev build the pages are served by Vite, so the second window needs the
 /// absolute dev URL; a bundled build resolves it inside the app bundle.
-fn settings_page_url(app: &AppHandle) -> WebviewUrl {
+fn page_url(app: &AppHandle, page: &str) -> WebviewUrl {
     #[cfg(dev)]
     if let Some(mut base) = app.config().build.dev_url.clone() {
-        base.set_path("/settings.html");
+        base.set_path(&format!("/{page}"));
         return WebviewUrl::External(base);
     }
     let _ = app;
-    WebviewUrl::App("settings.html".into())
+    WebviewUrl::App(page.into())
 }
 
 /// The settings window is created hidden at launch and only ever shown and
 /// hidden afterwards. A WebView2 window created later silently comes up blank,
 /// so the window that works is the one that exists before the island's webview.
 fn create_settings_window(app: &AppHandle) {
-    let url = settings_page_url(app);
+    let url = page_url(app, "settings.html");
     match WebviewWindowBuilder::new(app, "settings", url)
         .additional_browser_args(BROWSER_ARGS)
         .title(pick("Nöbetçi — Settings", "Nöbetçi — Ayarlar"))
@@ -867,6 +881,8 @@ pub fn run() {
             log_line,
             open_settings_window,
             close_settings_window,
+            buddy::buddy_reset_position,
+            buddy::buddy_open_island,
         ])
         .setup(move |app| {
             // macOS: a menu-bar app — no Dock icon, not in Cmd-Tab.
@@ -877,6 +893,7 @@ pub fn run() {
             tray::build(&handle)?;
             // Before the island: see create_settings_window.
             create_settings_window(&handle);
+            buddy::create(&handle, page_url(&handle, "buddy.html"), BROWSER_ARGS, &loaded);
 
             if let Some(win) = island::window(&handle) {
                 island::make_non_activating(&win);

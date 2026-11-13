@@ -3,7 +3,7 @@
 // `npm run dev` alone.
 
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
+import { emit, listen } from "@tauri-apps/api/event";
 import type { Settings } from "./settings-model";
 
 export const IS_TAURI =
@@ -235,6 +235,19 @@ export interface IslandWeather {
 }
 
 export const Bridge = {
+  // ── Desktop mascot ────────────────────────────────────────────────────────
+  /** Tells the island and the desktop mascot something about the other. */
+  toBuddy: async (event: string, payload: unknown) => {
+    if (!IS_TAURI) return;
+    try {
+      await emit(event, payload);
+    } catch (err) {
+      console.error(`[nobetci] ${event} failed`, err);
+    }
+  },
+  buddyOpenIsland: () => call<void>("buddy_open_island"),
+  buddyResetPosition: () => call<void>("buddy_reset_position"),
+
   islandMedia: (includeArtwork = false) => call<IslandMedia>("island_media", { includeArtwork }),
   islandMediaControl: (source: string, action: "previous" | "toggle" | "next") =>
     call<boolean>("island_media_control", { source, action }),
