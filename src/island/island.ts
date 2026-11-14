@@ -15,7 +15,7 @@ import { buildCompact, buildViews, drawMinis, type ViewActions, type ViewHost } 
 import { IslandStateMachine } from "./fsm";
 import {
   COMPACT_CORNER, EXPANDED_CORNER, EXPANDED_W, GREETING_H, HIDDEN_W, HIT_MARGIN,
-  OWL_OVERHANG, PANEL_W, islandSize, owlPlacement,
+  OWL_OVERHANG, PANEL_W, islandSize, owlPlacement, setMascotScale,
 } from "./layout";
 
 const modeOrder = (m: IslandMode) => (m === "hidden" ? 0 : m === "compact" ? 1 : 2);
@@ -65,6 +65,8 @@ export class Island {
   private moodOverride: OwlMood | null = null;
   /** The island has the keyboard (the assistant's text box is up). */
   private keyboardOn = false;
+  /** A text field on a card (the agenda) has the keyboard. */
+  private typing = false;
 
   constructor(root: HTMLElement) {
     this.root = root;
@@ -79,6 +81,11 @@ export class Island {
       this.ensureRunning();
     });
     // The desktop mascot asks where things stand when it (re)loads.
+    // An agenda item's time has come: a nudge from the owl (Rust shows the notification).
+    void onEvent<unknown>("agenda-due", () => {
+      this.react("surprised");
+      Sound.play("blip");
+    });
     void onEvent<null>("buddy-ready", () => {
       void Bridge.toBuddy("buddy-mood", this.lastMood || State.mood);
       void Bridge.toBuddy("buddy-accent", this.lastAccent);
@@ -237,7 +244,8 @@ export class Island {
    * open meanwhile; anything else gives both back.
    */
   private syncKeyboard() {
-    const on = State.mode === "expanded" && State.view === "assistant";
+    if (State.mode !== "expanded") this.typing = false;
+    const on = State.mode === "expanded" && (State.view === "assistant" || this.typing);
     if (on === this.keyboardOn) return;
     this.keyboardOn = on;
     void Bridge.islandKeyboard(on);
@@ -484,14 +492,16 @@ export class Island {
   private animateGeometry(shrinking: boolean) {
     const { w, h: hh } = islandSize(State.mode, State.view, this.viewHeight());
     const r = State.mode === "expanded" ? EXPANDED_CORNER : COMPACT_CORNER;
+    // Like a phone's island: opening, the width leads with a little overshoot
+    // and the height follows a beat later; closing, the height goes first.
     if (shrinking) {
-      this.width.curveTowards(w);
-      this.height.curveTowards(hh);
-      this.radius.curveTowards(r);
+      this.width.curveTowards(w, 360);
+      this.height.curveTowards(hh, 270);
+      this.radius.curveTowards(r, 320);
     } else {
-      this.width.springTo(w);
-      this.height.springTo(hh);
-      this.radius.springTo(r);
+      this.width.springTo(w, 0.4, 0.7);
+      this.height.springTo(hh, 0.52, 0.8);
+      this.radius.springTo(r, 0.46, 0.82);
     }
     this.ensureRunning();
   }
@@ -576,6 +586,27 @@ export class Island {
   // ── Input ───────────────────────────────────────────────────────────────────
 
   private wireInput() {
+    // Text fields on the cards (data-typing) need the keyboard, which the island
+    // never takes on its own: ask for it on the press, give it back on blur.
+    this.islandEl.addEventListener("pointerdown", (e) => {
+      const field = (e.target as Element | null)?.closest?.<HTMLElement>("[data-typing]");
+      if (!field || this.typing || State.view === "assistant") return;
+      this.typing = true;
+      this.fsm.pinned = true;
+      this.syncKeyboard();
+      window.setTimeout(() => field.focus(), 60);
+    });
+    this.islandEl.addEventListener("focusout", (e) => {
+      if (!this.typing) return;
+      const next = e.relatedTarget as Element | null;
+      if (next?.closest?.("[data-typing]")) return;
+      window.setTimeout(() => {
+        if (document.activeElement?.closest?.("[data-typing]")) return;
+        this.typing = false;
+        this.syncKeyboard();
+      }, 120);
+    });
+
     this.wakeStrip.addEventListener("mouseenter", () => {
       Sound.resume();
       if (State.mode === "hidden") this.fsm.mouseEntered();
@@ -748,6 +779,7 @@ export class Island {
   // ── DOM sync ────────────────────────────────────────────────────────────────
 
   private syncDom() {
+    setMascotScale(State.settings.islandMascotSize);
     const expanded = State.mode === "expanded";
     const greetingOn = expanded && State.view === "greeting";
 

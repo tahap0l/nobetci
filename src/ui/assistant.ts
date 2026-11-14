@@ -19,6 +19,7 @@ import { t } from "../i18n/island";
 import { HEADER_H } from "../island/layout";
 import { h, icon } from "./dom";
 import type { ViewHost } from "./views";
+import { firstPlaceholder, pick, PROMPT_LIBRARY } from "./prompt-library";
 import { startFocusTimer } from "./widgets";
 
 export interface AssistantActions {
@@ -150,6 +151,18 @@ export function buildAssistant(actions: AssistantActions): ViewHost & {
   const answerText = h("div", { class: "asst-answer-text", tabindex: "0" });
   const copy = h("button", { class: "btn btn-small btn-ghost", type: "button" }, icon(COPY_ICON, 13), ` ${t("as.copy")}`);
   const answer = h("div", { class: "asst-answer", hidden: true }, answerText, h("div", { class: "asst-answer-actions" }, copy));
+  // Ready-made prompts, for people who don't know what to ask yet.
+  const libraryCats = h("div", { class: "asst-lib-cats", role: "tablist", "aria-label": t("as.library") });
+  const libraryList = h("div", { class: "asst-lib-list" });
+  const library = h("div", { class: "asst-lib", hidden: true }, libraryCats, libraryList);
+  const libraryToggle = h("button", {
+    type: "button", class: "asst-lib-toggle", "aria-expanded": "false", title: t("as.libraryTitle"),
+  }, icon(BOOK_ICON, 13), h("span", { text: t("as.library") }));
+  const mic = h("button", {
+    type: "button", class: "icon-btn asst-mic", title: t("as.dictate"), "aria-label": t("as.dictate"),
+  }, icon(MIC_ICON, 15));
+  // Linux has no system dictation to start.
+  mic.hidden = getPlatform() === "linux";
   const el = h(
     "div",
     { class: "view view-assistant" },
@@ -158,10 +171,11 @@ export function buildAssistant(actions: AssistantActions): ViewHost & {
       { class: "asst-head" },
       h("button", { class: "icon-btn", title: t("as.back"), onclick: () => actions.back() }, icon(BACK_ICON)),
       h("span", { class: "asst-title" }, icon(SPARK_ICON, 14), ` ${t("as.title")}`),
-      h("span", { class: "grow" }),
-      h("span", { class: "asst-keys", text: t("as.keys") }),
+      h("span", { class: "asst-keys grow", text: t("as.keys") }),
+      libraryToggle,
     ),
-    input,
+    library,
+    h("div", { class: "asst-input-wrap" }, input, mic),
     hints,
     h("div", { class: "asst-row" }, chips, send),
     status,
@@ -171,6 +185,67 @@ export function buildAssistant(actions: AssistantActions): ViewHost & {
   let target: string = State.settings.assistantTarget || "chatgpt";
   let busy = false;
   let historyAt = -1;
+  /** Targets with a desktop app on this computer, and the app's name. */
+  let apps = new Map<string, string>();
+  let category = PROMPT_LIBRARY[0].id;
+
+  const refreshApps = () => {
+    void Bridge.assistantApps().then((list) => {
+      const next = new Map((list ?? []).map((a) => [a.target, a.name]));
+      const same = next.size === apps.size && [...next].every(([k, v]) => apps.get(k) === v);
+      apps = next;
+      if (!same) paintChips();
+    });
+  };
+  const viaApp = (id: string) => State.settings.assistantUseApps !== false && apps.has(id);
+
+  /** Puts `text` in the box and selects its first [placeholder]. */
+  const insertTemplate = (text: string) => {
+    input.value = draft = text;
+    showLibrary(false);
+    input.dispatchEvent(new Event("input"));
+    input.focus();
+    const at = firstPlaceholder(text);
+    if (at) input.setSelectionRange(at[0], at[1]);
+    say(at ? t("as.fillIn") : "");
+  };
+
+  const paintLibrary = () => {
+    libraryCats.replaceChildren(...PROMPT_LIBRARY.map((c) => h("button", {
+      type: "button", role: "tab", class: `asst-lib-cat${c.id === category ? " on" : ""}`,
+      "aria-selected": String(c.id === category),
+      onclick: () => { category = c.id; paintLibrary(); },
+    }, icon(c.icon, 12), h("span", { text: pick(c.name) }))));
+    const cat = PROMPT_LIBRARY.find((c) => c.id === category) ?? PROMPT_LIBRARY[0];
+    libraryList.replaceChildren(...cat.prompts.map((p, i) => h("button", {
+      type: "button", class: "asst-lib-item", style: `--i:${i}`, title: pick(p.text),
+      onclick: () => insertTemplate(pick(p.text)),
+    }, h("strong", { text: pick(p.title) }), h("span", { text: pick(p.text).replace(/\s+/g, " ") }))));
+    State.notify();
+  };
+
+  function showLibrary(on: boolean) {
+    library.hidden = !on;
+    libraryToggle.setAttribute("aria-expanded", String(on));
+    libraryToggle.classList.toggle("on", on);
+    if (on) paintLibrary();
+    State.notify();
+  }
+  libraryToggle.addEventListener("click", () => showLibrary(libraryToggle.getAttribute("aria-expanded") !== "true"));
+
+  let listening: number | undefined;
+  mic.addEventListener("click", async () => {
+    input.focus();
+    try {
+      await Bridge.assistantDictate();
+      mic.classList.add("listening");
+      say(t("as.listening"));
+      window.clearTimeout(listening);
+      listening = window.setTimeout(() => mic.classList.remove("listening"), 15_000);
+    } catch (err) {
+      say(String(err), "error");
+    }
+  });
 
   const paintChips = () => {
     chips.replaceChildren(
@@ -180,9 +255,10 @@ export function buildAssistant(actions: AssistantActions): ViewHost & {
           "button",
           {
             type: "button",
-            class: `asst-chip${on ? " on" : ""}${x.id === "here" ? " here" : ""}`,
+            class: `asst-chip${on ? " on" : ""}${x.id === "here" ? " here" : ""}${viaApp(x.id) ? " app" : ""}`,
             role: "radio",
             "aria-checked": on ? "true" : "false",
+            title: viaApp(x.id) ? t("as.inApp", { app: apps.get(x.id) ?? "" }) : undefined,
             onclick: () => {
               target = x.id;
               void Bridge.setAssistantTarget(x.id);
@@ -293,7 +369,7 @@ export function buildAssistant(actions: AssistantActions): ViewHost & {
       }
       try {
         const opened = await Bridge.assistantOpen(target, text);
-        const app = targetLabel(target);
+        const app = opened?.app ?? targetLabel(target);
         const paste = getPlatform() === "macos" ? "⌘V" : "Ctrl+V";
         say(
           opened?.prefilled
@@ -316,6 +392,7 @@ export function buildAssistant(actions: AssistantActions): ViewHost & {
 
   input.addEventListener("input", () => {
     draft = input.value;
+    mic.classList.remove("listening");
     paintSend();
     paintHints();
     // Grows with the text, up to six lines.
@@ -335,6 +412,12 @@ export function buildAssistant(actions: AssistantActions): ViewHost & {
       input.value = `/${shown(suggestions(input.value)[0])} `;
       paintHints();
       paintSend();
+    } else if (e.key === "Tab" && !e.shiftKey && firstPlaceholder(input.value.slice(input.selectionEnd))) {
+      // Tab jumps to the template's next [placeholder].
+      e.preventDefault();
+      const from = input.selectionEnd;
+      const [a, b] = firstPlaceholder(input.value.slice(from))!;
+      input.setSelectionRange(from + a, from + b);
     } else if ((e.key === "ArrowUp" || e.key === "ArrowDown") && !input.value.includes("\n") && history.length) {
       // Earlier prompts, like a shell.
       e.preventDefault();
@@ -356,6 +439,7 @@ export function buildAssistant(actions: AssistantActions): ViewHost & {
   paintChips();
   paintSend();
   paintHints();
+  refreshApps();
 
   return {
     el,
@@ -363,9 +447,12 @@ export function buildAssistant(actions: AssistantActions): ViewHost & {
       const answerH = answer.hidden ? 0 : Math.min(180, answerText.scrollHeight + 44);
       const hintsH = hints.hidden ? 0 : hints.childElementCount * 24 + 6;
       const inputH = input.offsetHeight || 54;
-      return HEADER_H + 40 + inputH + hintsH + 46 + (status.textContent ? 22 : 0) + answerH + 12;
+      const libraryH = library.hidden ? 0 : (library.offsetHeight || 150) + 8;
+      return HEADER_H + 40 + libraryH + inputH + hintsH + 46 + (status.textContent ? 22 : 0) + answerH + 12;
     },
     sync() {
+      // The platform is known only after boot, so this is checked here too.
+      mic.hidden = getPlatform() === "linux";
       if (input.value !== draft) input.value = draft;
       if ((State.settings.assistantTarget || "chatgpt") !== target && !busy) {
         target = State.settings.assistantTarget || "chatgpt";
@@ -374,6 +461,7 @@ export function buildAssistant(actions: AssistantActions): ViewHost & {
       }
     },
     focus() {
+      refreshApps();
       requestAnimationFrame(() => {
         input.focus();
         input.setSelectionRange(input.value.length, input.value.length);
@@ -387,6 +475,8 @@ export function buildAssistant(actions: AssistantActions): ViewHost & {
   };
 }
 
+const BOOK_ICON = "M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2zM4 19V5M8 7h7M8 11h5";
+const MIC_ICON = "M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3zM5 11a7 7 0 0 0 14 0M12 18v3";
 const SEND_ICON = "M5 12h13M13 6l6 6-6 6";
 const COPY_ICON = "M9 9h10v10H9zM5 15V5h10";
 const BACK_ICON = "M15 18l-6-6 6-6";

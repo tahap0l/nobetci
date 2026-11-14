@@ -238,6 +238,33 @@ export type MediaAction = "previous" | "toggle" | "next" | "seek";
 export interface IslandWeather {
   temperature: number;
   code: number;
+  feelsLike?: number;
+  isDay?: boolean;
+  /** km/h */
+  wind?: number;
+  high?: number | null;
+  low?: number | null;
+  /** Every third hour from now. */
+  hours?: { time: string; temperature: number; code: number }[];
+}
+
+export interface IslandStats {
+  cpu: number;
+  cores: number;
+  cpuName: string;
+  memUsed: number;
+  memTotal: number;
+  gpu: number | null;
+}
+
+export interface AgendaItem {
+  id: string;
+  text: string;
+  /** YYYY-MM-DD */
+  date: string;
+  /** HH:MM, or null for the whole day. */
+  time: string | null;
+  done: boolean;
 }
 
 export const Bridge = {
@@ -255,17 +282,27 @@ export const Bridge = {
   // ── Assistant ─────────────────────────────────────────────────────────────
   /** Opens an AI app with the prompt; `prefilled` says it went in the address. */
   assistantOpen: (target: string, prompt: string) =>
-    callOrThrow<{ prefilled: boolean }>("assistant_open", { target, prompt }),
+    callOrThrow<{ prefilled: boolean; app: string | null }>("assistant_open", { target, prompt }),
+  /** Targets that have a desktop app on this computer. */
+  assistantApps: () => call<{ target: string; name: string }[]>("assistant_apps"),
+  /** Starts the system's dictation into the focused text box. */
+  assistantDictate: () => callOrThrow<void>("assistant_dictate"),
   /** Answers with the Prompt Studio provider. Rejects with a readable message. */
   assistantAsk: (text: string) => callOrThrow<string>("assistant_ask", { text }),
   islandKeyboard: (on: boolean) => call<void>("island_keyboard", { on }),
   setAssistantTarget: (target: string) => call<void>("set_assistant_target", { target }),
+  /** Grows (positive) or shrinks the desktop mascot by `step` percent. */
+  buddyResizeBy: (step: number) => call<void>("buddy_resize_by", { step }),
   buddyResetPosition: () => call<void>("buddy_reset_position"),
 
   islandMedia: (includeArtwork = false) => call<IslandMedia>("island_media", { includeArtwork }),
   islandMediaControl: (source: string, action: MediaAction, positionMs?: number) =>
     call<boolean>("island_media_control", { source, action, positionMs: positionMs ?? null }),
   islandWeather: (cityId: string) => call<IslandWeather>("island_weather", { cityId }),
+  islandStats: () => call<IslandStats>("island_stats"),
+  agendaList: () => call<AgendaItem[]>("agenda_list"),
+  agendaPut: (item: AgendaItem) => callOrThrow<AgendaItem[]>("agenda_put", { item }),
+  agendaDelete: (id: string) => callOrThrow<AgendaItem[]>("agenda_delete", { id }),
   boot: () => call<BootInfo>("boot"),
 
   /** Saves and returns the sanitised settings Rust actually kept. */

@@ -44,7 +44,19 @@ export interface OwlPlacement {
 }
 
 /** Where the owl sits, relative to the island's top-left corner. */
+/** The island mascot's size setting, as a factor (0.8–1.3). */
+let mascotScale = 1;
+export function setMascotScale(percent: number) {
+  mascotScale = Math.max(0.8, Math.min(1.3, (percent || 100) / 100));
+}
+
 export function owlPlacement(mode: IslandMode, view: IslandView, islandH: number): OwlPlacement {
+  const p = basePlacement(mode, view, islandH);
+  if (mode !== "expanded") return p;
+  return { ...p, size: Math.round(p.size * mascotScale) };
+}
+
+function basePlacement(mode: IslandMode, view: IslandView, islandH: number): OwlPlacement {
   switch (mode) {
     case "hidden":
       return { cx: 26, cy: 12, size: 8, visible: false };

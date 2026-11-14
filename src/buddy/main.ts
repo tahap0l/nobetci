@@ -120,6 +120,17 @@ canvas.addEventListener("pointerup", () => {
   stir();
 });
 
+// Ctrl (⌘ on a Mac) + wheel resizes the mascot, ten percent a notch.
+let wheelAt = 0;
+canvas.addEventListener("wheel", (e) => {
+  if (!e.ctrlKey && !e.metaKey) return;
+  e.preventDefault();
+  const now = performance.now();
+  if (now - wheelAt < 90) return;
+  wheelAt = now;
+  void Bridge.buddyResizeBy(e.deltaY < 0 ? 10 : -10);
+}, { passive: false });
+
 // A double click opens the island — on the waiting card, if there is one.
 canvas.addEventListener("dblclick", () => void Bridge.buddyOpenIsland());
 

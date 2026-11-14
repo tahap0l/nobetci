@@ -7,6 +7,39 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.3.1] - 2026-11-15
+
+### Added
+
+- **Voice input** in the assistant: the microphone button starts the system's own dictation
+  (Windows voice typing, macOS Dictation) into the text box. Nöbetçi never hears the audio.
+- **Prompt ideas**: about twenty ready-made prompts in six groups (getting started, writing,
+  learning, work, code, everyday), in Turkish and English. Each one shows how a good prompt is
+  built; the parts in [brackets] are selected for you, and Tab jumps to the next one.
+- **Desktop AI apps first**: when the Claude, ChatGPT, Perplexity or Copilot app is installed, the
+  assistant opens the message there instead of the browser (Claude, ChatGPT and Perplexity get the
+  text in their box; the app never sends it for you). A green dot marks those targets; switch it
+  off under **Settings → General → Assistant**.
+- **Agenda**: a small to-do list per day on the island, with an optional time that reminds you
+  with a notification (silent during do-not-disturb). The calendar shows dots on busy days and a
+  click on a day opens its agenda; the compact island mentions the next item.
+- **System card**: processor, memory and graphics load as live rings, with a minute of CPU history.
+  Read only while the card is on screen.
+- **Focus length**: set the timer from 5 to 120 minutes in Settings, or with − and + on the card.
+- **Mascot sizes**: the island's mascot can be 80–130 % of its size; the desktop mascot also
+  resizes with Ctrl (⌘) + mouse wheel.
+
+### Changed
+
+- **Weather** shows an animated icon, high and low, feels-like and wind, and the next twelve hours
+  in steps of three. One request is shared and reused for ten minutes; 17 more cities.
+- **Calendar**: day pills that slide when you change weeks, and a **Today** button.
+- **Island motion**: the width opens a moment before the height, content rises out of a light blur
+  piece by piece, and a sliding pill marks the selected card. Looping animations only run while
+  the island is open.
+- The empty island was a little too short for its cards; it now fits them.
+- Tauri 2.12.5.
+
 ## [2.3.0] - 2026-11-14
 
 ### Added
@@ -276,7 +309,8 @@ pipe relay, the reviewed-diff hook installer and the island window were adapted 
 [Coucou](https://github.com/Louis-CFM/coucou) (MIT). Everything they had, and much more, shipped
 publicly in 0.2.0.
 
-[Unreleased]: https://github.com/tahap0l/nobetci/compare/v2.3.0...HEAD
+[Unreleased]: https://github.com/tahap0l/nobetci/compare/v2.3.1...HEAD
+[2.3.1]: https://github.com/tahap0l/nobetci/compare/v2.3.0...v2.3.1
 [2.3.0]: https://github.com/tahap0l/nobetci/compare/v2.2.0...v2.3.0
 [2.2.0]: https://github.com/tahap0l/nobetci/compare/v2.1.7...v2.2.0
 [2.1.7]: https://github.com/tahap0l/nobetci/compare/v2.1.6...v2.1.7

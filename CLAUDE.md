@@ -26,6 +26,13 @@ approve permission requests, each scored by a risk engine.
   and the island's weather card, which asks Open-Meteo for the chosen city's forecast (off until a
   city is picked). The assistant's other targets only open a fixed `https://` address from
   `assistant.rs`'s table through `sys::open_url` (http(s) only); Nöbetçi itself sends nothing.
+- The assistant may open a desktop AI app only through the fixed links in `assistant.rs`'s `APPS`
+  table (`sys::open_app_link`, never http/file schemes), and only when the scheme's handler name
+  matches. Dictation is the OS's own (Win+H, `startDictation:`); Nöbetçi never records audio.
+- The system card (`widgets/stats.rs`) and media are polled only while their card is on screen;
+  looping CSS animations are scoped to `#island[data-mode="expanded"]`.
+- The agenda (`agenda.rs`) lives in `agenda.json` next to the settings; reminders respect quiet
+  hours and go through `redact::redact`.
 - Media cards read the OS's own sources (SMTC, MPRIS, AppleScript to an app that is already
   running) and never download artwork: only local files or data the player hands over. Optional API keys stay in
   the OS credential store, never settings JSON, logs or audit. Drafts and rewrites are not persisted.

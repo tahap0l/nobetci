@@ -1090,7 +1090,7 @@ mark.lvl-critical { background: #f4505e; color: #fff; }
   background: currentColor;
   transform: scaleY(.25);
 }
-.view.on .is-playing .media-equalizer i { animation: media-beat .7s ease-in-out var(--beat-delay, 0s) infinite alternate; }
+#island[data-mode="expanded"] .view.on .is-playing .media-equalizer i { animation: media-beat .7s ease-in-out var(--beat-delay, 0s) infinite alternate; }
 .media-equalizer i:nth-child(2) { --beat-delay: -.32s; }
 .media-equalizer i:nth-child(3) { --beat-delay: -.15s; }
 .media-equalizer i:nth-child(4) { --beat-delay: -.48s; }
@@ -1099,7 +1099,7 @@ mark.lvl-critical { background: #f4505e; color: #fff; }
   to { transform: scaleY(1); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .view.on .is-playing .media-equalizer i { animation: none; transform: scaleY(.55); }
+  #island[data-mode="expanded"] .view.on .is-playing .media-equalizer i { animation: none; transform: scaleY(.55); }
 }
 .island-card-label {
   position: absolute;
@@ -1480,4 +1480,587 @@ mark.lvl-critical { background: #f4505e; color: #fff; }
 
 .hdr-assistant svg {
   color: var(--violet);
+}
+
+/* ── Assistant: prompt library, dictation, desktop apps ─────────────────── */
+.asst-lib-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  padding: 0 10px;
+  border: 1px solid rgba(167, 139, 250, 0.3);
+  border-radius: 999px;
+  background: rgba(167, 139, 250, 0.1);
+  color: #d9ccff;
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, transform 0.15s;
+}
+.asst-lib-toggle:hover { background: rgba(167, 139, 250, 0.18); }
+.asst-lib-toggle.on { background: rgba(167, 139, 250, 0.26); border-color: rgba(167, 139, 250, 0.6); }
+.asst-lib-toggle:active { transform: scale(0.96); }
+
+.asst-lib {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 14px;
+  background:
+    radial-gradient(ellipse at 0% 0%, rgba(167, 139, 250, 0.12), transparent 60%),
+    rgba(255, 255, 255, 0.025);
+  animation: asst-pop 0.24s cubic-bezier(0.2, 0.9, 0.3, 1.15) both;
+}
+.asst-lib[hidden] { display: none; }
+.asst-lib-cats { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; }
+.asst-lib-cats::-webkit-scrollbar { display: none; }
+.asst-lib-cat {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  padding: 0 9px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.asst-lib-cat:hover { color: var(--text); background: rgba(255, 255, 255, 0.05); }
+.asst-lib-cat.on {
+  color: #e4dcff;
+  background: rgba(167, 139, 250, 0.18);
+  border-color: rgba(167, 139, 250, 0.3);
+  font-weight: 600;
+}
+.asst-lib-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.asst-lib-item {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: 7px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.035);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  animation: asst-rise 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation-delay: calc(var(--i, 0) * 35ms);
+  transition: background 0.15s, border-color 0.15s, transform 0.15s;
+}
+.asst-lib-item:hover, .asst-lib-item:focus-visible {
+  background: rgba(167, 139, 250, 0.12);
+  border-color: rgba(167, 139, 250, 0.35);
+  transform: translateY(-1px);
+  outline: none;
+}
+.asst-lib-item strong { font-size: 12px; font-weight: 650; }
+.asst-lib-item span {
+  overflow: hidden;
+  color: var(--faint);
+  font-size: 10.5px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.asst-input-wrap { position: relative; }
+.asst-input-wrap .asst-input { padding-right: 42px; }
+.asst-mic {
+  position: absolute;
+  right: 7px;
+  bottom: 8px;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  color: var(--muted);
+  transition: color 0.15s, background 0.15s;
+}
+.asst-mic:hover { color: var(--text); background: rgba(255, 255, 255, 0.08); }
+.asst-mic.listening {
+  color: #fff;
+  background: linear-gradient(135deg, #f472b6, #a78bfa);
+}
+#island[data-mode="expanded"] .asst-mic.listening { animation: asst-listen 1.4s ease-in-out infinite; }
+@keyframes asst-listen {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(244, 114, 182, 0.45); }
+  50% { box-shadow: 0 0 0 7px rgba(244, 114, 182, 0); }
+}
+
+/* A target that opens its desktop app gets a small dot. */
+.asst-chip.app::after {
+  content: "";
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin-left: 6px;
+  vertical-align: 1px;
+  border-radius: 50%;
+  background: var(--low);
+  box-shadow: 0 0 6px var(--low);
+}
+
+@keyframes asst-pop {
+  from { opacity: 0; transform: translateY(-4px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes asst-rise {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .asst-lib, .asst-lib-item, .asst-mic.listening { animation: none; }
+}
+.asst-lib-toggle { flex: none; white-space: nowrap; }
+.asst-head .asst-keys { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+
+/* ── 2.3.1 dashboard: five cards, sliding tab indicator ─────────────────── */
+.island-widget-tabs {
+  position: relative;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  isolation: isolate;
+}
+.island-widget-tab { position: relative; z-index: 1; gap: 5px; }
+.island-widget-tab span { overflow: hidden; text-overflow: ellipsis; }
+.island-widget-tab[aria-selected="true"] { background: transparent; border-color: transparent; }
+/* One pill slides under the selected tab instead of each tab lighting up. */
+.island-widget-indicator {
+  position: absolute;
+  z-index: 0;
+  top: 3px;
+  bottom: 3px;
+  left: 3px;
+  width: calc((100% - 6px - 12px) / 5);
+  border: 1px solid color-mix(in srgb, var(--dash-accent) 30%, transparent);
+  border-radius: 8px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--dash-accent) 24%, transparent), color-mix(in srgb, var(--dash-accent) 12%, transparent));
+  box-shadow: 0 4px 14px -6px color-mix(in srgb, var(--dash-accent) 70%, transparent);
+  transform: translateX(calc(var(--tab, 0) * (100% + 3px)));
+  transition: transform 0.42s cubic-bezier(0.3, 1.3, 0.4, 1);
+}
+
+/* Focus: a ring that empties as the time runs. */
+.island-dashboard-media { grid-template-columns: minmax(0, 1fr) minmax(128px, 27%); }
+.island-card-focus {
+  display: grid;
+  grid-template-rows: 1fr auto;
+  justify-items: center;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 8px 5px;
+}
+.island-card-focus .island-card-label { top: 7px; left: 9px; }
+.focus-play {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  color: #121917;
+  background: var(--dash-accent);
+  cursor: pointer;
+  transition: transform 0.15s;
+}
+.focus-play:active { transform: scale(0.9); }
+.focus-play svg { width: 10px; height: 10px; fill: currentColor; }
+.focus-dial { position: relative; display: grid; place-items: center; width: 58px; height: 58px; }
+.focus-dial .ring { position: absolute; inset: 0; width: 100%; height: 100%; }
+.focus-time { position: relative; font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+.focus-row { display: flex; align-items: center; justify-content: center; gap: 4px; height: 18px; }
+.focus-row [hidden] { display: none; }
+.focus-length { min-width: 40px; color: #e2dcec; font-size: 10px; text-align: center; }
+.focus-step {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid #ffffff1c;
+  border-radius: 6px;
+  color: inherit;
+  background: #ffffff0d;
+  cursor: pointer;
+}
+.focus-step:hover { background: #ffffff22; }
+.island-card-focus.running .focus-time { color: var(--dash-accent); }
+.island-card-focus.running .ring-arc { filter: drop-shadow(0 0 4px color-mix(in srgb, var(--dash-accent) 70%, transparent)); }
+.island-card-focus.done { animation: focus-done 0.6s ease-in-out 3; }
+@keyframes focus-done {
+  50% { box-shadow: inset 0 0 0 2px var(--dash-accent), 0 0 18px color-mix(in srgb, var(--dash-accent) 50%, transparent); }
+}
+
+/* Rings, shared by focus and the system card. */
+.ring { transform: rotate(-90deg); overflow: visible; }
+.ring circle { fill: none; }
+.ring-track { stroke: #ffffff17; }
+.ring-arc {
+  stroke: var(--ring-color, var(--dash-accent));
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.9s cubic-bezier(0.3, 0.8, 0.3, 1), stroke 0.3s;
+}
+
+/* Agenda: the day on the left with the add box, its items on the right. */
+.island-agenda {
+  display: grid;
+  grid-template-columns: minmax(150px, 38%) minmax(0, 1fr);
+  gap: 8px;
+  height: 100%;
+}
+.agenda-side, .agenda-list {
+  min-width: 0;
+  border: 1px solid #ffffff19;
+  border-radius: 12px;
+  background: var(--dash-sheen), var(--dash-surface);
+}
+.agenda-side { display: grid; grid-template-rows: auto auto 1fr; gap: 3px; padding: 7px 8px; }
+.agenda-head { display: flex; align-items: center; gap: 4px; }
+.agenda-head .island-calendar-button { width: 20px; height: 20px; }
+.agenda-day { flex: 1; overflow: hidden; font-size: 12.5px; text-align: center; white-space: nowrap; text-overflow: ellipsis; }
+.agenda-count { color: #cfc8da; font-size: 10px; text-align: center; }
+.agenda-form { display: flex; align-items: end; gap: 4px; }
+.agenda-input, .agenda-time {
+  min-width: 0;
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid #ffffff1f;
+  border-radius: 8px;
+  color: var(--text);
+  background: #00000040;
+  font: inherit;
+  font-size: 11.5px;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.agenda-input { flex: 1; }
+.agenda-time { flex: none; width: 66px; padding: 0 4px; color-scheme: dark; }
+.agenda-input:focus, .agenda-time:focus {
+  border-color: color-mix(in srgb, var(--dash-accent) 70%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--dash-accent) 22%, transparent);
+}
+.agenda-add {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  color: #121917;
+  background: var(--dash-accent);
+  cursor: pointer;
+}
+.agenda-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 5px;
+  overflow: hidden auto;
+  list-style: none;
+  scrollbar-width: thin;
+}
+.agenda-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 24px;
+  padding: 0 4px 0 6px;
+  border-radius: 7px;
+  font-size: 11.5px;
+  animation: agenda-in 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation-delay: calc(var(--i, 0) * 30ms);
+}
+.agenda-item:hover { background: #ffffff0b; }
+@keyframes agenda-in { from { opacity: 0; transform: translateX(6px); } to { opacity: 1; transform: none; } }
+.agenda-check {
+  position: relative;
+  flex: none;
+  width: 15px;
+  height: 15px;
+  padding: 0;
+  border: 1.5px solid #ffffff55;
+  border-radius: 5px;
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s;
+}
+.agenda-check[aria-checked="true"] { border-color: var(--dash-accent); background: var(--dash-accent); }
+.agenda-check[aria-checked="true"]::after {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 1px;
+  width: 4px;
+  height: 7px;
+  border: solid #121917;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+  animation: agenda-tick 0.25s ease-out;
+}
+@keyframes agenda-tick { from { transform: rotate(45deg) scale(0); } to { transform: rotate(45deg) scale(1); } }
+.agenda-at { flex: none; color: var(--dash-accent); font-size: 10.5px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.agenda-text { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; transition: color 0.2s, opacity 0.2s; }
+.agenda-item.done .agenda-text { color: #ffffff80; text-decoration: line-through; text-decoration-color: #ffffff60; }
+.agenda-remove {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  color: #ffffffa0;
+  background: transparent;
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity 0.15s, background 0.15s;
+}
+.agenda-item:hover .agenda-remove, .agenda-remove:focus-visible { opacity: 1; }
+.agenda-remove:hover { background: #ff6b6b2a; color: #ffb3b3; }
+.agenda-empty { margin: auto; padding: 0 10px; color: #cfc8da; font-size: 11px; text-align: center; }
+
+/* Calendar: a week of day pills, with dots for agenda items. */
+.island-calendar { display: grid; grid-template-rows: auto 1fr; gap: 5px; }
+.cal-today {
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: inherit;
+  background: #ffffff09;
+  font: inherit;
+  font-size: 10.5px;
+  cursor: pointer;
+}
+.cal-today:hover { background: #ffffff21; }
+.cal-week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.cal-week[data-slide="next"] .cal-day { animation: cal-next 0.36s cubic-bezier(0.2, 0.8, 0.2, 1) both; animation-delay: calc(var(--i) * 18ms); }
+.cal-week[data-slide="prev"] .cal-day { animation: cal-prev 0.36s cubic-bezier(0.2, 0.8, 0.2, 1) both; animation-delay: calc((6 - var(--i)) * 18ms); }
+@keyframes cal-next { from { opacity: 0; transform: translateX(14px); } to { opacity: 1; transform: none; } }
+@keyframes cal-prev { from { opacity: 0; transform: translateX(-14px); } to { opacity: 1; transform: none; } }
+.cal-day {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 1px;
+  min-width: 0;
+  padding: 3px 0 5px;
+  border: 1px solid #ffffff12;
+  border-radius: 10px;
+  color: inherit;
+  background: #ffffff07;
+  font: inherit;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.15s, border-color 0.15s;
+}
+.cal-day:hover { background: #ffffff16; transform: translateY(-1px); }
+.cal-day.weekend .cal-weekday { color: color-mix(in srgb, var(--dash-accent) 60%, #c7c7d3); }
+.cal-weekday { color: #c7c7d3; font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.04em; }
+.cal-day strong { font-size: 15px; font-variant-numeric: tabular-nums; }
+.cal-day.today {
+  border-color: transparent;
+  color: #11141c;
+  background: linear-gradient(160deg, color-mix(in srgb, var(--dash-accent) 100%, #fff 18%), var(--dash-accent));
+  box-shadow: 0 6px 16px -6px color-mix(in srgb, var(--dash-accent) 80%, transparent);
+}
+.cal-day.today .cal-weekday { color: #11141ccc; }
+.cal-dots { display: flex; gap: 2px; height: 4px; }
+.cal-dots i { width: 4px; height: 4px; border-radius: 50%; background: var(--dash-accent); }
+.cal-dots i.done { opacity: 0.35; }
+.cal-day.today .cal-dots i { background: #11141c; }
+
+/* Weather: an animated icon, the temperature, and the next twelve hours. */
+.island-weather { position: relative; overflow: hidden; padding: 6px 12px; }
+.island-weather::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  opacity: 0.55;
+  transition: background 0.6s;
+}
+.island-weather { isolation: isolate; }
+.island-weather[data-kind^="clear"]::before, .island-weather[data-kind^="partly"]::before {
+  background: radial-gradient(ellipse at 12% 30%, #ffb34740, transparent 60%), linear-gradient(120deg, #3a7bd51f, transparent);
+}
+.island-weather[data-kind$="night"]::before { background: radial-gradient(ellipse at 12% 30%, #8f8cff38, transparent 60%), linear-gradient(120deg, #1b2a5a55, transparent); }
+.island-weather[data-kind^="rain"]::before, .island-weather[data-kind^="drizzle"]::before, .island-weather[data-kind^="thunder"]::before {
+  background: radial-gradient(ellipse at 12% 30%, #6aa9ff33, transparent 60%), linear-gradient(120deg, #33415555, transparent);
+}
+.island-weather[data-kind^="snow"]::before { background: radial-gradient(ellipse at 12% 30%, #ffffff30, transparent 60%), linear-gradient(120deg, #cfe3ff22, transparent); }
+.wx {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  height: 100%;
+}
+.wx[hidden] { display: none; }
+.wx-art { display: grid; place-items: center; width: 60px; height: 60px; }
+.wx-main { display: grid; min-width: 0; line-height: 1.15; }
+.wx-temp { font-size: 30px; font-weight: 750; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.wx-cond { font-size: 12px; font-weight: 600; }
+.wx-meta { display: flex; gap: 6px; overflow: hidden; color: #d6d1df; font-size: 10px; white-space: nowrap; text-overflow: ellipsis; }
+.wx-place { font-weight: 650; }
+.wx-hours { display: flex; gap: 4px; }
+.wx-hour {
+  display: grid;
+  justify-items: center;
+  gap: 1px;
+  width: 42px;
+  padding: 4px 0;
+  border: 1px solid #ffffff12;
+  border-radius: 10px;
+  background: #ffffff09;
+  font-size: 10px;
+  animation: asst-rise 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation-delay: calc(var(--i) * 45ms);
+}
+.wx-hour span { color: #cfc8da; font-variant-numeric: tabular-nums; }
+.wx-hour strong { font-size: 11.5px; }
+.wx-source { position: absolute; right: 8px; bottom: 3px; color: #c7c7d388; font-size: 8.5px; }
+
+/* Animated weather icons. */
+.wi { overflow: visible; }
+.wi-sun-disc { fill: #ffd166; filter: drop-shadow(0 0 6px #ffb347aa); }
+.wi-rays line { stroke: #ffd166; stroke-width: 3; stroke-linecap: round; }
+#island[data-mode="expanded"] .view.on .wi-rays { animation: wi-spin 14s linear infinite; }
+.wi-moon-disc { fill: #e9e4ff; filter: drop-shadow(0 0 6px #b9b2ffaa); }
+.wi-star { fill: #fff; }
+#island[data-mode="expanded"] .view.on .wi-star { animation: wi-twinkle 2.4s ease-in-out infinite; }
+.wi-cloud path { fill: #e6ebf5; }
+.wi-cloud-dark path { fill: #aab4c6; }
+.wi-cloud-back path { fill: #c3cadb; }
+#island[data-mode="expanded"] .view.on .wi-cloud { animation: wi-drift 5s ease-in-out infinite alternate; }
+#island[data-mode="expanded"] .view.on .wi-cloud-back { animation-duration: 7s; animation-direction: alternate-reverse; }
+.wi-rain line { stroke: #7cc0ff; stroke-width: 2.6; stroke-linecap: round; }
+.wi-drizzle line { stroke-width: 2; }
+#island[data-mode="expanded"] .view.on .wi-rain line { animation: wi-fall 0.9s linear infinite; }
+.wi-snow circle { fill: #fff; }
+#island[data-mode="expanded"] .view.on .wi-snow circle { animation: wi-flake 2.2s ease-in-out infinite; }
+.wi-bolt { fill: #ffd84a; }
+#island[data-mode="expanded"] .view.on .wi-bolt { animation: wi-flash 2.6s ease-in-out infinite; }
+.wi-fog line { stroke: #d5dbe7; stroke-width: 3; stroke-linecap: round; }
+#island[data-mode="expanded"] .view.on .wi-fog line { animation: wi-slide 3s ease-in-out infinite alternate; }
+@keyframes wi-spin { to { transform: rotate(360deg); } }
+@keyframes wi-twinkle { 50% { opacity: 0.2; } }
+@keyframes wi-drift { from { transform: translateX(-1.5px); } to { transform: translateX(2px); } }
+@keyframes wi-fall { from { transform: translateY(-4px); opacity: 0; } 30% { opacity: 1; } to { transform: translateY(6px); opacity: 0; } }
+@keyframes wi-flake { 0% { transform: translate(0, -4px); opacity: 0; } 30% { opacity: 1; } 100% { transform: translate(2px, 7px); opacity: 0; } }
+@keyframes wi-flash { 0%, 72%, 100% { opacity: 0.25; } 76%, 84% { opacity: 1; } 80% { opacity: 0.4; } }
+@keyframes wi-slide { to { transform: translateX(4px); } }
+
+/* System: three rings and a minute of CPU history. */
+.island-system {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 76px)) minmax(0, 1fr);
+  gap: 6px;
+  height: 100%;
+}
+.sys-gauge, .sys-history {
+  min-width: 0;
+  border: 1px solid #ffffff19;
+  border-radius: 12px;
+  background: var(--dash-sheen), var(--dash-surface);
+}
+.sys-gauge { display: grid; justify-items: center; align-content: center; gap: 0; padding: 4px 2px; line-height: 1.15; }
+.sys-cpu { --ring-color: #7dd3fc; }
+.sys-ram { --ring-color: #c4b5fd; }
+.sys-gpu { --ring-color: #86efac; }
+.sys-gauge.hot { --ring-color: #fb7185; }
+.sys-gauge.off .sys-value { color: #ffffff70; }
+.sys-dial { position: relative; display: grid; place-items: center; width: 48px; height: 48px; margin-bottom: 1px; }
+.sys-dial .ring { position: absolute; inset: 0; width: 100%; height: 100%; }
+.sys-dial .ring-arc { filter: drop-shadow(0 0 3px color-mix(in srgb, var(--ring-color) 60%, transparent)); }
+.sys-value { position: relative; font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.sys-name { font-size: 10px; font-weight: 700; letter-spacing: 0.05em; }
+.sys-sub { max-width: 100%; overflow: hidden; color: #cfc8da; font-size: 9px; white-space: nowrap; text-overflow: ellipsis; }
+.sys-history { display: grid; grid-template-rows: auto 1fr auto; gap: 2px; padding: 6px 9px; }
+.sys-spark-label { color: #cfc8da; font-size: 10px; }
+.sys-spark { width: 100%; height: 100%; min-height: 30px; overflow: visible; }
+.sys-spark-line { fill: none; stroke: #7dd3fc; stroke-width: 1.6; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
+.sys-spark-area { fill: #7dd3fc22; }
+.sys-model { overflow: hidden; color: #ffffffa8; font-size: 9.5px; white-space: nowrap; text-overflow: ellipsis; }
+
+@media (prefers-reduced-motion: reduce) {
+  .island-widget-indicator, .ring-arc { transition: none; }
+  .agenda-item, .wx-hour, .cal-week .cal-day { animation: none !important; }
+  #island[data-mode="expanded"] .view.on .wi-rays, #island[data-mode="expanded"] .view.on .wi-star, #island[data-mode="expanded"] .view.on .wi-cloud, #island[data-mode="expanded"] .view.on .wi-rain line,
+  #island[data-mode="expanded"] .view.on .wi-snow circle, #island[data-mode="expanded"] .view.on .wi-bolt, #island[data-mode="expanded"] .view.on .wi-fog line { animation: none; }
+}
+.agenda-side { overflow: hidden; }
+.agenda-day { min-width: 0; }
+.agenda-form { display: grid; grid-template-columns: minmax(0, 1fr) 62px 26px; }
+.agenda-time { width: auto; }
+.wx-meta { display: grid; gap: 0; }
+.wx-meta span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.sys-gauge { padding: 5px 2px 4px; }
+.sys-dial { width: 42px; height: 42px; }
+.sys-value { font-size: 10.5px; }
+.sys-name { font-size: 9.5px; }
+.island-system { grid-template-rows: minmax(0, 1fr); }
+.sys-history { min-height: 0; overflow: hidden; }
+.sys-spark { height: 46px; min-height: 0; }
+
+/* ── 2.3.1 island motion ────────────────────────────────────────────────────
+   Content arrives a beat after the island opens: each part of the view rises
+   out of a light blur, one after the other. Infinite animations above only run
+   while the island is open, so a hidden island costs nothing. The approval card
+   is left out: it appears at once, exactly as it will run. */
+#island[data-mode="expanded"] .view.on:not(.view-approval) > * {
+  animation: view-in 0.42s cubic-bezier(0.2, 0.85, 0.25, 1) both;
+  animation-delay: calc(70ms + var(--n, 0) * 40ms);
+}
+.view.on > :nth-child(2) { --n: 1; }
+.view.on > :nth-child(3) { --n: 2; }
+.view.on > :nth-child(4) { --n: 3; }
+.view.on > :nth-child(5) { --n: 4; }
+.view.on > :nth-child(n + 6) { --n: 5; }
+@keyframes view-in {
+  from { opacity: 0; transform: translateY(-7px) scale(0.985); filter: blur(5px); }
+  to { opacity: 1; transform: none; filter: none; }
+}
+#content { transition: opacity 0.22s ease; }
+#island { transition: box-shadow 0.4s ease; }
+#island[data-mode="expanded"] {
+  box-shadow:
+    0 22px 60px -18px rgba(0, 0, 0, 0.75),
+    0 8px 24px rgba(0, 0, 0, 0.35),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.06);
+}
+/* A thin light along the island's lower edge while it is open. */
+#island-clip::after {
+  content: "";
+  position: absolute;
+  left: 12%;
+  right: 12%;
+  bottom: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(196, 181, 253, 0.45), rgba(125, 211, 252, 0.4), transparent);
+  opacity: 0;
+  transition: opacity 0.5s ease;
+  pointer-events: none;
+}
+#island[data-mode="expanded"] #island-clip::after { opacity: 1; }
+#header .icon-btn { transition: background 0.15s, color 0.15s, transform 0.15s; }
+#header .icon-btn:active { transform: scale(0.88); }
+@media (prefers-reduced-motion: reduce) {
+  #island[data-mode="expanded"] .view.on > * { animation: none; }
 }

@@ -170,6 +170,21 @@ function render(): HTMLElement {
     card(
       { title: appearance, icon: "eye" },
       row(themeLabel, t("genel.mascotThemeHint"), picker),
+      row(
+        t("genel.islandMascot"),
+        t("genel.islandMascotHint"),
+        slider({
+          value: s.islandMascotSize,
+          min: 80,
+          max: 130,
+          step: 5,
+          format: (v) => `%${v}`,
+          onChange: (v) => update((x) => (x.islandMascotSize = v)),
+          fk: "islandMascotSize",
+          label: t("genel.islandMascot"),
+          ends: true,
+        }),
+      ),
     ),
     card(
       { title: t("genel.buddy.title"), icon: "eye", desc: t("genel.buddy.desc") },
@@ -215,6 +230,31 @@ function render(): HTMLElement {
         }),
       ),
       row(t("genel.widgets.weather"), t("genel.widgets.weatherHint"), weather),
+      row(
+        t("genel.widgets.focus"),
+        t("genel.widgets.focusHint"),
+        slider({
+          value: s.focusMinutes,
+          min: 5,
+          max: 120,
+          step: 5,
+          format: (v) => `${v} ${t("genel.widgets.focusUnit")}`,
+          onChange: (v) => update((x) => (x.focusMinutes = v)),
+          fk: "focusMinutes",
+          label: t("genel.widgets.focus"),
+          ends: true,
+        }),
+      ),
+    ),
+    card(
+      { title: t("genel.assistant.title"), icon: "eye" },
+      row(
+        t("genel.assistant.apps"),
+        t("genel.assistant.appsHint"),
+        toggle(s.assistantUseApps, (v) => update((x) => (x.assistantUseApps = v)), {
+          label: t("genel.assistant.apps"), fk: "assistantUseApps",
+        }),
+      ),
     ),
     glance(),
     card(

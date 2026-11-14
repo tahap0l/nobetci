@@ -4,6 +4,7 @@
 // opt-in weather card (widgets.rs). Optional API credentials use the OS vault.
 // Safety decisions (risk, rules, hold) stay in Rust; the windows only ask.
 
+mod agenda;
 mod agent_hooks;
 mod assistant;
 mod audit;
@@ -885,6 +886,7 @@ pub fn run() {
             hooks_health,
             agent_hooks_status,
             widgets::island_weather,
+            widgets::stats::island_stats,
             widgets::island_media,
             widgets::island_media_control,
             agent_hooks_preview,
@@ -913,8 +915,14 @@ pub fn run() {
             open_settings_window,
             close_settings_window,
             buddy::buddy_reset_position,
+            buddy::buddy_resize_by,
             assistant::assistant_open,
             assistant::assistant_ask,
+            assistant::assistant_apps,
+            agenda::agenda_list,
+            agenda::agenda_put,
+            agenda::agenda_delete,
+            assistant::assistant_dictate,
             assistant::island_keyboard,
             assistant::set_assistant_target,
             buddy::buddy_open_island,
@@ -944,6 +952,7 @@ pub fn run() {
             hooks::ensure_hook_exe(&handle);
             inputguard::start(&handle);
             pipe::start(handle.clone());
+            agenda::spawn_reminders(handle.clone());
 
             // First run: the welcome wizard, once the owl has said hello.
             if !loaded.onboarded {

@@ -145,6 +145,12 @@ pub struct Settings {
     pub buddy_size: u32,
     /// Where the assistant sends a prompt: "here" or an AI app (assistant.rs).
     pub assistant_target: String,
+    /// Open a target's desktop app, when installed, instead of the browser.
+    pub assistant_use_apps: bool,
+    /// Length of the island's focus timer, in minutes.
+    pub focus_minutes: u32,
+    /// Size of the mascot inside the island, in percent.
+    pub island_mascot_size: u32,
 
     // ── Prompt review ────────────────────────────────────────────────────────
     /// "ollama" (local) or "openai" (only used after an explicit review click).
@@ -219,6 +225,9 @@ impl Default for Settings {
             buddy_pos: None,
             buddy_size: 100,
             assistant_target: "chatgpt".into(),
+            assistant_use_apps: true,
+            focus_minutes: 25,
+            island_mascot_size: 100,
 
             prompt_provider: "ollama".into(),
             ollama_model: "gemma4".into(),
@@ -274,6 +283,8 @@ impl Settings {
     /// a hand-edited file cannot, say, set a zero-length hold.
     pub fn sanitized(mut self) -> Self {
         self.buddy_size = self.buddy_size.clamp(60, 200);
+        self.focus_minutes = self.focus_minutes.clamp(1, 180);
+        self.island_mascot_size = self.island_mascot_size.clamp(80, 130);
         if !crate::assistant::is_target(&self.assistant_target) {
             self.assistant_target = "chatgpt".into();
         }
@@ -467,6 +478,8 @@ mod tests {
         let placed: Settings = serde_json::from_str(r#"{"buddyPos":[1530,812]}"#).unwrap();
         assert_eq!(placed.sanitized().buddy_pos, Some([1530, 812]));
         assert_eq!(s.buddy_size, 100);
+        assert_eq!((s.focus_minutes, s.island_mascot_size), (25, 100));
+        assert!(s.assistant_use_apps);
         let huge: Settings = serde_json::from_str(r#"{"buddySize":900}"#).unwrap();
         assert_eq!(huge.sanitized().buddy_size, 200);
     }
