@@ -71,7 +71,7 @@ pub struct Media {
 }
 
 /// Turns a small local image into a data URL for the card; anything else, None.
-#[cfg(not(windows))]
+#[cfg(target_os = "linux")]
 fn image_data_url(bytes: &[u8]) -> Option<String> {
     use base64::{engine::general_purpose::STANDARD, Engine};
     if bytes.is_empty() || bytes.len() > 512 * 1024 {
