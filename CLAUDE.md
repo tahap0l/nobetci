@@ -1,15 +1,15 @@
 # Nöbetçi — guide for AI coding agents
 
-Tray / menu bar app for Windows and macOS (Tauri 2: Rust + TypeScript, no frontend framework). An owl on a
+Tray / menu bar app for Windows, macOS and Linux (Tauri 2: Rust + TypeScript, no frontend framework). An owl on a
 black island at the top of the screen shows Claude Code sessions and lets the user
 approve permission requests, each scored by a risk engine.
 
 ## Build & test
-- `npm test` — Rust unit tests (risk engine, rules, history, relay, decision rules, quiet hours). Run after any change to `src-tauri/src/*.rs` or `hook/`. Windows and macOS only: neither crate builds on Linux.
+- `npm test` — Rust unit tests (risk engine, rules, history, relay, decision rules, quiet hours). Run after any change to `src-tauri/src/*.rs` or `hook/`. Builds on all three OSes; on Linux it needs the WebKitGTK, libxi and libdbus dev packages (see README).
 - `npx tsc --noEmit` — typecheck the front end.
 - `npm run dev` then `http://127.0.0.1:1420/?demo=<critical|write|low|overview|session|compact|empty|mascots>` (`&theme=<mascot>` picks the mascot) — island without Rust; `settings.html?tab=<id>` — settings with mock data.
 - Claude's own Bash tool is sandboxed: the relay's same-user check refuses the pipe there. Feed fake hook events from PowerShell.
-- `npm run pack` — Windows installer into `release/`; `npm run pack:mac` — universal macOS disk image (on a Mac). CI builds and tests both OSes.
+- `npm run pack` — Windows installer into `release/`; `npm run pack:mac` — universal macOS disk image (on a Mac); `npm run pack:linux` — .deb and AppImage. CI builds and tests all three OSes.
 
 ## Rules
 - **Never block Claude Code.** The relay exits silently if the app is closed; only PermissionRequest waits, and never past its budget.
@@ -20,17 +20,21 @@ approve permission requests, each scored by a risk engine.
 - Relay ↔ app speak a small JSON line (`{"behavior":"deny","message":…,"interrupt":…,"stop":…}`); only `hook/src/main.rs` knows Claude Code's output format.
 - **No innerHTML.** The approval card shows attacker-controllable text in a window that can approve commands. Build DOM with `h()` / text nodes only.
 - What the card shows must be what runs: never truncate approval payloads silently (`nobetci_truncated` flag → high risk). The assessment's `target` is the whole command, path, URL or argument object — rules and session grants match on it.
-- No telemetry. Network access is limited to two things the user switches on: an explicit Prompt
+- No telemetry. Network access is limited to things the user switches on: an explicit Prompt
   Studio provider call — Ollama on loopback (cloud-tagged models may forward the draft) or OpenAI
-  after the user selects it and asks for a rewrite — and the island's weather card, which asks
-  Open-Meteo for the chosen city's forecast (off until a city is picked). Optional API keys stay in
+  after the user selects it and asks for a rewrite, or asks the island's assistant with **Here** —
+  and the island's weather card, which asks Open-Meteo for the chosen city's forecast (off until a
+  city is picked). The assistant's other targets only open a fixed `https://` address from
+  `assistant.rs`'s table through `sys::open_url` (http(s) only); Nöbetçi itself sends nothing.
+- Media cards read the OS's own sources (SMTC, MPRIS, AppleScript to an app that is already
+  running) and never download artwork: only local files or data the player hands over. Optional API keys stay in
   the OS credential store, never settings JSON, logs or audit. Drafts and rewrites are not persisted.
 - 0 % CPU while hidden: the frame loop stops and the cursor poll parks.
 - The owl, icons and sounds are original. Do not import anything from Coucou's Mochi, icons or sounds (not MIT).
-- **Every user-visible string exists in Turkish and English.** Front end: `defineMessages(tr, en)` from `src/i18n/core.ts` (island strings in `src/i18n/island.ts`, settings strings under `src/settings/`); Rust: `i18n::pick(en, tr)`. The language follows the `language` setting ("auto" = the system language). Wording that differs on a Mac goes in a `key@mac` entry next to the key. Code comments are English.
+- **Every user-visible string exists in Turkish and English.** Front end: `defineMessages(tr, en)` from `src/i18n/core.ts` (island strings in `src/i18n/island.ts`, settings strings under `src/settings/`); Rust: `i18n::pick(en, tr)`. The language follows the `language` setting ("auto" = the system language). Wording that differs on a Mac or on Linux goes in a `key@mac` / `key@linux` entry next to the key. Code comments are English.
 - **The desktop mascot (`buddy.rs`, `src/buddy/`) only shows.** It mirrors the island's mood and reactions over `buddy-*` events and opens the island on a double click; it never answers a request. Its window never takes focus, and its position belongs to Rust (`store()` keeps `buddy_pos`).
 - **Approvals need a physical click** (`inputguard.rs`): Raw Input on Windows, the event's source pid on macOS, tell real presses from synthesised ones and accessibility "presses". Keep the check in `pipe::answer`; the allow hotkey stays LOW-only.
-- **Two platforms.** OS-specific code lives behind `#[cfg(windows)]` / `#[cfg(target_os = "macos")]` in its own module (`hook/src/{win,mac}.rs`, `pipe/{named_pipe,unix_socket}.rs`, `inputguard/{raw_input,appkit}.rs`, `sys.rs`); shared logic stays shared. Every rule above holds on both.
+- **Three platforms.** OS-specific code lives behind `#[cfg(windows)]` / `#[cfg(target_os = "macos")]` / `#[cfg(target_os = "linux")]` in its own module (`hook/src/{win,mac,linux}.rs`, `pipe/{named_pipe,unix_socket}.rs`, `inputguard/{raw_input,appkit,x11}.rs`, `widgets/{linux,mac}_media.rs`, `x11.rs`, `mac_panel.rs`, `sys.rs`); shared logic stays shared. Every rule above holds on all three. Linux runs the window on X11 (XWayland under Wayland: `GDK_BACKEND=x11`) so the island can place itself and the click guard can see XInput2 raw events; XTEST devices count as synthetic.
 - Text that outlives the card (history, notifications) goes through `redact::redact`; the card itself always shows the request in full.
 - No literal invisible or bidi characters in source files — write them as escapes (`\u200B`). The repo is scanned for them.
 - New risk rules come with tests in `risk.rs`, including a "stays low" case for everyday commands.

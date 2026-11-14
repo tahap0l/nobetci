@@ -16,7 +16,7 @@ const SOUNDS: SoundName[] = ["approval", "danger", "finish", "error", "hoot", "a
 
 const TOAST_EVENTS = ["approval", "finished", "error", "waiting"] as const;
 
-const HOTKEYS: (keyof Hotkeys)[] = ["toggle", "deny", "allow", "dnd"];
+const HOTKEYS: (keyof Hotkeys)[] = ["toggle", "assistant", "deny", "allow", "dnd"];
 
 // ── Hotkey status after saves ─────────────────────────────────────────────────
 

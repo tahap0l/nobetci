@@ -12,7 +12,7 @@ const copy = {
     feature1Title: "Oturumları tek yerde gör", feature1Text: "Claude Code'un farklı terminal ve editörlerdeki oturumlarını; durumları ve yaptıklarıyla birlikte izle.",
     feature2Title: "Riski ve nedenini anla", feature2Text: "İzin kartı komutu, dosya yolunu veya bağlantıyı tam gösterir; risk seviyesini ve bulguları açıklar.",
     feature3Title: "Son sözü sen söyle", feature3Text: "İsteği onayla, reddet veya terminale bırak. Yüksek riskli isteklerde karar bilinçli bir basılı tutma ister.",
-    idleTitle: "Masaüstünde sürüklenen maskot", idleText: "Maskotunu ekranın istediğin yerine sürükle. Onaylayınca gülümseyip başını sallar ve yeşil bir tik çizer; reddedince kaşlarını çatıp başını iki yana sallar. Yedi maskotun hepsi aynı ifadelerle tepki verir.",
+    idleTitle: "Adada asistan, her yerde müzik", idleText: "Ctrl+Alt+Space ile yaz, istediğin yapay zekâ uygulamasına gönder ya da yanıtı adada al. Yeni medya kartı ileri sarar; Windows, macOS ve Linux'ta çalışır. Maskotu istediğin boyuta getir.",
     feature4Title: "Mesajını göndermeden düzenle", feature4Text: "Yazımını düzelt, isteğini netleştir. Yerel Ollama'yı veya seçersen OpenAI'yi kullan; sonucu inceleyip kendin kopyala.",
     howEyebrow: "Üç adımda", howTitle: "Gör. Anla.<br /><em>Sonra karar ver.</em>",
     howIntro: "Nöbetçi, ajanının önüne geçmez. Yalnızca senin karar vermen gereken anı daha görünür kılar.",
@@ -24,7 +24,7 @@ const copy = {
     privacyText: "Nöbetçi hesap açtırmaz, telemetri göndermez. Yapay zekâ ile mesaj inceleme isteğe bağlıdır; hangi sağlayıcıya ne zaman göndereceğini sen seçersin.",
     privacyLink: "Gizlilik politikasını oku", downloadEyebrow: "Kullanmaya başla", downloadTitle: "Nöbetçi nöbete hazır.",
     downloadText: "Ücretsiz indir, Claude Code ile bağla ve ilk izni geldiğinde kararını ver.", downloadLatest: "Son sürümü indir",
-    downloadFootnote: "Windows 10/11 · macOS beta · Açık kaynak MIT lisansı", footerLine: "Dikkatli ajanlar için küçük bir baykuş.",
+    downloadFootnote: "Windows 10/11 · macOS 11+ · Linux · Açık kaynak MIT lisansı", footerLine: "Dikkatli ajanlar için küçük bir baykuş.",
     footerPrivacy: "Gizlilik", footerLicense: "MIT lisansı", footerContact: "İletişim", langLabel: "Switch language to English",
     owlLabel: "Baykuşun başını döndür", owlHint: "Tıkla, selam versin"
   },
@@ -41,7 +41,7 @@ const copy = {
     feature1Title: "See sessions in one place", feature1Text: "Follow Claude Code sessions across terminals and editors, along with their status and recent activity.",
     feature2Title: "Understand the risk", feature2Text: "Each approval card shows the full command, file path or URL, then explains the risk level and findings.",
     feature3Title: "You make the call", feature3Text: "Allow, deny or hand the request back to the terminal. Higher-risk requests need a deliberate press and hold.",
-    idleTitle: "A mascot you drag around your desktop", idleText: "Drag your mascot anywhere on the screen. Approve, and it beams, nods and draws a green tick; deny, and it frowns and shakes its head. All seven mascots react with the same expressions.",
+    idleTitle: "An assistant on the island, music everywhere", idleText: "Press Ctrl+Alt+Space, write, and send it to the AI app you like — or get the answer on the island. The new media card seeks, on Windows, macOS and Linux. Size the mascot the way you like.",
     feature4Title: "Edit a prompt before you send it", feature4Text: "Fix spelling and make your request clearer. Use local Ollama or choose OpenAI; review and copy the result yourself.",
     howEyebrow: "Three simple steps", howTitle: "See it. Understand it.<br /><em>Then decide.</em>",
     howIntro: "Nöbetçi stays out of your agent's way. It brings your attention to the moments that need your decision.",
@@ -53,7 +53,7 @@ const copy = {
     privacyText: "Nöbetçi needs no account and sends no telemetry. AI prompt review is optional; you choose which provider receives a draft and when.",
     privacyLink: "Read the privacy policy", downloadEyebrow: "Get started", downloadTitle: "Nöbetçi is ready to keep watch.",
     downloadText: "Download for free, connect Claude Code and decide when its first permission request arrives.", downloadLatest: "Get the latest release",
-    downloadFootnote: "Windows 10/11 · macOS beta · Open source under the MIT license", footerLine: "A little owl for careful agents.",
+    downloadFootnote: "Windows 10/11 · macOS 11+ · Linux · Open source under the MIT license", footerLine: "A little owl for careful agents.",
     footerPrivacy: "Privacy", footerLicense: "MIT license", footerContact: "Contact", langLabel: "Switch language to Turkish",
     owlLabel: "Make the owl turn its head", owlHint: "Click to say hello"
   }

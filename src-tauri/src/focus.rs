@@ -10,6 +10,12 @@ pub use mac::focus_chain;
 #[cfg(windows)]
 pub use win::focus_chain;
 
+/// Linux: the window manager raises the first window owned by the chain.
+#[cfg(target_os = "linux")]
+pub fn focus_chain(pids: &[u32]) -> bool {
+    crate::x11::activate_pid(pids)
+}
+
 #[cfg(windows)]
 mod win {
     use windows::core::BOOL;

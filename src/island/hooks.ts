@@ -33,6 +33,11 @@ interface HookPayload {
   term_program?: string;
   wt_session?: string;
   vscode_pid?: string;
+  /**
+   * Which Claude Code sent it (CLAUDE_CODE_ENTRYPOINT): "cli", "claude-vscode",
+   * or "claude-desktop" for the Code tab of the Claude desktop app.
+   */
+  entrypoint?: string;
   risk?: RiskAssessment;
   rule_note?: string | null;
   policy?: "trusted" | "normal" | "strict";
@@ -151,6 +156,10 @@ const TERM_PROGRAMS: Record<string, string> = {
 };
 
 function terminalName(p: HookPayload): string {
+  // The Claude desktop app runs Claude Code itself, with the same hooks; its
+  // sessions have no terminal, so the app is the place to go back to.
+  if (p.entrypoint === "claude-desktop") return "Claude";
+  if (p.entrypoint === "claude-vscode") return "VS Code";
   if (p.wt_session) return "Windows Terminal";
   if (p.vscode_pid || p.term_program === "vscode") return "VS Code";
   const names = (p.nobetci_parents ?? []).map((x) => x.name.toLowerCase());

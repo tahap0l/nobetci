@@ -3,11 +3,11 @@
 // the type system checks. `{name}` placeholders are filled from `vars`.
 //
 // A key may have a macOS wording next to it as `key@mac` ("Start with Windows" →
-// "Start at login"); on a Mac that one wins.
+// "Start at login"); on a Mac that one wins. Linux looks for `key@linux` first.
 
 export type Lang = "tr" | "en";
 export type LangPref = "auto" | Lang;
-export type Platform = "windows" | "macos";
+export type Platform = "windows" | "macos" | "linux";
 
 let current: Lang = detectBrowserLang();
 let system: Lang = current;
@@ -17,7 +17,7 @@ markPlatform();
 
 function detectPlatform(): Platform {
   const ua = typeof navigator !== "undefined" ? navigator.userAgent : "";
-  return /Macintosh|Mac OS X/.test(ua) ? "macos" : "windows";
+  return /Macintosh|Mac OS X/.test(ua) ? "macos" : /Linux|X11/.test(ua) && !/Android/.test(ua) ? "linux" : "windows";
 }
 
 function markPlatform() {
@@ -81,8 +81,8 @@ function fill(text: string, vars?: Vars): string {
 export function defineMessages<T extends Record<string, string>>(tr: T, en: { [K in keyof T]: string }) {
   return (key: keyof T & string, vars?: Vars): string => {
     const table: Record<string, string> = current === "tr" ? tr : en;
-    const mac = platform === "macos" ? table[`${key}@mac`] : undefined;
-    return fill(mac ?? table[key] ?? tr[key] ?? key, vars);
+    const variant = platform === "macos" ? table[`${key}@mac`] : platform === "linux" ? table[`${key}@linux`] : undefined;
+    return fill(variant ?? table[key] ?? tr[key] ?? key, vars);
   };
 }
 

@@ -28,7 +28,7 @@ adımı anlatır. Sonda bir sorun giderme bölümü var.
 
 | | |
 | --- | --- |
-| İşletim sistemi | Windows 10 ya da 11, 64 bit — ya da macOS 11 ve üstü, bkz. [macOS](#macos) |
+| İşletim sistemi | Windows 10 ya da 11, 64 bit — ya da macOS 11 ve üstü, bkz. [macOS](#macos) — ya da Linux, bkz. [Linux](#linux) |
 | Claude Code | Windows üzerinde çalışan Claude Code (terminal, VS Code, Cursor…). WSL içindeki Claude Code ayarlarını başka yerde tuttuğu için kapsam dışıdır. |
 | WebView2 | Windows 11'de ve güncel Windows 10'da hazır gelir; yoksa kurulum programı indirir. |
 | Yetki | Yönetici yetkisi **gerekmez**; Nöbetçi sadece senin kullanıcı hesabına kurulur. |
@@ -165,8 +165,9 @@ kurarsan kaldığın yerden devam eder. İz bırakmamak için bu iki klasörü d
 - **Ayarlar → Claude Code → Sağlık testi**'ni çalıştır ve ✗ olan satırı oku.
 - Hook'ları kurduktan sonra **Claude Code oturumunu yeniden başlattın mı?** Açık oturumlar yeni
   hook'ları görmez.
-- Claude Code WSL içinde mi çalışıyor? O zaman ayarları Linux tarafında durur; Nöbetçi şu an yalnızca
-  Windows üzerindeki Claude Code'u destekler.
+- Claude Code WSL içinde mi çalışıyor? O zaman ayarları Linux tarafında durur; Nöbetçi aynı sistemde
+  çalışan Claude Code'u izler — Nöbetçi'yi Linux tarafına kur (WSLg penceresini gösterir) ya da
+  Claude Code'u Windows'ta çalıştır.
 - Hook'lar sonradan silindiyse Nöbetçi açılışta "hook'lar kaldırılmış" uyarısı verir;
   **Ayarlar → Claude Code**'dan yeniden kur.
 
@@ -252,7 +253,7 @@ Ayrıntılar için [CONTRIBUTING.md](../CONTRIBUTING.md).
 
 ## macOS
 
-macOS desteği 0.2.0 ile geldi ve henüz beta. Kurulum sihirbazı, Claude Code'a bağlama, deneme,
+Kurulum sihirbazı, Claude Code'a bağlama, deneme,
 önerilen ayarlar ve sorun gidermenin çoğu (4–7. ve 11. bölümler) Mac'te de aynı. Bu bölüm farklı
 olanları anlatır.
 
@@ -317,10 +318,13 @@ Baykuş menü çubuğunun hemen altında selam verir ve kurulum sihirbazı açı
   (reddet). Kendi kısayollarında ⌘ da kullanabilirsin.
 - **Pencereye git**, oturumun uygulamasını (Terminal, iTerm2, VS Code…) öne getirir; belirli bir
   pencereyi ya da sekmeyi değil.
-- **Adaya tıklamak Nöbetçi'yi etkin uygulama yapar**; terminal sen geri dönene kadar klavye
-  odağını kaybeder (⌘-Sekme ya da **Pencereye git**). Windows'ta ada hiç odak almaz; Mac'te de
-  böyle olması yapılacaklar listesinde.
-- **Tam ekranda sessizlik** henüz yok. Rahatsız etme ve sessiz saatler çalışır.
+- **Ada hiç odak almaz.** Yüzen bir paneldir: ona tıklamak terminalini etkin uygulama olarak
+  bırakır. Klavyeyi yalnızca asistanın yazı kutusu, sen içine yazarken alır.
+- **Tam ekranda sessizlik** Windows'taki gibi çalışır: önde tam ekran bir video, oyun ya da sunum
+  varken Nöbetçi sessiz kalır.
+- **Medya kartı** Spotify ya da Müzik açıkken onları gösterir. İlk seferde macOS, Nöbetçi'nin o
+  uygulamayı yönetip yönetemeyeceğini sorar (**Sistem Ayarları → Gizlilik ve Güvenlik →
+  Otomasyon**). Kapalı bir oynatıcı asla başlatılmaz.
 - **Tıklama koruması**, onay tıklamasının gerçek bir fareden ya da trackpad'den geldiğini
   denetler: macOS her fare olayına onu kimin ürettiğini yazar. Bir program ancak ona Erişilebilirlik
   izni verdiysen (**Sistem Ayarları → Gizlilik ve Güvenlik → Erişilebilirlik**) tıklama taklit
@@ -375,3 +379,43 @@ Finder `~/Library` klasörünü gizler: **Git → Klasöre Git…** (⇧⌘G) il
 - **Kısayollar çalışmıyor.** **Ayarlar → Bildirimler → Kısayollar**, bir kombinasyonu başka bir
   uygulamanın kullanıp kullanmadığını gösterir.
 - **Ada istediğim ekranda değil.** **Ayarlar → Genel**'den **Ekran**'ı değiştir.
+
+## Linux
+
+Kurulum sihirbazı, Claude Code'a bağlama, deneme ve önerilen ayarlar (4–7. bölümler) Linux'ta da
+aynı.
+
+### Gereksinimler
+
+| | |
+| --- | --- |
+| Dağıtım | WebKitGTK 4.1 olan x86-64: Ubuntu 22.04+, Debian 12+, Fedora 38+, Arch… |
+| Masaüstü | X11 ya da XWayland üzerinden Wayland (GNOME, KDE Plasma, Xfce, Cinnamon…) |
+| Tepsi | GNOME'da AppIndicator eklentisi gerekir; diğer masaüstlerinin çoğunda tepsi zaten var |
+
+### Kurulum
+
+[Son sürümden](https://github.com/tahap0l/nobetci/releases/latest) `.deb` ya da AppImage ile
+`SHA256SUMS.txt` dosyasını indir, `sha256sum` ile doğrula, sonra
+`sudo apt install ./Nobetci-x.y.z-linux-amd64.deb` çalıştır ya da
+`chmod +x Nobetci-x.y.z-linux-amd64.AppImage` deyip AppImage'ı aç.
+
+### Linux'ta neler farklı
+
+- **Pencere X11 üzerinden çalışır.** Wayland'de Nöbetçi kendini XWayland'de başlatır; böylece ada
+  ekranın üstüne yerleşip diğer pencerelerin üstünde kalabilir.
+- **Tıklama koruması** XInput2 ham olaylarını okur ve `xdotool` gibi araçların kullandığı XTEST
+  aygıtından gelen tıklamaları reddeder.
+- **Pencereye git**, pencere yöneticisinden oturumun süreç zincirine ait pencereyi öne getirmesini
+  ister.
+- **Medya kartı** MPRIS destekleyen her oynatıcıyla çalışır — Spotify, VLC, Firefox, Chromium,
+  MPRIS eklentili mpv.
+- **Gizli bilgiler** (isteğe bağlı OpenAI anahtarı) Secret Service'e (GNOME Keyring, KWallet) gider.
+
+### Dosyalar nerede?
+
+| | |
+| --- | --- |
+| Ayarlar | `~/.config/nobetci` |
+| Geçmiş, günlük ve relay | `~/.local/share/nobetci` |
+| Relay soketi | `~/.local/state/nobetci/nobetci.sock` (yedek olarak `/tmp/nobetci-<uid>/`) |

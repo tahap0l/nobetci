@@ -157,6 +157,13 @@ function reactionLineup() {
   document.body.append(row);
 }
 
+/** A made-up cover for the media card demo (&media=art). */
+const DEMO_ART = "data:image/svg+xml," + encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><defs><linearGradient id="g" x2="1" y2="1">'
+  + '<stop offset="0" stop-color="#ff7a59"/><stop offset="1" stop-color="#6a3cff"/></linearGradient></defs>'
+  + '<rect width="64" height="64" fill="url(#g)"/><circle cx="44" cy="20" r="9" fill="#ffe7a8"/>'
+  + '<path d="M0 50 20 34l14 10 12-8 18 14v14H0z" fill="#1d1033" opacity=".8"/></svg>');
+
 export function runDemo(island: Island, name: string) {
   document.body.style.background = "linear-gradient(180deg, #2b3140, #1b1f29)";
   State.settings.hooksInstalled = name !== "empty";
@@ -169,8 +176,10 @@ export function runDemo(island: Island, name: string) {
   if (params.has("media")) {
     State.settings.islandMedia = true;
     Bridge.islandMedia = async () => ({
-      title: "Night Watch", artist: "Nöbetçi", source: "Spotify.exe", playing: true, artwork: null,
+      title: "Night Watch", artist: "Nöbetçi", source: "Spotify.exe", playing: true,
+      artwork: params.get("media") === "art" ? DEMO_ART : null,
       canPrevious: true, canToggle: true, canNext: true,
+      positionMs: 83_000, durationMs: 214_000, canSeek: true,
     });
   }
   switch (name) {
@@ -191,6 +200,19 @@ export function runDemo(island: Island, name: string) {
     case "empty":
       island.setView("empty");
       break;
+    case "assistant": {
+      // The assistant with a prompt typed in, and with "/" for its commands.
+      sessions(island);
+      island.openAssistant();
+      const typed = params.get("text") ?? L("Bu hafta için kısa bir çalışma planı hazırla", "Draft a short study plan for this week");
+      window.setTimeout(() => {
+        const input = document.querySelector<HTMLTextAreaElement>(".asst-input");
+        if (!input) return;
+        input.value = typed;
+        input.dispatchEvent(new Event("input"));
+      }, 250);
+      break;
+    }
     case "session":
       sessions(island);
       island.showSession("a");

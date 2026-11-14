@@ -1,7 +1,7 @@
-import { Bridge, type IslandMedia, type IslandWeather } from "../core/bridge";
+import { Bridge, type IslandMedia, type IslandWeather, type MediaAction } from "../core/bridge";
 import { WEATHER_CITIES } from "../core/island-widgets";
 import { State } from "../core/state";
-import { getLang, getPlatform } from "../i18n/core";
+import { getLang } from "../i18n/core";
 import { h, icon } from "./dom";
 
 const local = (tr: string, en: string) => getLang() === "tr" ? tr : en;
@@ -76,7 +76,7 @@ export function compactWidgetSummary(redraw: () => void) {
         redraw();
       });
     }
-    const mediaOn = settings.islandMedia && getPlatform() === "windows";
+    const mediaOn = settings.islandMedia;
     if (!mediaOn) track = "";
     else if (now >= mediaAfter) {
       mediaAfter = now + 5_000;
@@ -133,6 +133,12 @@ function buildCalendar() {
 
 let focusRemaining = 25 * 60_000;
 let focusUntil = 0;
+
+/** Starts the focus timer for `minutes` (the assistant's /focus command). */
+export function startFocusTimer(minutes: number) {
+  focusRemaining = Math.max(1, Math.min(240, Math.round(minutes))) * 60_000;
+  focusUntil = Date.now() + focusRemaining;
+}
 
 export function buildWidgets(view: "overview" | "empty", openSettings: (tab: string) => void) {
   const label = (tr: string, en: string) => h("span", { class: "island-card-label", text: local(tr, en) });
@@ -201,7 +207,9 @@ export function buildWidgets(view: "overview" | "empty", openSettings: (tab: str
   const equalizer = h("span", { class: "media-equalizer", "aria-hidden": "true" },
     h("i"), h("i"), h("i"), h("i"));
   const artwork = h("img", { class: "media-artwork", alt: "", hidden: true });
-  artwork.addEventListener("error", () => { artwork.hidden = true; });
+  // The same picture, blurred, behind the whole card.
+  const backdrop = h("img", { class: "media-backdrop", alt: "", "aria-hidden": "true", hidden: true });
+  artwork.addEventListener("error", () => { artwork.hidden = true; backdrop.hidden = true; });
   const cover = h("div", { class: "media-cover", "aria-hidden": "true" }, artwork, equalizer);
   const mediaLabel = value();
   const mediaValue = h("span", { class: "island-card-hint" });
@@ -209,8 +217,16 @@ export function buildWidgets(view: "overview" | "empty", openSettings: (tab: str
     type: "button", class: "island-card-action", title: local("Medya ayarları", "Media settings"),
     "aria-label": local("Medya ayarları", "Media settings"), onclick: () => openSettings("genel"),
   }, icon(LINE_ICONS.sliders, 13));
+  const elapsed = h("span", { class: "media-time" });
+  const total = h("span", { class: "media-time" });
+  const fill = h("span", { class: "media-progress-fill" });
+  const bar = h("div", {
+    class: "media-progress-bar", role: "slider", tabindex: 0,
+    "aria-label": local("Parçadaki konum", "Position in track"), "aria-valuemin": 0,
+  }, fill);
+  const progress = h("div", { class: "media-progress", hidden: true }, elapsed, bar, total);
   const media = h("div", { class: "island-card island-card-media" },
-    cover, h("div", { class: "media-track" }, mediaHeading, mediaLabel, mediaValue), mediaSetup);
+    backdrop, cover, h("div", { class: "media-track" }, mediaHeading, mediaLabel, mediaValue), mediaSetup, progress);
   const home = h("div", { class: "island-dashboard-media" }, media, focus);
   const calendar = buildCalendar();
   const panels = [home, calendar.el, weather].map((content, i) => {
@@ -303,30 +319,78 @@ export function buildWidgets(view: "overview" | "empty", openSettings: (tab: str
   let wake: number | undefined;
   let mediaEnabled: boolean | undefined;
 
+  /** The last reading, so the bar can move every second between polls. */
+  let snapshot: { position: number; duration: number; at: number } | null = null;
+  const clock = (ms: number) => {
+    const s = Math.max(0, Math.floor(ms / 1000));
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return h ? `${h}:${pad(m)}:${pad(s % 60)}` : `${m}:${pad(s % 60)}`;
+  };
+  const position = () => {
+    if (!snapshot) return 0;
+    const moved = currentMedia?.playing ? Date.now() - snapshot.at : 0;
+    return Math.min(snapshot.duration, snapshot.position + moved);
+  };
+  function drawProgress() {
+    progress.hidden = !snapshot;
+    if (!snapshot) return;
+    const at = position();
+    fill.style.width = `${(at / snapshot.duration) * 100}%`;
+    elapsed.textContent = clock(at);
+    total.textContent = clock(snapshot.duration);
+    bar.setAttribute("aria-valuemax", String(Math.round(snapshot.duration / 1000)));
+    bar.setAttribute("aria-valuenow", String(Math.round(at / 1000)));
+    bar.setAttribute("aria-valuetext", `${clock(at)} / ${clock(snapshot.duration)}`);
+    bar.classList.toggle("can-seek", Boolean(currentMedia?.canSeek));
+    bar.setAttribute("aria-disabled", String(!currentMedia?.canSeek));
+  }
+
+  async function send(name: MediaAction, positionMs?: number) {
+    if (!currentMedia || busy) return;
+    const source = currentMedia.source;
+    busy = true;
+    mediaVersion++;
+    controls.setAttribute("aria-busy", "true");
+    let ok = false;
+    try {
+      ok = Boolean(await Bridge.islandMediaControl(source, name, positionMs));
+      if (!ok && currentMedia?.source === source) {
+        mediaValue.textContent = local("Medya komutu uygulanamadı", "Media command unavailable");
+      }
+    } finally {
+      busy = false;
+      controls.removeAttribute("aria-busy");
+      mediaAt = ok ? 0 : Date.now() + 2_000;
+      refresh();
+    }
+  }
+  const seek = (ms: number) => {
+    if (!snapshot || !currentMedia?.canSeek) return;
+    const target = Math.max(0, Math.min(snapshot.duration - 1_000, ms));
+    snapshot = { ...snapshot, position: target, at: Date.now() };
+    drawProgress();
+    void send("seek", target);
+  };
+  bar.addEventListener("click", (event) => {
+    if (!snapshot) return;
+    const rect = bar.getBoundingClientRect();
+    seek(((event.clientX - rect.left) / rect.width) * snapshot.duration);
+  });
+  bar.addEventListener("keydown", (event) => {
+    const step = event.key === "ArrowRight" ? 10_000 : event.key === "ArrowLeft" ? -10_000 : 0;
+    if (!step) return;
+    event.preventDefault();
+    seek(position() + step);
+  });
+
   const action = (glyph: keyof typeof MEDIA_ICONS, label: string, name: "previous" | "toggle" | "next") => {
     const button = h("button", {
       type: "button", class: name === "toggle" ? "media-button media-toggle" : "media-button",
       title: label, "aria-label": label,
     }, mediaIcon(glyph));
-    button.addEventListener("click", async () => {
-      if (!currentMedia || busy) return;
-      const source = currentMedia.source;
-      busy = true;
-      mediaVersion++;
-      controls.setAttribute("aria-busy", "true");
-      let ok = false;
-      try {
-        ok = Boolean(await Bridge.islandMediaControl(source, name));
-        if (!ok && currentMedia?.source === source) {
-          mediaValue.textContent = local("Medya komutu uygulanamadı", "Media command unavailable");
-        }
-      } finally {
-        busy = false;
-        controls.removeAttribute("aria-busy");
-        mediaAt = ok ? 0 : Date.now() + 2_000;
-        refresh();
-      }
-    });
+    button.addEventListener("click", () => void send(name));
     return button;
   };
   const back = action("previous", local("Önceki parça", "Previous track"), "previous");
@@ -350,12 +414,21 @@ export function buildWidgets(view: "overview" | "empty", openSettings: (tab: str
     if (result?.artwork) {
       if (artwork.getAttribute("src") !== result.artwork) {
         artwork.src = result.artwork;
+        backdrop.src = result.artwork;
         artwork.hidden = false;
+        backdrop.hidden = false;
       }
     } else {
       artwork.hidden = true;
+      backdrop.hidden = true;
       artwork.removeAttribute("src");
+      backdrop.removeAttribute("src");
     }
+    media.classList.toggle("has-art", Boolean(result?.artwork));
+    snapshot = result && result.durationMs && result.positionMs !== null
+      ? { position: result.positionMs, duration: result.durationMs, at: Date.now() }
+      : null;
+    drawProgress();
     if (play.dataset.playing !== String(Boolean(result?.playing))) {
       play.dataset.playing = String(Boolean(result?.playing));
       play.replaceChildren(mediaIcon(result?.playing ? "pause" : "play"));
@@ -383,7 +456,7 @@ export function buildWidgets(view: "overview" | "empty", openSettings: (tab: str
 
   function refresh() {
     const nextCity = State.settings.islandWeatherCity;
-    const mediaOn = State.settings.islandMedia && getPlatform() === "windows";
+    const mediaOn = State.settings.islandMedia;
     if (city !== nextCity) {
       city = nextCity;
       weatherAt = 0;
@@ -405,6 +478,7 @@ export function buildWidgets(view: "overview" | "empty", openSettings: (tab: str
     el.dataset.mascotTheme = State.settings.mascotTheme;
     el.hidden = false;
     refreshFocus();
+    drawProgress();
     if (State.mode !== "expanded" || State.view !== view || el.hidden || !el.isConnected) return;
     if (wake === undefined) {
       wake = window.setTimeout(() => {

@@ -52,7 +52,9 @@ export function owlPlacement(mode: IslandMode, view: IslandView, islandH: number
       return { cx: 24, cy: COMPACT_H / 2 + 1, size: 24, visible: true };
     case "expanded":
       if (view === "greeting") return { cx: EXPANDED_W / 2, cy: 80, size: 60, visible: false };
-      if (view === "approval" || view === "session") return { cx: 64, cy: HEADER_H + 50, size: 64, visible: true };
+      if (view === "approval" || view === "session" || view === "assistant") {
+        return { cx: 64, cy: HEADER_H + 50, size: 64, visible: true };
+      }
       return { cx: 70, cy: HEADER_H + (islandH - HEADER_H) / 2, size: 68, visible: true };
   }
 }

@@ -38,7 +38,7 @@ export interface BootInfo {
   version: string;
   hookPath: string;
   /** Which OS this is; a few labels differ ("Start with Windows" / "Start at login"). */
-  platform: "windows" | "macos";
+  platform: "windows" | "macos" | "linux";
   /** Whether "quiet in full screen" can work here (not on macOS yet). */
   fullscreenSupported: boolean;
 }
@@ -190,7 +190,7 @@ export interface AuditStats {
 }
 
 export interface HotkeyStatus {
-  action: "toggle" | "deny" | "allow" | "dnd";
+  action: "toggle" | "deny" | "allow" | "dnd" | "assistant";
   accel: string;
   ok: boolean;
   error: string | null;
@@ -227,7 +227,13 @@ export interface IslandMedia {
   canPrevious: boolean;
   canToggle: boolean;
   canNext: boolean;
+  /** Where the track was when it was read, and its length; null when unknown. */
+  positionMs: number | null;
+  durationMs: number | null;
+  canSeek: boolean;
 }
+
+export type MediaAction = "previous" | "toggle" | "next" | "seek";
 
 export interface IslandWeather {
   temperature: number;
@@ -246,11 +252,19 @@ export const Bridge = {
     }
   },
   buddyOpenIsland: () => call<void>("buddy_open_island"),
+  // ── Assistant ─────────────────────────────────────────────────────────────
+  /** Opens an AI app with the prompt; `prefilled` says it went in the address. */
+  assistantOpen: (target: string, prompt: string) =>
+    callOrThrow<{ prefilled: boolean }>("assistant_open", { target, prompt }),
+  /** Answers with the Prompt Studio provider. Rejects with a readable message. */
+  assistantAsk: (text: string) => callOrThrow<string>("assistant_ask", { text }),
+  islandKeyboard: (on: boolean) => call<void>("island_keyboard", { on }),
+  setAssistantTarget: (target: string) => call<void>("set_assistant_target", { target }),
   buddyResetPosition: () => call<void>("buddy_reset_position"),
 
   islandMedia: (includeArtwork = false) => call<IslandMedia>("island_media", { includeArtwork }),
-  islandMediaControl: (source: string, action: "previous" | "toggle" | "next") =>
-    call<boolean>("island_media_control", { source, action }),
+  islandMediaControl: (source: string, action: MediaAction, positionMs?: number) =>
+    call<boolean>("island_media_control", { source, action, positionMs: positionMs ?? null }),
   islandWeather: (cityId: string) => call<IslandWeather>("island_weather", { cityId }),
   boot: () => call<BootInfo>("boot"),
 

@@ -44,7 +44,7 @@ pub fn local_time() -> LocalTime {
     }
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(unix)]
 pub fn local_time() -> LocalTime {
     unsafe {
         let now = libc::time(std::ptr::null_mut());
@@ -93,15 +93,35 @@ pub fn fullscreen() -> bool {
     }
 }
 
-/// macOS has no public "a full-screen app is in front" query; until there is a
-/// reliable one, full-screen quiet does nothing here and Settings says so.
-#[cfg(target_os = "macos")]
-pub fn fullscreen() -> bool {
-    false
+/// Whether the user's languages (LANGUAGE, LC_ALL, LC_MESSAGES or LANG, the
+/// first one set) put Turkish first.
+#[cfg(target_os = "linux")]
+pub fn system_is_turkish() -> bool {
+    ["LANGUAGE", "LC_ALL", "LC_MESSAGES", "LANG"]
+        .iter()
+        .find_map(|var| std::env::var(var).ok().filter(|v| !v.is_empty()))
+        .is_some_and(|tag| is_turkish_tag(&tag))
 }
 
+/// "tr", "tr_TR.UTF-8", "tr-TR" or, in LANGUAGE, "tr:en".
+#[cfg(any(target_os = "linux", test))]
+fn is_turkish_tag(tag: &str) -> bool {
+    let first = tag.split(':').next().unwrap_or("").to_ascii_lowercase();
+    first == "tr" || first.starts_with("tr_") || first.starts_with("tr-") || first.starts_with("tr.")
+}
+
+/// The window in front is full screen (X11 / XWayland).
+#[cfg(target_os = "linux")]
+pub fn fullscreen() -> bool {
+    crate::x11::fullscreen()
+}
+
+/// A window covering a whole display is in front (see mac_fullscreen.rs).
+#[cfg(target_os = "macos")]
+pub use crate::mac_fullscreen::fullscreen;
+
 /// Whether `fullscreen()` can tell anything on this OS.
-pub const FULLSCREEN_SUPPORTED: bool = cfg!(windows);
+pub const FULLSCREEN_SUPPORTED: bool = true;
 
 /// The user's home folder, as Claude Code sees it.
 pub fn home() -> std::path::PathBuf {
@@ -109,8 +129,27 @@ pub fn home() -> std::path::PathBuf {
     std::env::var_os(var).map(std::path::PathBuf::from).unwrap_or_else(|| std::path::PathBuf::from("."))
 }
 
-/// "windows" or "macos" — what the front end adapts its wording to.
-pub const PLATFORM: &str = if cfg!(target_os = "macos") { "macos" } else { "windows" };
+/// "windows", "macos" or "linux" — what the front end adapts its wording to.
+pub const PLATFORM: &str = if cfg!(target_os = "macos") {
+    "macos"
+} else if cfg!(target_os = "linux") {
+    "linux"
+} else {
+    "windows"
+};
+
+/// Opens a web page in the default browser. Anything but http(s) is refused.
+pub fn open_url(url: &str) -> bool {
+    if !(url.starts_with("https://") || url.starts_with("http://")) {
+        return false;
+    }
+    #[cfg(windows)]
+    return std::process::Command::new("rundll32.exe").args(["url.dll,FileProtocolHandler", url]).spawn().is_ok();
+    #[cfg(target_os = "macos")]
+    return std::process::Command::new("/usr/bin/open").arg(url).spawn().is_ok();
+    #[cfg(target_os = "linux")]
+    return std::process::Command::new("xdg-open").arg(url).spawn().is_ok();
+}
 
 #[cfg(test)]
 mod tests {
@@ -121,6 +160,16 @@ mod tests {
         let t = LocalTime { year: 2026, month: 3, day: 7, hour: 9, minute: 5, second: 1 };
         assert_eq!(t.stamp(), "2026-03-07 09:05:01");
         assert_eq!(t.compact(), "20260307-090501");
+    }
+
+    #[test]
+    fn turkish_locales_are_recognised() {
+        for tag in ["tr", "tr_TR.UTF-8", "tr-TR", "TR_tr", "tr:en_US"] {
+            assert!(is_turkish_tag(tag), "{tag}");
+        }
+        for tag in ["en_US.UTF-8", "C", "trk", "de_DE", "en:tr"] {
+            assert!(!is_turkish_tag(tag), "{tag}");
+        }
     }
 
     #[test]

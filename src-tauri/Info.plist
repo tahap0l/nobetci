@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- Merged into the bundle by Tauri. Asked only when the island's media card is on
+       and Spotify or Music is already running. -->
+  <key>NSAppleEventsUsageDescription</key>
+  <string>Nöbetçi shows and controls the song playing in Spotify or Music. · Nöbetçi, Spotify veya Music'te çalan şarkıyı gösterir ve kontrol eder.</string>
+</dict>
+</plist>

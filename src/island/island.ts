@@ -2,7 +2,7 @@
 // frame loop. The loop only runs while something is moving, and never while the
 // island is hidden — a sleeping Nöbetçi costs no CPU.
 
-import { OwlEngine, type OwlEmote } from "../baykus/owl";
+import { OwlEngine, type OwlEmote, type OwlMood } from "../baykus/owl";
 import { applyMascotPalette } from "../core/mascot-theme";
 import { OwlGreeting } from "../baykus/greeting";
 import { Spring, Tracked } from "../core/anim";
@@ -61,6 +61,10 @@ export class Island {
   private flashTimer: number | null = null;
   private lastMood = "";
   private lastAccent: string | null = null;
+  /** A mood the assistant holds on the mascot while it waits for an answer. */
+  private moodOverride: OwlMood | null = null;
+  /** The island has the keyboard (the assistant's text box is up). */
+  private keyboardOn = false;
 
   constructor(root: HTMLElement) {
     this.root = root;
@@ -109,6 +113,13 @@ export class Island {
       collapse: () => this.collapse(),
       togglePause: () => this.togglePause(),
       toggleDnd: () => void Bridge.setDnd(!State.settings.dnd),
+      openAssistant: () => this.openAssistant(),
+      assistantMood: (m) => {
+        this.moodOverride = m;
+        this.dirty = true;
+        this.ensureRunning();
+      },
+      react: (e) => this.react(e),
     };
     const { header, views } = buildViews(this.viewActions);
     this.header = header;
@@ -183,6 +194,7 @@ export class Island {
     if (prev === "expanded" && mode !== "expanded") Sound.play("close");
     this.updateWindowCollapsed();
     this.animateGeometry(modeOrder(mode) < modeOrder(prev));
+    this.syncKeyboard();
     State.notify();
   }
 
@@ -190,6 +202,7 @@ export class Island {
     State.view = view;
     if (State.mode !== "expanded") this.setMode("expanded");
     else this.animateGeometry(false);
+    this.syncKeyboard();
     State.notify();
   }
 
@@ -197,11 +210,41 @@ export class Island {
     if (State.mode !== "expanded") {
       State.view = view;
       this.fsm.forceHome();
+      this.syncKeyboard();
       return;
     }
     State.view = view;
     this.dirty = true;
     this.ensureRunning();
+    this.syncKeyboard();
+  }
+
+  /** Opens the assistant and hands it the keyboard. */
+  openAssistant() {
+    // A request waiting for an answer comes first.
+    if (State.approvals.length) {
+      this.showApprovals();
+      return;
+    }
+    this.fsm.pinned = true;
+    this.expand("assistant");
+    this.syncKeyboard();
+    (this.views.get("assistant") as (ViewHost & { focus?(): void }) | undefined)?.focus?.();
+  }
+
+  /**
+   * The island takes the keyboard only while the assistant is up, and stays
+   * open meanwhile; anything else gives both back.
+   */
+  private syncKeyboard() {
+    const on = State.mode === "expanded" && State.view === "assistant";
+    if (on === this.keyboardOn) return;
+    this.keyboardOn = on;
+    void Bridge.islandKeyboard(on);
+    if (!on) {
+      this.moodOverride = null;
+      if (!State.approvals.length) this.fsm.pinned = false;
+    }
   }
 
   collapse() {
@@ -282,6 +325,10 @@ export class Island {
         break;
       case "deny":
         if (a) this.decide(a.requestId, "deny", { via: "hotkey" });
+        break;
+      case "assistant":
+        if (State.mode === "expanded" && State.view === "assistant") this.backToOverview();
+        else this.openAssistant();
         break;
       case "allow":
         if (!a) break;
@@ -681,7 +728,7 @@ export class Island {
       this.owlGlow.style.opacity = "0";
       return;
     }
-    const mood = State.mood;
+    const mood = this.moodOverride ?? State.mood;
     const color =
       mood === "danger" || mood === "error" ? "#F4505E"
       : mood === "approval" || mood === "question" ? "#F5A524"
@@ -720,7 +767,7 @@ export class Island {
     this.compact.sync();
     drawMinis(performance.now() / 1000);
 
-    const mood = State.mood;
+    const mood = this.moodOverride ?? State.mood;
     if (mood !== this.lastMood) {
       this.lastMood = mood;
       this.owl.setMood(mood);

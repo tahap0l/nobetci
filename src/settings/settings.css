@@ -11,8 +11,8 @@
   --text-2: rgba(242, 242, 244, 0.82);
   --muted: rgba(242, 242, 244, 0.58);
   --faint: rgba(242, 242, 244, 0.38);
-  --accent: #3b9eff;
-  --accent-soft: rgba(59, 158, 255, 0.14);
+  --accent: #8b7bff;
+  --accent-soft: rgba(139, 123, 255, 0.14);
   --low: #34d399;
   --medium: #f5a524;
   --high: #fb923c;
@@ -44,7 +44,7 @@ body.settings-window {
 }
 
 ::selection {
-  background: rgba(59, 158, 255, 0.35);
+  background: rgba(139, 123, 255, 0.35);
 }
 
 button,
@@ -64,7 +64,7 @@ button:disabled {
 }
 
 :focus-visible {
-  outline: 2px solid rgba(59, 158, 255, 0.85);
+  outline: 2px solid rgba(139, 123, 255, 0.85);
   outline-offset: 2px;
 }
 
@@ -758,7 +758,7 @@ textarea.input {
 }
 .prompt-result-card .prompt-textarea {
   min-height: 190px;
-  border-color: rgba(59, 158, 255, 0.25);
+  border-color: rgba(139, 123, 255, 0.25);
 }
 .prompt-actions {
   display: flex;
@@ -802,8 +802,8 @@ textarea.input {
 }
 .input:focus,
 .select:focus {
-  border-color: rgba(59, 158, 255, 0.7);
-  box-shadow: 0 0 0 3px rgba(59, 158, 255, 0.16);
+  border-color: rgba(139, 123, 255, 0.7);
+  box-shadow: 0 0 0 3px rgba(139, 123, 255, 0.16);
 }
 .input.mono {
   font-size: 12.5px;
@@ -915,12 +915,12 @@ textarea.input {
   color: #06121f;
 }
 .check input:focus-visible + .check-box {
-  outline: 2px solid rgba(59, 158, 255, 0.85);
+  outline: 2px solid rgba(139, 123, 255, 0.85);
   outline-offset: 2px;
 }
 .check:has(input:checked) {
-  border-color: rgba(59, 158, 255, 0.3);
-  background: rgba(59, 158, 255, 0.05);
+  border-color: rgba(139, 123, 255, 0.3);
+  background: rgba(139, 123, 255, 0.05);
 }
 .check-text {
   display: flex;
@@ -950,7 +950,7 @@ textarea.input {
   letter-spacing: 0.02em;
 }
 .tag-accent {
-  background: rgba(59, 158, 255, 0.16);
+  background: rgba(139, 123, 255, 0.16);
   color: #9cccff;
 }
 
@@ -1109,8 +1109,8 @@ kbd {
   color: var(--text);
 }
 .notice-info {
-  border-color: rgba(59, 158, 255, 0.24);
-  background: rgba(59, 158, 255, 0.07);
+  border-color: rgba(139, 123, 255, 0.24);
+  background: rgba(139, 123, 255, 0.07);
 }
 .notice-info .ico {
   color: #7cbfff;
@@ -1783,8 +1783,8 @@ code.path,
   background: var(--sunk);
 }
 .rung.auto {
-  border-color: rgba(59, 158, 255, 0.32);
-  background: rgba(59, 158, 255, 0.06);
+  border-color: rgba(139, 123, 255, 0.32);
+  background: rgba(139, 123, 255, 0.06);
 }
 .rung-ic {
   display: inline-flex;
@@ -2626,7 +2626,7 @@ code.path,
 }
 .recorder.recording {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(59, 158, 255, 0.18);
+  box-shadow: 0 0 0 3px rgba(139, 123, 255, 0.18);
 }
 .rec-live {
   color: #9cccff;
@@ -2975,7 +2975,7 @@ code.path,
   background: rgba(255, 255, 255, 0.035);
 }
 .hist-table tbody tr:focus-visible {
-  outline: 2px solid rgba(59, 158, 255, 0.85);
+  outline: 2px solid rgba(139, 123, 255, 0.85);
   outline-offset: -2px;
 }
 .t-when {
@@ -3047,7 +3047,7 @@ code.path,
   padding: 20px 22px;
   border: 1px solid var(--line);
   border-radius: 16px;
-  background: radial-gradient(120% 140% at 0% 0%, rgba(59, 158, 255, 0.1), transparent 55%), var(--card);
+  background: radial-gradient(120% 140% at 0% 0%, rgba(139, 123, 255, 0.1), transparent 55%), var(--card);
 }
 .hero .owl-mark {
   flex-shrink: 0;
@@ -3294,7 +3294,7 @@ code.path,
   gap: 24px;
   padding: 22px 14px;
   border-right: 1px solid var(--line);
-  background: radial-gradient(140% 90% at 0% 0%, rgba(59, 158, 255, 0.12), transparent 60%), #101014;
+  background: radial-gradient(140% 90% at 0% 0%, rgba(139, 123, 255, 0.12), transparent 60%), #101014;
 }
 .wz-brand {
   display: flex;
@@ -3468,7 +3468,7 @@ code.path,
   width: 34px;
   height: 34px;
   border-radius: 10px;
-  background: rgba(59, 158, 255, 0.1);
+  background: rgba(139, 123, 255, 0.1);
   color: #8fc3ff;
 }
 .wz-lang {
@@ -3614,4 +3614,121 @@ code.path,
 @media (prefers-reduced-motion: reduce) {
   .mascot-choice canvas { transition: none; }
   .mascot-choice:hover canvas { transform: none; }
+}
+
+/* ── 2.3 refresh ──────────────────────────────────────────────────────────
+   A lighter, layered look: ambient glow behind everything, glass sidebar and
+   header, cards with a soft sheen and an icon chip, the island's violet as the
+   accent. Only surfaces change here; layout and spacing rules stay above. */
+
+:root {
+  --accent: #8b7bff;
+  --accent-2: #c18bff;
+  --accent-soft: rgba(139, 123, 255, 0.15);
+  --accent-grad: linear-gradient(135deg, var(--accent), var(--accent-2));
+  --card: rgba(24, 24, 31, 0.72);
+  --sunk: rgba(10, 10, 14, 0.7);
+  --raised: rgba(38, 38, 48, 0.8);
+  --line: rgba(255, 255, 255, 0.07);
+  --line-2: rgba(255, 255, 255, 0.13);
+  --radius-card: 18px;
+}
+
+::selection { background: rgba(139, 123, 255, 0.38); }
+:focus-visible { outline-color: rgba(139, 123, 255, 0.9); }
+
+body.settings-window {
+  background:
+    radial-gradient(900px 520px at 100% -10%, rgba(139, 123, 255, 0.13), transparent 60%),
+    radial-gradient(700px 480px at 10% 110%, rgba(56, 189, 248, 0.07), transparent 60%),
+    #09090d;
+}
+
+.side {
+  background: rgba(8, 8, 12, 0.55);
+  border-right-color: rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(18px) saturate(1.3);
+}
+.nav { gap: 3px; }
+.nav-item { height: 38px; border-radius: 11px; }
+.nav-item .ico { transition: color 0.15s, transform 0.15s; }
+.nav-item:hover .ico { transform: translateX(1px); }
+.nav-item.on {
+  background: linear-gradient(90deg, rgba(139, 123, 255, 0.2), rgba(139, 123, 255, 0.05));
+  box-shadow: inset 0 0 0 1px rgba(139, 123, 255, 0.28);
+}
+.nav-item.on .ico { color: #b9adff; }
+.nav-item.on::before { display: none; }
+.nav-badge.count { background: rgba(139, 123, 255, 0.18); color: #cfc6ff; }
+.dnd-quick { border-radius: 13px; background: rgba(255, 255, 255, 0.03); }
+
+.head {
+  position: relative;
+  z-index: 2;
+  min-height: 74px;
+  background: rgba(10, 10, 14, 0.6);
+  border-bottom-color: rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(18px) saturate(1.3);
+}
+.head-title { font-size: 21px; font-weight: 700; letter-spacing: -0.015em; }
+.close-btn { border-radius: 12px; background: rgba(255, 255, 255, 0.05); }
+.close-btn:hover { background: rgba(255, 255, 255, 0.1); }
+
+.content-inner { padding-top: 24px; }
+.tab-body { gap: 16px; animation: tab-in 0.28s cubic-bezier(0.2, 0.8, 0.2, 1); }
+@keyframes tab-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+
+.card {
+  position: relative;
+  padding: 18px 20px;
+  border-radius: var(--radius-card);
+  border-color: rgba(255, 255, 255, 0.07);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent 90px),
+    var(--card);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 12px 32px -18px rgba(0, 0, 0, 0.7);
+  transition: border-color 0.2s;
+}
+.card:hover { border-color: rgba(255, 255, 255, 0.11); }
+.card-title { gap: 10px; font-size: 15px; font-weight: 650; }
+.card-title .ico {
+  box-sizing: border-box;
+  width: 28px;
+  height: 28px;
+  padding: 6px;
+  flex: none;
+  border-radius: 9px;
+  color: #c3b9ff;
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px rgba(139, 123, 255, 0.22);
+}
+.card-desc { margin-top: 5px; }
+
+.btn-primary {
+  background: var(--accent-grad);
+  color: #fff;
+  box-shadow: 0 6px 18px -8px rgba(139, 123, 255, 0.8);
+}
+.btn-primary:hover:not(:disabled) {
+  background: var(--accent-grad);
+  filter: brightness(1.08);
+}
+
+.switch { background: #2c2c37; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06); }
+.switch.on { background: var(--accent-grad); box-shadow: 0 0 14px -4px rgba(139, 123, 255, 0.9); }
+.switch-knob { transition: transform 0.2s cubic-bezier(0.3, 1.4, 0.5, 1); }
+
+.seg { border-radius: 12px; }
+.seg-btn { border-radius: 9px; }
+.seg-btn.on {
+  background: rgba(139, 123, 255, 0.22);
+  box-shadow: inset 0 0 0 1px rgba(139, 123, 255, 0.35);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tab-body { animation: none; }
+  .switch-knob, .nav-item .ico { transition: none; }
 }

@@ -28,7 +28,7 @@ updating and uninstalling. A troubleshooting section is at the end.
 
 | | |
 | --- | --- |
-| Operating system | Windows 10 or 11, 64-bit — or macOS 11 or later, see [macOS](#macos) |
+| Operating system | Windows 10 or 11, 64-bit — or macOS 11 or later, see [macOS](#macos) — or Linux, see [Linux](#linux) |
 | Claude Code | Claude Code running on Windows itself (terminal, VS Code, Cursor…). Claude Code inside WSL keeps its settings elsewhere and isn't covered. |
 | WebView2 | Part of Windows 11 and current Windows 10; the installer fetches it if it's missing. |
 | Rights | **No** administrator rights needed; Nöbetçi installs for your account only. |
@@ -162,7 +162,8 @@ The buttons on **Settings → About** show these files in File Explorer.
 - **Did you restart the Claude Code session** after installing the hooks? Open sessions don't see
   new hooks.
 - Is Claude Code running inside WSL? Its settings then live on the Linux side; Nöbetçi currently
-  supports Claude Code on Windows only.
+  supports Claude Code running on the same system as the app — install Nöbetçi inside the Linux
+  side (WSLg shows its window) or run Claude Code on Windows.
 - If the hooks were removed later, Nöbetçi says so at start-up; reinstall them from
   **Settings → Claude Code**.
 
@@ -248,7 +249,7 @@ See [CONTRIBUTING.md](../CONTRIBUTING.md) for more.
 
 ## macOS
 
-macOS support is new in 0.2.0 and still a beta. The setup wizard, connecting Claude Code, trying
+The setup wizard, connecting Claude Code, trying
 it out, the suggested settings and most of the troubleshooting (sections 4–7 and 11) work the same
 way on a Mac. This section covers what's different.
 
@@ -312,10 +313,13 @@ The owl says hello just below the menu bar, and the setup wizard opens — carry
   island) and ⌃⌥D (deny). Your own shortcuts may use ⌘ too.
 - **Go to window** brings the session's app (Terminal, iTerm2, VS Code…) to the front, not one
   particular window or tab.
-- **Clicking the island makes Nöbetçi the active app**, so your terminal loses keyboard focus
-  until you switch back (⌘-Tab, or **Go to window**). On Windows the island never takes focus;
-  doing the same on a Mac is on the list.
-- **Quiet in full screen** isn't available yet. Do not disturb and quiet hours work.
+- **The island never takes focus.** It is a floating panel: clicking it leaves your terminal the
+  active app. Only the assistant's text box takes the keyboard, while you type in it.
+- **Quiet in full screen** works as on Windows: a full-screen video, game or presentation in
+  front keeps Nöbetçi silent.
+- **The media card** shows Spotify and Music while one of them is open. The first time macOS asks
+  whether Nöbetçi may control that app (**System Settings → Privacy & Security → Automation**).
+  A closed player is never started.
 - **The click guard** checks that an approval click came from a real mouse or trackpad: macOS
   marks every mouse event with who made it. A program can only fake clicks if you've given it
   Accessibility access (**System Settings → Privacy & Security → Accessibility**), so keep that
@@ -369,3 +373,43 @@ buttons on **Settings → About**.
 - **Shortcuts don't work.** **Settings → Notifications → Shortcuts** shows whether another app
   already owns a combination.
 - **The island is on the wrong display.** Change **Display** in **Settings → General**.
+
+## Linux
+
+The setup wizard, connecting Claude Code, trying it out and the suggested settings (sections 4–7)
+work the same way on Linux.
+
+### Requirements
+
+| | |
+| --- | --- |
+| Distribution | x86-64 with WebKitGTK 4.1: Ubuntu 22.04+, Debian 12+, Fedora 38+, Arch… |
+| Desktop | X11, or Wayland through XWayland (GNOME, KDE Plasma, Xfce, Cinnamon…) |
+| Tray | GNOME needs the AppIndicator extension; most other desktops have a tray already |
+
+### Install
+
+Download the `.deb` or the AppImage and `SHA256SUMS.txt` from the
+[latest release](https://github.com/tahap0l/nobetci/releases/latest), check them with
+`sha256sum`, then either `sudo apt install ./Nobetci-x.y.z-linux-amd64.deb` or
+`chmod +x Nobetci-x.y.z-linux-amd64.AppImage` and run it.
+
+### What's different on Linux
+
+- **The window runs through X11.** Under Wayland, Nöbetçi starts itself on XWayland so the island
+  can sit at the top of the screen and stay above other windows.
+- **The click guard** reads XInput2 raw events and refuses clicks from the XTEST device that
+  `xdotool` and similar tools use.
+- **Go to window** asks the window manager to raise the window that belongs to the session's
+  process chain.
+- **The media card** works with every MPRIS player — Spotify, VLC, Firefox, Chromium, mpv with
+  its MPRIS plugin.
+- **Secrets** (an optional OpenAI key) go to the Secret Service (GNOME Keyring, KWallet).
+
+### Where things live
+
+| | |
+| --- | --- |
+| Settings | `~/.config/nobetci` |
+| History, log and the relay | `~/.local/share/nobetci` |
+| The relay's socket | `~/.local/state/nobetci/nobetci.sock` (`/tmp/nobetci-<uid>/` as a fallback) |

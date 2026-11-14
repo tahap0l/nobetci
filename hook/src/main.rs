@@ -40,12 +40,16 @@ const MAX_APPROVAL_FIELD_LEN: usize = 64 * 1024;
 const TRUNCATED_FLAG: &str = "nobetci_truncated";
 
 mod browser;
+#[cfg(target_os = "linux")]
+mod linux;
 #[cfg(target_os = "macos")]
 mod mac;
 #[cfg(windows)]
 mod win;
 
-// The two halves that differ by OS: `connect()` and `ancestors()`.
+// The halves that differ by OS: `connect()` and `ancestors()`.
+#[cfg(target_os = "linux")]
+use linux as os;
 #[cfg(target_os = "macos")]
 use mac as os;
 #[cfg(windows)]
@@ -334,7 +338,14 @@ fn prepare(
     }
 
     // Which terminal the session runs in — context only, never a filter.
-    for (key, var) in [("term_program", "TERM_PROGRAM"), ("wt_session", "WT_SESSION"), ("vscode_pid", "VSCODE_PID")] {
+    // `entrypoint` says which Claude Code it is: the CLI, the VS Code extension
+    // or the Code tab of the Claude desktop app ("claude-desktop").
+    for (key, var) in [
+        ("term_program", "TERM_PROGRAM"),
+        ("wt_session", "WT_SESSION"),
+        ("vscode_pid", "VSCODE_PID"),
+        ("entrypoint", "CLAUDE_CODE_ENTRYPOINT"),
+    ] {
         if !map.contains_key(key) {
             let value = std::env::var(var).unwrap_or_default();
             map.insert(key.into(), serde_json::Value::String(value));

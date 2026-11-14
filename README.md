@@ -11,7 +11,8 @@
 
 [![CI](https://github.com/tahap0l/nobetci/actions/workflows/ci.yml/badge.svg)](https://github.com/tahap0l/nobetci/actions/workflows/ci.yml)
 ![Windows 10 | 11](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D4)
-![macOS 11+ (beta)](https://img.shields.io/badge/macOS-11%2B%20(beta)-555555)
+![macOS 11+](https://img.shields.io/badge/macOS-11%2B-555555)
+![Linux](https://img.shields.io/badge/Linux-x86__64-555555)
 ![Tauri 2](https://img.shields.io/badge/Tauri-2-24C8DB)
 [![License: MIT](https://img.shields.io/badge/license-MIT-2EA043)](LICENSE)
 
@@ -21,7 +22,7 @@
 
 ## Download and use
 
-**[Latest Windows and macOS installers](https://github.com/tahap0l/nobetci/releases/latest)**
+**[Latest Windows, macOS and Linux installers](https://github.com/tahap0l/nobetci/releases/latest)**
 
 [Website](https://tahap0l.github.io/nobetci/) · [Interactive web demo](https://tahap0l.github.io/nobetci/demo/)
 
@@ -29,7 +30,9 @@ Nöbetçi sits at the top of the screen. Click the compact island to open your a
 
 - **Agent monitoring.** Track Claude Code, Codex, and Cursor sessions and supported permission requests. On Windows, you can see ChatGPT response status from Chrome or Edge. [ChatGPT Web setup](integrations/chatgpt-web/README.md)
 - **Three island tabs.** Use **Media & focus**, **Calendar**, and **Weather**, or swipe up on the card area. Browse weeks with the calendar arrows and see the selected city's conditions and temperature in a table.
-- **Media and focus.** The Windows player shows Spotify or other supported media with artwork when available. The 25-minute focus timer can be paused or reset. Choose a weather city and enable media under **Settings → General → Island widgets**.
+- **Media and focus.** The player shows what is playing, with the artwork blurred behind the card, a live time bar you can click to seek, and play, pause, next and previous. It follows the system media controls on Windows (Spotify, browsers…), Spotify and Music on macOS, and every MPRIS player on Linux (Spotify, VLC, browsers…). The 25-minute focus timer can be paused or reset. Choose a weather city and enable media under **Settings → General → Island widgets**.
+- **An assistant on the island.** Press `Ctrl+Alt+Space` (or the ✦ button), write what you want and send it to ChatGPT, Claude, Gemini, Perplexity, Copilot, Grok, DeepSeek or Mistral — the app opens with your message, and it is on the clipboard too. **Here** answers on the island itself with your Prompt Studio model. Slash commands control Nöbetçi from the same box: `/pause`, `/dnd`, `/focus 25`, `/play`, `/next`, `/prev`, `/settings`; ↑ and ↓ bring back earlier messages.
+- **Claude Code everywhere.** Sessions from the terminal, VS Code and the **Code tab of the Claude desktop app** all show on the island; the card tells you where each one runs.
 - **Seven mascots.** The owl, a wolf, a hawk, an octopus, a lion, a canary and an eagle move and react the same way: they wave at a permission request, bristle at a risky one, hop when a session finishes and doze when nothing is running. Choose one under **Settings → General → Appearance**; it also sets the card colors and transitions. Try the reactions in the web demo.
 
 <p align="center"><img src="docs/media/en/mascots.png" width="720" alt="The seven mascots side by side, each in a different mood: the owl idle, the wolf waving at a permission request, the hawk alarmed, the octopus thinking, the lion happy, the canary delighted and the eagle puzzled"></p>
@@ -116,8 +119,9 @@ edge of the screen.
 
 ### 🔒 Privacy
 
-- **No telemetry or accounts.** Outside an explicit prompt review, Nöbetçi makes no network
-  requests. Ollama uses its local service by default; Ollama models marked **cloud** may forward the
+- **No telemetry or accounts.** Outside an explicit prompt review, an assistant question you send
+  with **Here**, and the weather card once you pick a city, Nöbetçi makes no network requests.
+  Sending a message to an AI app opens that app or your browser; Nöbetçi itself sends nothing. Ollama uses its local service by default; Ollama models marked **cloud** may forward the
   draft. OpenAI receives it only after you select it and click **Improve**. Optional API keys stay
   in the operating system credential vault.
 - **Local data.** Settings, history and log are JSON, JSON Lines and text. Drafts and rewrites are
@@ -169,8 +173,8 @@ Nöbetçi is built so that it never holds Claude Code hostage:
 > 📖 The [installation guide](docs/install.md) goes through every step in detail, plus updating,
 > uninstalling and troubleshooting.
 
-Nöbetçi runs on **Windows 10 and 11** (64-bit) and on **macOS 11 or later** (Apple silicon and
-Intel; macOS support is new and still a beta). It needs [Claude Code](https://code.claude.com/docs/en/overview)
+Nöbetçi runs on **Windows 10 and 11** (64-bit), on **macOS 11 or later** (Apple silicon and
+Intel) and on **Linux** (x86-64, X11 or Wayland). It needs [Claude Code](https://code.claude.com/docs/en/overview)
 running on the same system — Claude Code inside WSL or a container keeps its settings elsewhere
 and isn't covered.
 
@@ -197,7 +201,7 @@ fetches it if it's missing.
 > SmartScreen reputation. Once you've checked the hash, choose **More info → Run anyway**. Signed
 > releases are on the [roadmap](#roadmap).
 
-### macOS (beta)
+### macOS
 
 1. Download `Nobetci-x.y.z-macos-universal.dmg` and `SHA256SUMS.txt` from the
    [latest release](https://github.com/tahap0l/nobetci/releases/latest).
@@ -217,6 +221,28 @@ fetches it if it's missing.
 Nöbetçi lives in the menu bar, with no Dock icon. The [installation guide](docs/install.md#macos)
 has the details.
 
+### Linux
+
+Nöbetçi runs on X11 and, through XWayland, on Wayland desktops (GNOME, KDE Plasma, Xfce,
+Cinnamon…). It needs WebKitGTK 4.1, which current Ubuntu, Debian, Fedora and Arch ship.
+
+1. Download `Nobetci-x.y.z-linux-amd64.deb` (Debian, Ubuntu, Mint…) or
+   `Nobetci-x.y.z-linux-amd64.AppImage` (any distribution) and `SHA256SUMS.txt` from the
+   [latest release](https://github.com/tahap0l/nobetci/releases/latest).
+2. Check the download:
+
+   ```sh
+   sha256sum Nobetci-x.y.z-linux-amd64.*
+   cat SHA256SUMS.txt
+   ```
+
+3. Install the package with `sudo apt install ./Nobetci-x.y.z-linux-amd64.deb`, or make the
+   AppImage executable (`chmod +x Nobetci-*.AppImage`) and run it.
+
+Nöbetçi lives in the system tray. On GNOME the tray needs the *AppIndicator* extension (Ubuntu has
+it already). The relay's socket is `~/.local/state/nobetci/nobetci.sock`, settings are in
+`~/.config/nobetci`, the history in `~/.local/share/nobetci`.
+
 ### Build from source
 
 You need [Rust](https://rustup.rs) with the MSVC toolchain, Node.js 22 or newer, and the
@@ -234,6 +260,10 @@ npm run pack     # → release\Nobetci-<version>-setup.exe
 On a Mac you need the Xcode Command Line Tools (`xcode-select --install`), Rust with both Apple
 targets (`rustup target add aarch64-apple-darwin x86_64-apple-darwin`) and Node.js 22 or newer;
 `npm run pack:mac` builds `release/Nobetci-<version>-macos-universal.dmg`.
+
+On Linux you need Rust, Node.js 22 or newer and the WebKitGTK development packages
+(`sudo apt install libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxi-dev libdbus-1-dev`
+on Debian and Ubuntu); `npm run pack:linux` builds the `.deb` and the AppImage.
 
 ## First run
 
@@ -442,6 +472,7 @@ rolls over to `audit.1.jsonl` at 10 MB
 | Deny the request on the card | `Ctrl+Alt+D` |
 | Allow the request on the card | Not set — LOW-risk requests only |
 | Do not disturb on / off | Not set |
+| Open the assistant | `Ctrl+Alt+Space` |
 
 On a Mac, Ctrl is ⌃ Control and Alt is ⌥ Option. Hotkeys work from any window. Any program can
 fake keystrokes, so the allow hotkey is off by
@@ -502,11 +533,10 @@ from `~/.claude/settings.json` — with a dated backup next to it — and touche
 has no uninstallers, so remove the hooks in Settings first. See [Uninstall](#uninstall).
 
 **Does it run on macOS? Linux?**
-macOS 11 or later, yes — new in 0.2.0 and still a beta, so please report anything odd. A few
-things differ there: the island sits below the menu bar, clicking it makes Nöbetçi the active
-app, **Go to window** brings the session's app to the front rather than one particular window,
-and quiet in full screen isn't available yet.
-Linux is on the [roadmap](#roadmap).
+Both, yes. On macOS 11 or later the island sits below the menu bar as a panel that never steals
+focus, quiet in full screen works, and **Go to window** brings the session's app to the front
+rather than one particular window. On Linux the island runs on X11 or, through XWayland, on
+Wayland; the media card works with every MPRIS player.
 
 **Why does macOS refuse to open it?**
 Releases aren't notarized by Apple yet. Check the SHA-256, then open it once through **System
@@ -557,6 +587,14 @@ Your preferences, history and the relay stay in `~/Library/Application Support/N
 that folder to remove every trace. Forgot step 1? Nothing breaks: the relay is still in that
 folder, finds nobody listening and exits, and Claude Code carries on — or run
 `/Applications/Nobetci.app/Contents/MacOS/nobetci --remove-hooks` before you delete the app.
+
+### Linux
+
+1. **Settings → Claude Code → Remove…** takes Nöbetçi's entries out of `~/.claude/settings.json`.
+2. `sudo apt remove nobetci`, or delete the AppImage.
+
+Settings stay in `~/.config/nobetci`, history and the relay in `~/.local/share/nobetci`; delete
+both to remove every trace.
 
 ## Development
 
@@ -629,10 +667,9 @@ Ideas, not promises:
   signing for open-source projects.
 - **Notarized macOS builds**, so Gatekeeper opens them without a detour.
 - **Other agents** — Cursor and other coding agents that offer hooks or a permission API.
-- **Linux**, plus full-screen quiet and an island that never takes focus on macOS.
+- **A richer assistant** on the island: more apps, voice input, answers that stay on screen.
 - **Sharper rules** — more coverage and fewer false positives. Reports are very welcome.
-
 
 ## License
 
-[MIT](LICENSE). See [NOTICE.md](NOTICE.md) for the parts adapted from Coucou.
+[MIT](LICENSE). See [NOTICE.md](NOTICE.md) for third-party notices.

@@ -113,7 +113,12 @@ fn result_text(value: &Value) -> Option<String> {
 pub async fn rewrite_prompt(text: String, agent: String, provider: String, model: String) -> Result<String, String> {
     validate(&text, &model)?;
     let agent = agent_name(&agent)?;
-    let instruction = instructions(agent);
+    complete(&instructions(agent), &text, &provider, &model).await
+}
+
+/// One request to the chosen provider: Ollama on this computer, or the OpenAI
+/// API with the key from the OS credential store. Nothing is kept afterwards.
+pub async fn complete(instruction: &str, text: &str, provider: &str, model: &str) -> Result<String, String> {
     let mut builder = reqwest::Client::builder().timeout(Duration::from_secs(120));
     if provider == "ollama" {
         // Keep local drafts on-device even if the machine has a proxy configured.
@@ -123,7 +128,7 @@ pub async fn rewrite_prompt(text: String, agent: String, provider: String, model
         crate::i18n::pick("Couldn't start the message editor.", "Mesaj düzenleyici başlatılamadı.").to_string()
     })?;
 
-    let response = match provider.as_str() {
+    let response = match provider {
         "ollama" => client
             .post("http://127.0.0.1:11434/api/chat")
             .json(&json!({
@@ -178,7 +183,7 @@ pub async fn rewrite_prompt(text: String, agent: String, provider: String, model
 
     if !response.status().is_success() {
         let status = response.status().as_u16();
-        return Err(match provider.as_str() {
+        return Err(match provider {
             "openai" => format!(
                 "{} ({status}).",
                 crate::i18n::pick("OpenAI couldn't process this request", "OpenAI bu isteği işleyemedi")

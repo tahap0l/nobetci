@@ -6,7 +6,7 @@
 // every piece is a text node, and a bug in this file cannot become script.
 
 import { drawOwlMini } from "../baykus/mini";
-import type { OwlMood } from "../baykus/owl";
+import type { OwlEmote, OwlMood } from "../baykus/owl";
 import type { DecisionOptions, RiskAssessment, RiskLevel } from "../core/bridge";
 import { Sound } from "../core/sound";
 import {
@@ -17,6 +17,7 @@ import { toolLabel } from "../island/hooks";
 import { HEADER_H } from "../island/layout";
 import { clear, h, icon } from "./dom";
 import { LEVEL_LABEL } from "./labels";
+import { SPARK_ICON, buildAssistant } from "./assistant";
 import { buildWidgets, compactWidgetSummary, widgetHeight } from "./widgets";
 
 export interface ViewHost {
@@ -40,6 +41,11 @@ export interface ViewActions {
   collapse(): void;
   togglePause(): void;
   toggleDnd(): void;
+  /** The assistant view, with the keyboard. */
+  openAssistant(): void;
+  /** Hold a mood on the mascot while the assistant works; null lets go. */
+  assistantMood(m: OwlMood | null): void;
+  react(e: OwlEmote): void;
 }
 
 // ── Labels ────────────────────────────────────────────────────────────────────
@@ -162,6 +168,7 @@ function buildHeader(actions: ViewActions): ViewHost {
     h("span", { class: "hdr-title", text: "Nöbetçi" }),
     status,
     h("span", { class: "grow" }),
+    h("button", { class: "icon-btn hdr-assistant", title: t("hdr.assistant"), onclick: () => actions.openAssistant() }, icon(SPARK_ICON)),
     dndBtn,
     pauseBtn,
     h("button", { class: "icon-btn", title: t("hdr.settings"), onclick: () => actions.openSettings() }, icon(ICON.gear)),
@@ -534,7 +541,8 @@ function buildApproval(actions: ViewActions): ViewHost {
   const denyMore = h("button", { class: "btn btn-deny split-more", title: t("ap.denyMore") }, icon(ICON.chevron, 13));
   const denyMenu = h("div", { class: "deny-menu" });
   const denyGroup = h("span", { class: "split" }, denyBtn, denyMore, denyMenu);
-  const termBtn = h("button", { class: "btn btn-ghost", title: t("ap.toTerminalTitle") }, icon(ICON.terminal, 13), ` ${t("ap.toTerminal")}`);
+  const termLabel = h("span", { text: ` ${t("ap.toTerminal")}` });
+  const termBtn = h("button", { class: "btn btn-ghost", title: t("ap.toTerminalTitle") }, icon(ICON.terminal, 13), termLabel);
 
   const el = h(
     "div",
@@ -649,6 +657,10 @@ function buildApproval(actions: ViewActions): ViewHost {
     chip.className = `risk-chip lvl-${r.level}`;
     chip.textContent = LEVEL_LABEL[r.level];
     who.textContent = `${session?.name ?? t("ap.session")} · ${toolLabel(a.tool)}`;
+    // A session from the Claude desktop app asks in its own window, not a terminal.
+    const inApp = session?.terminal === "Claude";
+    termLabel.textContent = ` ${t(inApp ? "ap.toApp" : "ap.toTerminal")}`;
+    termBtn.title = t(inApp ? "ap.toAppTitle" : "ap.toTerminalTitle");
     project.replaceChildren();
     project.hidden = !session?.cwd;
     if (session?.cwd) appendRevealed(project, session.cwd);
@@ -764,6 +776,17 @@ export function buildViews(actions: ViewActions): { header: ViewHost; views: Map
       ["session", buildSession(actions)],
       ["empty", buildEmpty(actions)],
       ["approval", buildApproval(actions)],
+      [
+        "assistant",
+        buildAssistant({
+          back: () => actions.back(),
+          togglePause: () => actions.togglePause(),
+          toggleDnd: () => actions.toggleDnd(),
+          openSettings: (tab) => actions.openSettings(tab),
+          mood: (m) => actions.assistantMood(m),
+          react: (e) => actions.react(e),
+        }),
+      ],
     ]),
   };
 }

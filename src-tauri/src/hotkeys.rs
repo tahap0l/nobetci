@@ -24,9 +24,13 @@ pub fn apply(app: &AppHandle, hotkeys: &Hotkeys) -> Vec<HotkeyStatus> {
     let gs = app.global_shortcut();
     let _ = gs.unregister_all();
     let mut out = Vec::new();
-    for (action, accel) in
-        [("toggle", &hotkeys.toggle), ("deny", &hotkeys.deny), ("allow", &hotkeys.allow), ("dnd", &hotkeys.dnd)]
-    {
+    for (action, accel) in [
+        ("toggle", &hotkeys.toggle),
+        ("deny", &hotkeys.deny),
+        ("allow", &hotkeys.allow),
+        ("dnd", &hotkeys.dnd),
+        ("assistant", &hotkeys.assistant),
+    ] {
         let accel = accel.trim().to_string();
         if accel.is_empty() {
             out.push(HotkeyStatus { action, accel, ok: true, error: None });

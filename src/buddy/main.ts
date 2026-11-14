@@ -20,13 +20,17 @@ const DRAG_SLOP = 4;
 const LANDING_MS = 180;
 /** Calm for this long and the mascot falls asleep (and the loop stops). */
 const DOZE_MS = 120_000;
-/** The mascot's width inside the window; the rest is room for badges and sparkles. */
-const BODY = 96;
+/**
+ * The mascot's width as a share of the window's; the rest is room for badges and
+ * sparkles. The window itself is sized by the `buddySize` setting.
+ */
+const BODY_SHARE = 96 / 124;
+const OVERHANG_SHARE = 56 / 96;
 
 const canvas = document.getElementById("mascot") as HTMLCanvasElement;
 const ctx = canvas.getContext("2d")!;
 const owl = new OwlEngine();
-owl.overhang = 56;
+let body = 96;
 
 let islandMood: OwlMood = "idle";
 let lastStir = performance.now();
@@ -36,6 +40,8 @@ let carried = false;
 let landing: number | null = null;
 
 function size() {
+  body = Math.round(window.innerWidth * BODY_SHARE);
+  owl.overhang = Math.round(body * OVERHANG_SHARE);
   const dpr = Math.min(2, window.devicePixelRatio || 1);
   canvas.width = Math.round(window.innerWidth * dpr);
   canvas.height = Math.round(window.innerHeight * dpr);
@@ -70,9 +76,9 @@ function frame(now: number) {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
   // Feet near the bottom, room above the head for badges.
-  const top = window.innerHeight - (BODY + owl.overhang) - 2;
-  ctx.translate((window.innerWidth - BODY) / 2, top);
-  owl.draw(ctx, BODY, BODY + owl.overhang);
+  const top = window.innerHeight - (body + owl.overhang) - 2;
+  ctx.translate((window.innerWidth - body) / 2, top);
+  owl.draw(ctx, body, body + owl.overhang);
 
   if (owl.busy && !document.hidden) requestAnimationFrame(frame);
   else running = false;
@@ -85,7 +91,7 @@ let dragged = false;
 
 canvas.addEventListener("pointermove", (e) => {
   const cx = window.innerWidth / 2;
-  const cy = window.innerHeight - BODY * 0.7;
+  const cy = window.innerHeight - body * 0.7;
   owl.lookX = Math.tanh((e.clientX - cx) / 50);
   owl.lookY = -Math.tanh((e.clientY - cy) / 50);
   if (down && !dragged && Math.hypot(e.clientX - down.x, e.clientY - down.y) > DRAG_SLOP) {

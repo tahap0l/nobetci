@@ -8,7 +8,8 @@
 
 [![CI](https://github.com/tahap0l/nobetci/actions/workflows/ci.yml/badge.svg)](https://github.com/tahap0l/nobetci/actions/workflows/ci.yml)
 ![Windows 10 | 11](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D4)
-![macOS 11+ (beta)](https://img.shields.io/badge/macOS-11%2B%20(beta)-555555)
+![macOS 11+](https://img.shields.io/badge/macOS-11%2B-555555)
+![Linux](https://img.shields.io/badge/Linux-x86__64-555555)
 ![Tauri 2](https://img.shields.io/badge/Tauri-2-24C8DB)
 [![Lisans: MIT](https://img.shields.io/badge/lisans-MIT-2EA043)](LICENSE)
 
@@ -18,7 +19,7 @@
 
 ## İndir ve kullan
 
-**[Güncel Windows ve macOS kurulumları](https://github.com/tahap0l/nobetci/releases/latest)**
+**[Güncel Windows, macOS ve Linux kurulumları](https://github.com/tahap0l/nobetci/releases/latest)**
 
 [Web sitesi](https://tahap0l.github.io/nobetci/) · [Etkileşimli web demosu](https://tahap0l.github.io/nobetci/demo/)
 
@@ -26,7 +27,9 @@ Nöbetçi ekranın üstünde küçük bir ada olarak durur. Adaya tıklayarak aj
 
 - **Ajan takibi.** Claude Code, Codex ve Cursor oturumlarını ve desteklenen izin isteklerini izle. Windows’ta Chrome veya Edge’deki ChatGPT yanıt durumunu görebilirsin. [ChatGPT Web kurulumu](integrations/chatgpt-web/README.md)
 - **Üç ada sekmesi.** **Medya ve odak**, **Takvim** ve **Hava durumu** sekmelerine dokun veya kartları yukarı kaydır. Takvimde oklarla haftalar arasında gez, hava durumu tablosunda seçtiğin şehrin sıcaklığını ve güncel koşullarını gör.
-- **Medya ve odak.** Windows medya kartı Spotify ve desteklenen diğer kaynaklarda çalan parçayı ve varsa kapak görselini gösterir. 25 dakikalık odak sayacı duraklatılabilir ve sıfırlanabilir. **Ayarlar → Genel → Ada bileşenleri** bölümünden hava durumu için şehir seçebilir ve medya kartını açabilirsin.
+- **Medya ve odak.** Oynatıcı çalan parçayı kartın arkasında bulanık kapak görseliyle, tıklayıp ileri sarabileceğin canlı bir süre çubuğuyla ve oynat, duraklat, sonraki, önceki düğmeleriyle gösterir. Windows'ta sistem medya kontrollerini (Spotify, tarayıcılar…), macOS'ta Spotify ve Müzik'i, Linux'ta MPRIS destekleyen her oynatıcıyı (Spotify, VLC, tarayıcılar…) izler. 25 dakikalık odak sayacı duraklatılabilir ve sıfırlanabilir. **Ayarlar → Genel → Ada bileşenleri** bölümünden hava durumu için şehir seçebilir ve medya kartını açabilirsin.
+- **Adada bir asistan.** `Ctrl+Alt+Space`'e (ya da ✦ düğmesine) bas, ne istediğini yaz ve ChatGPT, Claude, Gemini, Perplexity, Copilot, Grok, DeepSeek ya da Mistral'e gönder — uygulama mesajınla açılır, mesaj panoya da kopyalanır. **Burada** seçeneği Mesaj Atölyesi modelinle yanıtı adanın üstünde verir. Aynı kutudan eğik çizgi komutlarıyla Nöbetçi'yi yönetirsin: `/duraklat`, `/sessiz`, `/odak 25`, `/müzik`, `/sonraki`, `/önceki`, `/ayarlar`; ↑ ve ↓ önceki mesajları geri getirir.
+- **Claude Code her yerde.** Terminalden, VS Code'dan ve **Claude masaüstü uygulamasının Code sekmesinden** açılan oturumlar adada görünür; kart her birinin nerede çalıştığını söyler.
 - **Yedi maskot.** Baykuş, kurt, şahin, ahtapot, aslan, kanarya ve kartal aynı şekilde hareket eder ve tepki verir: izin isteğinde el sallar, riskli istekte kabarır, oturum bitince zıplar, çalışan bir şey yokken uyuklar. Maskotu **Ayarlar → Genel → Görünüm** bölümünden seç; kart renkleri ve geçişler de ona göre değişir. Tepkileri web demosunda deneyebilirsin.
 
 <p align="center"><img src="docs/media/tr/mascots.png" width="720" alt="Yedi maskot yan yana, her biri farklı bir ruh halinde: baykuş boşta, kurt izin isteğine el sallıyor, şahin alarmda, ahtapot düşünüyor, aslan mutlu, kanarya sevinçli, kartal şaşkın"></p>
@@ -115,7 +118,9 @@ butonu bilerek basılı tutman gerekir. Sana ihtiyaç olmadığında ekranın ü
 
 ### 🔒 Gizlilik
 
-- **Telemetri yok, hesap yok.** Açıkça mesaj inceleme istemediğin sürece Nöbetçi ağ isteği yapmaz.
+- **Telemetri yok, hesap yok.** Açıkça istediğin mesaj incelemesi, **Burada** ile sorduğun asistan
+  sorusu ve şehir seçtiğinde hava durumu kartı dışında Nöbetçi ağ isteği yapmaz. Bir yapay zekâ
+  uygulamasına mesaj göndermek o uygulamayı ya da tarayıcını açar; Nöbetçi kendisi bir şey göndermez.
   Ollama varsayılan olarak yerel servisini kullanır; **cloud** etiketli Ollama modelleri taslağı
   dışarı iletebilir. OpenAI yalnızca onu seçip **Mesajı iyileştir** dediğinde taslağı alır. İsteğe
   bağlı API anahtarı işletim sisteminin güvenli parola kasasında durur.
@@ -168,8 +173,8 @@ Nöbetçi, Claude Code'u asla rehin tutmayacak biçimde tasarlandı:
 > 📖 [Kurulum kılavuzu](docs/kurulum.md) her adımı, güncellemeyi, kaldırmayı ve sorun gidermeyi
 > ayrıntılı anlatır.
 
-Nöbetçi **Windows 10 ve 11**'de (64 bit) ve **macOS 11 ya da üstünde** (Apple Silicon ve Intel;
-macOS desteği yeni ve henüz beta) çalışır. Aynı sistemde çalışan
+Nöbetçi **Windows 10 ve 11**'de (64 bit), **macOS 11 ya da üstünde** (Apple Silicon ve Intel) ve
+**Linux**'ta (x86-64, X11 ya da Wayland) çalışır. Aynı sistemde çalışan
 [Claude Code](https://code.claude.com/docs/en/overview) gerekir — WSL ya da bir konteyner içindeki
 Claude Code ayarlarını başka bir yerde tutar, kapsam dışıdır.
 
@@ -196,7 +201,7 @@ programı onu indirir.
 > yüzden yeni bir kurulum dosyasının SmartScreen'de itibarı olmaz. Hash'i doğruladıktan sonra
 > **Ek bilgi → Yine de çalıştır**'ı seç. İmzalı sürümler [yol haritasında](#yol-haritası).
 
-### macOS (beta)
+### macOS
 
 1. [Son sürümden](https://github.com/tahap0l/nobetci/releases/latest)
    `Nobetci-x.y.z-macos-universal.dmg` ve `SHA256SUMS.txt` dosyalarını indir.
@@ -216,6 +221,28 @@ programı onu indirir.
 Nöbetçi menü çubuğunda yaşar, Dock'ta simgesi olmaz. Ayrıntılar
 [kurulum kılavuzunda](docs/kurulum.md#macos).
 
+### Linux
+
+Nöbetçi X11'de ve XWayland üzerinden Wayland masaüstlerinde (GNOME, KDE Plasma, Xfce, Cinnamon…)
+çalışır. Güncel Ubuntu, Debian, Fedora ve Arch'ın getirdiği WebKitGTK 4.1 gerekir.
+
+1. [Son sürümden](https://github.com/tahap0l/nobetci/releases/latest)
+   `Nobetci-x.y.z-linux-amd64.deb` (Debian, Ubuntu, Mint…) ya da
+   `Nobetci-x.y.z-linux-amd64.AppImage` (her dağıtım) ve `SHA256SUMS.txt` dosyalarını indir.
+2. İndirdiğini doğrula:
+
+   ```sh
+   sha256sum Nobetci-x.y.z-linux-amd64.*
+   cat SHA256SUMS.txt
+   ```
+
+3. Paketi `sudo apt install ./Nobetci-x.y.z-linux-amd64.deb` ile kur ya da AppImage'ı
+   çalıştırılabilir yap (`chmod +x Nobetci-*.AppImage`) ve aç.
+
+Nöbetçi sistem tepsisinde yaşar. GNOME'da tepsi için *AppIndicator* eklentisi gerekir (Ubuntu'da
+zaten var). Relay soketi `~/.local/state/nobetci/nobetci.sock`, ayarlar `~/.config/nobetci`,
+geçmiş `~/.local/share/nobetci` altındadır.
+
 ### Kaynaktan derleme
 
 [Rust](https://rustup.rs) (MSVC araç zinciriyle), Node.js 22 ya da üstü ve "Desktop development
@@ -233,6 +260,10 @@ npm run pack     # → release\Nobetci-<sürüm>-setup.exe
 Mac'te Xcode Command Line Tools (`xcode-select --install`), iki Apple hedefiyle Rust
 (`rustup target add aarch64-apple-darwin x86_64-apple-darwin`) ve Node.js 22 ya da üstü gerekir;
 `npm run pack:mac`, `release/Nobetci-<sürüm>-macos-universal.dmg` dosyasını üretir.
+
+Linux'ta Rust, Node.js 22 ya da üstü ve WebKitGTK geliştirme paketleri gerekir (Debian ve
+Ubuntu'da `sudo apt install libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxi-dev libdbus-1-dev`);
+`npm run pack:linux` `.deb` ve AppImage üretir.
 
 ## İlk çalıştırma
 
@@ -439,6 +470,7 @@ ya da temizlenebilir.
 | Karttaki isteği reddet | `Ctrl+Alt+D` |
 | Karttaki isteğe izin ver | Atanmamış — sadece DÜŞÜK riskli istekler |
 | Rahatsız etmeyi aç / kapat | Atanmamış |
+| Asistanı aç | `Ctrl+Alt+Space` |
 
 Mac'te Ctrl, ⌃ Control; Alt, ⌥ Option tuşudur. Kısayollar her pencerede çalışır. Her program
 klavye vuruşu taklit edebilir; bu yüzden izin
@@ -499,11 +531,10 @@ bir yedek bırakarak — ve başka hiçbir şeye dokunmaz. Mac'te kaldırma prog
 hook'ları önce Ayarlar'dan kaldır. Bkz. [Kaldırma](#kaldırma).
 
 **macOS'ta çalışır mı? Linux'ta?**
-macOS 11 ve üstünde evet — 0.2.0 ile geldi ve henüz beta; tuhaf bir şey görürsen lütfen bildir.
-Orada birkaç şey farklı: ada menü çubuğunun altında durur, ona tıklamak Nöbetçi'yi etkin uygulama
-yapar, **Pencereye git** belirli bir pencereyi değil oturumun uygulamasını öne getirir, tam ekranda
-sessizlik henüz yok. Linux
-[yol haritasında](#yol-haritası).
+İkisinde de evet. macOS 11 ve üstünde ada menü çubuğunun altında, hiç odak çalmayan bir panel
+olarak durur; tam ekranda sessizlik çalışır; **Pencereye git** belirli bir pencereyi değil oturumun
+uygulamasını öne getirir. Linux'ta ada X11'de ya da XWayland üzerinden Wayland'de çalışır; medya
+kartı MPRIS destekleyen her oynatıcıyla çalışır.
 
 **macOS neden açmayı reddediyor?**
 Sürümler henüz Apple tarafından onaylanmıyor (notarize edilmiyor). SHA-256'yı doğrula, sonra bir
@@ -557,6 +588,14 @@ kalmasın istiyorsan o klasörü de sil. 1. adımı unuttun mu? Bir şey bozulma
 durur, dinleyen kimseyi bulamayıp çıkar ve Claude Code yoluna devam eder. İstersen uygulamayı
 silmeden önce `/Applications/Nobetci.app/Contents/MacOS/nobetci --remove-hooks` komutunu
 çalıştırabilirsin.
+
+### Linux
+
+1. **Ayarlar → Claude Code → Kaldır…** Nöbetçi'nin girdilerini `~/.claude/settings.json`'dan çıkarır.
+2. `sudo apt remove nobetci` çalıştır ya da AppImage'ı sil.
+
+Ayarlar `~/.config/nobetci`, geçmiş ve relay `~/.local/share/nobetci` altında kalır; hiç iz
+kalmasın istiyorsan ikisini de sil.
 
 ## Geliştirme
 
@@ -629,18 +668,9 @@ Söz değil, fikir:
   projelere ücretsiz kod imzalamasıyla.
 - **Apple onaylı (notarize) macOS sürümleri**, Gatekeeper dolambaçsız açsın diye.
 - **Diğer ajanlar** — Cursor ve hook ya da izin API'si sunan başka kodlama ajanları.
-- **Linux**; macOS'ta tam ekranda sessizlik ve hiç odak almayan bir ada.
+- **Daha yetenekli bir asistan**: daha çok uygulama, sesle yazma, ekranda kalan yanıtlar.
 - **Daha keskin kurallar** — daha geniş kapsam, daha az yanlış pozitif. Bildirimlerin çok değerli.
-
-## Teşekkürler
-
-Nöbetçi, Louis Raillé'nin [Coucou](https://github.com/Louis-CFM/coucou) uygulamasının (MIT) bir
-fork'u olarak başladı. Named pipe relay'i, pipe sunucusu, farkı gösterilerek onaylanan hook
-kurulumu, şeffaf ada penceresi ve açılıp kapanma durum makinesi oradan alınıp uyarlandı. Baykuş,
-ikonlar, sentez sesler, risk motoru ve onun üzerine kurulan her şey Nöbetçi'ye özgüdür;
-Coucou'nun adı, karakteri, ikonları ve sesleri kullanılmamıştır. Ayrıntılar
-[NOTICE.md](NOTICE.md)'de.
 
 ## Lisans
 
-[MIT](LICENSE). Coucou'dan uyarlanan kısımlar için [NOTICE.md](NOTICE.md)'ye bak.
+[MIT](LICENSE). Üçüncü taraf bildirimleri için [NOTICE.md](NOTICE.md)'ye bak.

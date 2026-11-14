@@ -1153,7 +1153,7 @@ export function createMockApi(): Api {
       { path: P.nobetci, mode: "trusted", note: U(["Kendi projem", "My own project"]) },
       { path: P.infra, mode: "strict", note: U(["Üretim betikleri", "Production scripts"]) },
     ],
-    hotkeys: { toggle: "Ctrl+Alt+N", deny: "Ctrl+Alt+D", allow: "", dnd: "Ctrl+Alt+M" },
+    hotkeys: { toggle: "Ctrl+Alt+N", deny: "Ctrl+Alt+D", allow: "", dnd: "Ctrl+Alt+M", assistant: "Ctrl+Alt+Space" },
     disabledCategories: ["network", "file_delete"],
   });
   let history = makeHistory(settings);
@@ -1175,7 +1175,7 @@ export function createMockApi(): Api {
     window.setTimeout(() => listeners.get(name)?.forEach((fn) => fn(clone(payload))), 0);
   };
   const hotkeys = (): HotkeyStatus[] =>
-    (["toggle", "deny", "allow", "dnd"] as const).map((action) => {
+    (["toggle", "deny", "allow", "dnd", "assistant"] as const).map((action) => {
       const accel = settings.hotkeys[action];
       const taken = accel.toLowerCase() === "ctrl+alt+m";
       return {
@@ -1221,6 +1221,10 @@ export function createMockApi(): Api {
     toBuddy: async () => {},
     buddyOpenIsland: async () => null,
     buddyResetPosition: async () => null,
+    assistantOpen: async () => ({ prefilled: true }),
+    assistantAsk: async (text: string) => `(${text.length})`,
+    islandKeyboard: async () => null,
+    setAssistantTarget: async () => null,
     islandMedia: async () => null,
     islandMediaControl: async () => false,
     islandWeather: async () => null,
@@ -1239,7 +1243,7 @@ export function createMockApi(): Api {
       version,
       hookPath: hookStatus.hookPath,
       platform,
-      fullscreenSupported: platform === "windows",
+      fullscreenSupported: true,
     }),
     saveSettings: async (s: Settings) => {
       await delay(60);
