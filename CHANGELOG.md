@@ -36,6 +36,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - A refreshed settings window: ambient light behind a glass sidebar and header, cards with an
   icon chip and a soft sheen, the island's violet as the accent, gentler motion.
 
+### Security
+
+- Update `rustls-webpki` to 0.103.17 (RUSTSEC-2026-0382: certificate checks could accept a
+  distrusted intermediate). It is used by the Prompt Studio's OpenAI connection and the weather card.
+
 ## [2.2.0] - 2026-11-14
 
 ### Added
