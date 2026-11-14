@@ -151,9 +151,129 @@ pub fn open_url(url: &str) -> bool {
     return std::process::Command::new("xdg-open").arg(url).spawn().is_ok();
 }
 
+/// The name of the app that opens `scheme:` links, if one is installed.
+/// `scheme` must be a plain URL scheme (letters, digits, `+`, `-`, `.`).
+pub fn scheme_handler(scheme: &str) -> Option<String> {
+    if scheme.is_empty() || !scheme.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'+' | b'-' | b'.')) {
+        return None;
+    }
+    scheme_handler_os(scheme).filter(|name| !name.trim().is_empty())
+}
+
+#[cfg(windows)]
+fn scheme_handler_os(scheme: &str) -> Option<String> {
+    use windows::core::{PCWSTR, PWSTR};
+    use windows::Win32::UI::Shell::{AssocQueryStringW, ASSOCF_IS_PROTOCOL, ASSOCSTR_FRIENDLYAPPNAME};
+    let wide: Vec<u16> = scheme.encode_utf16().chain(Some(0)).collect();
+    let mut buf = [0u16; 260];
+    let mut len = buf.len() as u32;
+    // ASSOCF_IS_PROTOCOL also finds protocols registered by packaged (Store) apps.
+    let hr = unsafe {
+        AssocQueryStringW(
+            ASSOCF_IS_PROTOCOL,
+            ASSOCSTR_FRIENDLYAPPNAME,
+            PCWSTR(wide.as_ptr()),
+            PCWSTR::null(),
+            Some(PWSTR(buf.as_mut_ptr())),
+            &mut len,
+        )
+    };
+    if hr.is_err() {
+        return None;
+    }
+    let end = buf.iter().position(|&c| c == 0).unwrap_or(buf.len());
+    Some(String::from_utf16_lossy(&buf[..end]))
+}
+
+#[cfg(target_os = "macos")]
+fn scheme_handler_os(scheme: &str) -> Option<String> {
+    use std::ffi::c_void;
+    type CFTypeRef = *const c_void;
+    #[link(name = "CoreFoundation", kind = "framework")]
+    extern "C" {
+        fn CFURLCreateWithBytes(a: CFTypeRef, bytes: *const u8, len: isize, enc: u32, base: CFTypeRef) -> CFTypeRef;
+        fn CFURLGetFileSystemRepresentation(url: CFTypeRef, abs: u8, buf: *mut u8, len: isize) -> u8;
+        fn CFRelease(p: CFTypeRef);
+    }
+    #[link(name = "CoreServices", kind = "framework")]
+    extern "C" {
+        fn LSCopyDefaultApplicationURLForURL(url: CFTypeRef, roles: u32, err: *mut CFTypeRef) -> CFTypeRef;
+    }
+    const UTF8: u32 = 0x0800_0100;
+    const ALL_ROLES: u32 = 0xFFFF_FFFF;
+    let link = format!("{scheme}://");
+    // SAFETY: every object created here is released before returning.
+    unsafe {
+        let url = CFURLCreateWithBytes(std::ptr::null(), link.as_ptr(), link.len() as isize, UTF8, std::ptr::null());
+        if url.is_null() {
+            return None;
+        }
+        let app = LSCopyDefaultApplicationURLForURL(url, ALL_ROLES, std::ptr::null_mut());
+        CFRelease(url);
+        if app.is_null() {
+            return None;
+        }
+        let mut buf = [0u8; 1024];
+        let ok = CFURLGetFileSystemRepresentation(app, 1, buf.as_mut_ptr(), buf.len() as isize);
+        CFRelease(app);
+        if ok == 0 {
+            return None;
+        }
+        let end = buf.iter().position(|&c| c == 0).unwrap_or(buf.len());
+        let path = String::from_utf8_lossy(&buf[..end]).into_owned();
+        // "/Applications/ChatGPT.app" → "ChatGPT"
+        let name = path.trim_end_matches('/').rsplit('/').next()?.trim_end_matches(".app").to_string();
+        Some(name)
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn scheme_handler_os(scheme: &str) -> Option<String> {
+    let out = std::process::Command::new("xdg-mime")
+        .args(["query", "default", &format!("x-scheme-handler/{scheme}")])
+        .output()
+        .ok()?;
+    let name = String::from_utf8_lossy(&out.stdout).trim().trim_end_matches(".desktop").to_string();
+    out.status.success().then_some(name)
+}
+
+/// Opens an app link (`claude://…`, `ms-copilot:`) with the app that handles it.
+/// Only for the fixed links in `assistant.rs`; web addresses go through `open_url`.
+pub fn open_app_link(url: &str) -> bool {
+    let Some((scheme, _)) = url.split_once(':') else { return false };
+    if matches!(scheme, "http" | "https" | "file" | "javascript" | "data") || scheme_handler(scheme).is_none() {
+        return false;
+    }
+    #[cfg(windows)]
+    {
+        use windows::core::{w, PCWSTR};
+        use windows::Win32::UI::Shell::ShellExecuteW;
+        use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+        let wide: Vec<u16> = url.encode_utf16().chain(Some(0)).collect();
+        let r = unsafe {
+            ShellExecuteW(None, w!("open"), PCWSTR(wide.as_ptr()), PCWSTR::null(), PCWSTR::null(), SW_SHOWNORMAL)
+        };
+        // ShellExecute reports success with a value above 32.
+        r.0 as isize > 32
+    }
+    #[cfg(target_os = "macos")]
+    return std::process::Command::new("/usr/bin/open").arg(url).spawn().is_ok();
+    #[cfg(target_os = "linux")]
+    return std::process::Command::new("xdg-open").arg(url).spawn().is_ok();
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn odd_schemes_are_never_looked_up() {
+        assert_eq!(scheme_handler(""), None);
+        assert_eq!(scheme_handler("a b"), None);
+        assert_eq!(scheme_handler("x;rm -rf"), None);
+        assert!(!open_app_link("https://example.com"));
+        assert!(!open_app_link("javascript:alert(1)"));
+    }
 
     #[test]
     fn stamps_are_zero_padded() {

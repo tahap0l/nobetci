@@ -33,8 +33,26 @@ const M = {
   ],
   "genel.buddy.size": ["Boyut", "Size"],
   "genel.buddy.sizeHint": [
-    "Maskotu küçült ya da büyüt; ayakları durduğu yerde kalır.",
-    "Make the mascot smaller or bigger; its feet stay where they are.",
+    "Maskotu küçült ya da büyüt; ayakları durduğu yerde kalır. Maskotun üstünde Ctrl + fare tekerleği de çalışır.",
+    "Make the mascot smaller or bigger; its feet stay where they are. Ctrl + mouse wheel over the mascot works too.",
+  ],
+  "genel.buddy.sizeHint@mac": [
+    "Maskotu küçült ya da büyüt; ayakları durduğu yerde kalır. Maskotun üstünde ⌘ + kaydırma da çalışır.",
+    "Make the mascot smaller or bigger; its feet stay where they are. ⌘ + scroll over the mascot works too.",
+  ],
+  "genel.islandMascot": ["Adadaki maskotun boyutu", "Mascot size on the island"],
+  "genel.islandMascotHint": ["Ada açıkken soldaki maskotu büyüt ya da küçült.", "Make the mascot on the open island bigger or smaller."],
+  "genel.widgets.focus": ["Odak süresi", "Focus length"],
+  "genel.widgets.focusHint": [
+    "Odak sayacının başlangıç süresi. Kartın üstündeki − ve + da 5'er dakika değiştirir.",
+    "How long the focus timer runs. The − and + on the card change it by 5 minutes too.",
+  ],
+  "genel.widgets.focusUnit": ["dk", "min"],
+  "genel.assistant.title": ["Asistan", "Assistant"],
+  "genel.assistant.apps": ["Yüklü uygulamaları kullan", "Use installed apps"],
+  "genel.assistant.appsHint": [
+    "ChatGPT, Claude, Perplexity ya da Copilot bilgisayarında yüklüyse mesajın tarayıcı yerine o uygulamada açılır. Uygulama mesajı yalnızca kutuya yazar; göndermek senin elinde.",
+    "If ChatGPT, Claude, Perplexity or Copilot is installed, your message opens in that app instead of the browser. The app only fills in the box; sending is up to you.",
   ],
   "genel.buddy.reset": ["Konumu sıfırla", "Reset position"],
   "genel.buddy.resetHint": [

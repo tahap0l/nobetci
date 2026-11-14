@@ -58,6 +58,12 @@ export interface Settings {
   buddySize: number;
   /** Where the assistant sends a prompt: "here" or an AI app. */
   assistantTarget: string;
+  /** Open an AI app installed on this computer instead of its website. */
+  assistantUseApps: boolean;
+  /** Length of the island's focus timer, in minutes. */
+  focusMinutes: number;
+  /** Size of the mascot inside the island, in percent (80–130). */
+  islandMascotSize: number;
   // Prompt review
   promptProvider: "ollama" | "openai";
   ollamaModel: string;
@@ -130,6 +136,9 @@ export const DEFAULT_SETTINGS: Settings = {
   buddyPos: null,
   buddySize: 100,
   assistantTarget: "chatgpt",
+  assistantUseApps: true,
+  focusMinutes: 25,
+  islandMascotSize: 100,
   promptProvider: "ollama",
   ollamaModel: "gemma4",
   openaiModel: "gpt-6-luna",

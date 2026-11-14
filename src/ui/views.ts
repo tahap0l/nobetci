@@ -433,7 +433,8 @@ function buildEmpty(actions: ViewActions): ViewHost {
   const el = h("div", { class: "view view-empty" }, status, widgets.el);
   return {
     el,
-    height: () => HEADER_H + 42 + widgetHeight(),
+    // The status line is taller while it carries the setup button.
+    height: () => HEADER_H + 24 + Math.max(28, status.offsetHeight) + widgetHeight(),
     tick: widgets.refresh,
     sync() {
       widgets.refresh();

@@ -1,29 +1,128 @@
 use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
 
+/// Cities the weather card offers: (id, latitude, longitude). The front end has
+/// the matching names in `island-widgets.ts`.
+const CITIES: &[(&str, f64, f64)] = &[
+    ("istanbul", 41.01, 28.97),
+    ("ankara", 39.93, 32.86),
+    ("izmir", 38.42, 27.14),
+    ("bursa", 40.19, 29.06),
+    ("antalya", 36.90, 30.71),
+    ("adana", 37.00, 35.32),
+    ("konya", 37.87, 32.48),
+    ("gaziantep", 37.07, 37.38),
+    ("kayseri", 38.73, 35.48),
+    ("eskisehir", 39.78, 30.52),
+    ("samsun", 41.29, 36.33),
+    ("trabzon", 41.00, 39.72),
+    ("diyarbakir", 37.91, 40.24),
+    ("kocaeli", 40.77, 29.94),
+    ("mersin", 36.81, 34.64),
+    ("london", 51.51, -0.13),
+    ("berlin", 52.52, 13.40),
+    ("amsterdam", 52.37, 4.90),
+    ("paris", 48.86, 2.35),
+    ("new-york", 40.71, -74.01),
+    ("san-francisco", 37.77, -122.42),
+    ("tokyo", 35.68, 139.69),
+];
+
 pub fn city(id: &str) -> Option<(f64, f64)> {
-    match id {
-        "istanbul" => Some((41.01, 28.97)),
-        "ankara" => Some((39.93, 32.86)),
-        "izmir" => Some((38.42, 27.14)),
-        "bursa" => Some((40.19, 29.06)),
-        "antalya" => Some((36.90, 30.71)),
-        _ => None,
-    }
+    CITIES.iter().find(|(c, _, _)| *c == id).map(|&(_, lat, lon)| (lat, lon))
 }
 
-#[derive(Deserialize, Serialize)]
+/// One hour of the forecast strip.
+#[derive(Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct Hour {
+    /// Local time as "HH:00".
+    time: String,
+    temperature: f64,
+    code: u8,
+}
+
+#[derive(Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct Weather {
-    #[serde(rename(deserialize = "temperature_2m"))]
     pub temperature: f64,
-    #[serde(rename(deserialize = "weather_code"))]
     pub code: u8,
+    feels_like: f64,
+    is_day: bool,
+    wind: f64,
+    high: Option<f64>,
+    low: Option<f64>,
+    hours: Vec<Hour>,
+}
+
+#[derive(Deserialize)]
+struct Current {
+    temperature_2m: f64,
+    weather_code: u8,
+    apparent_temperature: Option<f64>,
+    is_day: Option<u8>,
+    wind_speed_10m: Option<f64>,
+}
+
+#[derive(Deserialize, Default)]
+struct Hourly {
+    time: Vec<String>,
+    temperature_2m: Vec<f64>,
+    weather_code: Vec<u8>,
+}
+
+#[derive(Deserialize, Default)]
+struct Daily {
+    temperature_2m_max: Vec<f64>,
+    temperature_2m_min: Vec<f64>,
 }
 
 #[derive(Deserialize)]
 struct Forecast {
-    current: Weather,
+    current: Current,
+    #[serde(default)]
+    hourly: Hourly,
+    #[serde(default)]
+    daily: Daily,
+}
+
+impl Forecast {
+    fn into_weather(self) -> Weather {
+        let c = self.current;
+        // Every third hour from now: what the next half day looks like.
+        let hours = (1..=4)
+            .filter_map(|i| {
+                let at = i * 3;
+                let time = self.hourly.time.get(at)?;
+                Some(Hour {
+                    time: time.get(11..16).unwrap_or(time).to_string(),
+                    temperature: *self.hourly.temperature_2m.get(at)?,
+                    code: *self.hourly.weather_code.get(at)?,
+                })
+            })
+            .collect();
+        Weather {
+            temperature: c.temperature_2m,
+            code: c.weather_code,
+            feels_like: c.apparent_temperature.unwrap_or(c.temperature_2m),
+            is_day: c.is_day.unwrap_or(1) == 1,
+            wind: c.wind_speed_10m.unwrap_or(0.0),
+            high: self.daily.temperature_2m_max.first().copied(),
+            low: self.daily.temperature_2m_min.first().copied(),
+            hours,
+        }
+    }
+}
+
+/// How long a forecast is reused. The compact island and the weather card both
+/// ask; one request serves both.
+const WEATHER_TTL: std::time::Duration = std::time::Duration::from_secs(10 * 60);
+
+type WeatherCache = std::sync::Mutex<Option<(String, std::time::Instant, Weather)>>;
+
+fn weather_cache() -> &'static WeatherCache {
+    static CACHE: std::sync::OnceLock<WeatherCache> = std::sync::OnceLock::new();
+    CACHE.get_or_init(|| std::sync::Mutex::new(None))
 }
 
 #[tauri::command]
@@ -32,6 +131,11 @@ pub async fn island_weather(app: AppHandle, city_id: String) -> Option<Weather> 
         return None;
     }
     let (latitude, longitude) = city(&city_id)?;
+    if let Some((cached, at, w)) = weather_cache().lock().ok()?.as_ref() {
+        if *cached == city_id && at.elapsed() < WEATHER_TTL {
+            return Some(w.clone());
+        }
+    }
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(8))
         .redirect(reqwest::redirect::Policy::none())
@@ -39,14 +143,21 @@ pub async fn island_weather(app: AppHandle, city_id: String) -> Option<Weather> 
         .ok()?;
     let response = client
         .get(format!(
-            "https://api.open-meteo.com/v1/forecast?latitude={latitude}&longitude={longitude}&current=temperature_2m,weather_code"
+            "https://api.open-meteo.com/v1/forecast?latitude={latitude}&longitude={longitude}\
+             &current=temperature_2m,weather_code,apparent_temperature,is_day,wind_speed_10m\
+             &hourly=temperature_2m,weather_code&forecast_hours=13\
+             &daily=temperature_2m_max,temperature_2m_min&forecast_days=1&timezone=auto"
         ))
         .send()
         .await
         .ok()?
         .error_for_status()
         .ok()?;
-    Some(response.json::<Forecast>().await.ok()?.current)
+    let weather = response.json::<Forecast>().await.ok()?.into_weather();
+    if let Ok(mut cache) = weather_cache().lock() {
+        *cache = Some((city_id, std::time::Instant::now(), weather.clone()));
+    }
+    Some(weather)
 }
 
 /// What is playing, as the island's media card shows it. Every OS has its own
@@ -88,6 +199,8 @@ fn image_data_url(bytes: &[u8]) -> Option<String> {
     };
     Some(format!("data:{mime};base64,{}", STANDARD.encode(bytes)))
 }
+
+pub mod stats;
 
 #[cfg(target_os = "linux")]
 mod linux_media;
@@ -232,6 +345,45 @@ mod windows_media {
         match operation {
             Ok(operation) => operation.get().unwrap_or(false),
             Err(_) => false,
+        }
+    }
+}
+
+#[cfg(test)]
+mod weather_tests {
+    use super::*;
+
+    #[test]
+    fn a_forecast_becomes_the_card() {
+        let json = r#"{
+          "current": {"temperature_2m": 12.4, "weather_code": 3, "apparent_temperature": 10.1, "is_day": 0, "wind_speed_10m": 14.2},
+          "hourly": {"time": ["2026-11-15T02:00","2026-11-15T03:00","2026-11-15T04:00","2026-11-15T05:00","2026-11-15T06:00","2026-11-15T07:00","2026-11-15T08:00","2026-11-15T09:00","2026-11-15T10:00","2026-11-15T11:00","2026-11-15T12:00","2026-11-15T13:00","2026-11-15T14:00"],
+                     "temperature_2m": [12,11,11,10,10,10,11,12,13,14,15,15,16],
+                     "weather_code": [3,3,3,61,61,61,3,3,2,2,1,1,0]},
+          "daily": {"temperature_2m_max": [16.2], "temperature_2m_min": [9.8]}
+        }"#;
+        let w = serde_json::from_str::<Forecast>(json).unwrap().into_weather();
+        assert!(!w.is_day);
+        assert_eq!(w.high, Some(16.2));
+        assert_eq!(w.hours.len(), 4);
+        assert_eq!(w.hours[0].time, "05:00");
+        assert_eq!(w.hours[0].code, 61);
+        assert_eq!(w.hours[3].time, "14:00");
+    }
+
+    #[test]
+    fn an_old_style_answer_still_parses() {
+        let json = r#"{"current": {"temperature_2m": 20.0, "weather_code": 0}}"#;
+        let w = serde_json::from_str::<Forecast>(json).unwrap().into_weather();
+        assert_eq!(w.feels_like, 20.0);
+        assert!(w.hours.is_empty());
+    }
+
+    #[test]
+    fn cities_are_unique_and_plausible() {
+        for (i, (id, lat, lon)) in CITIES.iter().enumerate() {
+            assert!(lat.abs() <= 90.0 && lon.abs() <= 180.0, "{id}");
+            assert!(CITIES[i + 1..].iter().all(|(other, _, _)| other != id), "{id}");
         }
     }
 }

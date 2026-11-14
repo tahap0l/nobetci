@@ -88,3 +88,20 @@ pub fn make_panel(win: &WebviewWindow) {
         let _: () = msg_send![window, setFloatingPanel: Bool::YES];
     }
 }
+
+/// Starts macOS Dictation for the key window's focused text field, as the
+/// Edit menu's "Start Dictation…" does. False when nothing took the action.
+pub fn start_dictation() -> bool {
+    let Some(class) = AnyClass::get(c"NSApplication") else { return false };
+    // SAFETY: called on the main thread (see assistant_dictate); both messages
+    // are standard NSApplication API with these exact types.
+    unsafe {
+        let app: *mut AnyObject = msg_send![class, sharedApplication];
+        if app.is_null() {
+            return false;
+        }
+        let none: *mut AnyObject = std::ptr::null_mut();
+        let ok: Bool = msg_send![app, sendAction: sel!(startDictation:), to: none, from: none];
+        ok.as_bool()
+    }
+}

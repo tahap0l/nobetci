@@ -182,6 +182,39 @@ export function runDemo(island: Island, name: string) {
       positionMs: 83_000, durationMs: 214_000, canSeek: true,
     });
   }
+  // &weather=<WMO code>[&night=1]: a forecast for the weather card.
+  if (params.has("weather")) {
+    State.settings.islandWeatherCity = "istanbul";
+    const code = Number(params.get("weather")) || 0;
+    const night = params.has("night");
+    Bridge.islandWeather = async () => ({
+      temperature: 17.6, code, feelsLike: 15.9, isDay: !night, wind: 18, high: 19.2, low: 11.4,
+      hours: [
+        { time: "06:00", temperature: 13, code: 2 },
+        { time: "09:00", temperature: 15, code: 3 },
+        { time: "12:00", temperature: 18, code: 61 },
+        { time: "15:00", temperature: 19, code: 0 },
+      ],
+    });
+  }
+  // The system card wanders a little so its history line has a shape.
+  let load = 38;
+  Bridge.islandStats = async () => {
+    load = Math.max(4, Math.min(96, load + (Math.random() - 0.45) * 22));
+    return {
+      cpu: load, cores: 12, cpuName: "AMD Ryzen 7 7840HS",
+      memUsed: 11.4 * 1024 ** 3, memTotal: 16 * 1024 ** 3, gpu: params.has("nogpu") ? null : 22 + load / 3,
+    };
+  };
+  // &page=<media|agenda|calendar|weather|system>: open that card.
+  const page = params.get("page");
+  if (page) {
+    window.setTimeout(() => {
+      for (const tab of document.querySelectorAll<HTMLButtonElement>(`[id$="-${page}-tab"]`)) {
+        if (tab.offsetParent) tab.click();
+      }
+    }, 400);
+  }
   switch (name) {
     case "mascots":
       mascotLineup();
@@ -210,6 +243,8 @@ export function runDemo(island: Island, name: string) {
         if (!input) return;
         input.value = typed;
         input.dispatchEvent(new Event("input"));
+        // &lib=1 opens the prompt library too.
+        if (params.get("lib")) document.querySelector<HTMLButtonElement>(".asst-lib-toggle")?.click();
       }, 250);
       break;
     }

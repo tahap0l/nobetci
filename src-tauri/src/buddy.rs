@@ -203,3 +203,14 @@ pub fn buddy_open_island(app: AppHandle) {
     use tauri::Emitter;
     let _ = app.emit_to(crate::island::WINDOW_LABEL, "tray", "open".to_string());
 }
+
+/// Ctrl + wheel on the mascot: grows or shrinks it by `step` percent.
+#[tauri::command]
+pub fn buddy_resize_by(app: AppHandle, step: i32) {
+    let mut s = crate::current(&app);
+    let next = (s.buddy_size as i32 + step.clamp(-50, 50)).clamp(60, 200) as u32;
+    if next != s.buddy_size {
+        s.buddy_size = next;
+        crate::store(&app, s);
+    }
+}
