@@ -4,8 +4,8 @@
 // The island is a black shape drawn at the top of the chosen display inside a
 // borderless, transparent, always-on-top window. On Windows it hangs from the top
 // edge of the screen and never takes focus; on macOS it sits just below the menu
-// bar, where a notch can't hide it — and there a click on it does make Nöbetçi
-// the active app (see `make_non_activating`).
+// bar, where a notch can't hide it, in a panel that does not activate the app
+// (see `make_non_activating`). On Linux it behaves as on Windows, through X11.
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
@@ -120,16 +120,26 @@ fn pointer(_app: &AppHandle, _main_scale: f64) -> Option<(f64, f64)> {
     Some((p.x as f64, p.y as f64))
 }
 
-#[cfg(not(windows))]
+#[cfg(target_os = "macos")]
 fn pointer(app: &AppHandle, main_scale: f64) -> Option<(f64, f64)> {
     let p = app.cursor_position().ok()?;
     Some((p.x / main_scale, p.y / main_scale))
 }
 
+/// X11 reports the pointer in root-window pixels, like every window position.
+#[cfg(target_os = "linux")]
+fn pointer(app: &AppHandle, _main_scale: f64) -> Option<(f64, f64)> {
+    let p = app.cursor_position().ok()?;
+    Some((p.x, p.y))
+}
+
+/// Pointer units are physical pixels everywhere but on macOS.
+const PIXEL_POINTER: bool = cfg!(not(target_os = "macos"));
+
 /// A position or length in physical pixels of something shown at `scale`, in
 /// pointer units.
 fn units(v: f64, scale: f64) -> f64 {
-    if cfg!(windows) {
+    if PIXEL_POINTER {
         v
     } else {
         v / scale
@@ -154,7 +164,7 @@ fn pointer_in(win: &WebviewWindow, (cx, cy): (f64, f64)) -> Option<(f64, f64)> {
     let scale = win.scale_factor().unwrap_or(1.0);
     let (ox, oy) = (units(origin.x as f64, scale), units(origin.y as f64, scale));
     // Pointer units are already logical on macOS; on Windows they are pixels.
-    let per_logical = if cfg!(windows) { scale } else { 1.0 };
+    let per_logical = if PIXEL_POINTER { scale } else { 1.0 };
     Some(((cx - ox) / per_logical, (cy - oy) / per_logical))
 }
 
@@ -252,6 +262,54 @@ pub fn make_non_activating(win: &WebviewWindow) {
 #[cfg(target_os = "macos")]
 pub fn make_non_activating(win: &WebviewWindow) {
     let _ = win.set_visible_on_all_workspaces(true);
+    crate::mac_panel::make_panel(win);
+}
+
+/// Linux: never focused, on every workspace, kept out of the taskbar and pager.
+#[cfg(target_os = "linux")]
+pub fn make_non_activating(win: &WebviewWindow) {
+    let _ = win.set_focusable(false);
+    let _ = win.set_visible_on_all_workspaces(true);
+    let _ = win.set_skip_taskbar(true);
+}
+
+/// Lets the island take the keyboard (`on`) or go back to never taking focus.
+#[cfg(windows)]
+pub fn set_typing(win: &WebviewWindow, on: bool) {
+    use windows::Win32::Foundation::HWND;
+    use windows::Win32::UI::WindowsAndMessaging::{
+        GetWindowLongPtrW, SetWindowLongPtrW, GWL_EXSTYLE, WS_EX_NOACTIVATE,
+    };
+    let Ok(raw) = win.hwnd() else { return };
+    if raw.0.is_null() {
+        return;
+    }
+    let hwnd = HWND(raw.0);
+    unsafe {
+        let ex = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
+        let bit = WS_EX_NOACTIVATE.0 as isize;
+        SetWindowLongPtrW(hwnd, GWL_EXSTYLE, if on { ex & !bit } else { ex | bit });
+    }
+    if on {
+        // The user just clicked the island, so Windows lets it come forward.
+        let _ = win.set_focus();
+    }
+}
+
+/// macOS: the panel becomes the key window without activating the app.
+#[cfg(target_os = "macos")]
+pub fn set_typing(win: &WebviewWindow, on: bool) {
+    if on {
+        crate::mac_panel::make_key(win);
+    }
+}
+
+#[cfg(target_os = "linux")]
+pub fn set_typing(win: &WebviewWindow, on: bool) {
+    let _ = win.set_focusable(on);
+    if on {
+        let _ = win.set_focus();
+    }
 }
 
 /// Position, size and scale of the monitor the island lives on. Any change here
@@ -279,7 +337,7 @@ pub fn spawn_cursor_poll(app: AppHandle, gate: Arc<PollGate>) {
             let mut last = (f64::MIN, f64::MIN);
             let mut ticks: u32 = 0;
             // Refreshed with the display check below rather than on every tick.
-            let mut scale_of_main = if cfg!(windows) { 1.0 } else { main_scale(&app) };
+            let mut scale_of_main = if PIXEL_POINTER { 1.0 } else { main_scale(&app) };
             while gate.is_active() {
                 std::thread::sleep(Duration::from_millis(16));
 
@@ -289,7 +347,7 @@ pub fn spawn_cursor_poll(app: AppHandle, gate: Arc<PollGate>) {
                 // is already running, so this costs one monitor query.
                 ticks = ticks.wrapping_add(1);
                 if ticks.is_multiple_of(30) {
-                    if !cfg!(windows) {
+                    if !PIXEL_POINTER {
                         scale_of_main = main_scale(&app);
                     }
                     let now = current_screen_key(&app);

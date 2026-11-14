@@ -1,6 +1,6 @@
 [package]
 name = "nobetci-hook"
-description = "Relays Claude Code hook events to Nöbetçi over a named pipe (Windows) or a Unix socket (macOS)"
+description = "Relays Claude Code hook events to Nöbetçi over a named pipe (Windows) or a Unix socket (macOS, Linux)"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -24,6 +24,6 @@ windows = { version = "0.61", features = [
   "Win32_System_Threading",
 ] }
 
-# macOS: who is on the other end of the socket, and the parent-process chain.
-[target.'cfg(target_os = "macos")'.dependencies]
+# macOS and Linux: who is on the other end of the socket, and the parent-process chain.
+[target.'cfg(unix)'.dependencies]
 libc = "0.2"

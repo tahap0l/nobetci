@@ -31,6 +31,8 @@ export interface Hotkeys {
   /** LOW risk only (keystrokes can be synthesised), off by default. */
   allow: string;
   dnd: string;
+  /** Open the assistant. */
+  assistant: string;
 }
 
 export interface Settings {
@@ -52,6 +54,10 @@ export interface Settings {
   buddy: boolean;
   /** Where it was left (physical desktop pixels), kept by Rust; null = the corner. */
   buddyPos: [number, number] | null;
+  /** The desktop mascot's size, percent of the default (60–200). */
+  buddySize: number;
+  /** Where the assistant sends a prompt: "here" or an AI app. */
+  assistantTarget: string;
   // Prompt review
   promptProvider: "ollama" | "openai";
   ollamaModel: string;
@@ -122,6 +128,8 @@ export const DEFAULT_SETTINGS: Settings = {
   expandOnFinish: false,
   buddy: true,
   buddyPos: null,
+  buddySize: 100,
+  assistantTarget: "chatgpt",
   promptProvider: "ollama",
   ollamaModel: "gemma4",
   openaiModel: "gpt-6-luna",
@@ -151,7 +159,7 @@ export const DEFAULT_SETTINGS: Settings = {
   quietFrom: "23:00",
   quietTo: "08:00",
   quietFullscreen: true,
-  hotkeys: { toggle: "Ctrl+Alt+N", deny: "Ctrl+Alt+D", allow: "", dnd: "" },
+  hotkeys: { toggle: "Ctrl+Alt+N", deny: "Ctrl+Alt+D", allow: "", dnd: "", assistant: "Ctrl+Alt+Space" },
   auditEnabled: true,
   auditMaxMb: 10,
 };

@@ -11,6 +11,7 @@ use std::path::PathBuf;
 /// Folder name under %APPDATA% and %LOCALAPPDATA% (Windows) or Application
 /// Support (macOS). ASCII on purpose: the hook path lands in
 /// ~/.claude/settings.json and is run through a shell (Git Bash on Windows).
+#[cfg(not(target_os = "linux"))]
 const DIR: &str = "Nobetci";
 
 /// Every hook event Nöbetçi understands, in the order Settings lists them.
@@ -96,6 +97,8 @@ pub struct Hotkeys {
     pub allow: String,
     /// Toggle do-not-disturb.
     pub dnd: String,
+    /// Open the assistant (and hand it the keyboard).
+    pub assistant: String,
 }
 
 impl Default for Hotkeys {
@@ -106,6 +109,7 @@ impl Default for Hotkeys {
             // Off by default: any program can synthesise keystrokes.
             allow: String::new(),
             dnd: String::new(),
+            assistant: "Ctrl+Alt+Space".into(),
         }
     }
 }
@@ -137,6 +141,10 @@ pub struct Settings {
     /// Where the desktop mascot was left, physical desktop pixels; null = the corner.
     /// Kept by Rust as the window moves; the settings window never edits it.
     pub buddy_pos: Option<[i32; 2]>,
+    /// The desktop mascot's size, percent of the default (60–200).
+    pub buddy_size: u32,
+    /// Where the assistant sends a prompt: "here" or an AI app (assistant.rs).
+    pub assistant_target: String,
 
     // ── Prompt review ────────────────────────────────────────────────────────
     /// "ollama" (local) or "openai" (only used after an explicit review click).
@@ -209,6 +217,8 @@ impl Default for Settings {
             expand_on_finish: false,
             buddy: true,
             buddy_pos: None,
+            buddy_size: 100,
+            assistant_target: "chatgpt".into(),
 
             prompt_provider: "ollama".into(),
             ollama_model: "gemma4".into(),
@@ -263,6 +273,10 @@ impl Settings {
     /// Clamps whatever came from disk or the settings window into sane ranges, so
     /// a hand-edited file cannot, say, set a zero-length hold.
     pub fn sanitized(mut self) -> Self {
+        self.buddy_size = self.buddy_size.clamp(60, 200);
+        if !crate::assistant::is_target(&self.assistant_target) {
+            self.assistant_target = "chatgpt".into();
+        }
         let d = Settings::default();
         self.hold_ms = self.hold_ms.clamp(400, 10_000);
         self.hold_critical_ms = self.hold_critical_ms.clamp(self.hold_ms, 20_000);
@@ -351,6 +365,27 @@ pub fn local_dir() -> PathBuf {
     config_dir()
 }
 
+/// $XDG_CONFIG_HOME/nobetci (~/.config/nobetci) — the preferences.
+#[cfg(target_os = "linux")]
+pub fn config_dir() -> PathBuf {
+    xdg("XDG_CONFIG_HOME", ".config").join("nobetci")
+}
+
+/// $XDG_DATA_HOME/nobetci (~/.local/share/nobetci) — the relay, the log and the history.
+#[cfg(target_os = "linux")]
+pub fn local_dir() -> PathBuf {
+    xdg("XDG_DATA_HOME", ".local/share").join("nobetci")
+}
+
+/// An XDG base folder: the variable when it holds an absolute path, else under home.
+#[cfg(target_os = "linux")]
+fn xdg(var: &str, fallback: &str) -> PathBuf {
+    std::env::var_os(var)
+        .map(PathBuf::from)
+        .filter(|p| p.is_absolute())
+        .unwrap_or_else(|| crate::sys::home().join(fallback))
+}
+
 /// The relay's file name: what Claude Code runs on every hook event.
 pub const HOOK_EXE: &str = if cfg!(windows) { "nobetci-hook.exe" } else { "nobetci-hook" };
 
@@ -431,6 +466,9 @@ mod tests {
         assert_eq!(s.buddy_pos, None, "and starts in its corner");
         let placed: Settings = serde_json::from_str(r#"{"buddyPos":[1530,812]}"#).unwrap();
         assert_eq!(placed.sanitized().buddy_pos, Some([1530, 812]));
+        assert_eq!(s.buddy_size, 100);
+        let huge: Settings = serde_json::from_str(r#"{"buddySize":900}"#).unwrap();
+        assert_eq!(huge.sanitized().buddy_size, 200);
     }
 
     #[test]

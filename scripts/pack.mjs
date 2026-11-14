@@ -53,6 +53,11 @@ if (process.platform === "darwin") {
   // Tauri names it Nobetci_<version>_<universal|aarch64|x64>.dmg.
   const arch = /_universal\.dmg$/.test(dmg) ? "universal" : /_aarch64\.dmg$/.test(dmg) ? "arm64" : "x64";
   ship(dmg, [`Nobetci-${version}-macos-${arch}.dmg`]);
+} else if (process.platform === "linux") {
+  // Tauri names them nobetci_<version>_amd64.deb and nobetci_<version>_amd64.AppImage.
+  const arch = process.arch === "arm64" ? "arm64" : "amd64";
+  ship(newest("deb", ".deb"), [`Nobetci-${version}-linux-${arch}.deb`]);
+  ship(newest("appimage", ".AppImage"), [`Nobetci-${version}-linux-${arch}.AppImage`]);
 } else {
   ship(newest("nsis", "-setup.exe"), [`Nobetci-${version}-setup.exe`, "Nobetci-setup.exe"]);
 }

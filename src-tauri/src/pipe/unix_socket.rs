@@ -1,5 +1,7 @@
 // macOS: a Unix socket at ~/Library/Application Support/Nobetci/nobetci.sock, or
 // in the per-user temporary folder when the home path is too long for a socket.
+// Linux: ~/.local/state/nobetci/nobetci.sock, or /tmp/nobetci-<uid>/ when the home
+// path is too long.
 //
 // Filesystem permissions do most of the work: the folder is kept at 0700 and the
 // socket at 0600, so no other account can even reach it. Every connection is
@@ -11,6 +13,7 @@
 use std::ffi::CStr;
 use std::io;
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
+#[cfg(target_os = "macos")]
 use std::os::unix::io::AsRawFd;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -43,9 +46,26 @@ fn home() -> Option<PathBuf> {
 }
 
 /// `sun_path` holds 104 bytes on macOS, the terminating NUL included.
+#[cfg(target_os = "macos")]
 const MAX_SOCKET_PATH: usize = 103;
+/// …and 108 on Linux.
+#[cfg(target_os = "linux")]
+const MAX_SOCKET_PATH: usize = 107;
+
+/// Must match nobetci-hook's `socket_path()` (hook/src/linux.rs) exactly.
+#[cfg(target_os = "linux")]
+pub fn socket_path() -> Option<PathBuf> {
+    let preferred = home()?.join(".local/state/nobetci/nobetci.sock");
+    if preferred.as_os_str().len() <= MAX_SOCKET_PATH {
+        return Some(preferred);
+    }
+    // A very long home folder: a folder of our own in /tmp, which `private_dir`
+    // refuses to use unless it belongs to us and nobody else can enter it.
+    Some(PathBuf::from(format!("/tmp/nobetci-{}/nobetci.sock", me())))
+}
 
 /// Must match nobetci-hook's `socket_path()` (hook/src/mac.rs) exactly.
+#[cfg(target_os = "macos")]
 pub fn socket_path() -> Option<PathBuf> {
     let preferred = home()?.join("Library/Application Support/Nobetci/nobetci.sock");
     if preferred.as_os_str().len() <= MAX_SOCKET_PATH {
@@ -58,6 +78,7 @@ pub fn socket_path() -> Option<PathBuf> {
 
 /// The per-user temporary folder (`/var/folders/…/T/`), from confstr rather than
 /// `$TMPDIR`, exactly as nobetci-hook finds it.
+#[cfg(target_os = "macos")]
 fn user_temp_dir() -> Option<PathBuf> {
     let mut buf = vec![0 as libc::c_char; 1024];
     let n = unsafe { libc::confstr(libc::_CS_DARWIN_USER_TEMP_DIR, buf.as_mut_ptr(), buf.len()) };
@@ -76,6 +97,13 @@ fn me() -> u32 {
 /// credentials the kernel stored at connect time, so it still answers after a
 /// fire-and-forget relay has written its event and gone — unlike a peer-pid
 /// query, which fails once the other side has closed.
+#[cfg(target_os = "linux")]
+fn peer_uid(stream: &UnixStream) -> io::Result<u32> {
+    // SO_PEERCRED, stored at connect time just like getpeereid's answer.
+    stream.peer_cred().map(|cred| cred.uid())
+}
+
+#[cfg(target_os = "macos")]
 fn peer_uid(stream: &UnixStream) -> io::Result<u32> {
     let (mut uid, mut gid): (libc::uid_t, libc::gid_t) = (0, 0);
     if unsafe { libc::getpeereid(stream.as_raw_fd(), &mut uid, &mut gid) } == 0 {

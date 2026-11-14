@@ -102,12 +102,12 @@ static COUNTER: AtomicU64 = AtomicU64::new(1);
 
 #[cfg(windows)]
 mod named_pipe;
-#[cfg(target_os = "macos")]
+#[cfg(unix)]
 mod unix_socket;
 
 #[cfg(windows)]
 use named_pipe as transport;
-#[cfg(target_os = "macos")]
+#[cfg(unix)]
 use unix_socket as transport;
 
 /// One connection from nobetci-hook, whatever carries it.

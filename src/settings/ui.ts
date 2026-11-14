@@ -406,7 +406,8 @@ function keyName(part: string): string {
     const mac: Record<string, string> = { Ctrl: "⌃ Control", Alt: "⌥ Option", Shift: "⇧ Shift", Super: "⌘ Command" };
     return mac[part] ?? part;
   }
-  return part === "Super" ? "Win" : part;
+  if (part === "Super") return getPlatform() === "linux" ? "Super" : "Win";
+  return part;
 }
 
 export function kbd(accel: string): HTMLElement {

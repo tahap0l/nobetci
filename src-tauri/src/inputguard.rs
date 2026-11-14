@@ -12,6 +12,8 @@
 //     device a press came from; SendInput has none.
 //   * macOS (`inputguard/appkit.rs`): a mouse event carries the process id of
 //     whoever posted it; a real mouse's events come from the HID system, pid 0.
+//   * Linux (`inputguard/x11.rs`): XInput 2 names the device behind every press;
+//     XTEST, the way X11 programs fake input, has devices of its own.
 // An accessibility "press" produces no mouse event at all on either.
 //
 // An approval is only accepted when the last press was physical, recent and on
@@ -32,16 +34,20 @@ use tauri::{AppHandle, WebviewWindow};
 mod appkit;
 #[cfg(windows)]
 mod raw_input;
+#[cfg(target_os = "linux")]
+mod x11;
 
 #[cfg(target_os = "macos")]
 use appkit as imp;
 #[cfg(windows)]
 use raw_input as imp;
+#[cfg(target_os = "linux")]
+use x11 as imp;
 
 /// One left-button press.
 ///
 /// Coordinates are in the platform's "guard space", the same one `Rect` uses:
-/// physical screen pixels on Windows; on macOS, points inside the island window
+/// physical screen pixels on Windows and Linux; on macOS, points inside the island window
 /// measured from its bottom-left corner (NaN when the press was in another window).
 #[derive(Clone, Copy, Debug)]
 pub struct Press {

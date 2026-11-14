@@ -131,3 +131,62 @@ jobs:
           path: release/*.dmg
           if-no-files-found: error
           retention-days: 14
+
+  linux:
+    name: Build and test (Linux)
+    # The oldest supported glibc, so the .deb and AppImage run on Ubuntu 22.04 and newer.
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install the system libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev \
+            libxi-dev libxdo-dev libdbus-1-dev libssl-dev file
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Set up Rust (stable, with clippy)
+        run: |
+          rustup toolchain install stable --profile minimal --component clippy --no-self-update
+          rustup default stable
+          rustc --version
+          cargo --version
+
+      - name: Cache Rust builds
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Build the relay
+        run: cargo build --release --locked -p nobetci-hook
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+      - name: Tests
+        run: cargo test --workspace --locked
+
+      - name: Build the .deb and the AppImage
+        run: npm run pack:linux
+
+      - name: Upload the packages
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: nobetci-linux-${{ github.sha }}
+          path: |
+            release/*.deb
+            release/*.AppImage
+          if-no-files-found: error
+          retention-days: 14

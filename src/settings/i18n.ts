@@ -12,8 +12,9 @@ type Pair = readonly [tr: string, en: string];
 const M = {
   "genel.widgets.title": ["Ada bileşenleri", "Island widgets"],
   "genel.widgets.media": ["Çalan medya", "Now playing"],
-  "genel.widgets.mediaHint": ["Spotify ve Windows’a medya bilgisi gönderen tarayıcı sekmelerini gösterir.", "Shows Spotify and browser tabs that expose media to Windows."],
-  "genel.widgets.mediaWindows": ["Medya kontrolü Windows’ta kullanılabilir.", "Media controls are available on Windows."],
+  "genel.widgets.mediaHint": ["Spotify ve Windows’a medya bilgisi gönderen tarayıcı sekmelerini gösterir; süre çubuğuna tıklayarak ileri sarabilirsin.", "Shows Spotify and browser tabs that expose media to Windows; click the time bar to seek."],
+  "genel.widgets.mediaHint@mac": ["Açıksa Spotify veya Müzik’te çalanı gösterir. İlk seferde macOS izin ister; uygulama kapalıyken açılmaz.", "Shows what Spotify or Music is playing while it is open. macOS asks for permission the first time; a closed app is never started."],
+  "genel.widgets.mediaHint@linux": ["MPRIS destekleyen her oynatıcıyı gösterir: Spotify, VLC, tarayıcılar… Süre çubuğuna tıklayarak ileri sarabilirsin.", "Shows any MPRIS player: Spotify, VLC, browsers… Click the time bar to seek."],
   "genel.widgets.weather": ["Hava durumu", "Weather"],
   "genel.widgets.weatherHint": ["Şehir seçersen Open-Meteo’ya yalnızca seçtiğin şehrin koordinatlarıyla istek gönderilir.", "Selecting a city sends its coordinates to Open-Meteo."],
   "genel.widgets.off": ["Kapalı", "Off"],
@@ -29,6 +30,11 @@ const M = {
   "genel.buddy.showHint": [
     "Tek tık dürter, çift tık adayı açar. Tepsi menüsünden de açıp kapatabilirsin.",
     "A click pokes it, a double click opens the island. You can also switch it from the tray menu.",
+  ],
+  "genel.buddy.size": ["Boyut", "Size"],
+  "genel.buddy.sizeHint": [
+    "Maskotu küçült ya da büyüt; ayakları durduğu yerde kalır.",
+    "Make the mascot smaller or bigger; its feet stay where they are.",
   ],
   "genel.buddy.reset": ["Konumu sıfırla", "Reset position"],
   "genel.buddy.resetHint": [
@@ -133,6 +139,10 @@ const M = {
     "Nöbetçi'nin konuştuğu dil. Otomatik, macOS'un dil tercihini izler.",
     "The language Nöbetçi speaks. Automatic follows your macOS language.",
   ],
+  "genel.langDesc@linux": [
+    "Nöbetçi'nin konuştuğu dil. Otomatik, sistemin dil ayarını (LANG) izler.",
+    "The language Nöbetçi speaks. Automatic follows your system language (LANG).",
+  ],
   "genel.langAuto": ["Otomatik (sistem: {lang})", "Automatic (system: {lang})"],
   "genel.glance.claude": ["Claude Code", "Claude Code"],
   "genel.glance.checking": ["Kontrol ediliyor", "Checking"],
@@ -170,6 +180,7 @@ const M = {
   "genel.startup": ["Başlangıç", "Startup"],
   "genel.autostart": ["Windows açılınca başlat", "Start with Windows"],
   "genel.autostart@mac": ["Oturum açınca başlat", "Start at login"],
+  "genel.autostart@linux": ["Oturum açınca başlat", "Start at login"],
   "genel.autostartHint": [
     "Oturum açtığında Nöbetçi tepsiye yerleşir; ada ilk istekte belirir.",
     "Nöbetçi waits in the tray after you sign in; the island shows up with the first request.",
@@ -792,6 +803,10 @@ const M = {
     "Sesler, macOS bildirimleri, sessizlik ve kısayollar",
     "Sounds, macOS notifications, quiet mode and shortcuts",
   ],
+  "notif.subtitle@linux": [
+    "Sesler, masaüstü bildirimleri, sessizlik ve kısayollar",
+    "Sounds, desktop notifications, quiet mode and shortcuts",
+  ],
   "snd.approval": ["Onay isteği", "Approval request"],
   "snd.approvalDesc": ["DÜŞÜK ya da ORTA riskli bir istek geldiğinde", "A LOW or MEDIUM risk request arrives"],
   "snd.danger": ["Riskli istek", "Risky request"],
@@ -826,6 +841,11 @@ const M = {
   "hk.denyDesc": ["Karttaki isteği reddeder.", "Denies the request on the card."],
   "hk.allow": ["İzin ver", "Allow"],
   "hk.allowDesc": ["Sadece DÜŞÜK riskli istekler için.", "LOW-risk requests only."],
+  "hk.assistant": ["Asistanı aç", "Open the assistant"],
+  "hk.assistantDesc": [
+    "Adada yazma alanını açar: bir yapay zekâya gönder, burada sor ya da /komut çalıştır.",
+    "Opens the island's text box: send to an AI, ask here or run a /command.",
+  ],
   "hk.dnd": ["Rahatsız etme", "Do not disturb"],
   "hk.dndDesc": ["Sessiz modu açar ya da kapatır.", "Turns quiet mode on or off."],
   "hk.aria": ["{label} kısayolu", "{label} shortcut"],
@@ -840,6 +860,10 @@ const M = {
   "hk.needMod@mac": [
     "En az bir değiştirici tuş gerekir (⌃, ⌥, ⇧ ya da ⌘) — yoksa yazarken tetiklenir.",
     "Add at least one modifier (⌃, ⌥, ⇧ or ⌘) — otherwise it fires while you type.",
+  ],
+  "hk.needMod@linux": [
+    "En az bir değiştirici tuş gerekir (Ctrl, Alt, Shift ya da Super) — yoksa yazarken tetiklenir.",
+    "Add at least one modifier (Ctrl, Alt, Shift or Super) — otherwise it fires while you type.",
   ],
   "hk.clear": ["Kısayolu kaldır", "Remove shortcut"],
   "hk.same": ["“{name}” ile aynı", "Same as “{name}”"],
@@ -871,6 +895,10 @@ const M = {
     "Sessizken ses çalınmaz ve macOS bildirimi gösterilmez; onay istekleri yine adada sıraya girer.",
     "While quiet, no sounds play and no macOS notifications appear. Approval requests still line up on the island.",
   ],
+  "quiet.desc@linux": [
+    "Sessizken ses çalınmaz ve masaüstü bildirimi gösterilmez; onay istekleri yine adada sıraya girer.",
+    "While quiet, no sounds play and no desktop notifications appear. Approval requests still line up on the island.",
+  ],
   "quiet.dnd": ["Rahatsız etme", "Do not disturb"],
   "quiet.dndOnHint": [
     "Açık — ada ve tepsi menüsünden de kapatabilirsin.",
@@ -897,8 +925,8 @@ const M = {
     "While a game, presentation or full-screen video is in front.",
   ],
   "quiet.fullscreenHint@mac": [
-    "macOS'ta henüz çalışmıyor: öndeki uygulamanın tam ekran olduğunu güvenilir şekilde anlamanın yolu yok.",
-    "Not available on macOS yet: there's no reliable way to tell a full-screen app is in front.",
+    "Öndeki uygulama tam ekrana geçtiğinde: oyun, sunum ya da tam ekran video.",
+    "When the app in front goes full screen: a game, a presentation or a full-screen video.",
   ],
   "sounds.title": ["Sesler", "Sounds"],
   "sounds.desc": [
@@ -910,6 +938,7 @@ const M = {
   "sounds.muteAria": ["{label} sesi", "{label} sound"],
   "toasts.title": ["Windows bildirimleri", "Windows notifications"],
   "toasts.title@mac": ["macOS bildirimleri", "macOS notifications"],
+  "toasts.title@linux": ["Masaüstü bildirimleri", "Desktop notifications"],
   "toasts.desc": [
     "Ada görünmüyorken önemli anları kaçırmaman için.",
     "So you don't miss what matters while the island is out of sight.",
@@ -1010,6 +1039,10 @@ const M = {
     "Her izin isteğinin sonucu bu bilgisayarda, ~/Library/Application Support/Nobetci/audit.jsonl dosyasında tutulur. Hiçbir yere gönderilmez.",
     "Every permission decision is kept on this computer in ~/Library/Application Support/Nobetci/audit.jsonl. It's never sent anywhere.",
   ],
+  "hist.recordingDesc@linux": [
+    "Her izin isteğinin sonucu bu bilgisayarda, ~/.local/share/nobetci/audit.jsonl dosyasında tutulur. Hiçbir yere gönderilmez.",
+    "Every permission decision is kept on this computer in ~/.local/share/nobetci/audit.jsonl. It's never sent anywhere.",
+  ],
   "hist.showFile": ["Dosyayı göster", "Show file"],
   "hist.keep": ["Geçmişi kaydet", "Keep history"],
   "hist.keepOff": ["Kapalı: yeni kararlar yazılmıyor.", "Off: new decisions aren't recorded."],
@@ -1079,6 +1112,7 @@ const M = {
   "about.files": ["Dosyalar", "Files"],
   "about.filesDesc": ["Hepsi düz metin; Gezgin'de açılır.", "All plain text; they open in File Explorer."],
   "about.filesDesc@mac": ["Hepsi düz metin; Finder'da açılır.", "All plain text; they open in Finder."],
+  "about.filesDesc@linux": ["Hepsi düz metin; dosya yöneticisinde açılır.", "All plain text; they open in your file manager."],
   "about.log": ["Kayıt dosyası", "Log file"],
   "about.data": ["Veri klasörü", "Data folder"],
   "about.settingsFile": ["Ayar dosyası", "Settings file"],

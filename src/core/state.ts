@@ -11,7 +11,7 @@ import { DEFAULT_SETTINGS, type Settings } from "./settings-model";
 export type { Settings } from "./settings-model";
 
 export type IslandMode = "hidden" | "compact" | "expanded";
-export type IslandView = "greeting" | "overview" | "empty" | "approval" | "session";
+export type IslandView = "greeting" | "overview" | "empty" | "approval" | "session" | "assistant";
 
 export type SessionState =
   | "idle"

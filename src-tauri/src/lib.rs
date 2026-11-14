@@ -5,6 +5,7 @@
 // Safety decisions (risk, rules, hold) stay in Rust; the windows only ask.
 
 mod agent_hooks;
+mod assistant;
 mod audit;
 mod buddy;
 mod focus;
@@ -14,6 +15,10 @@ mod i18n;
 mod inputguard;
 mod island;
 mod log;
+#[cfg(target_os = "macos")]
+mod mac_fullscreen;
+#[cfg(target_os = "macos")]
+mod mac_panel;
 mod pipe;
 mod prompts;
 mod quiet;
@@ -26,6 +31,8 @@ mod tray;
 mod widgets;
 #[cfg(windows)]
 mod win_user;
+#[cfg(target_os = "linux")]
+mod x11;
 
 use std::io::Write;
 #[cfg(windows)]
@@ -132,6 +139,8 @@ fn store(app: &AppHandle, next: Settings) -> Settings {
     }
     if prev.buddy != next.buddy {
         buddy::apply(app, next.buddy);
+    } else if prev.buddy_size != next.buddy_size {
+        buddy::resize(app, next.buddy_size);
     }
     if prev.screen != next.screen || prev.position != next.position {
         let collapsed = shared.gate.collapsed.load(Ordering::Relaxed);
@@ -236,6 +245,15 @@ fn open_folder_in_editor(p: &str) -> bool {
     Command::new("explorer").arg(p).spawn().is_ok()
 }
 
+/// Linux: VS Code when it is on PATH, the file manager otherwise.
+#[cfg(target_os = "linux")]
+fn open_folder_in_editor(p: &str) -> bool {
+    if Command::new("code").arg(p).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn().is_ok() {
+        return true;
+    }
+    Command::new("xdg-open").arg(p).spawn().is_ok()
+}
+
 #[cfg(target_os = "macos")]
 fn open_folder_in_editor(p: &str) -> bool {
     // `open -b` fails at once when no app has VS Code's bundle id, but waits while
@@ -281,10 +299,7 @@ fn find_on_path(stem: &str) -> Option<std::path::PathBuf> {
 fn open_location(what: String) -> bool {
     if what == "chatgpt-web" {
         let url = "https://github.com/tahap0l/nobetci/tree/main/integrations/chatgpt-web";
-        #[cfg(windows)]
-        return Command::new("rundll32.exe").args(["url.dll,FileProtocolHandler", url]).spawn().is_ok();
-        #[cfg(target_os = "macos")]
-        return Command::new("/usr/bin/open").arg(url).spawn().is_ok();
+        return sys::open_url(url);
     }
     let (path, select) = match what.as_str() {
         "log" => (settings::local_dir().join("nobetci.log"), true),
@@ -305,6 +320,14 @@ fn reveal(path: &std::path::Path, select: bool) -> bool {
         cmd.arg(path.parent().filter(|_| select).unwrap_or(path));
     }
     cmd.spawn().is_ok()
+}
+
+/// Linux: the file manager, on the folder (selecting a file needs a D-Bus
+/// FileManager1 call not every desktop answers; the folder always opens).
+#[cfg(target_os = "linux")]
+fn reveal(path: &std::path::Path, select: bool) -> bool {
+    let dir = if select { path.parent().unwrap_or(path) } else { path };
+    Command::new("xdg-open").arg(dir).spawn().is_ok()
 }
 
 #[cfg(target_os = "macos")]
@@ -817,6 +840,14 @@ pub fn cli() -> Option<i32> {
 }
 
 pub fn run() {
+    // Linux: X11 (XWayland under Wayland). A Wayland window can neither place
+    // itself at the top of the screen nor stay above the others, and the click
+    // guard and "go to window" speak X11. Somebody who set GDK_BACKEND knows why.
+    #[cfg(target_os = "linux")]
+    if std::env::var_os("GDK_BACKEND").is_none() && std::env::var_os("DISPLAY").is_some() {
+        std::env::set_var("GDK_BACKEND", "x11");
+    }
+
     // Language first: default settings (deny reasons) depend on it.
     i18n::apply("auto");
     let loaded = settings::load();
@@ -882,6 +913,10 @@ pub fn run() {
             open_settings_window,
             close_settings_window,
             buddy::buddy_reset_position,
+            assistant::assistant_open,
+            assistant::assistant_ask,
+            assistant::island_keyboard,
+            assistant::set_assistant_target,
             buddy::buddy_open_island,
         ])
         .setup(move |app| {

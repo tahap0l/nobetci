@@ -7,6 +7,35 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.3.0] - 2026-11-14
+
+### Added
+
+- **Linux.** A `.deb` and an AppImage for x86-64. The island runs on X11 and, through XWayland, on
+  Wayland desktops; the relay talks over a Unix socket in `~/.local/state/nobetci` and checks the
+  peer's user id; the click guard reads XInput2 raw events and refuses XTEST clicks (`xdotool`);
+  quiet in full screen, **Go to window**, start at login and the Secret Service keyring all work.
+- **An assistant on the island** (`Ctrl+Alt+Space` or the ✦ button). Write a message and send it to
+  ChatGPT, Claude, Gemini, Perplexity, Copilot, Grok, DeepSeek or Mistral: the app opens with the
+  message (where it accepts one in its address) and the message is on the clipboard too. **Here**
+  answers on the island with the Prompt Studio model. Slash commands (`/pause`, `/dnd`, `/focus 25`,
+  `/play`, `/next`, `/prev`, `/settings`, in Turkish too) control Nöbetçi, and ↑/↓ bring back
+  earlier messages. The island takes the keyboard only while you type there.
+- **A new media card**: the artwork blurred behind the card, a live time bar you can click (or
+  move with ←/→) to seek, and larger controls. It now works on all three systems — the system
+  media controls on Windows, Spotify and Music on macOS, every MPRIS player on Linux.
+- **Mascot size**: make the desktop mascot 60–200 % of its size in **Settings → General → Desktop
+  mascot**; it keeps standing where it was.
+- Claude Code sessions from the **Claude desktop app** (its Code tab) and from VS Code are named as
+  such on the island; the hand-off button reads **Hand to Claude** for them.
+
+### Changed
+
+- **macOS is no longer a beta.** The island is a non-activating panel that never takes focus,
+  quiet in full screen works, and the media card follows Spotify and Music.
+- A refreshed settings window: ambient light behind a glass sidebar and header, cards with an
+  icon chip and a soft sheen, the island's violet as the accent, gentler motion.
+
 ## [2.2.0] - 2026-11-14
 
 ### Added
@@ -242,7 +271,8 @@ pipe relay, the reviewed-diff hook installer and the island window were adapted 
 [Coucou](https://github.com/Louis-CFM/coucou) (MIT). Everything they had, and much more, shipped
 publicly in 0.2.0.
 
-[Unreleased]: https://github.com/tahap0l/nobetci/compare/v2.2.0...HEAD
+[Unreleased]: https://github.com/tahap0l/nobetci/compare/v2.3.0...HEAD
+[2.3.0]: https://github.com/tahap0l/nobetci/compare/v2.2.0...v2.3.0
 [2.2.0]: https://github.com/tahap0l/nobetci/compare/v2.1.7...v2.2.0
 [2.1.7]: https://github.com/tahap0l/nobetci/compare/v2.1.6...v2.1.7
 [2.1.6]: https://github.com/tahap0l/nobetci/compare/v2.1.5...v2.1.6
