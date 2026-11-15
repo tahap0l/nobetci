@@ -3,133 +3,304 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#08111f" />
-    <meta name="description" content="Nöbetçi, yapay zekâ kodlama ajanlarının izin isteklerini görünür kılar. Komutu ve riski incele, son kararı sen ver." />
+    <meta name="theme-color" content="#070b14" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="description" content="Nöbetçi, Claude Code'un izin isteklerini ekranının üstündeki bir adada gösterir: komutu ve riskini gör, kararı sen ver. Asistan, ajanda, müzik, hava ve sistem kartlarıyla. Windows, macOS ve Linux için ücretsiz." />
+    <meta name="nobetci-base" content="/" />
     <meta property="og:type" content="website" />
     <meta property="og:title" content="Nöbetçi — Son karar sende" />
     <meta property="og:description" content="Yapay zekâ kod yazsın. İzin isteklerini gör, riski anla, kararı sen ver." />
     <meta property="og:image" content="/assets/social.png" />
+    <meta name="twitter:card" content="summary_large_image" />
     <link rel="icon" type="image/png" href="/assets/owl.png" />
-    <link rel="preload" href="/assets/overview.png" as="image" />
-    <link rel="stylesheet" href="/styles.css" />
-    <link rel="stylesheet" href="/home-themes.css?v=mascots3" />
+    <link rel="preload" href="/shots/tr/idle-island.webp" as="image" type="image/webp" />
+    <link rel="stylesheet" href="/styles.css?v=2.3.1" />
+    <link rel="stylesheet" href="/home-themes.css?v=2.3.1" />
     <link rel="stylesheet" href="/mascot-motion.css?v=mascots" />
     <title>Nöbetçi — Son karar sende</title>
   </head>
   <body>
     <a class="skip-link" href="#main" data-i18n="skip">İçeriğe atla</a>
     <div class="site-shell">
+      <div class="aurora" aria-hidden="true"><i></i><i></i><i></i></div>
+      <div class="grid-fade" aria-hidden="true"></div>
+
       <header class="site-header">
         <div class="container nav">
-          <a class="brand" href="/" aria-label="Nöbetçi"><img src="/assets/owl.png" alt="" width="40" height="40" /><span>Nöbetçi</span></a>
+          <a class="brand" href="/" aria-label="Nöbetçi"><img src="/assets/owl.png" alt="" width="36" height="36" /><span>Nöbetçi</span></a>
           <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="site-nav" data-i18n="menu">Menü</button>
           <nav class="nav-links" id="site-nav" aria-label="Ana gezinme">
             <a href="#features" data-i18n="navFeatures">Özellikler</a>
-            <a href="#how" data-i18n="navHow">Nasıl çalışır?</a>
-            <a href="#privacy" data-i18n="navPrivacy">Gizlilik</a>
+            <a href="#new" data-i18n="navNew">Yenilikler</a>
+            <a href="#demo" data-i18n="navDemo">Canlı demo</a>
+            <a href="#download" data-i18n="navDownload">İndir</a>
+            <a href="#faq" data-i18n="navFaq">SSS</a>
           </nav>
           <div class="nav-actions">
             <button class="language-toggle" type="button" data-language-toggle aria-label="Switch language to English">EN</button>
-            <a class="button button-small button-quiet" href="https://github.com/tahap0l/nobetci" target="_blank" rel="noreferrer" data-i18n="navGithub">GitHub</a>
+            <a class="button button-small button-quiet" href="https://github.com/tahap0l/nobetci" target="_blank" rel="noreferrer">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-3.2 19.5c.5.1.7-.2.7-.5v-1.7c-2.8.6-3.4-1.3-3.4-1.3-.4-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.5 2.3 1.1 2.9.8.1-.6.3-1.1.6-1.3-2.2-.3-4.6-1.1-4.6-5a3.9 3.9 0 0 1 1-2.7 3.6 3.6 0 0 1 .1-2.7s.8-.3 2.8 1a9.6 9.6 0 0 1 5 0c2-1.3 2.8-1 2.8-1 .4 1 .2 2 .1 2.7a3.9 3.9 0 0 1 1 2.7c0 3.9-2.4 4.7-4.6 5 .4.3.7.9.7 1.9V21c0 .3.2.6.7.5A10 10 0 0 0 12 2z"/></svg>
+              <span>GitHub</span>
+            </a>
           </div>
         </div>
       </header>
 
       <main id="main">
+        <!-- Hero -->
         <section class="hero container">
           <div class="hero-copy">
-            <div class="eyebrow"><span class="eyebrow-dot"></span><span data-i18n="eyebrow">Açık kaynak · Windows ve macOS</span></div>
-            <h1 data-i18n="heroTitle">Yapay zekâ kod yazsın.<br /><em>Son karar sende.</em></h1>
-            <p class="hero-lede" data-i18n="heroText">Nöbetçi, Claude Code oturumlarını izler. Bir izin isteği geldiğinde komutu ve riskini tek ekranda gösterir; onaylayıp onaylamamak sana kalır.</p>
-            <div class="hero-actions">
-              <a class="button button-primary" href="https://github.com/tahap0l/nobetci/releases/latest" target="_blank" rel="noreferrer"><span data-i18n="download">GitHub'dan indir</span><span aria-hidden="true">↗</span></a>
-              <a class="button button-secondary" href="#features" data-i18n="explore">Neler yapabildiğine bak</a>
-              <a class="button button-secondary" href="/demo/" data-i18n="tryDemo">Canlı demoyu dene</a>
+            <a class="release-pill reveal" href="#new"><b>2.3.1</b><span data-i18n="pill">Sesle yazma, ajanda, sistem kartı</span><span aria-hidden="true">→</span></a>
+            <h1 class="reveal" data-i18n="heroTitle">Yapay zekâ kod yazsın.<br /><em>Son karar sende.</em></h1>
+            <p class="hero-lede reveal" data-i18n="heroText">Nöbetçi, Claude Code oturumlarını ekranının üstündeki küçük bir adada izler. Bir izin isteği geldiğinde komutu ve riskini tek bakışta gösterir; onaylamak ya da reddetmek sana kalır.</p>
+            <div class="hero-actions reveal">
+              <a class="button button-primary" href="#download" data-os-download>
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11m0 0 4.5-4.5M12 15l-4.5-4.5M5 19.5h14"/></svg>
+                <span data-os-label data-i18n="download">Ücretsiz indir</span>
+              </a>
+              <a class="button button-secondary" href="#demo">
+                <span class="live-dot" aria-hidden="true"></span><span data-i18n="tryDemo">Canlı demoyu dene</span>
+              </a>
             </div>
-            <div class="home-theme">
-              <label for="home-theme-picker" id="home-theme-label">Site teması</label>
-              <select id="home-theme-picker" aria-labelledby="home-theme-label"></select>
+            <div class="hero-meta reveal">
+              <span><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span data-i18n="meta1">Ücretsiz ve açık kaynak</span></span>
+              <span><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span data-i18n="meta2">Hesap yok, telemetri yok</span></span>
+              <span><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span data-i18n="meta3">Windows · macOS · Linux</span></span>
+              <span class="home-theme"><label for="home-theme-picker" id="home-theme-label">Site teması</label><select id="home-theme-picker" aria-labelledby="home-theme-label"></select></span>
             </div>
-            <div class="hero-meta"><span class="meta-check"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><span data-i18n="heroMeta">Ücretsiz · MIT lisansı · Hesap gerekmez</span></div>
           </div>
-          <div class="hero-visual" aria-label="Nöbetçi uygulamasından ekran görüntüsü">
-            <div class="glow glow-one"></div><div class="glow glow-two"></div>
-            <div class="app-window">
-              <div class="window-top">
-                <div class="window-controls" aria-hidden="true"><i></i><i></i><i></i></div>
-                <div class="window-title"><span class="live-dot"></span><span data-i18n="windowTitle">Nöbetçi · Oturumlara göz kulak oluyor</span></div>
-                <span class="window-mark">● ● ●</span>
-              </div>
-              <img class="app-screenshot" src="/assets/overview.png" alt="Nöbetçi ekranında çalışan, düşünen ve bitmiş üç yapay zekâ kodlama oturumu" width="720" height="405" />
-              <div class="window-caption"><span class="caption-icon"><svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" aria-hidden="true" focusable="false"><path d="M12 3l1.9 5.6L19.5 10.5l-5.6 1.9L12 18l-1.9-5.6L4.5 10.5l5.6-1.9L12 3z"/></svg></span><span data-i18n="caption">Birden fazla oturum. Tek bakışta kontrol.</span></div>
+
+          <div class="hero-visual reveal">
+            <div class="stage" data-stage data-scene="tour">
+              <div class="stage-bar" aria-hidden="true"><i></i><span>Nöbetçi</span><span data-i18n="barFile">Dosya</span><span data-i18n="barView">Görünüm</span><span class="clock" data-clock></span></div>
+              <img class="stage-poster" src="/shots/tr/idle-island.webp" alt="" width="1440" height="810" data-shot="idle-island" fetchpriority="high" />
+              <iframe class="stage-frame" title="Nöbetçi adası, canlı" data-i18n-title="frameTitle" tabindex="-1" loading="eager"></iframe>
+              <span class="stage-hint"><span class="live-dot" aria-hidden="true"></span><span data-i18n="stageHint">Canlı · gerçek uygulama arayüzü</span></span>
             </div>
-            <div class="floating-note"><span class="note-icon"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><span><strong data-i18n="noteTitle">Karar sende</strong><small data-i18n="noteText">İstekler otomatik gönderilmez.</small></span></div>
+            <div class="float-chip one" aria-hidden="true"><span class="chip-icon chip-green"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><span><strong data-i18n="chip1">Karar sende</strong><small data-i18n="chip1s">Hiçbir istek kendiliğinden onaylanmaz</small></span></div>
+            <div class="float-chip two" aria-hidden="true"><span class="chip-icon chip-violet"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21.5s7.5-3.6 7.5-9.6V5.5L12 2.8 4.5 5.5v6.4c0 6 7.5 9.6 7.5 9.6z"/></svg></span><span><strong data-i18n="chip2">Risk motoru</strong><small data-i18n="chip2s">Her komut puanlanır ve açıklanır</small></span></div>
           </div>
         </section>
 
-        <section class="agent-strip" aria-label="Desteklenen yapay zekâ ajanları">
-          <div class="container agent-strip-inner"><span data-i18n="agentLabel">Mesaj Atölyesi için</span><strong>Claude Code</strong><b>·</b><strong>Codex</strong><b>·</b><strong>Cursor</strong><b>·</b><strong>ChatGPT</strong><b>·</b><strong>Gemini</strong><b>·</b><span data-i18n="agentMore">ve diğerleri</span></div>
+        <!-- Works with -->
+        <section class="strip" aria-label="Uyumlu araçlar" data-i18n-aria="stripLabel">
+          <div class="container strip-inner">
+            <span data-i18n="stripLead">Şunlarla çalışır:</span>
+            <strong><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 17l6-5-6-5M12 19h8"/></svg>Claude Code</strong>
+            <strong><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M8 8l-4 4 4 4M16 8l4 4-4 4"/></svg>VS Code</strong>
+            <strong><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 5h16v11H4zM8 20h8"/></svg><span data-i18n="stripDesktop">Claude masaüstü (Code)</span></strong>
+            <strong><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/></svg>ChatGPT · Gemini · Perplexity</strong>
+          </div>
         </section>
 
+        <!-- Features -->
         <section class="section container" id="features">
-          <div class="section-heading">
+          <div class="section-heading reveal">
             <div class="eyebrow"><span class="eyebrow-dot"></span><span data-i18n="featuresEyebrow">Kontrolü elinde tut</span></div>
             <h2 data-i18n="featuresTitle">Ajan çalışırken sen de <em>ne olduğunu bil.</em></h2>
-            <p data-i18n="featuresIntro">Nöbetçi, terminalde gözden kaçabilecek istekleri görünür ve anlaşılır hale getirir.</p>
+            <p data-i18n="featuresIntro">Terminalde gözden kaçabilecek istekler adada, anlaşılır bir dille önüne gelir. Arada da ada senin için çalışır.</p>
           </div>
-          <div class="feature-grid">
-            <article class="feature-card feature-card-accent idle-feature"><span class="feature-number">2.3.1</span><div class="feature-icon icon-cyan"><svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 5h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zM3 10h18M9 5v5M15 5v5"/></svg></div><h3 data-i18n="idleTitle">Adada asistan, her yerde müzik</h3><p data-i18n="idleText">Ctrl+Alt+Space ile yaz, istediğin yapay zekâ uygulamasına gönder ya da yanıtı adada al. Yeni medya kartı ileri sarar; Windows, macOS ve Linux'ta çalışır. Maskotu istediğin boyuta getir.</p><img class="idle-preview" src="/assets/idle-island.png?v=2.3.1" alt="Kurt temalı adada medya, takvim ve hava durumu sekmeleri" loading="lazy" /><a class="button button-secondary button-small" href="/demo/" data-i18n="tryDemo">Canlı demoyu dene</a></article>
-            <article class="feature-card"><span class="feature-number">01</span><div class="feature-icon icon-cyan"><svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M2.5 12s3.5-6.5 9.5-6.5S21.5 12 21.5 12s-3.5 6.5-9.5 6.5S2.5 12 2.5 12zM12 14.8a2.8 2.8 0 1 0 0-5.6 2.8 2.8 0 0 0 0 5.6z"/></svg></div><h3 data-i18n="feature1Title">Oturumları tek yerde gör</h3><p data-i18n="feature1Text">Claude Code'un farklı terminal ve editörlerdeki oturumlarını; durumları ve yaptıklarıyla birlikte izle.</p></article>
-            <article class="feature-card"><span class="feature-number">02</span><div class="feature-icon icon-purple"><svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 21.5s7.5-3.6 7.5-9.6V5.5L12 2.8 4.5 5.5v6.4c0 6 7.5 9.6 7.5 9.6zM12 8v4.5M12 16v.1"/></svg></div><h3 data-i18n="feature2Title">Riski ve nedenini anla</h3><p data-i18n="feature2Text">İzin kartı komutu, dosya yolunu veya bağlantıyı tam gösterir; risk seviyesini ve bulguları açıklar.</p></article>
-            <article class="feature-card"><span class="feature-number">03</span><div class="feature-icon icon-green"><svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div><h3 data-i18n="feature3Title">Son sözü sen söyle</h3><p data-i18n="feature3Text">İsteği onayla, reddet veya terminale bırak. Yüksek riskli isteklerde karar bilinçli bir basılı tutma ister.</p></article>
-            <article class="feature-card feature-card-accent"><span class="feature-number">04</span><div class="feature-icon icon-amber"><svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4.5 19.5h4L19 9l-4-4L4.5 15.5v4zM13 7l4 4"/></svg></div><h3 data-i18n="feature4Title">Mesajını göndermeden düzenle</h3><p data-i18n="feature4Text">Yazımını düzelt, isteğini netleştir. Yerel Ollama'yı veya seçersen OpenAI'yi kullan; sonucu inceleyip kendin kopyala.</p></article>
+          <div class="bento">
+            <article class="tile tile-wide reveal">
+              <span class="tile-icon ic-red ic-amber"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21.5s7.5-3.6 7.5-9.6V5.5L12 2.8 4.5 5.5v6.4c0 6 7.5 9.6 7.5 9.6zM12 8v4.5M12 16v.1"/></svg></span>
+              <h3 data-i18n="f1Title">Riski ve nedenini anla</h3>
+              <p data-i18n="f1Text">İzin kartı komutun, dosya yolunun ya da bağlantının tamamını gösterir; riskli parçaları işaretler, nedenlerini sıralar. Yüksek riskte izin vermek için düğmeyi basılı tutman gerekir ve yalnızca gerçek bir fare tıklaması sayılır.</p>
+              <div class="tile-shot"><img src="/shots/tr/critical.webp" data-shot="critical" alt="Kritik riskli bir komutu, riskli bölümlerini ve dört bulguyu gösteren onay kartı" data-i18n-alt="altCritical" width="1440" height="920" loading="lazy" decoding="async" /></div>
+            </article>
+            <article class="tile tile-third reveal">
+              <span class="tile-icon ic-cyan"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 12s3.5-6.5 9.5-6.5S21.5 12 21.5 12s-3.5 6.5-9.5 6.5S2.5 12 2.5 12zM12 14.8a2.8 2.8 0 1 0 0-5.6 2.8 2.8 0 0 0 0 5.6z"/></svg></span>
+              <h3 data-i18n="f2Title">Her oturum tek yerde</h3>
+              <p data-i18n="f2Text">Terminal, VS Code ya da Claude masaüstü uygulaması: hangisinde çalışırsa çalışsın, her oturumun durumu ve son adımı adada.</p>
+              <ul class="tile-list">
+                <li data-i18n="f2a">Çalışıyor, düşünüyor, onay bekliyor, bitti</li>
+                <li data-i18n="f2b">Tek tıkla doğru pencereye git</li>
+                <li data-i18n="f2c">Bitince küçük bir bildirim</li>
+              </ul>
+            </article>
+            <article class="tile tile-half reveal">
+              <span class="tile-icon ic-violet"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/></svg></span>
+              <h3 data-i18n="f3Title">Adada bir asistan</h3>
+              <p data-i18n="f3Text"><span class="kbd">Ctrl</span> <span class="kbd">Alt</span> <span class="kbd">Space</span> ile yaz ya da 🎙 ile konuş; mesajın ChatGPT, Claude, Gemini, Perplexity ve diğerlerinde açılsın. Uygulama yüklüyse doğrudan orada. Ne soracağını bilmiyorsan hazır promptlar yol gösterir.</p>
+              <div class="tile-shot"><img src="/shots/tr/assistant.webp" data-shot="assistant" alt="Hazır prompt kütüphanesi açık asistan" data-i18n-alt="altAssistant" width="1440" height="920" loading="lazy" decoding="async" /></div>
+            </article>
+            <article class="tile tile-half reveal">
+              <span class="tile-icon ic-green"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v14H4zM4 10h16M9 5v14"/></svg></span>
+              <h3 data-i18n="f4Title">Beş kart, tek ada</h3>
+              <p data-i18n="f4Text">Müzik ve odak sayacı, ajanda, takvim, animasyonlu hava durumu ve canlı CPU · RAM · GPU. Kartlar yalnızca ekrandayken çalışır.</p>
+              <div class="carousel" data-carousel>
+                <img class="on" src="/shots/tr/card-weather.webp" data-shot="card-weather" alt="Hava durumu kartı" data-i18n-alt="altWeather" width="1440" height="810" loading="lazy" decoding="async" />
+                <img src="/shots/tr/card-agenda.webp" data-shot="card-agenda" alt="Ajanda kartı" data-i18n-alt="altAgenda" width="1440" height="810" loading="lazy" decoding="async" />
+                <img src="/shots/tr/card-calendar.webp" data-shot="card-calendar" alt="Takvim kartı" data-i18n-alt="altCalendar" width="1440" height="810" loading="lazy" decoding="async" />
+                <img src="/shots/tr/card-system.webp" data-shot="card-system" alt="Sistem kartı" data-i18n-alt="altSystem" width="1440" height="810" loading="lazy" decoding="async" />
+              </div>
+              <div class="carousel-dots" data-carousel-dots>
+                <button type="button" aria-pressed="true" data-i18n="cWeather">Hava</button>
+                <button type="button" aria-pressed="false" data-i18n="cAgenda">Ajanda</button>
+                <button type="button" aria-pressed="false" data-i18n="cCalendar">Takvim</button>
+                <button type="button" aria-pressed="false" data-i18n="cSystem">Sistem</button>
+              </div>
+            </article>
+            <article class="tile tile-third reveal">
+              <span class="tile-icon ic-amber"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 19.5h4L19 9l-4-4L4.5 15.5v4zM13 7l4 4"/></svg></span>
+              <h3 data-i18n="f5Title">Mesaj Atölyesi</h3>
+              <p data-i18n="f5Text">Ajana göndermeden önce mesajını düzelt ve netleştir. Yerel Ollama ya da seçersen OpenAI; sonucu inceleyip kendin kopyalarsın.</p>
+            </article>
+            <article class="tile tile-wide reveal">
+              <span class="tile-icon ic-pink"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM9 10h.01M15 10h.01M9.5 14.5s1 1 2.5 1 2.5-1 2.5-1"/></svg></span>
+              <h3 data-i18n="f6Title">Yedi maskot, hepsi canlı</h3>
+              <p data-i18n="f6Text">Baykuş, kurt, şahin, ahtapot, aslan, kanarya ve kartal. Onaylayınca sevinir, reddedince kaşlarını çatar; istersen masaüstünde serbestçe dolaşır, boyunu sen seçersin.</p>
+              <div class="tile-shot"><img src="/shots/tr/mascots.webp" data-shot="mascots" alt="Yedi maskot yan yana, her biri farklı bir ruh hâlinde" data-i18n-alt="altMascots" width="1440" height="420" loading="lazy" decoding="async" /></div>
+            </article>
           </div>
         </section>
 
-        <section class="section section-how" id="how">
-          <div class="container how-layout">
-            <div class="how-copy">
+        <!-- What's new -->
+        <section class="section container" id="new">
+          <div class="section-heading center reveal">
+            <div class="eyebrow"><span class="eyebrow-dot"></span><span data-i18n="newEyebrow">Yenilikler</span></div>
+            <h2 data-i18n="newTitle">Her sürümde <em>biraz daha yetenekli.</em></h2>
+          </div>
+          <div class="timeline">
+            <article class="release reveal">
+              <span class="release-mark" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/></svg></span>
+              <div class="release-body">
+                <header><h3>2.3.1</h3><time datetime="2026-11-15" data-i18n="d231">15 Kasım 2026</time></header>
+                <ul>
+                  <li data-i18n="n231a">Sesle yazma ve 20'ye yakın hazır prompt</li>
+                  <li data-i18n="n231b">Yüklü AI uygulaması varsa mesaj orada açılır</li>
+                  <li data-i18n="n231c">Ajanda ve hatırlatıcılar, yeni takvim, animasyonlu hava durumu</li>
+                  <li data-i18n="n231d">CPU · RAM · GPU kartı, ayarlanabilir odak süresi</li>
+                  <li data-i18n="n231e">Adada daha akıcı açılış animasyonları</li>
+                </ul>
+              </div>
+            </article>
+            <article class="release reveal">
+              <span class="release-mark" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 17l6-5-6-5M12 19h8"/></svg></span>
+              <div class="release-body">
+                <header><h3>2.3.0</h3><time datetime="2026-11-14" data-i18n="d230">14 Kasım 2026</time></header>
+                <ul>
+                  <li data-i18n="n230a">Linux desteği (.deb ve AppImage), macOS betadan çıktı</li>
+                  <li data-i18n="n230b">Adada asistan: ChatGPT, Claude, Gemini, Perplexity ve fazlası</li>
+                  <li data-i18n="n230c">İleri sarılabilen yeni medya kartı, üç sistemde</li>
+                  <li data-i18n="n230d">Yenilenen ayarlar penceresi</li>
+                </ul>
+              </div>
+            </article>
+            <article class="release reveal">
+              <span class="release-mark" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 21a8 8 0 1 0 0-16 8 8 0 0 0 0 16z"/></svg></span>
+              <div class="release-body">
+                <header><h3>2.2.0</h3><time datetime="2026-11-14" data-i18n="d220">14 Kasım 2026</time></header>
+                <ul>
+                  <li data-i18n="n220a">Masaüstünde serbestçe dolaşan maskot</li>
+                  <li data-i18n="n220b">Onay ve ret için animasyonlu tepkiler</li>
+                </ul>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <!-- Live demo -->
+        <section class="section container" id="demo">
+          <div class="section-heading center reveal">
+            <div class="eyebrow"><span class="eyebrow-dot"></span><span data-i18n="demoEyebrow">Canlı demo</span></div>
+            <h2 data-i18n="demoTitle">İndirmeden önce <em>bir dene.</em></h2>
+            <p data-i18n="demoIntro">Aşağıdaki ada, uygulamanın gerçek arayüzü. Bir senaryo seç, kartlara tıkla, onay kartında düğmeleri dene; bilgisayarında hiçbir şey çalışmaz.</p>
+          </div>
+          <div class="lab reveal" data-lab></div>
+        </section>
+
+        <!-- How it works -->
+        <section class="section container" id="how">
+          <div class="how">
+            <div class="reveal">
               <div class="eyebrow"><span class="eyebrow-dot"></span><span data-i18n="howEyebrow">Üç adımda</span></div>
-              <h2 data-i18n="howTitle">Gör. Anla.<br /><em>Sonra karar ver.</em></h2>
-              <p data-i18n="howIntro">Nöbetçi, ajanının önüne geçmez. Yalnızca senin karar vermen gereken anı daha görünür kılar.</p>
-              <ol class="steps">
-                <li><span>1</span><div><strong data-i18n="step1Title">İstek ekrana gelir</strong><p data-i18n="step1Text">Claude Code bir işlem için izin istediğinde Nöbetçi bunu önüne getirir.</p></div></li>
-                <li><span>2</span><div><strong data-i18n="step2Title">Neyi çalıştıracağını incele</strong><p data-i18n="step2Text">Komutun tamamını, risk nedenlerini ve varsa şüpheli parçaları gör.</p></div></li>
-                <li><span>3</span><div><strong data-i18n="step3Title">Kararını ver</strong><p data-i18n="step3Text">İzin ver, reddet veya kararı terminale bırak. Nöbetçi kapalı olsa bile ajan çalışmaya devam eder.</p></div></li>
+              <h2 class="how-title" data-i18n="howTitle">Gör. Anla.<br /><em>Sonra karar ver.</em></h2>
+              <ol class="steps" data-steps>
+                <li><span>1</span><div><strong data-i18n="s1">İstek ekrana gelir</strong><p data-i18n="s1t">Claude Code bir işlem için izin istediğinde ada açılır ve isteği önüne getirir.</p></div></li>
+                <li><span>2</span><div><strong data-i18n="s2">Neyi çalıştıracağını incele</strong><p data-i18n="s2t">Komutun tamamı, risk seviyesi, nedenleri ve şüpheli parçalar tek kartta.</p></div></li>
+                <li><span>3</span><div><strong data-i18n="s3">Kararını ver</strong><p data-i18n="s3t">İzin ver, reddet ya da terminale bırak. Nöbetçi kapalıysa ajan hiç beklemeden çalışmaya devam eder.</p></div></li>
               </ol>
             </div>
-            <figure class="detail-shot"><div class="shot-glow"></div><img src="/assets/critical.png" alt="Nöbetçi'nin risk seviyesini, nedenlerini ve komutun riskli bölümlerini gösteren izin kartı" width="720" height="405" loading="lazy" /><figcaption data-i18n="shotCaption">İzin isteği geldiğinde komutun tamamı ve risk nedenleri görünür.</figcaption></figure>
+            <figure class="shot-card reveal">
+              <div class="shot-glow" aria-hidden="true"></div>
+              <img src="/shots/tr/settings-security.webp" data-shot="settings-security" alt="Ayarlar penceresinde güvenlik sayfası" data-i18n-alt="altSecurity" width="1440" height="1066" loading="lazy" decoding="async" />
+              <figcaption data-i18n="howCaption">Otomatik izin tavanı, basılı tutma süreleri ve gerçek tıklama koruması senin elinde.</figcaption>
+            </figure>
           </div>
         </section>
 
-        <section class="section container privacy-section" id="privacy">
-          <div class="privacy-card">
-            <div class="privacy-symbol" aria-hidden="true"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M7 10.5h10a2 2 0 0 1 2 2v5.5a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-5.5a2 2 0 0 1 2-2zM8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/></svg></div>
-            <div><div class="eyebrow"><span class="eyebrow-dot"></span><span data-i18n="privacyEyebrow">Önce gizlilik</span></div><h2 data-i18n="privacyTitle">Verin senin bilgisayarında kalır.</h2><p data-i18n="privacyText">Nöbetçi hesap açtırmaz, telemetri göndermez. Yapay zekâ ile mesaj inceleme isteğe bağlıdır; hangi sağlayıcıya ne zaman göndereceğini sen seçersin.</p></div>
-            <a class="button button-secondary" href="/privacy.html" data-i18n="privacyLink">Gizlilik politikasını oku</a>
+        <!-- Download -->
+        <section class="section container" id="download">
+          <div class="section-heading center reveal">
+            <div class="eyebrow"><span class="eyebrow-dot"></span><span data-i18n="dlEyebrow">İndir</span></div>
+            <h2 data-i18n="dlTitle">Nöbetçi <em>nöbete hazır.</em></h2>
+            <p data-i18n="dlIntro">Ücretsiz indir, kurulum sihirbazıyla Claude Code'a bağla, ilk izin isteğinde kararını ver.</p>
+          </div>
+          <div class="downloads">
+            <a class="os-card reveal" data-os="windows" href="https://github.com/tahap0l/nobetci/releases/latest" target="_blank" rel="noreferrer">
+              <span class="yours" data-i18n="yours">Senin sistemin</span>
+              <span class="os-logo"><svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" aria-hidden="true"><path d="M3 5.5l7.5-1v7H3zM11.5 4.4 21 3v8.5h-9.5zM3 12.5h7.5v7L3 18.5zM11.5 12.5H21V21l-9.5-1.4z"/></svg></span>
+              <h3>Windows</h3>
+              <p data-i18n="winReq">Windows 10 ve 11, 64 bit. Kurulum sihirbazı her şeyi ayarlar.</p>
+              <span class="files">Nobetci-x.y.z-setup.exe</span>
+              <span class="go"><span data-i18n="get">İndir</span> →</span>
+            </a>
+            <a class="os-card reveal" data-os="mac" href="https://github.com/tahap0l/nobetci/releases/latest" target="_blank" rel="noreferrer">
+              <span class="yours" data-i18n="yours">Senin sistemin</span>
+              <span class="os-logo"><svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" aria-hidden="true"><path d="M16.4 12.6c0-2.4 2-3.5 2-3.6-1.1-1.6-2.8-1.8-3.4-1.8-1.4-.2-2.8.8-3.5.8s-1.8-.8-3-.8C7 7.3 5.6 8.1 4.8 9.5c-1.7 2.9-.4 7.2 1.2 9.6.8 1.2 1.7 2.4 2.9 2.4s1.6-.8 3-.8 1.8.8 3 .7c1.3 0 2.1-1.2 2.8-2.3.9-1.3 1.3-2.6 1.3-2.7 0 0-2.6-1-2.6-3.8zM14.1 5.6c.6-.8 1.1-1.9 1-3-.9 0-2.1.6-2.7 1.4-.6.7-1.1 1.8-1 2.9 1 .1 2.1-.5 2.7-1.3z"/></svg></span>
+              <h3>macOS</h3>
+              <p data-i18n="macReq">macOS 11 ve üstü, Apple Silicon ve Intel tek pakette.</p>
+              <span class="files">Nobetci-x.y.z-macos-universal.dmg</span>
+              <span class="go"><span data-i18n="get">İndir</span> →</span>
+            </a>
+            <a class="os-card reveal" data-os="linux" href="https://github.com/tahap0l/nobetci/releases/latest" target="_blank" rel="noreferrer">
+              <span class="yours" data-i18n="yours">Senin sistemin</span>
+              <span class="os-logo"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3c-2.2 0-3.2 1.8-3.2 4 0 1.6-.6 2.7-1.6 4.2C6 13 5 15 5.6 17c.4 1.4 1.8 2.4 3 2.6M12 3c2.2 0 3.2 1.8 3.2 4 0 1.6.6 2.7 1.6 4.2 1.2 1.8 2.2 3.8 1.6 5.8-.4 1.4-1.8 2.4-3 2.6M9 20.5c1 .6 2 .8 3 .8s2-.2 3-.8M10.5 7.5h.01M13.5 7.5h.01M10.8 9.6s.6.6 1.2.6 1.2-.6 1.2-.6"/></svg></span>
+              <h3>Linux</h3>
+              <p data-i18n="linuxReq">x86-64, X11 ya da Wayland. Debian ve Ubuntu için .deb, her dağıtım için AppImage.</p>
+              <span class="files">.deb · .AppImage</span>
+              <span class="go"><span data-i18n="get">İndir</span> →</span>
+            </a>
+          </div>
+          <p class="download-note" data-i18n="dlNote">Her sürümün yanında SHA256SUMS.txt var; indirdiğini doğrulayabilirsin. Kaynak kod MIT lisanslı.</p>
+        </section>
+
+        <!-- FAQ -->
+        <section class="section container" id="faq">
+          <div class="section-heading center reveal">
+            <div class="eyebrow"><span class="eyebrow-dot"></span><span data-i18n="faqEyebrow">Sık sorulanlar</span></div>
+            <h2 data-i18n="faqTitle">Merak ettiklerin</h2>
+          </div>
+          <div class="faq">
+            <details class="reveal"><summary data-i18n="q1">Nöbetçi kapalıysa ajanım takılır mı?</summary><p data-i18n="a1">Hayır. Uygulama kapalıysa köprü hiçbir şey yapmadan çıkar ve Claude Code her zamanki gibi terminalde sorar. Açıkken bile bir isteğe yalnızca belirli bir süre bekler.</p></details>
+            <details class="reveal"><summary data-i18n="q2">Verilerim bir yere gönderiliyor mu?</summary><p data-i18n="a2">Hayır. Hesap, telemetri ya da analiz yok. Ağa yalnızca senin açtığın şeyler çıkar: Mesaj Atölyesi'nde seçtiğin sağlayıcı ve şehir seçtiysen hava durumu.</p></details>
+            <details class="reveal"><summary data-i18n="q3">Yüksek riskli bir komut kendiliğinden onaylanabilir mi?</summary><p data-i18n="a3">Hayır. Kurallar, güvenilen projeler ve oturum izinleri en fazla orta riske kadar otomatik izin verebilir. Yüksek ve kritik istekler her zaman basılı tutmayla, gerçek bir tıklamayla onaylanır.</p></details>
+            <details class="reveal"><summary data-i18n="q4">Claude masaüstü uygulamasıyla da çalışıyor mu?</summary><p data-i18n="a4">Evet; uygulamanın Code sekmesindeki Claude Code oturumları terminaldekilerle aynı şekilde izlenir ve adada ayrıca etiketlenir. Normal sohbet bölümü izlenemez.</p></details>
+            <details class="reveal"><summary data-i18n="q5">Ücretli mi?</summary><p data-i18n="a5">Hayır. Nöbetçi ücretsiz ve MIT lisanslı açık kaynak bir projedir.</p></details>
           </div>
         </section>
 
-        <section class="download-section">
-          <div class="container download-inner">
-            <div class="download-orb"><img src="/assets/owl.png" alt="" width="84" height="84" loading="lazy" /></div>
-            <div><div class="eyebrow"><span class="eyebrow-dot"></span><span data-i18n="downloadEyebrow">Kullanmaya başla</span></div><h2 data-i18n="downloadTitle">Nöbetçi nöbete hazır.</h2><p data-i18n="downloadText">Ücretsiz indir, Claude Code ile bağla ve ilk izni geldiğinde kararını ver.</p></div>
-            <a class="button button-primary button-download" href="https://github.com/tahap0l/nobetci/releases/latest" target="_blank" rel="noreferrer"><span data-i18n="downloadLatest">Son sürümü indir</span><span aria-hidden="true">↗</span></a>
+        <section class="container">
+          <div class="cta reveal">
+            <img class="cta-owl" src="/assets/owl.png" alt="" width="84" height="84" loading="lazy" />
+            <h2 data-i18n="ctaTitle">Yapay zekâ çalışsın, <em>sen izle.</em></h2>
+            <p data-i18n="ctaText">Birkaç dakikada kur, ilk izin isteğinde farkı gör.</p>
+            <a class="button button-primary" href="#download"><span data-i18n="download">Ücretsiz indir</span></a>
           </div>
-          <div class="container download-footnote" data-i18n="downloadFootnote">Windows 10/11 · macOS 11+ · Linux · Açık kaynak MIT lisansı</div>
         </section>
       </main>
 
       <footer class="site-footer">
         <div class="container footer-inner">
-          <a class="brand footer-brand" href="/"><img src="/assets/owl.png" alt="" width="30" height="30" loading="lazy" /><span>Nöbetçi</span></a>
+          <a class="brand" href="/"><img src="/assets/owl.png" alt="" width="28" height="28" loading="lazy" /><span>Nöbetçi</span></a>
           <p data-i18n="footerLine">Dikkatli ajanlar için küçük bir baykuş.</p>
-          <nav aria-label="Alt gezinme"><a href="/privacy.html" data-i18n="footerPrivacy">Gizlilik</a><a href="https://github.com/tahap0l/nobetci/blob/main/LICENSE" target="_blank" rel="noreferrer" data-i18n="footerLicense">MIT lisansı</a><a href="https://github.com/tahap0l/nobetci/issues" target="_blank" rel="noreferrer" data-i18n="footerContact">İletişim</a></nav>
+          <nav aria-label="Alt gezinme" data-i18n-aria="footerNav"><a href="/privacy.html" data-i18n="footerPrivacy">Gizlilik</a><a href="https://github.com/tahap0l/nobetci/blob/main/CHANGELOG.md" target="_blank" rel="noreferrer" data-i18n="footerChanges">Sürüm notları</a><a href="https://github.com/tahap0l/nobetci/blob/main/LICENSE" target="_blank" rel="noreferrer" data-i18n="footerLicense">MIT lisansı</a><a href="https://github.com/tahap0l/nobetci/issues" target="_blank" rel="noreferrer" data-i18n="footerContact">İletişim</a></nav>
           <span class="copyright">© 2026 Nöbetçi</span>
         </div>
       </footer>
     </div>
-    <button class="owl-companion" type="button" aria-label="Baykuşun başını döndür" title="Baykuşa tıkla" data-i18n-aria="owlLabel">
+
+    <button class="owl-companion" type="button" aria-label="Baykuşun başını döndür" data-i18n-aria="owlLabel">
       <svg class="owl-art" viewBox="0 0 96 96" aria-hidden="true" focusable="false">
         <ellipse class="owl-body" cx="48" cy="65" rx="27" ry="28" />
         <path class="owl-belly" d="M29 70c0-15 8-23 19-23s19 8 19 23c0 11-8 18-19 18S29 81 29 70Z" />
@@ -147,8 +318,9 @@
       <span class="owl-hint" data-i18n="owlHint">Tıkla, selam versin</span>
     </button>
     <script src="/site.js?v=2.3.1" defer></script>
+    <script src="/live-demo.js?v=2.3.1" defer></script>
     <script src="/mascot-themes.js?v=mascots2" defer></script>
     <script type="module" src="/mascot-engine.js?v=mascots3"></script>
-    <script src="/home-themes.js?v=mascots3" defer></script>
+    <script src="/home-themes.js?v=2.3.1" defer></script>
   </body>
 </html>

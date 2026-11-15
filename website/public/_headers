@@ -2,14 +2,28 @@
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
   X-Frame-Options: DENY
-  Permissions-Policy: camera=(), microphone=(), geolocation=()
-  Content-Security-Policy: default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), interest-cohort=()
+  Content-Security-Policy: default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; frame-src 'self'; base-uri 'self'; form-action 'self'; object-src 'none'; frame-ancestors 'none'; upgrade-insecure-requests
 
-/styles.css
-  Cache-Control: public, max-age=86400
+# The live demo is the app's island, framed by the site's own pages. It sets
+# style attributes as it draws, and it may only be framed from this site.
+/island/*
+  ! X-Frame-Options
+  ! Content-Security-Policy
+  X-Frame-Options: SAMEORIGIN
+  Content-Security-Policy: default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'none'; base-uri 'self'; form-action 'none'; object-src 'none'; frame-ancestors 'self'
 
-/site.js
-  Cache-Control: public, max-age=86400
+/island/assets/*
+  Cache-Control: public, max-age=31536000, immutable
 
 /assets/*
-  Cache-Control: public, max-age=604800, immutable
+  Cache-Control: public, max-age=604800
+
+/shots/*
+  Cache-Control: public, max-age=604800
+
+/*.css
+  Cache-Control: public, max-age=86400
+
+/*.js
+  Cache-Control: public, max-age=86400

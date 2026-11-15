@@ -15,8 +15,11 @@ async function main() {
 
   const island = new Island(root);
 
+  // The website's live demo is this page, built with VITE_WEB_DEMO=1 (vite.config.ts);
+  // the app's own build has neither flag, so the demo code is dropped from it.
+  const demoBuild = import.meta.env.DEV || import.meta.env.VITE_WEB_DEMO === "1";
   // `?lang=tr|en` forces a language in the browser preview (README screenshots).
-  const forced = import.meta.env.DEV ? new URLSearchParams(location.search).get("lang") : null;
+  const forced = demoBuild ? new URLSearchParams(location.search).get("lang") : null;
   const pickLang = (): Lang => (forced === "tr" || forced === "en" ? forced : resolveLang(State.settings.language));
 
   const boot = await Bridge.boot();
@@ -75,7 +78,9 @@ async function main() {
   // Hooks that were installed but have disappeared: say so once the greeting is done.
   if (boot?.hooksLost) window.setTimeout(() => island.flash(t("fl.hooksLost"), "warn"), 4500);
 
-  const demo = import.meta.env.DEV && !IS_TAURI ? new URLSearchParams(location.search).get("demo") : null;
+  const demo = demoBuild && !IS_TAURI
+    ? new URLSearchParams(location.search).get("demo") ?? (import.meta.env.VITE_WEB_DEMO === "1" ? "overview" : null)
+    : null;
   if (demo) {
     const { runDemo } = await import("./demo");
     runDemo(island, demo);

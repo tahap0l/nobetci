@@ -2064,3 +2064,11 @@ mark.lvl-critical { background: #f4505e; color: #fff; }
 @media (prefers-reduced-motion: reduce) {
   #island[data-mode="expanded"] .view.on > * { animation: none; }
 }
+
+/* Demo screenshots (?still=1): animations jump to their end. */
+[data-still] *, [data-still] *::before, [data-still] *::after {
+  animation-duration: 0s !important;
+  animation-delay: 0s !important;
+  animation-iteration-count: 1 !important;
+  transition: none !important;
+}

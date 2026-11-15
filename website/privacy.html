@@ -6,17 +6,18 @@
     <meta name="theme-color" content="#08111f" />
     <meta name="description" content="Nöbetçi'nin gizlilik politikası: yerel kayıtlar, isteğe bağlı yapay zekâ mesaj incelemesi ve veri tercihlerin." />
     <link rel="icon" type="image/png" href="/assets/owl.png" />
-    <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="/styles.css?v=2.3.1" />
     <title>Gizlilik Politikası — Nöbetçi</title>
   </head>
   <body>
     <div class="site-shell">
+      <div class="aurora" aria-hidden="true"><i></i><i></i><i></i></div>
       <header class="site-header"><div class="container nav"><a class="brand" href="/" aria-label="Nöbetçi ana sayfa"><img src="/assets/owl.png" alt="" width="40" height="40" /><span>Nöbetçi</span></a><nav class="nav-links"><a href="/#features">Özellikler</a><a href="/#how">Nasıl çalışır?</a></nav><div class="nav-actions"><a class="button button-small button-quiet" href="https://github.com/tahap0l/nobetci" target="_blank" rel="noreferrer">GitHub</a></div></div></header>
       <main class="container policy-main">
         <article class="policy-content" lang="tr">
           <div class="eyebrow"><span class="eyebrow-dot"></span>Şeffaf ve yerel</div>
           <h1>Nöbetçi Gizlilik Politikası</h1>
-          <p class="policy-date">Son güncelleme: 9 Kasım 2026</p>
+          <p class="policy-date">Son güncelleme: 15 Kasım 2026</p>
           <p class="policy-intro">Nöbetçi, yapay zekâ kodlama ajanlarının izin isteklerini incelemene ve ajanlara göndereceğin mesajları hazırlamana yardımcı olan bir masaüstü uygulamasıdır. Bilgisayarında çalışır ve hesap açmanı gerektirmez.</p>
           <h2>Bilgiler ve yerel kayıtlar</h2>
           <p>Nöbetçi telemetri, analiz, çökme raporu veya güncelleme kontrolü göndermez. Ayarlar, istek geçmişi ve kayıtlar bilgisayarında tutulur. Mesaj taslakları ve düzeltilmiş metinler geçmişe kaydedilmez. İstek geçmişe yazılmadan veya bildirimde gösterilmeden önce API anahtarı, parola ve özel anahtar gibi tanınan sırlar maskelenir. Onay kartı, neye izin verdiğini inceleyebilmen için isteği eksiksiz gösterir.</p>
@@ -28,7 +29,9 @@
           </ul>
           <p>Düzenlenmiş mesajı önce sen incelersin. Başka bir uygulamaya kopyalamaya sen karar verirsin.</p>
           <h2>İsteğe bağlı ada bileşenleri</h2>
-          <p>Hava durumu varsayılan olarak kapalıdır. Bir şehir seçersen Open-Meteo o şehrin koordinatlarını ve bağlantının IP adresini alır. Cihaz konumu veya ajan verisi gönderilmez. Windows medya bileşeni parça bilgilerini cihazda okur ve bu bilgileri göndermez veya saklamaz.</p>
+          <p>Hava durumu varsayılan olarak kapalıdır. Bir şehir seçersen Open-Meteo o şehrin koordinatlarını ve bağlantının IP adresini alır. Cihaz konumu veya ajan verisi gönderilmez. Medya kartı parça bilgilerini işletim sisteminden cihazda okur; göndermez ve saklamaz. Sistem kartı işlemci, bellek ve ekran kartı kullanımını yalnızca kart ekrandayken cihazda okur. Ajanda notların bilgisayarındaki <code>agenda.json</code> dosyasında kalır.</p>
+          <h2>Ada asistanı</h2>
+          <p>Asistanda bir yapay zekâ uygulaması seçip gönderdiğinde Nöbetçi mesajı kendisi göndermez: uygulamayı ya da tarayıcını mesajınla açar ve mesajı panoya kopyalar; göndermeye sen karar verirsin. <strong>Burada sor</strong> seçeneği mesajı Mesaj Atölyesi'nde seçtiğin sağlayıcıya (Ollama ya da OpenAI) gönderir. Sesle yazma işletim sisteminin kendi dikte özelliğidir; Nöbetçi ses kaydetmez.</p>
           <h2>Seçimlerin</h2>
           <p>Nöbetçi'yi Mesaj Atölyesi olmadan kullanabilir, yerel Ollama'yı seçebilir veya kendi API anahtarınla OpenAI'yi seçebilirsin. Kayıtlı OpenAI anahtarını Mesaj Atölyesi'nden silebilirsin. Yerel geçmişini ve ayarlarını uygulama içinden yönetirsin.</p>
           <h2>Değişiklikler ve iletişim</h2>
@@ -39,7 +42,7 @@
             <summary>English version</summary>
             <section lang="en">
               <h2>Nöbetçi Privacy Policy</h2>
-              <p class="policy-date">Last updated: November 9, 2026</p>
+              <p class="policy-date">Last updated: November 15, 2026</p>
               <p class="policy-intro">Nöbetçi is a desktop application that helps you review AI coding-agent permission requests and prepare messages for AI agents. It runs on your computer and does not require an account.</p>
               <h2>Information and local storage</h2>
               <p>Nöbetçi does not send telemetry, analytics, crash reports, or update checks. Settings, request history, and logs are stored locally on your computer. Prompt drafts and rewritten messages are not saved to history. Before request text is written to history or shown in a notification, Nöbetçi masks recognized secrets such as API tokens, passwords, and private keys. The approval card shows the request in full so you can review what you are approving.</p>
@@ -51,7 +54,9 @@
               </ul>
               <p>The rewritten message is shown for your review. You decide whether to copy it to another app.</p>
               <h2>Optional island widgets</h2>
-              <p>Weather is off by default. If you select a city, Open-Meteo receives that city’s coordinates and your connection’s IP address. Device location and agent data are not sent. The Windows media widget reads track details locally without sending or storing them.</p>
+              <p>Weather is off by default. If you select a city, Open-Meteo receives that city’s coordinates and your connection’s IP address. Device location and agent data are not sent. The media card reads track details from the operating system on your device without sending or storing them. The system card reads processor, memory and graphics load on your device, only while it is on screen. Agenda notes stay in an <code>agenda.json</code> file on your computer.</p>
+              <h2>The island assistant</h2>
+              <p>When you send a message to an AI app from the assistant, Nöbetçi does not send it itself: it opens the app or your browser with your message and copies the message to the clipboard; sending is up to you. <strong>Ask here</strong> sends the message to the provider you chose in Prompt Studio (Ollama or OpenAI). Voice input is your operating system's own dictation; Nöbetçi records no audio.</p>
               <h2>Your choices</h2>
               <p>You can use Nöbetçi without Prompt Studio, choose local Ollama, or choose OpenAI with your own API key. You can remove the saved OpenAI key in Prompt Studio. You control the local history and settings from the app.</p>
               <h2>Changes and contact</h2>
@@ -60,7 +65,7 @@
           </details>
         </article>
       </main>
-      <footer class="site-footer"><div class="container footer-inner"><a class="brand footer-brand" href="/"><img src="/assets/owl.png" alt="" width="30" height="30" /><span>Nöbetçi</span></a><p>Dikkatli ajanlar için küçük bir baykuş.</p><nav><a href="/">Ana sayfa</a><a href="https://github.com/tahap0l/nobetci" target="_blank" rel="noreferrer">GitHub</a></nav><span class="copyright">© 2026 Nöbetçi</span></div></footer>
+      <footer class="site-footer"><div class="container footer-inner"><a class="brand" href="/"><img src="/assets/owl.png" alt="" width="28" height="28" /><span>Nöbetçi</span></a><p>Dikkatli ajanlar için küçük bir baykuş.</p><nav><a href="/">Ana sayfa</a><a href="https://github.com/tahap0l/nobetci" target="_blank" rel="noreferrer">GitHub</a></nav><span class="copyright">© 2026 Nöbetçi</span></div></footer>
     </div>
   </body>
 </html>

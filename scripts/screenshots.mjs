@@ -45,11 +45,17 @@ const SHOTS = [
   { name: "critical", path: "?demo=critical", size: ISLAND },
   { name: "low", path: "?demo=low", size: ISLAND },
   { name: "overview", path: "?demo=overview", size: HERO },
-  { name: "idle-island", path: "?demo=overview&theme=wolf&media=1", size: HERO },
+  { name: "idle-island", path: "?demo=overview&theme=wolf&media=art", size: HERO },
   // Drawn at twice the size: the mascots are the whole picture.
   { name: "mascots", path: "?demo=mascots", size: { width: 720, height: 210 }, scale: 2 },
   { name: "reactions", path: "?demo=reactions", size: { width: 720, height: 210 }, scale: 2 },
   { name: "session", path: "?demo=session", size: ISLAND },
+  // The assistant with its prompt library open, and each card of the dashboard.
+  { name: "assistant", path: "?demo=assistant&lib=1&text=", size: ISLAND },
+  { name: "card-weather", path: "?demo=overview&media=art&weather=2&page=weather", size: HERO },
+  { name: "card-agenda", path: "?demo=overview&media=art&page=agenda", size: HERO },
+  { name: "card-calendar", path: "?demo=overview&media=art&page=calendar", size: HERO },
+  { name: "card-system", path: "?demo=overview&media=art&page=system", size: HERO },
   { name: "compact", path: "?demo=compact", size: ISLAND },
   { name: "settings-rules", path: "settings.html?tab=kurallar", size: SETTINGS },
   { name: "settings-history", path: "settings.html?tab=gecmis", size: SETTINGS },
@@ -181,6 +187,8 @@ async function main() {
         const file = join(outDir, `${shot.name}.png`);
         const url = new URL(shot.path, base);
         url.searchParams.set("lang", lang);
+        // Animations at their end: virtual time does not run CSS animations.
+        if (url.searchParams.has("demo")) url.searchParams.set("still", "1");
         // A fresh profile per image: no storage or preference leaks between shots.
         const profile = mkdtempSync(join(profiles, "p-"));
         rmSync(file, { force: true });

@@ -1,7 +1,7 @@
-// Browser-only demo scenarios for `npm run dev`: open /?demo=<name> (optionally
-// with &lang=en|tr, &theme=<mascot> and &media=1 for a playing media card) to
-// see a view without Claude Code or Rust. Only reachable
-// behind import.meta.env.DEV, so a production build drops this file entirely.
+// Browser-only demo scenarios for `npm run dev` and the website's live demo: open
+// /?demo=<name> (optionally with &lang=en|tr, &theme=<mascot> and &media=1 for a
+// playing media card) to see a view without Claude Code or Rust. Only reachable
+// behind import.meta.env.DEV or VITE_WEB_DEMO, so the app's build drops this file.
 // The data is made up — neutral paths and project names, fit for screenshots.
 
 import { OwlEngine, type OwlEmote, type OwlMood } from "./baykus/owl";
@@ -165,9 +165,23 @@ const DEMO_ART = "data:image/svg+xml," + encodeURIComponent(
   + '<path d="M0 50 20 34l14 10 12-8 18 14v14H0z" fill="#1d1033" opacity=".8"/></svg>');
 
 export function runDemo(island: Island, name: string) {
-  document.body.style.background = "linear-gradient(180deg, #2b3140, #1b1f29)";
-  State.settings.hooksInstalled = name !== "empty";
   const params = new URLSearchParams(location.search);
+  // &bg=none: a transparent page, for the website's frame.
+  document.body.style.background = params.get("bg") === "none" ? "transparent" : "linear-gradient(180deg, #2b3140, #1b1f29)";
+  // A dark scheme like the framing page's, so the frame stays see-through.
+  if (params.get("bg") === "none") document.documentElement.style.colorScheme = "dark";
+  State.settings.hooksInstalled = name !== "empty";
+  // &still=1: every CSS animation at its end state, for screenshots.
+  if (params.has("still")) document.documentElement.dataset.still = "1";
+  // The website's tour shows everything: playing music with a cover, and weather.
+  if (name === "tour") {
+    if (!params.has("media")) params.set("media", "art");
+    if (!params.has("weather")) params.set("weather", "2");
+  }
+  // Decisions go nowhere outside the app; the card answers as if they had.
+  Bridge.approvalDecision = async () => {};
+  Bridge.approvalAck = async () => null;
+  Bridge.approvalDecline = async () => null;
   const theme = params.get("theme");
   if (theme && Object.prototype.hasOwnProperty.call(MASCOT_THEMES, theme)) {
     State.settings.mascotTheme = theme as MascotTheme;
@@ -218,6 +232,11 @@ export function runDemo(island: Island, name: string) {
   switch (name) {
     case "mascots":
       mascotLineup();
+      break;
+    case "tour":
+      sessions(island);
+      island.setView("overview");
+      tour(island);
       break;
     case "reactions":
       reactionLineup();
@@ -284,4 +303,66 @@ export function runDemo(island: Island, name: string) {
   State.notify();
   // Let the DOM lay out once so measured heights are real, then skip the animation.
   requestAnimationFrame(() => requestAnimationFrame(() => island.snap()));
+}
+
+/** Clicks the dashboard tab for `page` on whichever view is showing. */
+function showCard(page: string) {
+  for (const tab of document.querySelectorAll<HTMLButtonElement>(`[id$="-${page}-tab"]`)) {
+    if (tab.offsetParent) tab.click();
+  }
+}
+
+/**
+ * The website's hero: a loop through what the island does — sessions, a
+ * critical request, the cards, the assistant — a few seconds each.
+ */
+function tour(island: Island) {
+  // Nobody hovers a frame on a web page: keep the island open.
+  const keepOpen = () => {
+    island.fsm.pinned = true;
+    island.fsm.cancelTimers();
+    if (island.fsm.state !== "home") island.fsm.forceHome();
+  };
+  keepOpen();
+  const back = () => {
+    State.approvals = [];
+    const s = State.session("b");
+    if (s?.state === "approval") State.setState(s, "working");
+    island.setView("overview");
+    island.fsm.pinned = true;
+    State.notify();
+  };
+  const later = (fn: () => void) => window.setTimeout(fn, 350);
+  const steps: [number, () => void][] = [
+    [4200, () => approval(island, "tour", "b", "Bash", critical())],
+    [5600, () => { back(); later(() => showCard("weather")); }],
+    [3400, () => showCard("agenda")],
+    [3400, () => showCard("calendar")],
+    [3400, () => showCard("system")],
+    [3600, () => {
+      island.openAssistant();
+      island.fsm.pinned = true;
+      window.setTimeout(() => {
+        const input = document.querySelector<HTMLTextAreaElement>(".asst-input");
+        if (!input) return;
+        input.value = L("Bu hafta için kısa bir çalışma planı hazırla", "Draft a short study plan for this week");
+        input.dispatchEvent(new Event("input"));
+      }, 400);
+    }],
+    [5200, () => { back(); later(() => showCard("media")); }],
+  ];
+  let i = 0;
+  const next = () => {
+    const [wait, step] = steps[i];
+    window.setTimeout(() => {
+      // A visitor clicking inside the frame takes over: the tour stops.
+      if (document.body.dataset.tourStopped) return;
+      step();
+      keepOpen();
+      i = (i + 1) % steps.length;
+      next();
+    }, wait);
+  };
+  document.addEventListener("pointerdown", () => { document.body.dataset.tourStopped = "1"; }, { once: true });
+  next();
 }

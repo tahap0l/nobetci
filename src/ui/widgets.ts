@@ -578,7 +578,7 @@ export function buildWidgets(view: "overview" | "empty", openSettings: (tab: str
     markPage(index);
     viewport.scrollTo({
       top: index * viewport.clientHeight,
-      behavior: reducedMotion.matches ? "instant" : "smooth",
+      behavior: reducedMotion.matches || document.documentElement.dataset.still ? "instant" : "smooth",
     });
   }
 

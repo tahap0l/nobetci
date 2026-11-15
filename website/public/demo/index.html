@@ -1,60 +1,41 @@
 <!doctype html>
 <html lang="tr">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Nöbetçi · Canlı demo</title>
-  <link rel="stylesheet" href="/demo/demo.css?v=mascots3">
-  <link rel="stylesheet" href="/mascot-motion.css?v=mascots">
-  <script src="/mascot-themes.js?v=mascots2" defer></script>
-  <script type="module" src="/mascot-engine.js?v=mascots3"></script>
-  <script src="/demo/demo.js?v=mascots3" defer></script>
-</head>
-<body data-theme="owl">
-  <main>
-    <nav><a href="/">← Nöbetçi</a><span>ETKİLEŞİMLİ DEMO</span></nav>
-    <header>
-      <h1>Son karar <em>sende.</em></h1>
-      <p>Maskotunu seç. Bir komut isteği gönder ve Nöbetçi’nin nasıl tepki verdiğini gör.</p>
-    </header>
-    <div class="layout">
-      <aside aria-labelledby="theme-heading">
-        <h2 id="theme-heading">Maskot teması</h2>
-        <div class="themes" id="themes" role="group" aria-labelledby="theme-heading"></div>
-      </aside>
-      <section class="stage" id="stage" data-state="idle" aria-labelledby="stage-heading">
-        <div class="stage-bar"><span id="stage-heading">NÖBETÇİ ADASI</span><span class="signal"></span></div>
-        <div class="avatar-zone" aria-hidden="true">
-          <div class="halo"></div>
-          <div class="mascot" id="mascot"></div>
-          <span class="mascot-signal" id="mascot-signal" hidden></span>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#070b14" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="description" content="Nöbetçi'nin gerçek arayüzünü tarayıcında dene: izin kartları, asistan, ajanda, hava ve sistem kartları." />
+    <meta name="nobetci-base" content="/" />
+    <link rel="icon" type="image/png" href="/assets/owl.png" />
+    <link rel="stylesheet" href="/styles.css?v=2.3.1" />
+    <title>Nöbetçi · Canlı demo</title>
+  </head>
+  <body>
+    <a class="skip-link" href="#main" data-i18n="skip">İçeriğe atla</a>
+    <div class="site-shell">
+      <div class="aurora" aria-hidden="true"><i></i><i></i><i></i></div>
+      <div class="grid-fade" aria-hidden="true"></div>
+      <header class="site-header">
+        <div class="container nav">
+          <a class="brand" href="/" aria-label="Nöbetçi"><img src="/assets/owl.png" alt="" width="36" height="36" /><span>Nöbetçi</span></a>
+          <nav class="nav-links" aria-label="Ana gezinme" data-i18n-aria="navMain">
+            <a href="/#features" data-i18n="navFeatures">Özellikler</a>
+            <a href="/#download" data-i18n="navDownload">İndir</a>
+          </nav>
+          <div class="nav-actions"><button class="language-toggle" type="button" data-language-toggle aria-label="Switch language to English">EN</button></div>
         </div>
-        <div class="card" id="card">
-          <div class="card-title"><span class="badge" id="badge">Hazır</span><h2 id="heading">Nöbetteyim</h2></div>
-          <p id="detail">Oturum bekleniyor</p>
-          <div class="mini-widgets" id="widgets">
-            <div class="mini-player">
-              <span class="mini-beats" aria-hidden="true"><i></i><i></i><i></i></span>
-              <span class="mini-track"><strong>Gece Nöbeti</strong><small>Örnek parça</small></span>
-              <button id="music" type="button" aria-label="Örnek oynatmayı başlat" aria-pressed="false"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true" focusable="false"><path d="M7 4.5v15l12.5-7.5z"/></svg></button>
-            </div>
-            <span class="mini-focus"><small>Odak</small><strong>25:00</strong></span>
-          </div>
-          <div id="command" hidden>
-            <div class="meta"><span>Claude Code · Bash</span><span>nobetci/</span></div>
-            <pre><code id="example-command">git status --short</code></pre>
-          </div>
-          <div class="actions">
-            <button class="primary" id="send" type="button">Örnek istek gönder <span aria-hidden="true">→</span></button>
-            <button id="send-risky" type="button">Riskli isteği göster</button>
-            <button class="deny" id="deny" type="button" hidden>Reddet</button>
-            <button class="allow" id="allow" type="button" hidden>Onayla</button>
-          </div>
-          <p id="status" role="status" class="sr-only"></p>
+      </header>
+      <main id="main" class="section container">
+        <div class="section-heading center">
+          <div class="eyebrow"><span class="eyebrow-dot"></span><span data-i18n="demoEyebrow">Canlı demo</span></div>
+          <h1 class="demo-title" data-i18n="demoTitle">İndirmeden önce <em>bir dene.</em></h1>
+          <p data-i18n="demoIntro">Aşağıdaki ada, uygulamanın gerçek arayüzü. Bir senaryo seç, kartlara tıkla, onay kartında düğmeleri dene; bilgisayarında hiçbir şey çalışmaz.</p>
         </div>
-        <p class="foot">Simülasyon · Bilgisayarında komut çalıştırmaz.</p>
-      </section>
+        <div class="lab" data-lab></div>
+      </main>
     </div>
-  </main>
-</body>
+    <script src="/site.js?v=2.3.1" defer></script>
+    <script src="/live-demo.js?v=2.3.1" defer></script>
+  </body>
 </html>
