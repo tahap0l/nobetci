@@ -1,4 +1,4 @@
-import { defineConfig } from "vite";
+import { build as viteBuild, defineConfig } from "vite";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
@@ -30,16 +30,32 @@ export default defineConfig(process.env.CF_PAGES === "1" ? {
         const source = html.replace(/\b(href|src|content)="\/(?!\/)/g, (_, attr) => `${attr}="${websiteBase}`);
         this.emitFile({ type: "asset", fileName: name, source });
       }
+      // Screenshots for the pages are WebP files in website/public/shots/.
       const images = {
         "owl.png": "src-tauri/icons/128x128.png",
-        "overview.png": "docs/media/tr/overview.png",
-        "idle-island.png": "docs/media/tr/idle-island.png",
-        "critical.png": "docs/media/tr/critical.png",
         "social.png": "docs/media/social.png",
       };
       for (const [name, path] of Object.entries(images)) {
         this.emitFile({ type: "asset", fileName: `assets/${name}`, source: readFileSync(resolve(root, path)) });
       }
+    },
+    // The live demo is the app's real island, built a second time into
+    // dist/island/ with VITE_WEB_DEMO so its browser-only scenarios stay in.
+    async closeBundle() {
+      await viteBuild({
+        configFile: false,
+        root,
+        base: `${websiteBase}island/`,
+        logLevel: "warn",
+        define: { "import.meta.env.VITE_WEB_DEMO": JSON.stringify("1") },
+        build: {
+          outDir: resolve(root, "dist/island"),
+          emptyOutDir: true,
+          target: "es2022",
+          sourcemap: false,
+          rolldownOptions: { input: resolve(root, "index.html") },
+        },
+      });
     },
   }],
   build: {
