@@ -14,6 +14,11 @@
 //! * Only `PermissionRequest` waits for an answer, because approving from the
 //!   island is the whole point. No answer means empty stdout, and Claude Code
 //!   asks in the terminal exactly as if Nöbetçi were not installed.
+//! * The one exception is the Code tab of the Claude desktop app, which shows
+//!   its own permission dialog and never runs `PermissionRequest` hooks. There a
+//!   `PreToolUse` for a tool that would ask (see `desktop_gate`) is relayed as a
+//!   permission request and answered with a `PreToolUse` decision. Same budget,
+//!   same silence when nobody answers: the app's own dialog then appears.
 //!
 //! Usage: `nobetci-hook <EventName>` (the name is also read from the JSON).
 
@@ -64,7 +69,7 @@ fn main() {
     }
     let provider = if first == "codex" || first == "cursor" { first.clone() } else { "claude".into() };
     let event_arg = if provider == "claude" { first } else { args.next().unwrap_or_default() };
-    let Some((payload, event)) = read_event(&provider, event_arg) else { std::process::exit(0) };
+    let Some((payload, event, gated)) = read_event(&provider, event_arg) else { std::process::exit(0) };
 
     let waits_for_answer = event == "PermissionRequest";
     let budget = if waits_for_answer { DECISION_BUDGET } else { FIRE_AND_FORGET_BUDGET };
@@ -77,7 +82,8 @@ fn main() {
     });
 
     if let Ok(Some(decision)) = rx.recv_timeout(budget) {
-        if let Some(json) = output_json(&provider, &event, &decision) {
+        let json = if gated { pre_tool_use_json(&decision) } else { output_json(&provider, &event, &decision) };
+        if let Some(json) = json {
             let mut out = std::io::stdout();
             let _ = writeln!(out, "{json}");
             let _ = out.flush();
@@ -219,8 +225,65 @@ fn decision_json(answer: &str) -> Option<String> {
     Some(out.to_string())
 }
 
-/// Reads stdin and returns the payload to forward plus the event name.
-fn read_event(provider: &str, arg_event: String) -> Option<(String, String)> {
+/// The documented PreToolUse output for a request gated in the Claude desktop
+/// app (see `desktop_gate`). `allow` skips the app's own permission dialog,
+/// `deny` blocks the tool and tells Claude why; anything else prints nothing,
+/// and the app asks as usual.
+/// See https://code.claude.com/docs/en/hooks (PreToolUse decision control).
+fn pre_tool_use_json(answer: &str) -> Option<String> {
+    let reply = parse_internal_decision(answer)?;
+    let mut out = match reply.get("behavior")?.as_str()? {
+        "allow" => serde_json::json!({
+            "hookSpecificOutput": {
+                "hookEventName": "PreToolUse",
+                "permissionDecision": "allow",
+                "permissionDecisionReason": "Approved in Nöbetçi."
+            }
+        }),
+        "deny" => serde_json::json!({
+            "hookSpecificOutput": {
+                "hookEventName": "PreToolUse",
+                "permissionDecision": "deny",
+                "permissionDecisionReason": clean_message(reply.get("message"), DEFAULT_DENY)
+            }
+        }),
+        _ => return None,
+    };
+    if reply.get("stop").and_then(|v| v.as_bool()) == Some(true) {
+        out["continue"] = serde_json::Value::Bool(false);
+        out["stopReason"] = serde_json::Value::String(clean_message(reply.get("message"), "Stopped by Nöbetçi."));
+    }
+    Some(out.to_string())
+}
+
+/// The `CLAUDE_CODE_ENTRYPOINT` of the Code tab in the Claude desktop app.
+const DESKTOP_ENTRYPOINT: &str = "claude-desktop";
+
+/// Tools that ask for permission by default in Claude Code.
+const ASKING_TOOLS: &[&str] = &["Bash", "PowerShell", "Write", "Edit", "MultiEdit", "NotebookEdit", "WebFetch"];
+/// The subset that `acceptEdits` mode lets through without asking.
+const EDIT_TOOLS: &[&str] = &["Write", "Edit", "MultiEdit", "NotebookEdit"];
+
+/// Whether a `PreToolUse` should be relayed as a permission request: only in the
+/// Claude desktop app (which never runs `PermissionRequest` hooks), only for tools
+/// that would normally ask, and only in modes where the app would ask at all.
+fn desktop_gate(entrypoint: &str, tool: &str, mode: &str) -> bool {
+    if entrypoint != DESKTOP_ENTRYPOINT {
+        return false;
+    }
+    let asks = ASKING_TOOLS.contains(&tool) || tool.starts_with("mcp__");
+    match mode {
+        "" | "default" | "plan" => asks,
+        "acceptEdits" => asks && !EDIT_TOOLS.contains(&tool),
+        // bypassPermissions, dontAsk, auto and anything newer: the user chose not
+        // to be asked, so Nöbetçi does not ask either.
+        _ => false,
+    }
+}
+
+/// Reads stdin and returns the payload to forward, the event name, and whether it
+/// is a `PreToolUse` gated as a permission request (see `desktop_gate`).
+fn read_event(provider: &str, arg_event: String) -> Option<(String, String, bool)> {
     let mut raw = Vec::new();
     if std::io::stdin().read_to_end(&mut raw).is_err() || raw.is_empty() {
         return None;
@@ -238,7 +301,9 @@ fn read_event(provider: &str, arg_event: String) -> Option<(String, String)> {
         "beforeMCPExecution",
     ]
     .iter()
-    .any(|e| arg_event == *e || peek.contains(&format!("\"{e}\"")));
+    .any(|e| arg_event == *e || peek.contains(&format!("\"{e}\"")))
+        || (std::env::var("CLAUDE_CODE_ENTRYPOINT").as_deref() == Ok(DESKTOP_ENTRYPOINT)
+            && (arg_event == "PreToolUse" || peek.contains("\"PreToolUse\"")));
     let parents = wants_parents.then(|| os::ancestors(12));
     prepare(&raw, provider, arg_event, parents)
 }
@@ -250,7 +315,7 @@ fn prepare(
     provider: &str,
     arg_event: String,
     parents: Option<Vec<(u32, String)>>,
-) -> Option<(String, String)> {
+) -> Option<(String, String, bool)> {
     // Some shells hand us a UTF-8 BOM; serde_json would choke on it.
     let raw = raw.strip_prefix(&[0xEF, 0xBB, 0xBF]).unwrap_or(raw);
 
@@ -265,7 +330,7 @@ fn prepare(
         .map(str::to_string)
         .filter(|s| !s.is_empty())
         .unwrap_or(arg_event);
-    let event = if provider == "cursor" {
+    let mut event = if provider == "cursor" {
         match source_event.as_str() {
             "beforeSubmitPrompt" => "UserPromptSubmit".to_string(),
             "beforeShellExecution" | "beforeMCPExecution" => "PermissionRequest".to_string(),
@@ -358,6 +423,16 @@ fn prepare(
         map.insert("nobetci_parents".into(), serde_json::Value::Array(list));
     }
 
+    let text = |key: &str| map.get(key).and_then(|v| v.as_str()).unwrap_or_default().to_string();
+    let gated = provider == "claude"
+        && event == "PreToolUse"
+        && desktop_gate(&text("entrypoint"), &text("tool_name"), &text("permission_mode"));
+    if gated {
+        event = "PermissionRequest".to_string();
+        map.insert("hook_event_name".into(), serde_json::Value::String(event.clone()));
+        map.insert("nobetci_via".into(), serde_json::Value::String("PreToolUse".into()));
+    }
+
     let limit = if event == "PermissionRequest" { MAX_APPROVAL_FIELD_LEN } else { MAX_FIELD_LEN };
     if truncate_strings(&mut payload, limit) {
         if let Some(map) = payload.as_object_mut() {
@@ -367,7 +442,7 @@ fn prepare(
 
     let mut line = payload.to_string();
     line.push('\n');
-    Some((line, event))
+    Some((line, event, gated))
 }
 
 /// Caps every string in the payload. Returns true when anything was cut.
@@ -506,7 +581,7 @@ mod tests {
             "tool_input": { "command": command },
         })
         .to_string();
-        let (line, event) = prepare(raw.as_bytes(), "claude", String::new(), None).unwrap();
+        let (line, event, _) = prepare(raw.as_bytes(), "claude", String::new(), None).unwrap();
         assert_eq!(event, "PermissionRequest");
         let sent: serde_json::Value = serde_json::from_str(&line).unwrap();
         assert_eq!(sent["tool_input"]["command"].as_str().unwrap(), command);
@@ -549,7 +624,7 @@ mod tests {
             "workspace_roots": ["C:/work/project"]
         })
         .to_string();
-        let (line, event) = prepare(raw.as_bytes(), "cursor", String::new(), None).unwrap();
+        let (line, event, _) = prepare(raw.as_bytes(), "cursor", String::new(), None).unwrap();
         let payload: serde_json::Value = serde_json::from_str(&line).unwrap();
         assert_eq!(event, "UserPromptSubmit");
         assert_eq!(payload["agent_name"], "Cursor");
@@ -566,7 +641,7 @@ mod tests {
             "tool_input": { "command": "x".repeat(MAX_APPROVAL_FIELD_LEN + 10) },
         })
         .to_string();
-        let (line, _) = prepare(raw.as_bytes(), "claude", String::new(), None).unwrap();
+        let (line, _, _) = prepare(raw.as_bytes(), "claude", String::new(), None).unwrap();
         let sent: serde_json::Value = serde_json::from_str(&line).unwrap();
         assert_eq!(sent[TRUNCATED_FLAG], serde_json::Value::Bool(true));
     }
@@ -579,7 +654,7 @@ mod tests {
             "tool_input": { "command": "y".repeat(5000) },
         })
         .to_string();
-        let (line, _) = prepare(raw.as_bytes(), "claude", String::new(), None).unwrap();
+        let (line, _, _) = prepare(raw.as_bytes(), "claude", String::new(), None).unwrap();
         let sent: serde_json::Value = serde_json::from_str(&line).unwrap();
         assert!(sent["tool_input"]["command"].as_str().unwrap().len() <= MAX_FIELD_LEN + 4);
     }
@@ -588,7 +663,7 @@ mod tests {
     fn the_process_chain_is_attached_when_given() {
         let raw = br#"{"hook_event_name":"SessionStart","cwd":"C:/w"}"#;
         let chain = vec![(10, "claude.exe".to_string()), (9, "pwsh.exe".to_string())];
-        let (line, _) = prepare(raw, "claude", String::new(), Some(chain)).unwrap();
+        let (line, _, _) = prepare(raw, "claude", String::new(), Some(chain)).unwrap();
         let sent: serde_json::Value = serde_json::from_str(&line).unwrap();
         assert_eq!(sent["nobetci_parents"][0]["name"], "claude.exe");
         assert_eq!(sent["nobetci_parents"][1]["pid"], 9);
@@ -606,7 +681,72 @@ mod tests {
     fn a_bom_and_argv_event_are_handled() {
         let mut raw = vec![0xEF, 0xBB, 0xBF];
         raw.extend_from_slice(br#"{"cwd":"C:/w"}"#);
-        let (_, event) = prepare(&raw, "claude", "Stop".into(), None).unwrap();
+        let (_, event, _) = prepare(&raw, "claude", "Stop".into(), None).unwrap();
         assert_eq!(event, "Stop");
+    }
+
+    #[test]
+    fn the_desktop_app_gates_only_tools_that_would_ask() {
+        let d = DESKTOP_ENTRYPOINT;
+        assert!(desktop_gate(d, "Bash", "default"));
+        assert!(desktop_gate(d, "Write", ""));
+        assert!(desktop_gate(d, "mcp__github__create_issue", "default"));
+        assert!(desktop_gate(d, "Bash", "acceptEdits"), "acceptEdits still asks for commands");
+        // Reads never ask, so they never wait.
+        assert!(!desktop_gate(d, "Read", "default"));
+        assert!(!desktop_gate(d, "Grep", "default"));
+        // The user chose not to be asked.
+        assert!(!desktop_gate(d, "Edit", "acceptEdits"));
+        assert!(!desktop_gate(d, "Bash", "bypassPermissions"));
+        assert!(!desktop_gate(d, "Bash", "dontAsk"));
+        // The CLI and VS Code have PermissionRequest; their PreToolUse never waits.
+        assert!(!desktop_gate("cli", "Bash", "default"));
+        assert!(!desktop_gate("claude-vscode", "Bash", "default"));
+        assert!(!desktop_gate("", "Bash", "default"));
+    }
+
+    #[test]
+    fn a_desktop_pre_tool_use_travels_as_a_permission_request() {
+        let raw = serde_json::json!({
+            "hook_event_name": "PreToolUse",
+            "session_id": "s1",
+            "cwd": "C:/work",
+            "entrypoint": DESKTOP_ENTRYPOINT,
+            "permission_mode": "default",
+            "tool_name": "Bash",
+            "tool_input": { "command": "rm -rf build" },
+        })
+        .to_string();
+        let (line, event, gated) = prepare(raw.as_bytes(), "claude", String::new(), None).unwrap();
+        assert!(gated);
+        assert_eq!(event, "PermissionRequest");
+        let sent: serde_json::Value = serde_json::from_str(&line).unwrap();
+        assert_eq!(sent["hook_event_name"], "PermissionRequest");
+        assert_eq!(sent["nobetci_via"], "PreToolUse");
+        assert_eq!(sent["tool_input"]["command"], "rm -rf build");
+
+        // The same event from the terminal is only displayed.
+        let cli = raw.replace(DESKTOP_ENTRYPOINT, "cli");
+        let (_, event, gated) = prepare(cli.as_bytes(), "claude", String::new(), None).unwrap();
+        assert!(!gated);
+        assert_eq!(event, "PreToolUse");
+    }
+
+    #[test]
+    fn pre_tool_use_decisions_match_the_documented_shape() {
+        let allow: serde_json::Value = serde_json::from_str(&pre_tool_use_json("allow").unwrap()).unwrap();
+        assert_eq!(allow["hookSpecificOutput"]["hookEventName"], "PreToolUse");
+        assert_eq!(allow["hookSpecificOutput"]["permissionDecision"], "allow");
+        let deny: serde_json::Value =
+            serde_json::from_str(&pre_tool_use_json(r#"{"behavior":"deny","message":"Önce sor"}"#).unwrap()).unwrap();
+        assert_eq!(deny["hookSpecificOutput"]["permissionDecision"], "deny");
+        assert_eq!(deny["hookSpecificOutput"]["permissionDecisionReason"], "Önce sor");
+        assert!(deny.get("continue").is_none());
+        let stop: serde_json::Value =
+            serde_json::from_str(&pre_tool_use_json(r#"{"behavior":"deny","stop":true}"#).unwrap()).unwrap();
+        assert_eq!(stop["continue"], false);
+        // Anything unrecognised prints nothing: the app's own dialog takes over.
+        assert!(pre_tool_use_json("maybe").is_none());
+        assert!(pre_tool_use_json(r#"{"behavior":"ask"}"#).is_none());
     }
 }

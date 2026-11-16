@@ -7,6 +7,20 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.3.2] - 2026-11-16
+
+### Fixed
+
+- **Approvals from the Claude desktop app.** The Code tab of the Claude desktop app shows its own
+  permission dialog and never runs Claude Code's `PermissionRequest` hook, so its requests never
+  reached the island. Nöbetçi now asks from the `PreToolUse` hook there instead: commands, file
+  edits, web fetches and MCP tools wait for your decision on the island, with the same risk score,
+  hold and real-click guard. Reads never wait, and nothing waits in a mode where the app would not
+  ask (Accept edits for file edits, Bypass permissions). With no answer, or with Nöbetçi closed,
+  the app's own dialog appears as before. The terminal and VS Code are unchanged.
+- **Update the hooks once:** Settings → Claude Code says the hooks are out of date (the
+  `PreToolUse` entry gets the same timeout as `PermissionRequest`); review the diff and reinstall.
+
 ## [2.3.1] - 2026-11-15
 
 ### Added
@@ -309,7 +323,8 @@ pipe relay, the reviewed-diff hook installer and the island window were adapted 
 [Coucou](https://github.com/Louis-CFM/coucou) (MIT). Everything they had, and much more, shipped
 publicly in 0.2.0.
 
-[Unreleased]: https://github.com/tahap0l/nobetci/compare/v2.3.1...HEAD
+[Unreleased]: https://github.com/tahap0l/nobetci/compare/v2.3.2...HEAD
+[2.3.2]: https://github.com/tahap0l/nobetci/compare/v2.3.1...v2.3.2
 [2.3.1]: https://github.com/tahap0l/nobetci/compare/v2.3.0...v2.3.1
 [2.3.0]: https://github.com/tahap0l/nobetci/compare/v2.2.0...v2.3.0
 [2.2.0]: https://github.com/tahap0l/nobetci/compare/v2.1.7...v2.2.0

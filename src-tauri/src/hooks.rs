@@ -22,11 +22,13 @@ use crate::settings;
 
 /// Every event the island reacts to, with the hook timeout written to settings.json.
 /// PermissionRequest waits for a human, so it gets the decision timeout + 10 s.
+/// So does PreToolUse: in the Claude desktop app, which never runs
+/// PermissionRequest hooks, the relay asks the island from PreToolUse instead.
 pub const HOOK_EVENTS: &[(&str, u64)] = &[
     ("SessionStart", 10),
     ("SessionEnd", 10),
     ("UserPromptSubmit", 10),
-    ("PreToolUse", 10),
+    ("PreToolUse", 120),
     ("PostToolUse", 10),
     ("PostToolUseFailure", 10),
     ("PermissionRequest", 120),
@@ -280,6 +282,23 @@ pub(crate) fn fingerprint(bytes: &[u8]) -> String {
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
+/// Our entry points at another relay path (an older install location), or was
+/// written with another timeout (2.3.2 gave PreToolUse the decision timeout).
+fn entry_is_stale(event: &str, entry: &Value) -> bool {
+    let expected = hook_command(event);
+    let timeout = HOOK_EVENTS.iter().find(|(e, _)| *e == event).map(|(_, t)| *t);
+    entry
+        .get("hooks")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter(|h| h.get("command").and_then(Value::as_str).is_some_and(|c| c.contains(MARKER)))
+        .any(|h| {
+            h.get("command").and_then(Value::as_str) != Some(expected.as_str())
+                || (timeout.is_some() && h.get("timeout").and_then(Value::as_u64) != timeout)
+        })
+}
+
 pub fn status() -> HookStatus {
     let current = read_settings_lossy();
     let mut events = Vec::new();
@@ -291,16 +310,7 @@ pub fn status() -> HookStatus {
                 continue;
             }
             events.push(event.clone());
-            let expected = hook_command(event);
-            stale |= ours.iter().any(|e| {
-                e.get("hooks")
-                    .and_then(Value::as_array)
-                    .into_iter()
-                    .flatten()
-                    .filter_map(|h| h.get("command").and_then(Value::as_str))
-                    .filter(|c| c.contains(MARKER))
-                    .any(|c| c != expected)
-            });
+            stale |= ours.iter().any(|e| entry_is_stale(event, e));
         }
     }
     let hook_path = settings::hook_exe_path();
@@ -689,5 +699,16 @@ mod tests {
         assert_eq!(std::fs::read(&path).unwrap(), b"{ broken");
 
         let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn an_old_pre_tool_use_timeout_counts_as_stale() {
+        let fresh = json!({ "hooks": [{ "type": "command", "command": hook_command("PreToolUse"), "timeout": 120 }] });
+        assert!(!entry_is_stale("PreToolUse", &fresh));
+        let old = json!({ "hooks": [{ "type": "command", "command": hook_command("PreToolUse"), "timeout": 10 }] });
+        assert!(entry_is_stale("PreToolUse", &old), "the desktop app's approvals need the long timeout");
+        let moved =
+            json!({ "hooks": [{ "type": "command", "command": "C:/old/nobetci-hook.exe Stop", "timeout": 10 }] });
+        assert!(entry_is_stale("Stop", &moved));
     }
 }

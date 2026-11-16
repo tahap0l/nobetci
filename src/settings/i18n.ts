@@ -1225,8 +1225,8 @@ const M = {
     "The hooks are in ~/.claude/settings.json. You can pick which events to use in Settings → Claude Code.",
   ],
   "wz.connect.stale": [
-    "Hook'lar eski bir konuma işaret ediyor; yeniden kurman gerekiyor.",
-    "The hooks point to an old location and need reinstalling.",
+    "Hook'lar güncel değil; değişikliği inceleyip yeniden kurman gerekiyor.",
+    "The hooks are out of date; review the change and reinstall them.",
   ],
   "wz.connect.none": ["Henüz bağlı değil.", "Not connected yet."],
   "wz.connect.noRelay": [
