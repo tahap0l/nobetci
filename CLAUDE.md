@@ -12,7 +12,7 @@ approve permission requests, each scored by a risk engine.
 - `npm run pack` — Windows installer into `release/`; `npm run pack:mac` — universal macOS disk image (on a Mac); `npm run pack:linux` — .deb and AppImage. CI builds and tests all three OSes.
 
 ## Rules
-- **Never block Claude Code.** The relay exits silently if the app is closed; only PermissionRequest waits, and never past its budget.
+- **Never block Claude Code.** The relay exits silently if the app is closed; only PermissionRequest waits, and never past its budget. The one exception: in the Claude desktop app (`CLAUDE_CODE_ENTRYPOINT=claude-desktop`), which never runs PermissionRequest hooks, the relay turns a PreToolUse for a tool that would ask into a permission request (`desktop_gate` in `hook/src/main.rs`) — same budget, silence falls back to the app's own dialog.
 - **Never write `~/.claude/settings.json` without a reviewed diff**: dated backup, merge, show the diff, write only after an explicit click, refuse if the file changed since the preview.
 - **High/critical approvals need a hold** — enforced in `pipe.rs::resolve`, not just the UI. Never add an "always allow".
 - **Nothing high or critical is ever auto-approved** — rules, trusted projects and session grants are capped in `rules.rs` (`auto_allow_max` ≤ medium, sanitised in `settings.rs`). The cap looks at the engine's own level too: a rule that re-scores a high request to low makes it a plain click, never an automatic pass. Rules may always deny.
