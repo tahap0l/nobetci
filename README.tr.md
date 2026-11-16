@@ -134,6 +134,13 @@ butonu bilerek basılı tutman gerekir. Sana ihtiyaç olmadığında ekranın ü
 
 Ayrıntılar için [Gizlilik Politikası](PRIVACY.md) sayfasına bak.
 
+### Kod imzalama politikası
+
+Ücretsiz kod imzalama [SignPath.io](https://signpath.io) tarafından, sertifika
+[SignPath Foundation](https://signpath.org) tarafından sağlanmaktadır. Başvuru kabul edilince Windows
+sürümleri imzalı çıkar; v2.3.1 ve öncesi imzasız. Neyin imzalandığı, bir sürümün nasıl onaylandığı ve
+kimin onayladığı: [Kod imzalama politikası](CODE_SIGNING_POLICY.md).
+
 ## Nasıl çalışır
 
 ```mermaid
@@ -666,8 +673,8 @@ Katkılara açığız — kurulum, temel kurallar ve yanlış pozitif bildirimi 
 
 Söz değil, fikir:
 
-- **İmzalı sürümler** — örneğin [SignPath Foundation](https://signpath.org/)'ın açık kaynak
-  projelere ücretsiz kod imzalamasıyla.
+- **İmzalı Windows sürümleri**, SignPath Foundation üzerinden — sürüm iş akışı hazır; bkz.
+  [kod imzalama politikası](CODE_SIGNING_POLICY.md).
 - **Apple onaylı (notarize) macOS sürümleri**, Gatekeeper dolambaçsız açsın diye.
 - **Diğer ajanlar** — Cursor ve hook ya da izin API'si sunan başka kodlama ajanları.
 - **Daha yetenekli bir asistan**: daha çok uygulama, sesle yazma, ekranda kalan yanıtlar.

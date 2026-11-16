@@ -24,7 +24,7 @@ export default defineConfig(process.env.CF_PAGES === "1" ? {
     generateBundle(_, bundle) {
       // The pages are plain HTML with scripts from public/; the only bundle is the mascot engine.
       for (const key of Object.keys(bundle)) if (key !== MASCOT_ENGINE) delete bundle[key];
-      for (const name of ["index.html", "privacy.html", "404.html", "demo/index.html"]) {
+      for (const name of ["index.html", "privacy.html", "code-signing.html", "404.html", "demo/index.html"]) {
         const input = name.startsWith("demo/") ? `public/${name}` : name;
         const html = readFileSync(resolve(websiteRoot, input), "utf8");
         const source = html.replace(/\b(href|src|content)="\/(?!\/)/g, (_, attr) => `${attr}="${websiteBase}`);
