@@ -149,6 +149,7 @@ jobs:
       contents: read
     env:
       SIGNPATH_ORGANIZATION_ID: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+      VERSION: ${{ needs.build.outputs.version }}
     outputs:
       setup-artifact-id: ${{ steps.upload-setup.outputs.artifact-id }}
     steps:
@@ -189,6 +190,12 @@ jobs:
             $file = Get-ChildItem signed-app -Recurse -Filter $name | Select-Object -First 1
             if (-not $file) { throw "$name is missing from the signed programs." }
             Copy-Item $file.FullName "src/target/release/$name"
+            # SignPath refuses a file whose product name or version is off; fail here first.
+            $vi = (Get-Item "src/target/release/$name").VersionInfo
+            "::notice::$name ProductName=$($vi.ProductName) ProductVersion=$($vi.ProductVersion)"
+            if ($vi.ProductName -ne 'Nobetci' -or $vi.ProductVersion -ne $env:VERSION) {
+              throw "$name says $($vi.ProductName) $($vi.ProductVersion), not Nobetci $env:VERSION."
+            }
             $sig = Get-AuthenticodeSignature "src/target/release/$name"
             "{0}: {1} {2}" -f $name, $sig.Status, $sig.SignerCertificate.Subject
             if ($env:SIGNPATH_ORGANIZATION_ID -and $sig.Status -ne 'Valid') {
@@ -265,6 +272,11 @@ jobs:
           $name = "Nobetci-$env:VERSION-setup.exe"
           $path = Join-Path release $name
           if (-not (Test-Path $path)) { throw "$path is missing." }
+          $vi = (Get-Item $path).VersionInfo
+          "::notice::$name ProductName=$($vi.ProductName) ProductVersion=$($vi.ProductVersion)"
+          if ($vi.ProductName -ne 'Nobetci' -or $vi.ProductVersion -ne $env:VERSION) {
+            throw "$name says $($vi.ProductName) $($vi.ProductVersion), not Nobetci $env:VERSION."
+          }
           $sig = Get-AuthenticodeSignature $path
           "{0}: {1} {2}" -f $name, $sig.Status, $sig.SignerCertificate.Subject
           if ($env:SIGNPATH_ORGANIZATION_ID -and $sig.Status -ne 'Valid') {
