@@ -90,8 +90,11 @@ const footer = [
   `  shasum -a 256 ${dmg}`,
   "  ```",
   "",
-  "Releases aren't code-signed or notarized yet, so Windows SmartScreen and macOS Gatekeeper warn the first time. " +
+  "If this release isn't code-signed or notarized yet, Windows SmartScreen and macOS Gatekeeper warn the first time. " +
     "The [installation guide](https://github.com/tahap0l/nobetci/blob/main/docs/install.md) shows how to get past them.",
+  "",
+  "[Code signing policy](https://github.com/tahap0l/nobetci/blob/main/CODE_SIGNING_POLICY.md) · " +
+    "Free code signing provided by [SignPath.io](https://signpath.io), certificate by [SignPath Foundation](https://signpath.org).",
 ].join("\n");
 
 const notes = `${unwrap(body)}\n\n${footer}\n`;

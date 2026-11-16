@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  SignPath artifact configuration "app": the two programs the Windows installer
+  carries. The release workflow uploads them as one GitHub artifact (a zip).
+  Both must say they are Nobetci, at the version being released.
+-->
+<artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
+  <parameters>
+    <parameter name="version" required="true" />
+  </parameters>
+  <zip-file>
+    <pe-file path="nobetci.exe" product-name="Nobetci" product-version="${version}">
+      <authenticode-sign />
+    </pe-file>
+    <pe-file path="nobetci-hook.exe" product-name="Nobetci" product-version="${version}">
+      <authenticode-sign />
+    </pe-file>
+  </zip-file>
+</artifact-configuration>

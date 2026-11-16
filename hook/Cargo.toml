@@ -4,6 +4,7 @@ description = "Relays Claude Code hook events to Nöbetçi over a named pipe (Wi
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+build = "build.rs"
 
 [[bin]]
 name = "nobetci-hook"
@@ -23,6 +24,10 @@ windows = { version = "0.61", features = [
   "Win32_System_Pipes",
   "Win32_System_Threading",
 ] }
+
+# The relay's version resource (product name and version), read by code signing.
+[target.'cfg(windows)'.build-dependencies]
+tauri-winres = "0.3"
 
 # macOS and Linux: who is on the other end of the socket, and the parent-process chain.
 [target.'cfg(unix)'.dependencies]

@@ -25,11 +25,12 @@ env:
 
 jobs:
   build:
-    name: Build, test and package (Windows)
+    name: Build and test (Windows)
     runs-on: windows-latest
     timeout-minutes: 90
     outputs:
       version: ${{ steps.version.outputs.version }}
+      app-artifact-id: ${{ steps.upload-app.outputs.artifact-id }}
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -101,35 +102,187 @@ jobs:
       - name: Tests
         run: cargo test --workspace --locked
 
-      - name: Build the installer
-        run: npm run pack
+      # Only the programs here. The installer is made in the next job, from
+      # the programs as they come back from code signing.
+      - name: Build the app and the relay
+        run: npx tauri build --no-bundle
 
-      - name: Write the checksum
+      - name: Upload the programs for signing
+        id: upload-app
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: windows-app
+          path: |
+            target/release/nobetci.exe
+            target/release/nobetci-hook.exe
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Write the release notes from CHANGELOG.md
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
+          New-Item -ItemType Directory -Force release | Out-Null
+          node .github/scripts/release-notes.mjs $env:VERSION --out release/RELEASE_NOTES.md
+
+      - name: Upload the release notes
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-notes
+          path: release/RELEASE_NOTES.md
+          if-no-files-found: error
+          retention-days: 7
+
+  # Windows code signing goes through SignPath (see CODE_SIGNING_POLICY.md).
+  # It is on once the repository has the SIGNPATH_ORGANIZATION_ID variable and
+  # the SIGNPATH_API_TOKEN secret; until then both signing steps pass the files
+  # through unsigned, as before. Every signing request waits for a person to
+  # approve it on SignPath, so a release asks twice: the programs, then the
+  # installer that carries them.
+  bundle-windows:
+    name: Sign the programs and build the installer (Windows)
+    needs: build
+    runs-on: windows-latest
+    timeout-minutes: 90
+    permissions:
+      actions: read
+      contents: read
+    env:
+      SIGNPATH_ORGANIZATION_ID: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+    outputs:
+      setup-artifact-id: ${{ steps.upload-setup.outputs.artifact-id }}
+    steps:
+      # First, before anything from the repository or npm runs on this machine.
+      - name: Sign the programs (SignPath)
+        if: env.SIGNPATH_ORGANIZATION_ID != ''
+        uses: signpath/github-action-submit-signing-request@f6d04783b4569d051e0c80105fe66e82819d0092 # v3.0
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG || 'nobetci' }}
+          signing-policy-slug: ${{ vars.SIGNPATH_POLICY_SLUG || 'release-signing' }}
+          artifact-configuration-slug: app
+          parameters: |
+            version: "${{ needs.build.outputs.version }}"
+          github-artifact-id: ${{ needs.build.outputs.app-artifact-id }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 3600
+          output-artifact-directory: signed-app
+
+      - name: Take the unsigned programs
+        if: env.SIGNPATH_ORGANIZATION_ID == ''
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: windows-app
+          path: signed-app
+
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          path: src
+
+      - name: Put the programs where Tauri expects them
+        run: |
+          New-Item -ItemType Directory -Force src/target/release | Out-Null
+          foreach ($name in 'nobetci.exe', 'nobetci-hook.exe') {
+            $file = Get-ChildItem signed-app -Recurse -Filter $name | Select-Object -First 1
+            if (-not $file) { throw "$name is missing from the signed programs." }
+            Copy-Item $file.FullName "src/target/release/$name"
+            $sig = Get-AuthenticodeSignature "src/target/release/$name"
+            "{0}: {1} {2}" -f $name, $sig.Status, $sig.SignerCertificate.Subject
+            if ($env:SIGNPATH_ORGANIZATION_ID -and $sig.Status -ne 'Valid') {
+              throw "$name came back from SignPath without a valid signature."
+            }
+          }
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: src/package-lock.json
+
+      - name: Install npm dependencies
+        working-directory: src
+        run: npm ci
+
+      # Bundles what is already in target/release; nothing is compiled again.
+      - name: Build the installer
+        working-directory: src
+        run: |
+          npx tauri bundle --bundles nsis
+          node scripts/pack.mjs
+
+      - name: Upload the installer for signing
+        id: upload-setup
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: windows-setup
+          path: src/release/Nobetci-${{ needs.build.outputs.version }}-setup.exe
+          if-no-files-found: error
+          retention-days: 7
+
+  # A job of its own, on a fresh machine: nothing from npm has run where the
+  # API token is used.
+  sign-windows:
+    name: Sign the installer (Windows)
+    needs: [build, bundle-windows]
+    runs-on: windows-latest
+    timeout-minutes: 75
+    permissions:
+      actions: read
+      contents: read
+    env:
+      SIGNPATH_ORGANIZATION_ID: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+      VERSION: ${{ needs.build.outputs.version }}
+    steps:
+      - name: Sign the installer (SignPath)
+        if: env.SIGNPATH_ORGANIZATION_ID != ''
+        uses: signpath/github-action-submit-signing-request@f6d04783b4569d051e0c80105fe66e82819d0092 # v3.0
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG || 'nobetci' }}
+          signing-policy-slug: ${{ vars.SIGNPATH_POLICY_SLUG || 'release-signing' }}
+          artifact-configuration-slug: installer
+          parameters: |
+            version: "${{ needs.build.outputs.version }}"
+          github-artifact-id: ${{ needs.bundle-windows.outputs.setup-artifact-id }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 3600
+          output-artifact-directory: release
+
+      - name: Take the unsigned installer
+        if: env.SIGNPATH_ORGANIZATION_ID == ''
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: windows-setup
+          path: release
+
+      - name: Check the signature and write the checksum
+        run: |
           $name = "Nobetci-$env:VERSION-setup.exe"
           $path = Join-Path release $name
-          if (-not (Test-Path $path)) { throw "$path is missing; did npm run pack name it differently?" }
+          if (-not (Test-Path $path)) { throw "$path is missing." }
+          $sig = Get-AuthenticodeSignature $path
+          "{0}: {1} {2}" -f $name, $sig.Status, $sig.SignerCertificate.Subject
+          if ($env:SIGNPATH_ORGANIZATION_ID -and $sig.Status -ne 'Valid') {
+            throw "The installer came back from SignPath without a valid signature."
+          }
           $hash = (Get-FileHash $path -Algorithm SHA256).Hash.ToLowerInvariant()
           # sha256sum format with LF endings, so `sha256sum -c` works on any OS.
           # The publish job joins every platform's line into SHA256SUMS.txt.
           [IO.File]::WriteAllText((Join-Path $PWD "release/$name.sha256"), "$hash  $name`n")
           Get-Content "release/$name.sha256"
 
-      - name: Write the release notes from CHANGELOG.md
-        env:
-          VERSION: ${{ steps.version.outputs.version }}
-        run: node .github/scripts/release-notes.mjs $env:VERSION --out release/RELEASE_NOTES.md
-
       - name: Upload the release files
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: release-windows
           path: |
-            release/Nobetci-${{ steps.version.outputs.version }}-setup.exe
-            release/Nobetci-${{ steps.version.outputs.version }}-setup.exe.sha256
-            release/RELEASE_NOTES.md
+            release/Nobetci-${{ needs.build.outputs.version }}-setup.exe
+            release/Nobetci-${{ needs.build.outputs.version }}-setup.exe.sha256
           if-no-files-found: error
           retention-days: 7
 
@@ -293,7 +446,7 @@ jobs:
   publish:
     if: github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main'
     name: Publish the GitHub release
-    needs: [build, build-macos, build-linux]
+    needs: [build, sign-windows, build-macos, build-linux]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:

@@ -134,6 +134,13 @@ edge of the screen.
 
 See the full [Privacy Policy](PRIVACY.md).
 
+### Code signing policy
+
+Free code signing provided by [SignPath.io](https://signpath.io), certificate by
+[SignPath Foundation](https://signpath.org). Windows releases move to signed builds once the
+application is accepted; releases up to v2.3.1 are unsigned. What is signed, how a release is
+approved and who approves it: [Code signing policy](CODE_SIGNING_POLICY.md).
+
 ## How it works
 
 ```mermaid
@@ -665,8 +672,8 @@ how to report a false positive.
 
 Ideas, not promises:
 
-- **Signed releases**, for example through [SignPath Foundation](https://signpath.org/)'s free code
-  signing for open-source projects.
+- **Signed Windows releases** through SignPath Foundation — the release workflow is ready; see the
+  [code signing policy](CODE_SIGNING_POLICY.md).
 - **Notarized macOS builds**, so Gatekeeper opens them without a detour.
 - **Other agents** — Cursor and other coding agents that offer hooks or a permission API.
 - **A richer assistant** on the island: more apps, voice input, answers that stay on screen.
