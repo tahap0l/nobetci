@@ -21,6 +21,8 @@ jobs:
     name: Installer screenshots (Windows)
     runs-on: windows-latest
     timeout-minutes: 60
+    permissions:
+      contents: write
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -77,3 +79,24 @@ jobs:
           name: installer-preview
           path: shots/*.png
           retention-days: 7
+
+      # Also on a draft release named "installer-preview" (never published), whose
+      # files can be fetched where Actions artifacts cannot.
+      - name: Put the screenshots on the draft release
+        if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+        continue-on-error: true
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "installer-preview"
+          $id = gh api "repos/${{ github.repository }}/releases" --jq ".[] | select(.draft and .name == \"$tag\") | .id" | Select-Object -First 1
+          if (-not $id) {
+            $id = gh api -X POST "repos/${{ github.repository }}/releases" -f tag_name=$tag -f name=$tag -F draft=true -f body="Installer screenshots from the Installer preview workflow. Never published." --jq .id
+          }
+          foreach ($a in (gh api "repos/${{ github.repository }}/releases/$id/assets" --jq ".[].id")) {
+            gh api -X DELETE "repos/${{ github.repository }}/releases/assets/$a" | Out-Null
+          }
+          foreach ($f in Get-ChildItem shots -Filter *.png) {
+            gh api -X POST "https://uploads.github.com/repos/${{ github.repository }}/releases/$id/assets?name=$($f.Name)" -H "Content-Type: image/png" --input $f.FullName | Out-Null
+          }
