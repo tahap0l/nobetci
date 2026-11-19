@@ -9,6 +9,11 @@ on:
         description: "Release tag matching the version in main (for example v2.1.0)"
         required: true
         type: string
+      replace:
+        description: "The release already exists: replace its files and notes and move its tag to this commit"
+        required: false
+        type: boolean
+        default: false
 
 # The build job runs third-party code (npm and cargo dependencies) with a
 # read-only token. Only the small publish job, which runs nothing from the
@@ -490,8 +495,24 @@ jobs:
           VERSION: ${{ needs.build.outputs.version }}
           RELEASE_SHA: ${{ github.sha }}
           RELEASE_EVENT: ${{ github.event_name }}
+          REPLACE: ${{ inputs.replace || false }}
         run: |
           set -euo pipefail
+          files=(
+            "out/Nobetci-${VERSION}-setup.exe"
+            "out/Nobetci-${VERSION}-macos-universal.dmg"
+            "out/Nobetci-${VERSION}-linux-amd64.deb"
+            "out/Nobetci-${VERSION}-linux-amd64.AppImage"
+            out/SHA256SUMS.txt
+          )
+          # Asked for by hand only: rebuild a published version without a new
+          # number. The tag moves to this commit, the files and notes are swapped.
+          if [[ "$RELEASE_EVENT" == "workflow_dispatch" && "$REPLACE" == "true" ]]; then
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/git/refs/tags/$TAG" -f sha="$RELEASE_SHA" -F force=true > /dev/null
+            gh release upload "$TAG" "${files[@]}" --clobber --repo "$GITHUB_REPOSITORY"
+            gh release edit "$TAG" --notes-file out/RELEASE_NOTES.md --repo "$GITHUB_REPOSITORY"
+            exit 0
+          fi
           flags=()
           if [[ "$RELEASE_EVENT" == "workflow_dispatch" ]]; then
             flags+=(--target "$RELEASE_SHA")
@@ -500,12 +521,7 @@ jobs:
           fi
           # v0.3.0-beta.1 and the like are pre-releases.
           if [[ "$TAG" == *-* ]]; then flags+=(--prerelease); fi
-          gh release create "$TAG" \
-            "out/Nobetci-${VERSION}-setup.exe" \
-            "out/Nobetci-${VERSION}-macos-universal.dmg" \
-            "out/Nobetci-${VERSION}-linux-amd64.deb" \
-            "out/Nobetci-${VERSION}-linux-amd64.AppImage" \
-            out/SHA256SUMS.txt \
+          gh release create "$TAG" "${files[@]}" \
             --repo "$GITHUB_REPOSITORY" \
             --title "Nöbetçi $TAG" \
             --notes-file out/RELEASE_NOTES.md \
