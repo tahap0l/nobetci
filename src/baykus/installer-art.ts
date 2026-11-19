@@ -199,13 +199,26 @@ function dmgBackground(ctx: CanvasRenderingContext2D) {
   ctx.closePath();
   ctx.fill();
 
-  // The instruction, in both languages.
+  // Plates under Finder's icon labels: Finder writes them black in Light Mode
+  // and white in Dark Mode, and this grey keeps both readable.
+  for (const x of [app.x, folder.x]) {
+    ctx.beginPath();
+    ctx.roundRect(x - 62, app.y + 77, 124, 22, 11);
+    ctx.fillStyle = "#8f8f9a";
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.18)";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+
+  // The instruction, in both languages. (The window's title bar takes about
+  // 28 points off the bottom, so this sits above that.)
   ctx.fillStyle = "rgba(242, 242, 245, 0.88)";
   ctx.font = "600 14px -apple-system, 'SF Pro Text', 'Segoe UI', system-ui, sans-serif";
-  ctx.fillText("Kurmak için Nöbetçi'yi Applications klasörüne sürükle", w / 2, 334);
+  ctx.fillText("Kurmak için Nöbetçi'yi Applications klasörüne sürükle", w / 2, 322);
   ctx.fillStyle = "rgba(242, 242, 245, 0.5)";
   ctx.font = "400 12.5px -apple-system, 'SF Pro Text', 'Segoe UI', system-ui, sans-serif";
-  ctx.fillText("Drag Nöbetçi to Applications to install", w / 2, 356);
+  ctx.fillText("Drag Nöbetçi to Applications to install", w / 2, 342);
 }
 
 /** One tile: the sidebar's own background under that rectangle, then the owl. */
