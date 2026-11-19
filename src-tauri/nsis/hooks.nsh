@@ -1,4 +1,4 @@
-; Uninstall hooks for the NSIS installer.
+﻿; Uninstall hooks for the NSIS installer.
 ;
 ; The app stages nobetci-hook.exe into %LOCALAPPDATA%\Nobetci\bin at launch, so
 ; the installer never recorded it and the default uninstaller leaves it behind.
@@ -20,3 +20,20 @@
   RMDir /r "$LOCALAPPDATA\Nobetci\bin"
   Delete "$LOCALAPPDATA\Nobetci\nobetci.log"
 !macroend
+
+; ── Look ─────────────────────────────────────────────────────────────────────
+; Included before the pages, so these shape every page of the installer: dark
+; welcome and finish pages and header in Nöbetçi's colours, with the owl. The
+; pictures come from scripts/installer-art.mjs; installer-ui.nsh animates them.
+
+!define NOBETCI_NSIS "${__FILEDIR__}"
+!define NOBETCI_ART "${__FILEDIR__}\art"
+!define MUI_BGCOLOR "0B0B0E"
+!define MUI_TEXTCOLOR "F2F2F5"
+!define MUI_HEADERIMAGE_RIGHT
+!define MUI_WELCOMEFINISHPAGE_BITMAP_STRETCH FitControl
+!define MUI_HEADERIMAGE_BITMAP_STRETCH FitControl
+!define MUI_WELCOMEPAGE_TITLE "$(nobetciWelcomeTitle)"
+!define MUI_WELCOMEPAGE_TEXT "$(nobetciWelcomeText)"
+!define MUI_FINISHPAGE_TITLE "$(nobetciFinishTitle)"
+!define MUI_FINISHPAGE_TEXT "$(nobetciFinishText)"

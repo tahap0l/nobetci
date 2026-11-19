@@ -365,6 +365,10 @@ export function runDemo(island: Island, name: string) {
         window.setTimeout(() => document.querySelector<HTMLButtonElement>(".change-row")?.click(), 300);
       }
       break;
+    case "installer-art":
+      // The Windows installer's pictures (scripts/installer-art.mjs reads them).
+      void import("./baykus/installer-art").then((m) => m.renderInstallerArt());
+      break;
     case "question":
       sessions(island);
       question(island);
