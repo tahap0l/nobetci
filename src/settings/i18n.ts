@@ -104,6 +104,7 @@ const M = {
   "outcome.deny": ["Otomatik ret", "Auto-denied"],
   "by.user": ["Sen", "You"],
   "by.hotkey": ["Kısayol", "Hotkey"],
+  "by.batch": ["Toplu izin (düşük risk)", "Batch (low risk)"],
   "by.rule": ["Kural", "Rule"],
   "by.trusted": ["Güvenilir proje", "Trusted project"],
   "by.session": ["Oturum izni", "Session grant"],
@@ -364,6 +365,20 @@ const M = {
     "The context is about to be compacted — the steps show “compacting”.",
   ],
   "claude.ev.PostCompact": ["Bağlam sıkıştırıldı.", "The context was compacted."],
+  "claude.ev.StatusLine": [
+    "Kanca değil, Claude Code'un durum satırı: bağlam kullanımını, maliyeti ve 5 saatlik / haftalık limitleri adaya taşır. İsteğe bağlı; terminalde altta kısa bir satır gösterir.",
+    "Not a hook but Claude Code's status line: brings context use, cost and the 5-hour / weekly limits to the island. Optional; shows a short line under the prompt.",
+  ],
+  "claude.statusLineTaken": [
+    "settings.json'da zaten kendi durum satırın var; Nöbetçi onu değiştirmez. Limitleri görmek istersen önce onu kaldırman gerekir.",
+    "settings.json already has your own status line; Nöbetçi won't replace it. To see the limits, remove yours first.",
+  ],
+  "claude.interactive": ["Sorular ve planlar", "Questions and plans"],
+  "claude.questions": ["Claude'un sorularını ve planlarını adada cevapla", "Answer Claude's questions and plans on the island"],
+  "claude.questionsHint": [
+    "Claude çoktan seçmeli bir soru sorduğunda ya da plan onayı istediğinde kart adada açılır. Kapatırsan terminal ya da uygulama sorar.",
+    "When Claude asks a multiple-choice question or wants a plan approved, the card opens on the island. Off, the terminal or app asks.",
+  ],
   "claude.written": [
     "Yazıldı. Yedek: {backup}. Açık Claude Code oturumları hook'ları yeniden başlatınca görür.",
     "Written. Backup: {backup}. Running Claude Code sessions pick up the hooks after a restart.",

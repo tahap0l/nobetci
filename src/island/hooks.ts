@@ -47,6 +47,23 @@ interface HookPayload {
   nobetci_quiet?: QuietReason;
   /** The relay had to cut a field of this event. */
   nobetci_truncated?: boolean;
+  /** Set by Rust on a waiting request: a permission, or Claude's question or plan. */
+  nobetci_kind?: "permission" | "question" | "plan";
+  /** PostToolUse of a file edit: what changed (the relay's summary). */
+  nobetci_change?: {
+    file: string;
+    added: number;
+    removed: number;
+    created: boolean;
+    diff: string;
+    cut: boolean;
+  };
+  /** StatusLine (Claude Code's status line, via the relay). */
+  model?: string;
+  context_used?: number | null;
+  cost_usd?: number | null;
+  five_hour?: { used: number | null; resets_at: number | null };
+  seven_day?: { used: number | null; resets_at: number | null };
 }
 
 /** Sent by Rust when a rule, a trusted project or a session grant decided. */
@@ -258,6 +275,10 @@ function handle(island: Island, p: HookPayload) {
     onPermissionRequest(island, p);
     return;
   }
+  if (event === "StatusLine") {
+    onStatusLine(p);
+    return;
+  }
   if (State.paused) return;
 
   const known = !!State.session(p.session_id || p.cwd || "oturum");
@@ -299,6 +320,12 @@ function handle(island: Island, p: HookPayload) {
     case "PostToolUse":
     case "PostToolUseFailure": {
       releaseApprovals(s.id, p);
+      const c = event === "PostToolUse" ? p.nobetci_change : undefined;
+      if (c && c.file) {
+        State.addChange(s, { ...c, t: Date.now() });
+        const what = c.created ? t("step.created", { file: lastPathComponent(c.file) }) : lastPathComponent(c.file);
+        State.step(s, `✎ ${what} +${c.added} −${c.removed}`);
+      }
       if (!State.approvals.some((a) => a.sessionId === s.id)) State.setState(s, "working");
       if (event === "PostToolUseFailure") State.step(s, t("step.toolFailed"));
       island.afterApprovalChange();
@@ -395,7 +422,10 @@ function onPermissionRequest(island: Island, p: HookPayload) {
 
   const s = sessionFor(p);
   const now = Date.now();
+  const kind = p.nobetci_kind ?? "permission";
   State.approvals.push({
+    kind,
+    input: p.tool_input ?? {},
     requestId,
     sessionId: s.id,
     tool: p.tool_name ?? t("tool.generic"),
@@ -414,17 +444,46 @@ function onPermissionRequest(island: Island, p: HookPayload) {
   const first = State.approvals.length === 1;
   const risky = needsHold(p.risk.level);
   if (first) {
-    Sound.play(risky ? "danger" : "approval");
+    Sound.play(risky ? "danger" : kind === "permission" ? "approval" : "hoot");
     island.react(risky ? "surprised" : "hoot");
   } else {
     Sound.play("blip");
   }
-  toast(
-    "approval",
-    `${risky ? "⚠ " : ""}${t("toast.approval", { name: s.name })}`,
-    `${toolLabel(p.tool_name ?? "")}: ${p.risk.target.slice(0, 160)}`,
-  );
+  if (kind === "permission") {
+    toast(
+      "approval",
+      `${risky ? "⚠ " : ""}${t("toast.approval", { name: s.name })}`,
+      `${toolLabel(p.tool_name ?? "")}: ${p.risk.target.slice(0, 160)}`,
+    );
+  } else {
+    const title = t(kind === "question" ? "toast.question" : "toast.plan", { name: s.name });
+    toast("waiting", title, kind === "question" ? firstQuestion(p.tool_input) : t("toast.planBody"));
+  }
   island.showApprovals();
+}
+
+function firstQuestion(input: Record<string, unknown> | undefined): string {
+  const qs = Array.isArray(input?.questions) ? (input?.questions as { question?: unknown }[]) : [];
+  return typeof qs[0]?.question === "string" ? qs[0].question.slice(0, 160) : "";
+}
+
+/** Claude Code's status line: context use and cost per session, plan limits for all. */
+function onStatusLine(p: HookPayload) {
+  const s = State.session(p.session_id ?? "");
+  if (s) {
+    s.usage = {
+      model: p.model ?? "",
+      context: typeof p.context_used === "number" ? p.context_used : null,
+      costUsd: typeof p.cost_usd === "number" ? p.cost_usd : null,
+      at: Date.now(),
+    };
+  }
+  const win = (w?: { used: number | null; resets_at: number | null }) =>
+    w && typeof w.used === "number" ? { used: w.used, resetsAt: typeof w.resets_at === "number" ? w.resets_at * 1000 : null } : null;
+  const fiveHour = win(p.five_hour);
+  const sevenDay = win(p.seven_day);
+  if (fiveHour || sevenDay) State.limits = { fiveHour, sevenDay, at: Date.now() };
+  State.notify();
 }
 
 function onAutoDecision(island: Island, d: AutoDecision) {

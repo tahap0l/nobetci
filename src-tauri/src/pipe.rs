@@ -79,6 +79,20 @@ struct Waiting {
     session: String,
     tool: String,
     target: String,
+    /// "permission", or "question" / "plan" for Claude's own interactive tools.
+    kind: &'static str,
+    /// The tool input, echoed back with the answer for a question or a plan.
+    input: Value,
+}
+
+/// Claude's tools that wait for the user rather than for permission. They are
+/// answered with the input sent back (plus the answers), never by a rule.
+fn interactive_kind(tool: &str) -> Option<&'static str> {
+    match tool {
+        "AskUserQuestion" => Some("question"),
+        "ExitPlanMode" => Some("plan"),
+        _ => None,
+    }
 }
 
 /// Permission requests the island has been told about.
@@ -209,11 +223,28 @@ async fn handle<C: Conn>(app: AppHandle, mut pipe: C) {
     let input = payload.get("tool_input").cloned().unwrap_or(Value::Null);
     let truncated = payload.get("nobetci_truncated").and_then(Value::as_bool).unwrap_or(false);
 
-    let eval = rules::evaluate(
+    let kind = interactive_kind(&tool);
+    // A question or a plan the island cannot answer whole goes straight back:
+    // turned off in Settings, or cut by the relay (the answer echoes the input,
+    // and a cut plan must never be handed back as if it were the real one).
+    if kind.is_some() && (!settings.island_questions || truncated) {
+        pipe.close();
+        return;
+    }
+    let mut eval = rules::evaluate(
         &rules::Request { tool: &tool, input: &input, cwd: &cwd, session: &session, truncated },
         &settings,
         &app.state::<SessionGrants>(),
     );
+    if kind.is_some() {
+        // Nothing to score and nothing a rule may answer: only the user can.
+        eval.outcome = Outcome::Ask;
+        eval.assessment.level = Level::Low;
+        eval.assessment.findings.clear();
+        eval.grantable = false;
+        eval.note = None;
+    }
+    let kind = kind.unwrap_or("permission");
     let a = &eval.assessment;
     let id = format!("{}-{}", std::process::id(), COUNTER.fetch_add(1, Ordering::Relaxed));
     let started = audit::now_ms();
@@ -284,10 +315,13 @@ async fn handle<C: Conn>(app: AppHandle, mut pipe: C) {
                 session: session.clone(),
                 tool: tool.clone(),
                 target: a.target.clone(),
+                kind,
+                input: input.clone(),
             },
         );
     }
     payload["request_id"] = json!(id);
+    payload["nobetci_kind"] = json!(kind);
     payload["risk"] = serde_json::to_value(a).unwrap_or(Value::Null);
     payload["rule_note"] = json!(eval.note);
     payload["policy"] = json!(eval.policy);
@@ -473,14 +507,18 @@ pub struct Choice<'a> {
 
 /// Called by the island's Allow / Deny controls and the global shortcuts.
 pub fn answer(app: &AppHandle, request_id: &str, c: Choice) -> Result<(), String> {
-    let (level, grantable, queued_at, session, tool, target) = {
+    let (level, grantable, queued_at, session, tool, target, kind) = {
         let pending = app.state::<Pending>();
         let map = pending.0.lock().unwrap();
         match map.get(request_id) {
-            Some(w) => (w.level, w.grantable, w.queued_at, w.session.clone(), w.tool.clone(), w.target.clone()),
+            Some(w) => (w.level, w.grantable, w.queued_at, w.session.clone(), w.tool.clone(), w.target.clone(), w.kind),
             None => return Err("not_pending".into()),
         }
     };
+    // A question or plan is allowed only with its answer (`respond`).
+    if kind != "permission" && c.decision != "deny" {
+        return Err("needs_answer".into());
+    }
     let word = resolve(c.decision, level, c.via).map_err(|why| {
         log::line(format!("decision id={request_id} rejected: {why}"));
         why.to_string()
@@ -527,9 +565,180 @@ pub fn answer(app: &AppHandle, request_id: &str, c: Choice) -> Result<(), String
     Ok(())
 }
 
+/// The user's answer to a question or a plan.
+pub enum Response {
+    /// AskUserQuestion: question text → chosen label(s), or the user's own words.
+    Answers(serde_json::Map<String, Value>),
+    /// ExitPlanMode: go ahead with the plan.
+    ApprovePlan,
+    /// ExitPlanMode: keep planning, with this feedback for Claude.
+    Revise(String),
+}
+
+/// Longest answer or feedback passed back to Claude.
+const MAX_ANSWER: usize = 2_000;
+
+fn clean_text(text: &str) -> String {
+    text.chars().filter(|c| !c.is_control() || *c == '\n').take(MAX_ANSWER).collect::<String>().trim().to_string()
+}
+
+/// The question texts in an AskUserQuestion input.
+fn question_texts(input: &Value) -> Vec<String> {
+    input
+        .get("questions")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|q| q.get("question").and_then(Value::as_str).map(str::to_string))
+        .collect()
+}
+
+/// The JSON line for a question's or plan's answer. Answers are kept only for
+/// questions that were asked, and every question must have one.
+fn response_reply(
+    kind: &str,
+    input: &Value,
+    response: Response,
+) -> Result<(Value, &'static str, String), &'static str> {
+    match (kind, response) {
+        ("question", Response::Answers(given)) => {
+            let mut answers = serde_json::Map::new();
+            for q in question_texts(input) {
+                let a = given.get(&q).and_then(Value::as_str).map(clean_text).unwrap_or_default();
+                if a.is_empty() {
+                    return Err("unanswered");
+                }
+                answers.insert(q, Value::String(a));
+            }
+            if answers.is_empty() {
+                return Err("unanswered");
+            }
+            let summary = answers.values().filter_map(Value::as_str).collect::<Vec<_>>().join(" · ");
+            let mut updated = input.clone();
+            updated["answers"] = Value::Object(answers);
+            Ok((json!({ "behavior": "allow", "updatedInput": updated }), "allow", summary))
+        }
+        ("plan", Response::ApprovePlan) => {
+            Ok((json!({ "behavior": "allow", "updatedInput": input.clone() }), "allow", String::new()))
+        }
+        ("plan", Response::Revise(feedback)) => {
+            let feedback = clean_text(&feedback);
+            if feedback.is_empty() {
+                return Err("unanswered");
+            }
+            // No interrupt: Claude reads the feedback and keeps planning.
+            Ok((json!({ "behavior": "deny", "message": feedback, "interrupt": false }), "deny", feedback))
+        }
+        _ => Err("wrong_kind"),
+    }
+}
+
+/// Answers a question or a plan from the island. Backed by a real click on the
+/// island like any approval when the click guard is on.
+pub fn respond(app: &AppHandle, request_id: &str, response: Response, anchor: Option<Anchor>) -> Result<(), String> {
+    let (kind, input, queued_at) = {
+        let pending = app.state::<Pending>();
+        let map = pending.0.lock().unwrap();
+        match map.get(request_id) {
+            Some(w) => (w.kind, w.input.clone(), w.queued_at),
+            None => return Err("not_pending".into()),
+        }
+    };
+    let (reply, decision, message) = response_reply(kind, &input, response).map_err(str::to_string)?;
+    let settings = app.state::<crate::Shared>().settings.lock().unwrap().clone();
+    if decision == "allow" && settings.input_guard {
+        if let Err(why) = inputguard::check_and_consume(Duration::ZERO, queued_at, anchor_rect(app, anchor)) {
+            log::line(format!("SUSPICIOUS: answer id={request_id} without a physical click ({why}) — refused"));
+            return Err(if why == "guard_unavailable" { why } else { "input_not_physical" }.into());
+        }
+    }
+    send(app, request_id, Reply::Decision(Answer { reply: reply.to_string(), decision, by: "user", message }), false);
+    Ok(())
+}
+
+/// Allows every waiting low-risk permission request with one click. Medium and
+/// above, questions and plans are never part of it: they stay on their cards.
+pub fn allow_low(app: &AppHandle, anchor: Option<Anchor>) -> Result<usize, String> {
+    let (ids, newest) = {
+        let pending = app.state::<Pending>();
+        let map = pending.0.lock().unwrap();
+        let low: Vec<(&String, &Waiting)> =
+            map.iter().filter(|(_, w)| w.kind == "permission" && w.level == Level::Low).collect();
+        let newest = low.iter().map(|(_, w)| w.queued_at).max();
+        (low.into_iter().map(|(id, _)| id.clone()).collect::<Vec<_>>(), newest)
+    };
+    let Some(queued_at) = newest else { return Ok(0) };
+    let settings = app.state::<crate::Shared>().settings.lock().unwrap().clone();
+    if settings.input_guard {
+        // The press must come after the newest of them appeared.
+        if let Err(why) = inputguard::check_and_consume(Duration::ZERO, queued_at, anchor_rect(app, anchor)) {
+            log::line(format!("SUSPICIOUS: batch approval without a physical click ({why}) — refused"));
+            return Err(if why == "guard_unavailable" { why } else { "input_not_physical" }.into());
+        }
+    }
+    for id in &ids {
+        let reply = json!({ "behavior": "allow" }).to_string();
+        send(app, id, Reply::Decision(Answer { reply, decision: "allow", by: "batch", message: String::new() }), false);
+    }
+    log::line(format!("batch: allowed {} low-risk requests", ids.len()));
+    Ok(ids.len())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn question_input() -> Value {
+        json!({ "questions": [
+            { "question": "Which framework?", "header": "Framework", "options": [{ "label": "React" }, { "label": "Vue" }] },
+            { "question": "Tests?", "header": "Tests", "options": [{ "label": "Yes" }, { "label": "No" }], "multiSelect": true },
+        ] })
+    }
+
+    #[test]
+    fn answers_echo_the_questions_and_cover_every_one() {
+        let mut given = serde_json::Map::new();
+        given.insert("Which framework?".into(), json!("React"));
+        given.insert("Tests?".into(), json!("Yes, No"));
+        given.insert("Not asked".into(), json!("ignored"));
+        let (reply, decision, summary) =
+            response_reply("question", &question_input(), Response::Answers(given)).unwrap();
+        assert_eq!(decision, "allow");
+        assert_eq!(reply["updatedInput"]["questions"], question_input()["questions"]);
+        assert_eq!(reply["updatedInput"]["answers"]["Tests?"], "Yes, No");
+        assert!(reply["updatedInput"]["answers"].get("Not asked").is_none());
+        assert_eq!(summary, "React · Yes, No");
+
+        let mut partial = serde_json::Map::new();
+        partial.insert("Which framework?".into(), json!("React"));
+        assert_eq!(response_reply("question", &question_input(), Response::Answers(partial)).err(), Some("unanswered"));
+        let mut blank = serde_json::Map::new();
+        blank.insert("Which framework?".into(), json!("  "));
+        blank.insert("Tests?".into(), json!("Yes"));
+        assert_eq!(response_reply("question", &question_input(), Response::Answers(blank)).err(), Some("unanswered"));
+    }
+
+    #[test]
+    fn plans_are_approved_with_their_input_or_sent_back_with_feedback() {
+        let input = json!({ "plan": "## Plan\n1. Do it", "planFilePath": "/p.md" });
+        let (reply, decision, _) = response_reply("plan", &input, Response::ApprovePlan).unwrap();
+        assert_eq!((decision, &reply["updatedInput"]), ("allow", &input));
+        let (reply, decision, message) =
+            response_reply("plan", &input, Response::Revise(" Add tests ".into())).unwrap();
+        assert_eq!(decision, "deny");
+        assert_eq!(reply["interrupt"], false);
+        assert_eq!(message, "Add tests");
+        assert_eq!(response_reply("plan", &input, Response::Revise("".into())).err(), Some("unanswered"));
+        assert_eq!(response_reply("question", &input, Response::ApprovePlan).err(), Some("wrong_kind"));
+        assert_eq!(response_reply("permission", &input, Response::ApprovePlan).err(), Some("wrong_kind"));
+    }
+
+    #[test]
+    fn only_claudes_interactive_tools_are_questions_or_plans() {
+        assert_eq!(interactive_kind("AskUserQuestion"), Some("question"));
+        assert_eq!(interactive_kind("ExitPlanMode"), Some("plan"));
+        assert_eq!(interactive_kind("Bash"), None);
+    }
 
     #[test]
     fn relay_frames_must_be_terminated_and_bounded() {

@@ -30,7 +30,15 @@ pub const ALL_EVENTS: &[&str] = &[
     "SubagentStop",
     "PreCompact",
     "PostCompact",
+    // Not a hook: Claude Code's status line command, which carries context use and
+    // plan limits. Opt-in, since it shows a line under the prompt (hooks.rs).
+    "StatusLine",
 ];
+
+/// Events chosen on a fresh install: every hook, but not the status line.
+pub fn default_events() -> Vec<String> {
+    ALL_EVENTS.iter().filter(|e| **e != "StatusLine").map(|s| s.to_string()).collect()
+}
 
 /// A user rule: when a request matches, decide or re-score it before anyone asks.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -162,6 +170,8 @@ pub struct Settings {
     pub hooks_installed: bool,
     /// Which events `Install hooks` writes. PermissionRequest is what approvals need.
     pub hook_events: Vec<String>,
+    /// Answer Claude's questions and approve its plans on the island.
+    pub island_questions: bool,
 
     // ── Safety ────────────────────────────────────────────────────────────────
     /// How long Allow must be held for a high-risk request, ms.
@@ -234,7 +244,8 @@ impl Default for Settings {
             openai_model: "gpt-6-luna".into(),
 
             hooks_installed: false,
-            hook_events: ALL_EVENTS.iter().map(|s| s.to_string()).collect(),
+            hook_events: default_events(),
+            island_questions: true,
 
             hold_ms: 1200,
             hold_critical_ms: 2400,
@@ -471,7 +482,9 @@ mod tests {
         let s: Settings = serde_json::from_str::<Settings>(old).unwrap().sanitized();
         assert!(!s.sound_enabled);
         assert_eq!(s.hold_ms, 900);
-        assert_eq!(s.hook_events.len(), ALL_EVENTS.len());
+        assert_eq!(s.hook_events.len(), ALL_EVENTS.len() - 1);
+        assert!(!s.hook_events.iter().any(|e| e == "StatusLine"), "the status line is opt-in");
+        assert!(s.island_questions);
         assert_eq!(s.hotkeys.deny, "Ctrl+Alt+D");
         assert!(s.buddy, "the desktop mascot is on for people upgrading");
         assert_eq!(s.buddy_pos, None, "and starts in its corner");

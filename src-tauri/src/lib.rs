@@ -536,6 +536,36 @@ fn approval_decision(
     )
 }
 
+/// The user's answer to one of Claude's questions, or a verdict on its plan.
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase", tag = "kind")]
+enum ResponseIn {
+    Answers { answers: serde_json::Map<String, Value> },
+    ApprovePlan,
+    Revise { feedback: String },
+}
+
+#[tauri::command]
+fn approval_respond(
+    app: AppHandle,
+    request_id: String,
+    response: ResponseIn,
+    anchor: Option<pipe::Anchor>,
+) -> Result<(), String> {
+    let response = match response {
+        ResponseIn::Answers { answers } => pipe::Response::Answers(answers),
+        ResponseIn::ApprovePlan => pipe::Response::ApprovePlan,
+        ResponseIn::Revise { feedback } => pipe::Response::Revise(feedback),
+    };
+    pipe::respond(&app, &request_id, response, anchor)
+}
+
+/// Allows every waiting low-risk request at once; returns how many.
+#[tauri::command]
+fn approval_allow_low(app: AppHandle, anchor: Option<pipe::Anchor>) -> Result<usize, String> {
+    pipe::allow_low(&app, anchor)
+}
+
 /// The card is on screen or queued, so the long wait for a person may begin.
 #[tauri::command]
 fn approval_ack(app: AppHandle, request_id: String) {
@@ -898,6 +928,8 @@ pub fn run() {
             approval_decision,
             approval_ack,
             approval_decline,
+            approval_respond,
+            approval_allow_low,
             rules_test,
             risk_categories,
             audit_query,

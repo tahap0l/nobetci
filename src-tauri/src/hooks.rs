@@ -55,6 +55,33 @@ pub struct HookStatus {
     pub events: Vec<String>,
     /// Some entry points at a different relay path (an older install location).
     pub stale: bool,
+    /// settings.json has a status line that is not ours; Nöbetçi leaves it alone.
+    pub foreign_status_line: bool,
+}
+
+/// The pseudo-event that stands for Claude Code's `statusLine` setting.
+pub const STATUS_LINE: &str = "StatusLine";
+
+/// Who owns the `statusLine` setting.
+#[derive(Debug, PartialEq)]
+enum StatusLineOwner {
+    None,
+    Ours,
+    Theirs,
+}
+
+fn status_line_owner(settings: &Value) -> StatusLineOwner {
+    match settings.get("statusLine") {
+        None | Some(Value::Null) => StatusLineOwner::None,
+        Some(v) if v.get("command").and_then(Value::as_str).is_some_and(|c| c.contains(MARKER)) => {
+            StatusLineOwner::Ours
+        }
+        Some(_) => StatusLineOwner::Theirs,
+    }
+}
+
+fn status_line_entry() -> Value {
+    json!({ "type": "command", "command": hook_command("statusline"), "padding": 0 })
 }
 
 #[derive(Serialize)]
@@ -253,12 +280,28 @@ fn merged(existing: &Value, events: &[String]) -> Value {
     }
 
     root.insert("hooks".into(), Value::Object(hooks));
+
+    // The status line is a single setting, not a list: take it only when nobody
+    // else has, and give back only our own.
+    let wanted = events.iter().any(|e| e == STATUS_LINE);
+    match (status_line_owner(existing), wanted) {
+        (StatusLineOwner::None | StatusLineOwner::Ours, true) => {
+            root.insert("statusLine".into(), status_line_entry());
+        }
+        (StatusLineOwner::Ours, false) => {
+            root.remove("statusLine");
+        }
+        _ => {}
+    }
     Value::Object(root)
 }
 
 /// Settings with every Nöbetçi entry removed, and nothing else changed.
 fn without_ours(existing: &Value) -> Value {
     let mut root = existing.as_object().cloned().unwrap_or_default();
+    if status_line_owner(existing) == StatusLineOwner::Ours {
+        root.remove("statusLine");
+    }
     let Some(hooks) = root.get("hooks").and_then(Value::as_object).cloned() else {
         return Value::Object(root);
     };
@@ -344,8 +387,14 @@ pub fn status() -> HookStatus {
             stale |= ours.iter().any(|e| entry_is_stale(event, e));
         }
     }
+    let owner = status_line_owner(&current);
+    if owner == StatusLineOwner::Ours {
+        events.push(STATUS_LINE.to_string());
+        stale |= current.get("statusLine") != Some(&status_line_entry());
+    }
     let hook_path = settings::hook_exe_path();
     HookStatus {
+        foreign_status_line: owner == StatusLineOwner::Theirs,
         installed: !events.is_empty(),
         settings_path: settings_path().to_string_lossy().to_string(),
         hook_ready: hook_path.exists(),
@@ -386,14 +435,15 @@ pub fn write(install: bool, expected_fingerprint: &str, events: &[String]) -> Re
 pub fn remove_for_uninstall() -> Result<Option<String>, String> {
     let path = settings_path();
     let (current, bytes) = snapshot(&path)?;
-    let installed = current
-        .get("hooks")
-        .and_then(Value::as_object)
-        .into_iter()
-        .flat_map(|hooks| hooks.values())
-        .filter_map(Value::as_array)
-        .flatten()
-        .any(entry_is_ours);
+    let installed = status_line_owner(&current) == StatusLineOwner::Ours
+        || current
+            .get("hooks")
+            .and_then(Value::as_object)
+            .into_iter()
+            .flat_map(|hooks| hooks.values())
+            .filter_map(Value::as_array)
+            .flatten()
+            .any(entry_is_ours);
     if !installed {
         return Ok(None);
     }
@@ -776,5 +826,21 @@ mod tests {
         let moved =
             json!({ "hooks": [{ "type": "command", "command": "C:/old/nobetci-hook.exe Stop", "timeout": 10 }] });
         assert!(entry_is_stale("Stop", &moved));
+    }
+
+    #[test]
+    fn the_status_line_is_taken_only_when_free_and_given_back_only_when_ours() {
+        let events = vec!["Stop".to_string(), STATUS_LINE.to_string()];
+        let free = merged(&json!({}), &events);
+        assert_eq!(free["statusLine"], status_line_entry());
+        assert_eq!(status_line_owner(&free), StatusLineOwner::Ours);
+        // Unticked: ours goes away.
+        let off = merged(&free, &["Stop".to_string()]);
+        assert!(off.get("statusLine").is_none());
+        // Somebody else's is never replaced or removed.
+        let theirs = json!({ "statusLine": { "type": "command", "command": "~/bin/my-line.sh" } });
+        assert_eq!(merged(&theirs, &events)["statusLine"], theirs["statusLine"]);
+        assert_eq!(without_ours(&theirs)["statusLine"], theirs["statusLine"]);
+        assert!(without_ours(&free).get("statusLine").is_none());
     }
 }

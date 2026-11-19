@@ -977,7 +977,7 @@ function stats(all: AuditEntry[], days: number): AuditStats {
     }
     s[e.level as RiskLevel]++;
     if (["rule", "trusted", "session"].includes(e.by)) s.automatic++;
-    if (["user", "hotkey"].includes(e.by)) waits.push(e.ms);
+    if (["user", "hotkey", "batch"].includes(e.by)) waits.push(e.ms);
     projects.set(e.project, (projects.get(e.project) ?? 0) + 1);
     tools.set(e.tool, (tools.get(e.tool) ?? 0) + 1);
     for (const l of e.labels) labels.set(l, (labels.get(l) ?? 0) + 1);
@@ -1346,6 +1346,8 @@ export function createMockApi(): Api {
       };
     },
     approvalDecision: async () => {},
+    approvalRespond: async () => {},
+    approvalAllowLow: async () => 0,
     approvalAck: async () => {},
     approvalDecline: async () => {},
     rulesTest: async (tool: string, input: Record<string, unknown>, cwd: string, draft?: Settings) => {

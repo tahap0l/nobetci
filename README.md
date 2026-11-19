@@ -35,6 +35,8 @@ Nöbetçi sits at the top of the screen. Click the compact island to open your a
 - **Voice and ready-made prompts.** The 🎙 button starts your system's dictation (Windows voice typing, macOS Dictation); **Prompt ideas** gives beginners about twenty fill-in-the-blanks prompts. If the Claude, ChatGPT, Perplexity or Copilot app is installed, the message opens there instead of the browser.
 - **Agenda, calendar, weather and system.** Note what to do on a day, with an optional reminder time; see busy days on the calendar; an animated forecast for the next twelve hours; and live CPU, RAM and GPU load.
 - **Claude Code everywhere.** Sessions from the terminal, VS Code and the **Code tab of the Claude desktop app** all show on the island; the card tells you where each one runs. The desktop app never runs Claude Code's `PermissionRequest` hook, so there Nöbetçi asks from `PreToolUse` for commands, edits, web fetches and MCP tools.
+- **Questions and plans on the island.** When Claude asks a multiple-choice question or wants its plan approved, the card shows it: pick an answer (or write your own), approve the plan or send it back with a note.
+- **What changed, and how much is left.** The session view lists the files each session edited, with lines added and removed and the diff a click away. With the opt-in status line, it also shows context use, cost, and your 5-hour and weekly plan limits.
 - **Seven mascots.** The owl, a wolf, a hawk, an octopus, a lion, a canary and an eagle move and react the same way: they wave at a permission request, bristle at a risky one, hop when a session finishes and doze when nothing is running. Choose one under **Settings → General → Appearance**; it also sets the card colors and transitions. Try the reactions in the web demo.
 
 <p align="center"><img src="docs/media/en/mascots.png" width="720" alt="The seven mascots side by side, each in a different mood: the owl idle, the wolf waving at a permission request, the hawk alarmed, the octopus thinking, the lion happy, the canary delighted and the eagle puzzled"></p>
@@ -94,6 +96,7 @@ edge of the screen.
   down (1.2 s and 2.4 s by default). The rule is enforced in Rust, not just in the UI.
 - **Deny with a reason.** Pick a ready-made reason and Claude reads it, or **Deny and stop Claude**
   to end its turn. **Hand to terminal** gives the decision back to Claude Code's own prompt.
+- **Many small ones at once.** When two or more LOW requests wait, **Allow all low-risk requests** clears them with one real click; anything above LOW keeps its own card.
 - **A queue, not a pile-up.** Requests that arrive together line up, up to six at a time; any
   beyond that go to the terminal, so none are lost.
 

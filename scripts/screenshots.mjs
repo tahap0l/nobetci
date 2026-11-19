@@ -50,6 +50,9 @@ const SHOTS = [
   { name: "mascots", path: "?demo=mascots", size: { width: 720, height: 210 }, scale: 2 },
   { name: "reactions", path: "?demo=reactions", size: { width: 720, height: 210 }, scale: 2 },
   { name: "session", path: "?demo=session", size: ISLAND },
+  { name: "question", path: "?demo=question", size: ISLAND },
+  { name: "plan", path: "?demo=plan", size: ISLAND },
+  { name: "batch", path: "?demo=batch", size: ISLAND },
   // The assistant with its prompt library open, and each card of the dashboard.
   { name: "assistant", path: "?demo=assistant&lib=1&text=", size: ISLAND },
   { name: "card-weather", path: "?demo=overview&media=art&weather=2&page=weather", size: HERO },

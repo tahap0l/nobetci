@@ -50,6 +50,9 @@ export interface Session {
   approved: number;
   denied: number;
   automatic: number;
+  /** Files changed this session, newest first (kept short). */
+  changes: FileChange[];
+  usage: SessionUsage | null;
 }
 
 /** What identifies the tool call behind a request, to recognise the event that resolves it. */
@@ -62,7 +65,38 @@ export interface CallSignature {
   prefix: string;
 }
 
+/** A file a session changed, newest first in `Session.changes`. */
+export interface FileChange {
+  file: string;
+  added: number;
+  removed: number;
+  created: boolean;
+  /** Unified-diff lines, possibly cut (`cut`). */
+  diff: string;
+  cut: boolean;
+  t: number;
+}
+
+/** What Claude Code's status line last said about a session. */
+export interface SessionUsage {
+  model: string;
+  /** Context window used, percent; null early in a session. */
+  context: number | null;
+  costUsd: number | null;
+  at: number;
+}
+
+/** A claude.ai plan window: percent used and when it resets (ms). */
+export interface LimitWindow {
+  used: number;
+  resetsAt: number | null;
+}
+
 export interface Approval {
+  /** A permission request, or one of Claude's own questions or plans. */
+  kind: "permission" | "question" | "plan";
+  /** The tool input, for a question's options or a plan's text. */
+  input: Record<string, unknown>;
   requestId: string;
   sessionId: string;
   tool: string;
@@ -93,6 +127,8 @@ export { DEFAULT_SETTINGS };
 export const DECISION_WINDOW_MS = 108_000;
 /** More than this many waiting requests and the rest go straight to the terminal. */
 export const MAX_QUEUE = 6;
+/** Files kept per session in the change list. */
+export const MAX_CHANGES = 12;
 const MAX_STEPS = 40;
 
 const ACCENTS = ["#60A5FA", "#34D399", "#F472B6", "#FBBF24", "#A78BFA", "#22D3EE", "#FB923C", "#A3E635"];
@@ -116,6 +152,8 @@ class AppState {
 
   sessions: Session[] = [];
   approvals: Approval[] = [];
+  /** claude.ai plan limits from the newest status line, when Claude Code sent them. */
+  limits: { fiveHour: LimitWindow | null; sevenDay: LimitWindow | null; at: number } | null = null;
   flash: Flash | null = null;
   /** A warning shown inside the card of one request (e.g. a refused synthetic click). */
   cardWarning: { requestId: string; text: string } | null = null;
@@ -172,6 +210,8 @@ class AppState {
         approved: 0,
         denied: 0,
         automatic: 0,
+        changes: [],
+        usage: null,
       };
       this.sessions.push(s);
     }
@@ -228,6 +268,20 @@ class AppState {
 
   get currentApproval(): Approval | null {
     return this.approvals[0] ?? null;
+  }
+
+  /** Records a file change on a session, newest first; one row per file. */
+  addChange(s: Session, c: FileChange) {
+    const prev = s.changes.find((x) => x.file === c.file);
+    if (prev) {
+      c = { ...c, added: c.added + prev.added, removed: c.removed + prev.removed, created: prev.created || c.created };
+    }
+    s.changes = [c, ...s.changes.filter((x) => x.file !== c.file)].slice(0, MAX_CHANGES);
+  }
+
+  /** Waiting low-risk permission requests: what one batch click may allow. */
+  get lowApprovals(): Approval[] {
+    return this.approvals.filter((a) => a.kind === "permission" && a.risk.level === "low");
   }
 
   removeApproval(requestId: string) {

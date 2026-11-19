@@ -30,6 +30,7 @@ export function outcomeLabel(o: Evaluation["outcome"]): string {
 export const BY_KEYS = [
   "user",
   "hotkey",
+  "batch",
   "rule",
   "trusted",
   "session",

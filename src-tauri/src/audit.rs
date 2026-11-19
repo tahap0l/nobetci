@@ -254,7 +254,7 @@ impl Log {
             if matches!(e.by.as_str(), "rule" | "trusted" | "session") {
                 s.automatic += 1;
             }
-            if matches!(e.by.as_str(), "user" | "hotkey") {
+            if matches!(e.by.as_str(), "user" | "hotkey" | "batch") {
                 waits.push(e.ms);
             }
             *projects.entry(e.project.clone()).or_default() += 1;
