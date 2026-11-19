@@ -7,6 +7,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.3.3] - 2026-11-19
+
+### Fixed
+
+- **The Claude desktop app on Windows.** Claude Code runs a hook in Git Bash, or in PowerShell when it
+  cannot find Git Bash, which is often the case in the Claude desktop app even when the terminal
+  finds it. Nöbetçi wrote its hooks as a quoted path, which PowerShell reads as a plain string, so
+  in the app the relay never ran and nothing reached the island. The hooks are now a bare path
+  that runs in both shells (the 8.3 short form when the path has spaces).
+- **Update the hooks once:** Settings → Claude Code says the hooks are out of date; review the
+  change and reinstall, then restart the Claude desktop app.
+
 ## [2.3.2] - 2026-11-16
 
 ### Fixed
@@ -323,7 +335,8 @@ pipe relay, the reviewed-diff hook installer and the island window were adapted 
 [Coucou](https://github.com/Louis-CFM/coucou) (MIT). Everything they had, and much more, shipped
 publicly in 0.2.0.
 
-[Unreleased]: https://github.com/tahap0l/nobetci/compare/v2.3.2...HEAD
+[Unreleased]: https://github.com/tahap0l/nobetci/compare/v2.3.3...HEAD
+[2.3.3]: https://github.com/tahap0l/nobetci/compare/v2.3.2...v2.3.3
 [2.3.2]: https://github.com/tahap0l/nobetci/compare/v2.3.1...v2.3.2
 [2.3.1]: https://github.com/tahap0l/nobetci/compare/v2.3.0...v2.3.1
 [2.3.0]: https://github.com/tahap0l/nobetci/compare/v2.2.0...v2.3.0
