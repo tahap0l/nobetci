@@ -32,6 +32,8 @@ Nöbetçi ekranın üstünde küçük bir ada olarak durur. Adaya tıklayarak aj
 - **Ses ve hazır promptlar.** 🎙 düğmesi sistemin dikte özelliğini başlatır (Windows'ta sesle yazma, macOS'ta Dikte); **Hazır promptlar** yapay zekâyı yeni kullananlara yirmiye yakın doldur-gönder kalıbı sunar. Claude, ChatGPT, Perplexity ya da Copilot uygulaması yüklüyse mesaj tarayıcı yerine orada açılır.
 - **Ajanda, takvim, hava ve sistem.** Bir güne yapılacak not al, istersen saat ver hatırlatsın; takvimde dolu günleri gör; önümüzdeki 12 saatin animasyonlu tahmini; canlı CPU, RAM ve GPU kullanımı.
 - **Claude Code her yerde.** Terminalden, VS Code'dan ve **Claude masaüstü uygulamasının Code sekmesinden** açılan oturumlar adada görünür; kart her birinin nerede çalıştığını söyler. Masaüstü uygulaması Claude Code'un `PermissionRequest` kancasını hiç çalıştırmadığından Nöbetçi orada komutlar, düzenlemeler, web istekleri ve MCP araçları için `PreToolUse` üzerinden sorar.
+- **Sorular ve planlar adada.** Claude çoktan seçmeli bir soru sorduğunda ya da planını onayına sunduğunda kart adada açılır: bir cevap seç (ya da kendin yaz), planı onayla ya da notla geri gönder.
+- **Ne değişti, ne kadar kaldı.** Oturum ekranı her oturumun düzenlediği dosyaları eklenen ve silinen satır sayısıyla listeler; farkı bir tık uzakta. İsteğe bağlı durum satırıyla bağlam kullanımını, maliyeti, 5 saatlik ve haftalık plan limitlerini de gösterir.
 - **Yedi maskot.** Baykuş, kurt, şahin, ahtapot, aslan, kanarya ve kartal aynı şekilde hareket eder ve tepki verir: izin isteğinde el sallar, riskli istekte kabarır, oturum bitince zıplar, çalışan bir şey yokken uyuklar. Maskotu **Ayarlar → Genel → Görünüm** bölümünden seç; kart renkleri ve geçişler de ona göre değişir. Tepkileri web demosunda deneyebilirsin.
 
 <p align="center"><img src="docs/media/tr/mascots.png" width="720" alt="Yedi maskot yan yana, her biri farklı bir ruh halinde: baykuş boşta, kurt izin isteğine el sallıyor, şahin alarmda, ahtapot düşünüyor, aslan mutlu, kanarya sevinçli, kartal şaşkın"></p>
@@ -93,6 +95,7 @@ butonu bilerek basılı tutman gerekir. Sana ihtiyaç olmadığında ekranın ü
   uygulanır.
 - **Gerekçeyle reddet.** Hazır bir gerekçe seç, Claude onu okusun; ya da **Reddet ve Claude'u
   durdur** ile turu bitir. **Terminale bırak** kararı Claude Code'un kendi sorusuna geri verir.
+- **Küçükleri tek seferde.** İki ya da daha fazla DÜŞÜK riskli istek beklerken **Düşük riskli isteklerin hepsine izin ver** hepsini tek bir gerçek tıklamayla geçirir; DÜŞÜK'ün üstündeki her istek kendi kartında kalır.
 - **Yığılma değil, kuyruk.** Aynı anda gelen istekler sıraya girer — en fazla altı tane; fazlası
   terminale düşer, hiçbiri kaybolmaz.
 

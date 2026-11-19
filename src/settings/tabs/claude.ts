@@ -11,7 +11,7 @@ import { t, type MsgKey } from "../i18n";
 import { icon } from "../icons";
 import { app, devParam, refreshBadges, rerender, type Tab } from "../nav";
 import { flush, same, settings, update } from "../store";
-import { button, card, checkbox, modal, notice, pill } from "../ui";
+import { button, card, checkbox, modal, notice, pill, row, toggle } from "../ui";
 
 let health: HealthReport | null = null;
 let healthRunning = false;
@@ -300,12 +300,15 @@ function eventsCard(): HTMLElement {
       ),
     );
   }
-  const installedSorted = hs ? ALL_EVENTS.filter((e) => hs.events.includes(e)) : [];
+  // Someone else's status line stays theirs, so ticking ours changes nothing there.
+  const foreign = !!hs?.foreignStatusLine;
+  const counted = (e: string) => !(foreign && e === "StatusLine");
+  const installedSorted = hs ? ALL_EVENTS.filter((e) => hs.events.includes(e) && counted(e)) : [];
   const differs =
     !!hs?.installed &&
     !same(
       installedSorted,
-      ALL_EVENTS.filter((e) => chosen.has(e)),
+      ALL_EVENTS.filter((e) => chosen.has(e) && counted(e)),
     );
   return card(
     {
@@ -328,6 +331,7 @@ function eventsCard(): HTMLElement {
       ? notice("warn", h("strong", { text: t("claude.noPermission") }), t("claude.noPermissionText"))
       : null,
     grid,
+    foreign && chosen.has("StatusLine") ? notice("info", t("claude.statusLineTaken")) : null,
     differs
       ? h(
           "div",
@@ -394,6 +398,17 @@ function render(): HTMLElement {
         : null,
       healthBlock(),
       h("p", { class: "fine" }, icon("lock", 13), h("span", { text: t("claude.never") })),
+    ),
+    card(
+      { title: t("claude.interactive"), icon: "claude" },
+      row(
+        t("claude.questions"),
+        t("claude.questionsHint"),
+        toggle(settings().islandQuestions, (v) => update((x) => (x.islandQuestions = v)), {
+          label: t("claude.questions"),
+          fk: "islandQuestions",
+        }),
+      ),
     ),
     eventsCard(),
   );

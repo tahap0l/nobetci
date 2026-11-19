@@ -71,6 +71,8 @@ export interface Settings {
   // Claude Code
   hooksInstalled: boolean;
   hookEvents: string[];
+  /** Answer Claude's questions and approve its plans on the island. */
+  islandQuestions: boolean;
   // Safety
   holdMs: number;
   holdCriticalMs: number;
@@ -118,7 +120,11 @@ export const ALL_EVENTS = [
   "SubagentStop",
   "PreCompact",
   "PostCompact",
+  "StatusLine",
 ] as const;
+
+/** A fresh install's events: every hook, but not the opt-in status line. */
+export const DEFAULT_EVENTS: string[] = ALL_EVENTS.filter((e) => e !== "StatusLine");
 
 export const DEFAULT_SETTINGS: Settings = {
   language: "auto",
@@ -143,7 +149,8 @@ export const DEFAULT_SETTINGS: Settings = {
   ollamaModel: "gemma4",
   openaiModel: "gpt-6-luna",
   hooksInstalled: false,
-  hookEvents: [...ALL_EVENTS],
+  hookEvents: [...DEFAULT_EVENTS],
+  islandQuestions: true,
   holdMs: 1200,
   holdCriticalMs: 2400,
   inputGuard: true,

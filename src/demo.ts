@@ -88,6 +88,94 @@ function approval(island: Island, id: string, session: string, tool: string, ris
   });
 }
 
+/** One of Claude's own questions, the way the relay forwards it. */
+function question(island: Island) {
+  injectHook(island, {
+    hook_event_name: "PermissionRequest",
+    request_id: "q1",
+    session_id: "a",
+    cwd: P.app,
+    tool_name: "AskUserQuestion",
+    nobetci_kind: "question",
+    tool_input: {
+      questions: [
+        {
+          question: L("Ayarlar penceresinde sekmeler nerede dursun?", "Where should the settings tabs go?"),
+          header: L("Yerleşim", "Layout"),
+          multiSelect: false,
+          options: [
+            { label: L("Solda dikey", "Left, vertical"), description: L("Uzun listeler için iyi", "Good for long lists") },
+            { label: L("Üstte yatay", "Top, horizontal"), description: L("Az sekmede sade", "Clean with few tabs") },
+          ],
+        },
+        {
+          question: L("Hangi temaları ekleyelim?", "Which themes should we add?"),
+          header: L("Tema", "Theme"),
+          multiSelect: true,
+          options: [{ label: L("Koyu", "Dark") }, { label: L("Açık", "Light") }, { label: L("Sistem", "System") }],
+        },
+      ],
+    },
+    risk: low(),
+  });
+}
+
+/** Claude's plan, waiting for approval. */
+function plan(island: Island) {
+  injectHook(island, {
+    hook_event_name: "PermissionRequest",
+    request_id: "p1",
+    session_id: "a",
+    cwd: P.app,
+    tool_name: "ExitPlanMode",
+    nobetci_kind: "plan",
+    tool_input: {
+      plan: L(
+        "## Ayarlar penceresini sekmeli yap\n\n1. `src/settings/main.ts` içinde sekme gezgini kur\n2. Her bölümü **kendi dosyasına** taşı\n3. Seçili sekmeyi hatırla\n\n### Testler\n- [ ] Sekme geçişleri\n- [ ] Klavye ile gezinme\n\n> Mevcut ayar dosyası değişmez.",
+        "## Make the settings window tabbed\n\n1. Add a tab navigator in `src/settings/main.ts`\n2. Move each section **into its own file**\n3. Remember the selected tab\n\n### Tests\n- [ ] Switching tabs\n- [ ] Keyboard navigation\n\n> The settings file format stays the same.",
+      ),
+      planFilePath: "C:/Users/dev/.claude/plans/settings-tabs.md",
+    },
+    risk: low(),
+  });
+}
+
+/** File edits, context use and plan limits, as the relay and the status line send them. */
+function workDone(island: Island) {
+  const change = (file: string, diff: string, created = false) => {
+    const lines = diff.split("\n");
+    injectHook(island, {
+      hook_event_name: "PostToolUse",
+      session_id: "a",
+      cwd: P.app,
+      tool_name: created ? "Write" : "Edit",
+      tool_input: { file_path: file },
+      nobetci_change: {
+        file,
+        added: lines.filter((l) => l.startsWith("+")).length,
+        removed: lines.filter((l) => l.startsWith("-")).length,
+        created,
+        diff,
+        cut: false,
+      },
+    });
+  };
+  change("src/settings/tabs/index.ts", "+export const TABS = [genel, claude, rules];\n+export type TabId = (typeof TABS)[number][\"id\"];", true);
+  change(
+    "src/settings/main.ts",
+    "@@ -12,4 +12,6 @@\n import { h } from \"../ui/dom\";\n-const sections = buildSections();\n+const tabs = buildTabs(TABS);\n+tabs.select(saved() ?? \"genel\");\n render();",
+  );
+  injectHook(island, {
+    hook_event_name: "StatusLine",
+    session_id: "a",
+    model: "Opus 5.5",
+    context_used: 38,
+    cost_usd: 1.42,
+    five_hour: { used: 64, resets_at: Math.floor(Date.now() / 1000) + 5400 },
+    seven_day: { used: 23, resets_at: Math.floor(Date.now() / 1000) + 3 * 86400 },
+  });
+}
+
 /** The seven mascots side by side, each caught in a different mood (the README's mascot picture). */
 function mascotLineup() {
   const cast: [MascotTheme, OwlMood, OwlEmote?][] = [
@@ -180,6 +268,8 @@ export function runDemo(island: Island, name: string) {
   }
   // Decisions go nowhere outside the app; the card answers as if they had.
   Bridge.approvalDecision = async () => {};
+  Bridge.approvalRespond = async () => {};
+  Bridge.approvalAllowLow = async () => State.lowApprovals.length;
   Bridge.approvalAck = async () => null;
   Bridge.approvalDecline = async () => null;
   const theme = params.get("theme");
@@ -269,7 +359,26 @@ export function runDemo(island: Island, name: string) {
     }
     case "session":
       sessions(island);
+      workDone(island);
       island.showSession("a");
+      if (params.has("diff")) {
+        window.setTimeout(() => document.querySelector<HTMLButtonElement>(".change-row")?.click(), 300);
+      }
+      break;
+    case "question":
+      sessions(island);
+      question(island);
+      break;
+    case "plan":
+      sessions(island);
+      plan(island);
+      break;
+    case "batch":
+      // Three low-risk requests waiting: one click allows them all.
+      sessions(island);
+      approval(island, "r1", "a", "Bash", low());
+      approval(island, "r2", "a", "Bash", { ...low(), target: "npm run lint" });
+      approval(island, "r3", "b", "Bash", { ...low(), target: "git status" });
       break;
     case "low":
       sessions(island);

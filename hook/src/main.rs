@@ -67,6 +67,10 @@ fn main() {
         browser::run();
         return;
     }
+    if first == "statusline" {
+        status_line();
+        return;
+    }
     let provider = if first == "codex" || first == "cursor" { first.clone() } else { "claude".into() };
     let event_arg = if provider == "claude" { first } else { args.next().unwrap_or_default() };
     let Some((payload, event, gated)) = read_event(&provider, event_arg) else { std::process::exit(0) };
@@ -199,9 +203,13 @@ fn decision_json(answer: &str) -> Option<String> {
     };
 
     let mut out = match reply.get("behavior").and_then(|b| b.as_str())? {
-        "allow" => serde_json::json!({
-            "hookSpecificOutput": { "hookEventName": "PermissionRequest", "decision": { "behavior": "allow" } }
-        }),
+        "allow" => {
+            let mut decision = serde_json::json!({ "behavior": "allow" });
+            if let Some(input) = reply.get("updatedInput").filter(|v| v.is_object()) {
+                decision["updatedInput"] = input.clone();
+            }
+            serde_json::json!({ "hookSpecificOutput": { "hookEventName": "PermissionRequest", "decision": decision } })
+        }
         "deny" => {
             let message = clean(reply.get("message")).unwrap_or_else(|| DEFAULT_DENY.to_string());
             // `interrupt: true` is what lets Claude see the message; without it the
@@ -226,20 +234,28 @@ fn decision_json(answer: &str) -> Option<String> {
 }
 
 /// The documented PreToolUse output for a request gated in the Claude desktop
-/// app (see `desktop_gate`). `allow` skips the app's own permission dialog,
+/// app (see `desktop_gate`) or for a question or plan (see `interactive_tool`). `allow` skips the app's own permission dialog,
 /// `deny` blocks the tool and tells Claude why; anything else prints nothing,
 /// and the app asks as usual.
 /// See https://code.claude.com/docs/en/hooks (PreToolUse decision control).
 fn pre_tool_use_json(answer: &str) -> Option<String> {
     let reply = parse_internal_decision(answer)?;
     let mut out = match reply.get("behavior")?.as_str()? {
-        "allow" => serde_json::json!({
-            "hookSpecificOutput": {
-                "hookEventName": "PreToolUse",
-                "permissionDecision": "allow",
-                "permissionDecisionReason": "Approved in Nöbetçi."
+        "allow" => {
+            let mut out = serde_json::json!({
+                "hookSpecificOutput": {
+                    "hookEventName": "PreToolUse",
+                    "permissionDecision": "allow",
+                    "permissionDecisionReason": "Approved in Nöbetçi."
+                }
+            });
+            // AskUserQuestion and ExitPlanMode only run when the answer comes back
+            // in updatedInput: an allow alone would leave them waiting for a person.
+            if let Some(input) = reply.get("updatedInput").filter(|v| v.is_object()) {
+                out["hookSpecificOutput"]["updatedInput"] = input.clone();
             }
-        }),
+            out
+        }
         "deny" => serde_json::json!({
             "hookSpecificOutput": {
                 "hookEventName": "PreToolUse",
@@ -281,6 +297,14 @@ fn desktop_gate(entrypoint: &str, tool: &str, mode: &str) -> bool {
     }
 }
 
+/// Claude's own tools that wait for the user rather than for permission: its
+/// multiple-choice questions and its plan. A `PreToolUse` hook may answer them
+/// (allow with the answer in `updatedInput`), so the island can. Silence leaves
+/// the terminal or app to ask as usual.
+fn interactive_tool(tool: &str) -> bool {
+    matches!(tool, "AskUserQuestion" | "ExitPlanMode")
+}
+
 /// Reads stdin and returns the payload to forward, the event name, and whether it
 /// is a `PreToolUse` gated as a permission request (see `desktop_gate`).
 fn read_event(provider: &str, arg_event: String) -> Option<(String, String, bool)> {
@@ -302,6 +326,8 @@ fn read_event(provider: &str, arg_event: String) -> Option<(String, String, bool
     ]
     .iter()
     .any(|e| arg_event == *e || peek.contains(&format!("\"{e}\"")))
+        || peek.contains("\"AskUserQuestion\"")
+        || peek.contains("\"ExitPlanMode\"")
         || (std::env::var("CLAUDE_CODE_ENTRYPOINT").as_deref() == Ok(DESKTOP_ENTRYPOINT)
             && (arg_event == "PreToolUse" || peek.contains("\"PreToolUse\"")));
     let parents = wants_parents.then(|| os::ancestors(12));
@@ -391,6 +417,8 @@ fn prepare(
         }
     }
 
+    let change = (event == "PostToolUse").then(|| file_change(map)).flatten();
+
     for field in DROPPED_FIELDS {
         map.remove(*field);
     }
@@ -426,7 +454,8 @@ fn prepare(
     let text = |key: &str| map.get(key).and_then(|v| v.as_str()).unwrap_or_default().to_string();
     let gated = provider == "claude"
         && event == "PreToolUse"
-        && desktop_gate(&text("entrypoint"), &text("tool_name"), &text("permission_mode"));
+        && (interactive_tool(&text("tool_name"))
+            || desktop_gate(&text("entrypoint"), &text("tool_name"), &text("permission_mode")));
     if gated {
         event = "PermissionRequest".to_string();
         map.insert("hook_event_name".into(), serde_json::Value::String(event.clone()));
@@ -440,9 +469,177 @@ fn prepare(
         }
     }
 
+    // Added after the cut: the diff has its own, larger cap.
+    if let (Some(change), Some(map)) = (change, payload.as_object_mut()) {
+        map.insert("nobetci_change".into(), change);
+    }
+
     let mut line = payload.to_string();
     line.push('\n');
     Some((line, event, gated))
+}
+
+/// Longest diff forwarded with a file change, in bytes.
+const MAX_DIFF_LEN: usize = 12_000;
+
+/// What a finished file edit changed, for the island's change list: the file,
+/// lines added and removed, and a short diff. Taken from Claude Code's own patch
+/// (`tool_response.structuredPatch`) when it sends one, else from the edit's
+/// input. Display only: nothing here is ever approved.
+fn file_change(map: &serde_json::Map<String, serde_json::Value>) -> Option<serde_json::Value> {
+    let tool = map.get("tool_name")?.as_str()?;
+    if !matches!(tool, "Edit" | "MultiEdit" | "Write" | "NotebookEdit") {
+        return None;
+    }
+    let input = map.get("tool_input")?;
+    let file = input.get("file_path").or_else(|| input.get("notebook_path"))?.as_str()?.to_string();
+    let response = map.get("tool_response");
+    let created = response.and_then(|r| r.get("type")).and_then(|v| v.as_str()) == Some("create");
+
+    let mut lines: Vec<String> = Vec::new();
+    let patch = response.and_then(|r| r.get("structuredPatch")).and_then(|v| v.as_array()).filter(|p| !p.is_empty());
+    if let Some(hunks) = patch {
+        for hunk in hunks {
+            let n = |k: &str| hunk.get(k).and_then(|v| v.as_u64()).unwrap_or(0);
+            lines.push(format!("@@ -{},{} +{},{} @@", n("oldStart"), n("oldLines"), n("newStart"), n("newLines")));
+            for l in hunk.get("lines").and_then(|v| v.as_array()).into_iter().flatten() {
+                if let Some(text) = l.as_str() {
+                    lines.push(text.to_string());
+                }
+            }
+        }
+    } else {
+        let text = |v: Option<&serde_json::Value>| v.and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let mut pair = |old: String, new: String| {
+            lines.extend(old.lines().map(|l| format!("-{l}")));
+            lines.extend(new.lines().map(|l| format!("+{l}")));
+        };
+        match tool {
+            "Edit" => pair(text(input.get("old_string")), text(input.get("new_string"))),
+            "MultiEdit" => {
+                for edit in input.get("edits").and_then(|v| v.as_array()).into_iter().flatten() {
+                    pair(text(edit.get("old_string")), text(edit.get("new_string")));
+                }
+            }
+            "Write" => pair(String::new(), text(input.get("content"))),
+            _ => pair(String::new(), text(input.get("new_source"))),
+        }
+    }
+
+    let added = lines.iter().filter(|l| l.starts_with('+')).count();
+    let removed = lines.iter().filter(|l| l.starts_with('-')).count();
+    let mut diff = lines.join("\n");
+    let cut = diff.len() > MAX_DIFF_LEN;
+    if cut {
+        let mut end = MAX_DIFF_LEN;
+        while end > 0 && !diff.is_char_boundary(end) {
+            end -= 1;
+        }
+        diff.truncate(end);
+    }
+    Some(serde_json::json!({
+        "file": file,
+        "added": added,
+        "removed": removed,
+        "created": created,
+        "diff": diff,
+        "cut": cut,
+    }))
+}
+
+/// `nobetci-hook statusline`: Claude Code's status line command. It hands us the
+/// session's context use, cost and plan limits on stdin; we pass them to the
+/// island (never waiting for it) and print a short line for Claude Code to show.
+fn status_line() {
+    let mut raw = Vec::new();
+    let _ = std::io::stdin().take(1 << 20).read_to_end(&mut raw);
+    let raw = raw.strip_prefix(&[0xEF, 0xBB, 0xBF]).unwrap_or(&raw);
+    let data: serde_json::Value = serde_json::from_slice(raw).unwrap_or(serde_json::Value::Null);
+    if let Some(line) = status_payload(&data) {
+        let (tx, rx) = mpsc::channel::<()>();
+        std::thread::spawn(move || {
+            let _ = talk(&line, false);
+            let _ = tx.send(());
+        });
+        // The status line redraws while we run: never hold it up for long.
+        let _ = rx.recv_timeout(Duration::from_millis(400));
+    }
+    let mut out = std::io::stdout();
+    let _ = writeln!(out, "{}", status_text(&data));
+    let _ = out.flush();
+}
+
+/// The few fields of the status line input the island uses, as a hook event.
+fn status_payload(data: &serde_json::Value) -> Option<String> {
+    let session = data.get("session_id")?.as_str()?;
+    let number = |path: &[&str]| -> serde_json::Value {
+        let mut v = data;
+        for key in path {
+            match v.get(*key) {
+                Some(next) => v = next,
+                None => return serde_json::Value::Null,
+            }
+        }
+        if v.is_number() {
+            v.clone()
+        } else {
+            serde_json::Value::Null
+        }
+    };
+    let cwd = data
+        .get("workspace")
+        .and_then(|w| w.get("current_dir"))
+        .or_else(|| data.get("cwd"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let model = data.get("model").and_then(|m| m.get("display_name")).and_then(|v| v.as_str()).unwrap_or("");
+    let window = |name: &str| {
+        serde_json::json!({
+            "used": number(&["rate_limits", name, "used_percentage"]),
+            "resets_at": number(&["rate_limits", name, "resets_at"]),
+        })
+    };
+    let payload = serde_json::json!({
+        "hook_event_name": "StatusLine",
+        "session_id": session,
+        "cwd": cwd,
+        "model": model.chars().take(80).collect::<String>(),
+        "context_used": number(&["context_window", "used_percentage"]),
+        "cost_usd": number(&["cost", "total_cost_usd"]),
+        "five_hour": window("five_hour"),
+        "seven_day": window("seven_day"),
+        "entrypoint": std::env::var("CLAUDE_CODE_ENTRYPOINT").unwrap_or_default(),
+    });
+    let mut line = payload.to_string();
+    line.push('\n');
+    Some(line)
+}
+
+/// What Claude Code shows: the model, context use and plan limits, whatever of
+/// them it sent.
+fn status_text(data: &serde_json::Value) -> String {
+    let pct = |path: &[&str]| -> Option<String> {
+        let mut v = data;
+        for key in path {
+            v = v.get(*key)?;
+        }
+        Some(format!("{}%", v.as_f64()?.round() as i64))
+    };
+    let model = data.get("model").and_then(|m| m.get("display_name")).and_then(|v| v.as_str());
+    let parts: Vec<String> = [
+        model.map(|m| m.chars().filter(|c| !c.is_control()).take(40).collect()),
+        pct(&["context_window", "used_percentage"]).map(|p| format!("ctx {p}")),
+        pct(&["rate_limits", "five_hour", "used_percentage"]).map(|p| format!("5h {p}")),
+        pct(&["rate_limits", "seven_day", "used_percentage"]).map(|p| format!("7d {p}")),
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
+    if parts.is_empty() {
+        "Nöbetçi".to_string()
+    } else {
+        format!("Nöbetçi · {}", parts.join(" · "))
+    }
 }
 
 /// Caps every string in the payload. Returns true when anything was cut.
@@ -748,5 +945,99 @@ mod tests {
         // Anything unrecognised prints nothing: the app's own dialog takes over.
         assert!(pre_tool_use_json("maybe").is_none());
         assert!(pre_tool_use_json(r#"{"behavior":"ask"}"#).is_none());
+    }
+
+    #[test]
+    fn questions_and_plans_wait_everywhere_but_only_for_claude() {
+        let raw = serde_json::json!({
+            "hook_event_name": "PreToolUse",
+            "session_id": "s1",
+            "cwd": "/w",
+            "entrypoint": "cli",
+            "tool_name": "AskUserQuestion",
+            "tool_input": { "questions": [{ "question": "Which?", "header": "H", "options": [{ "label": "A" }] }] },
+        })
+        .to_string();
+        let (line, event, gated) = prepare(raw.as_bytes(), "claude", String::new(), None).unwrap();
+        assert!(gated);
+        assert_eq!(event, "PermissionRequest");
+        assert!(line.contains("\"nobetci_via\":\"PreToolUse\""));
+        let plan = raw.replace("AskUserQuestion", "ExitPlanMode");
+        assert!(prepare(plan.as_bytes(), "claude", String::new(), None).unwrap().2);
+        // Other tools in the terminal are only displayed.
+        let read = raw.replace("AskUserQuestion", "Read");
+        assert!(!prepare(read.as_bytes(), "claude", String::new(), None).unwrap().2);
+    }
+
+    #[test]
+    fn answers_travel_in_updated_input() {
+        let answer = r#"{"behavior":"allow","updatedInput":{"questions":[],"answers":{"Which?":"A"}}}"#;
+        let pre: serde_json::Value = serde_json::from_str(&pre_tool_use_json(answer).unwrap()).unwrap();
+        assert_eq!(pre["hookSpecificOutput"]["permissionDecision"], "allow");
+        assert_eq!(pre["hookSpecificOutput"]["updatedInput"]["answers"]["Which?"], "A");
+        let perm: serde_json::Value = serde_json::from_str(&decision_json(answer).unwrap()).unwrap();
+        assert_eq!(perm["hookSpecificOutput"]["decision"]["updatedInput"]["answers"]["Which?"], "A");
+        // A plain allow carries no input.
+        let plain: serde_json::Value = serde_json::from_str(&pre_tool_use_json("allow").unwrap()).unwrap();
+        assert!(plain["hookSpecificOutput"].get("updatedInput").is_none());
+        // Plan feedback keeps Claude going: no interrupt.
+        let feedback: serde_json::Value = serde_json::from_str(
+            &decision_json(r#"{"behavior":"deny","message":"Add tests","interrupt":false}"#).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(feedback["hookSpecificOutput"]["decision"]["interrupt"], false);
+        assert_eq!(feedback["hookSpecificOutput"]["decision"]["message"], "Add tests");
+    }
+
+    #[test]
+    fn file_changes_count_lines_from_the_patch_or_the_input() {
+        let from_patch = serde_json::json!({
+            "hook_event_name": "PostToolUse", "session_id": "s", "cwd": "/w", "tool_name": "Edit",
+            "tool_input": { "file_path": "/w/a.rs", "old_string": "x", "new_string": "y" },
+            "tool_response": { "structuredPatch": [{ "oldStart": 3, "oldLines": 2, "newStart": 3, "newLines": 3,
+                "lines": [" keep", "-old", "+new", "+more"] }] },
+        })
+        .to_string();
+        let (line, _, _) = prepare(from_patch.as_bytes(), "claude", String::new(), None).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&line).unwrap();
+        let c = &v["nobetci_change"];
+        assert_eq!(c["file"], "/w/a.rs");
+        assert_eq!((c["added"].as_u64(), c["removed"].as_u64()), (Some(2), Some(1)));
+        assert!(c["diff"].as_str().unwrap().starts_with("@@ -3,2 +3,3 @@"));
+        assert!(v.get("tool_response").is_none(), "the response itself is still dropped");
+
+        let from_input = serde_json::json!({
+            "hook_event_name": "PostToolUse", "session_id": "s", "cwd": "/w", "tool_name": "Write",
+            "tool_input": { "file_path": "/w/new.md", "content": "a\nb\nc" },
+            "tool_response": { "type": "create", "filePath": "/w/new.md" },
+        })
+        .to_string();
+        let (line, _, _) = prepare(from_input.as_bytes(), "claude", String::new(), None).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&line).unwrap();
+        assert_eq!(v["nobetci_change"]["added"], 3);
+        assert_eq!(v["nobetci_change"]["created"], true);
+
+        let read = from_input.replace("\"Write\"", "\"Read\"");
+        let (line, _, _) = prepare(read.as_bytes(), "claude", String::new(), None).unwrap();
+        assert!(!line.contains("nobetci_change"));
+    }
+
+    #[test]
+    fn the_status_line_reports_what_it_was_given() {
+        let data = serde_json::json!({
+            "session_id": "s1",
+            "model": { "display_name": "Opus" },
+            "workspace": { "current_dir": "/w" },
+            "context_window": { "used_percentage": 23.4 },
+            "cost": { "total_cost_usd": 0.5 },
+            "rate_limits": { "five_hour": { "used_percentage": 41.0, "resets_at": 1700000000 } },
+        });
+        assert_eq!(status_text(&data), "Nöbetçi · Opus · ctx 23% · 5h 41%");
+        let sent: serde_json::Value = serde_json::from_str(&status_payload(&data).unwrap()).unwrap();
+        assert_eq!(sent["hook_event_name"], "StatusLine");
+        assert_eq!(sent["five_hour"]["used"], 41.0);
+        assert!(sent["seven_day"]["used"].is_null());
+        assert_eq!(status_text(&serde_json::json!({})), "Nöbetçi");
+        assert!(status_payload(&serde_json::json!({})).is_none());
     }
 }

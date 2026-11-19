@@ -7,7 +7,7 @@
 
 import { drawOwlMini } from "../baykus/mini";
 import type { OwlEmote, OwlMood } from "../baykus/owl";
-import type { DecisionOptions, RiskAssessment, RiskLevel } from "../core/bridge";
+import type { Anchor, DecisionOptions, InteractiveResponse, RiskAssessment, RiskLevel } from "../core/bridge";
 import { Sound } from "../core/sound";
 import {
   LEVEL_ORDER, State, needsHold, type Approval, type IslandView, type Session, type SessionState,
@@ -18,6 +18,7 @@ import { HEADER_H } from "../island/layout";
 import { clear, h, icon } from "./dom";
 import { LEVEL_LABEL } from "./labels";
 import { SPARK_ICON, buildAssistant } from "./assistant";
+import { changeList, limitSummary, planView, questionForm, usageView, type QuestionForm } from "./interactive";
 import { buildWidgets, compactWidgetSummary, widgetHeight } from "./widgets";
 
 export interface ViewHost {
@@ -32,6 +33,10 @@ export interface ViewActions {
   /** `allow_confirmed` is only ever sent after a completed hold. */
   decide(requestId: string, decision: "allow" | "allow_confirmed" | "deny", opts?: DecisionOptions): void;
   handToTerminal(requestId: string): void;
+  /** Answers a question or a plan (`anchor`: the button pressed). */
+  respond(requestId: string, response: InteractiveResponse, anchor: Anchor): void;
+  /** Allows every waiting low-risk request at once. */
+  allowLow(anchor: Anchor): void;
   openFolder(cwd: string): void;
   focusSession(id: string): void;
   showSession(id: string): void;
@@ -182,11 +187,13 @@ function buildHeader(actions: ViewActions): ViewHost {
       const n = State.sessions.length;
       const waiting = State.approvals.length;
       const quiet = State.settings.dnd ? "dnd" : State.quiet;
-      const next = `${n}|${waiting}|${State.paused}|${quiet}`;
+      const limit = limitSummary(State.limits);
+      const next = `${n}|${waiting}|${State.paused}|${quiet}|${limit}`;
       if (next === key) return;
       key = next;
       const parts: string[] = [n === 0 ? t("hdr.noSessions") : t("hdr.sessions", { n })];
       if (waiting) parts.push(t("hdr.waiting", { n: waiting }));
+      if (limit) parts.push(limit);
       if (State.paused) parts.push(t("hdr.paused"));
       if (quiet) parts.push(t("hdr.quiet", { why: quietLabel(quiet) }));
       status.textContent = parts.join(" · ");
@@ -332,7 +339,10 @@ function buildSession(actions: ViewActions): ViewHost {
   const name = h("span", { class: "detail-name" });
   const state = h("span", { class: "session-state" });
   const meta = h("div", { class: "detail-meta" });
+  const usageSlot = h("div", { class: "detail-usage" });
+  const changesSlot = h("div", { class: "detail-changes" });
   const timeline = h("ol", { class: "timeline" });
+  const openDiffs = new Set<string>();
   const goBtn = h("button", { class: "btn btn-small" }, icon(ICON.window, 13), ` ${t("sd.goto")}`);
   const folderBtn = h("button", { class: "btn btn-small btn-ghost" }, icon(ICON.folder, 13), ` ${t("sd.folder")}`);
   const forgetBtn = h("button", { class: "btn btn-small btn-ghost", title: t("sd.forget") }, icon(ICON.trash, 13));
@@ -352,6 +362,8 @@ function buildSession(actions: ViewActions): ViewHost {
       forgetBtn,
     ),
     meta,
+    usageSlot,
+    changesSlot,
     timeline,
   );
   let shownId = "";
@@ -366,13 +378,16 @@ function buildSession(actions: ViewActions): ViewHost {
 
   return {
     el,
-    height: () => Math.max(170, HEADER_H + 12 + 34 + 22 + Math.min(TIMELINE_ROWS, State.session(shownId)?.steps.length ?? 1) * 22 + 16),
+    // Measured, like the approval card: meters, changed files and an open diff
+    // all add height (the panel caps it; the lists scroll).
+    height: () => Math.max(170, HEADER_H + el.scrollHeight + 12),
     sync() {
       const s = State.detailId ? State.session(State.detailId) : undefined;
       if (!s) return;
       if (s.id !== shownId) {
         shownId = s.id;
         owlSlot.replaceChildren(miniCanvas(s, 22));
+        openDiffs.clear();
         key = "";
       }
       name.textContent = s.name;
@@ -382,9 +397,23 @@ function buildSession(actions: ViewActions): ViewHost {
       goBtn.style.display = s.parents.length ? "" : "none";
       goBtn.title = s.terminal ? t("sd.gotoTitle", { terminal: s.terminal }) : t("sd.gotoTitleAny");
 
-      const next = `${s.steps.length}:${State.lastStep(s)}:${s.tools}:${s.approved}:${s.denied}:${s.subagents.size}`;
+      const next = `${s.steps.length}:${State.lastStep(s)}:${s.tools}:${s.approved}:${s.denied}:${s.subagents.size}:${s.usage?.at ?? 0}:${State.limits?.at ?? 0}:${s.changes[0]?.t ?? 0}:${[...openDiffs].join("|")}`;
       if (next === key) return;
       key = next;
+      const usage = usageView(s.usage, State.limits);
+      usageSlot.replaceChildren(...(usage ? [usage] : []));
+      changesSlot.replaceChildren(
+        ...(s.changes.length
+          ? [
+              h("div", { class: "detail-sub", text: t("ch.title", { n: s.changes.length }) }),
+              changeList(s.changes, openDiffs, (file) => {
+                if (openDiffs.has(file)) openDiffs.delete(file);
+                else openDiffs.add(file);
+                State.notify();
+              }),
+            ]
+          : []),
+      );
       const bits = [
         s.terminal || null,
         t("sd.tools", { n: s.tools }),
@@ -545,21 +574,45 @@ function buildApproval(actions: ViewActions): ViewHost {
   const termLabel = h("span", { text: ` ${t("ap.toTerminal")}` });
   const termBtn = h("button", { class: "btn btn-ghost", title: t("ap.toTerminalTitle") }, icon(ICON.terminal, 13), termLabel);
 
+  // Claude's questions and plans: their own body and buttons on the same card.
+  const special = h("div", { class: "appr-special" });
+  const sendBtn = h("button", { class: "btn btn-allow", text: t("q.send") });
+  const reviseBtn = h("button", { class: "btn btn-deny", text: t("plan.revise") });
+  const approvePlanBtn = h("button", { class: "btn btn-allow", text: t("plan.approve") });
+  const feedback = h("textarea", {
+    class: "plan-feedback",
+    rows: 2,
+    maxlength: 2000,
+    placeholder: t("plan.feedback"),
+    "data-typing": "",
+  }) as HTMLTextAreaElement;
+  let form: QuestionForm | null = null;
+
+  // One click for every waiting low-risk request; nothing above low is ever in it.
+  const batchBtn = h("button", { class: "btn btn-small btn-batch" });
+  const batchRow = h("div", { class: "appr-batch" }, icon(ICON.shield, 13), batchBtn);
+
+  const standard = h("div", { class: "appr-standard" }, ruleNote, project, kind, target, overflow, preview, findings, note, rememberRow);
+
   const el = h(
     "div",
     { class: "view view-approval" },
     h("div", { class: "appr-head" }, chip, who, h("span", { class: "grow" }), queue, timer),
     warning,
-    ruleNote,
-    project,
-    kind,
-    target,
-    overflow,
-    preview,
-    findings,
-    note,
-    rememberRow,
-    h("div", { class: "appr-actions" }, termBtn, h("span", { class: "grow" }), denyGroup, allowBtn),
+    standard,
+    special,
+    batchRow,
+    h(
+      "div",
+      { class: "appr-actions" },
+      termBtn,
+      h("span", { class: "grow" }),
+      denyGroup,
+      allowBtn,
+      reviseBtn,
+      approvePlanBtn,
+      sendBtn,
+    ),
   );
 
   let shown: Approval | null = null;
@@ -651,7 +704,62 @@ function buildApproval(actions: ViewActions): ViewHost {
   });
   termBtn.addEventListener("click", () => shown && actions.handToTerminal(shown.requestId));
 
+  const rect = (b: HTMLElement): Anchor => {
+    const r = b.getBoundingClientRect();
+    return { x: r.left, y: r.top, w: r.width, h: r.height };
+  };
+  const syncSpecial = () => {
+    sendBtn.disabled = !form?.answers();
+    reviseBtn.disabled = !feedback.value.trim();
+  };
+  feedback.addEventListener("input", syncSpecial);
+  sendBtn.addEventListener("click", () => {
+    const answers = form?.answers();
+    if (shown && answers) actions.respond(shown.requestId, { kind: "answers", answers }, rect(sendBtn));
+  });
+  approvePlanBtn.addEventListener("click", () => {
+    if (shown) actions.respond(shown.requestId, { kind: "approvePlan" }, rect(approvePlanBtn));
+  });
+  reviseBtn.addEventListener("click", () => {
+    const text = feedback.value.trim();
+    if (shown && text) actions.respond(shown.requestId, { kind: "revise", feedback: text }, rect(reviseBtn));
+  });
+  batchBtn.addEventListener("click", () => actions.allowLow(rect(batchBtn)));
+
+  /** The card for a question or a plan; false for a permission request. */
+  const renderSpecial = (a: Approval): boolean => {
+    const isPermission = a.kind === "permission";
+    standard.style.display = isPermission ? "" : "none";
+    special.style.display = isPermission ? "none" : "";
+    for (const b of [denyGroup, allowBtn]) b.style.display = isPermission ? "" : "none";
+    sendBtn.style.display = a.kind === "question" ? "" : "none";
+    for (const b of [reviseBtn, approvePlanBtn]) b.style.display = a.kind === "plan" ? "" : "none";
+    if (isPermission) return false;
+
+    const session = State.session(a.sessionId);
+    el.dataset.level = "low";
+    chip.className = `risk-chip kind-${a.kind}`;
+    chip.textContent = t(a.kind === "question" ? "q.chip" : "plan.chip");
+    who.textContent = `${session?.name ?? t("ap.session")} · ${t(a.kind === "question" ? "q.title" : "plan.title")}`;
+    form = null;
+    feedback.value = "";
+    if (a.kind === "question") {
+      form = questionForm(a.input, syncSpecial);
+      special.replaceChildren(form.el);
+    } else {
+      const plan = typeof a.input.plan === "string" ? a.input.plan : "";
+      special.replaceChildren(h("div", { class: "plan-box" }, planView(plan)), feedback);
+    }
+    syncSpecial();
+    return true;
+  };
+
   const render = (a: Approval) => {
+    if (renderSpecial(a)) {
+      closeMenu();
+      holdReset();
+      return;
+    }
     const r = a.risk;
     const session = State.session(a.sessionId);
     el.dataset.level = r.level;
@@ -743,6 +851,9 @@ function buildApproval(actions: ViewActions): ViewHost {
         render(a);
       }
       queue.textContent = State.approvals.length > 1 ? `1/${State.approvals.length}` : "";
+      const lows = State.lowApprovals.length;
+      batchRow.style.display = lows >= 2 ? "" : "none";
+      if (lows >= 2) batchBtn.textContent = t("ap.allowLow", { n: lows });
       const w = State.cardWarning && State.cardWarning.requestId === a.requestId ? State.cardWarning.text : "";
       if (warning.textContent !== w) {
         warning.replaceChildren();

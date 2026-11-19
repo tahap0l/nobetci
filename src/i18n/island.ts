@@ -208,6 +208,38 @@ const tr = {
 
   // Greeting
   "greet.text": "Nöbetteyim!",
+
+  // 2.4.0: questions, plans, changes, usage
+  "step.created": "{file} oluşturuldu",
+  "toast.question": "{name} sana bir soru soruyor",
+  "toast.plan": "{name} planını onayına sunuyor",
+  "toast.planBody": "Adadan oku, onayla ya da not bırak.",
+  "q.chip": "SORU",
+  "q.title": "Soru",
+  "q.multi": "birden çok seçebilirsin",
+  "q.other": "Ya da kendi cevabını yaz…",
+  "q.send": "Cevabı gönder",
+  "plan.chip": "PLAN",
+  "plan.title": "Plan onayı",
+  "plan.empty": "Plan metni gelmedi; terminalde ya da uygulamada oku.",
+  "plan.feedback": "Değişmesini istediğin bir şey var mı? Yaz, Claude planlamaya devam etsin.",
+  "plan.revise": "Notla geri gönder",
+  "plan.approve": "Planı onayla",
+  "ap.allowLow": "Düşük riskli {n} isteğin hepsine izin ver",
+  "out.answered": "Cevaplandı: {answer}",
+  "out.planApproved": "Plan onaylandı",
+  "out.planRevise": "Plan notla geri gönderildi",
+  "out.allowedBatch": "İzin verildi (toplu, düşük risk)",
+  "fl.answerOnCard": "Bunu kartın üzerinden cevapla",
+  "ch.title": "Değişen dosyalar ({n})",
+  "ch.new": "yeni",
+  "ch.cut": "… (fark kısaltıldı)",
+  "use.context": "Bağlam",
+  "use.fiveHour": "5 saat",
+  "use.sevenDay": "Hafta",
+  "use.resets": "{at} itibarıyla sıfırlanır",
+  "use.cost": "Bu oturum yaklaşık ${usd}",
+  "use.short": "limit %{pct}",
 };
 
 const en: { [K in keyof typeof tr]: string } = {
@@ -403,6 +435,38 @@ const en: { [K in keyof typeof tr]: string } = {
   "out.fellBack": "Fell back to the terminal",
 
   "greet.text": "On watch!",
+
+  // 2.4.0: questions, plans, changes, usage
+  "step.created": "created {file}",
+  "toast.question": "{name} has a question for you",
+  "toast.plan": "{name} wants you to approve a plan",
+  "toast.planBody": "Read it on the island, approve it or leave a note.",
+  "q.chip": "QUESTION",
+  "q.title": "Question",
+  "q.multi": "pick any number",
+  "q.other": "Or write your own answer…",
+  "q.send": "Send answer",
+  "plan.chip": "PLAN",
+  "plan.title": "Plan approval",
+  "plan.empty": "No plan text came through; read it in the terminal or the app.",
+  "plan.feedback": "Anything to change? Write it and Claude keeps planning.",
+  "plan.revise": "Send back with note",
+  "plan.approve": "Approve plan",
+  "ap.allowLow": "Allow all {n} low-risk requests",
+  "out.answered": "Answered: {answer}",
+  "out.planApproved": "Plan approved",
+  "out.planRevise": "Plan sent back with a note",
+  "out.allowedBatch": "Allowed (batch, low risk)",
+  "fl.answerOnCard": "Answer this on its card",
+  "ch.title": "Changed files ({n})",
+  "ch.new": "new",
+  "ch.cut": "… (diff shortened)",
+  "use.context": "Context",
+  "use.fiveHour": "5 hours",
+  "use.sevenDay": "Week",
+  "use.resets": "resets at {at}",
+  "use.cost": "This session about ${usd}",
+  "use.short": "limit {pct}%",
 };
 
 export const t = defineMessages(tr, en);

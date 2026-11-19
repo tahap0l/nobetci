@@ -7,12 +7,14 @@ approve permission requests, each scored by a risk engine.
 ## Build & test
 - `npm test` — Rust unit tests (risk engine, rules, history, relay, decision rules, quiet hours). Run after any change to `src-tauri/src/*.rs` or `hook/`. Builds on all three OSes; on Linux it needs the WebKitGTK, libxi and libdbus dev packages (see README).
 - `npx tsc --noEmit` — typecheck the front end.
-- `npm run dev` then `http://127.0.0.1:1420/?demo=<critical|write|low|overview|session|compact|empty|mascots>` (`&theme=<mascot>` picks the mascot) — island without Rust; `settings.html?tab=<id>` — settings with mock data.
+- `npm run dev` then `http://127.0.0.1:1420/?demo=<critical|write|low|batch|question|plan|overview|session|compact|empty|mascots>` (`&theme=<mascot>` picks the mascot) — island without Rust; `settings.html?tab=<id>` — settings with mock data.
 - Claude's own Bash tool is sandboxed: the relay's same-user check refuses the pipe there. Feed fake hook events from PowerShell.
 - `npm run pack` — Windows installer into `release/`; `npm run pack:mac` — universal macOS disk image (on a Mac); `npm run pack:linux` — .deb and AppImage. CI builds and tests all three OSes.
 
 ## Rules
-- **Never block Claude Code.** The relay exits silently if the app is closed; only PermissionRequest waits, and never past its budget. The one exception: in the Claude desktop app (`CLAUDE_CODE_ENTRYPOINT=claude-desktop`), which never runs PermissionRequest hooks, the relay turns a PreToolUse for a tool that would ask into a permission request (`desktop_gate` in `hook/src/main.rs`) — same budget, silence falls back to the app's own dialog.
+- **Never block Claude Code.** The relay exits silently if the app is closed; only PermissionRequest waits, and never past its budget. The one exception: in the Claude desktop app (`CLAUDE_CODE_ENTRYPOINT=claude-desktop`), which never runs PermissionRequest hooks, the relay turns a PreToolUse for a tool that would ask into a permission request (`desktop_gate` in `hook/src/main.rs`) — same budget, silence falls back to the app's own dialog. The relay also waits on a PreToolUse for Claude's AskUserQuestion and ExitPlanMode in every surface (`interactive_tool`): only the user answers them (never a rule), the reply echoes the input in `updatedInput`, and a cut input is never answered.
+- **Batch approval covers LOW only** (`pipe::allow_low`): never medium or above, never a question or plan, one physical click for the lot.
+- The status line (`nobetci-hook statusline`) is opt-in (the `StatusLine` pseudo-event), never waits on the app, and never replaces a `statusLine` that isn't ours.
 - **Never write `~/.claude/settings.json` without a reviewed diff**: dated backup, merge, show the diff, write only after an explicit click, refuse if the file changed since the preview.
 - **High/critical approvals need a hold** — enforced in `pipe.rs::resolve`, not just the UI. Never add an "always allow".
 - **Nothing high or critical is ever auto-approved** — rules, trusted projects and session grants are capped in `rules.rs` (`auto_allow_max` ≤ medium, sanitised in `settings.rs`). The cap looks at the engine's own level too: a rule that re-scores a high request to low makes it a plain click, never an automatic pass. Rules may always deny.

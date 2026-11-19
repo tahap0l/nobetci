@@ -7,6 +7,29 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.4.0] - 2026-11-19
+
+### Added
+
+- **Answer Claude's questions on the island.** When Claude asks a multiple-choice question
+  (AskUserQuestion), the card shows every question with its options; pick one or several, or
+  write your own answer, and send. Works in the terminal, VS Code and the Claude desktop app.
+  **Hand to terminal** gives the question back.
+- **Approve plans on the island.** When Claude finishes a plan (ExitPlanMode), the card shows it
+  as formatted text. **Approve plan**, or write what to change and **Send back with note**: Claude
+  reads the note and keeps planning. Turn both off under **Settings → Claude Code → Questions and
+  plans**.
+- **Changed files with diffs.** The session view lists every file the session edited or created
+  with lines added and removed; click one to read its diff.
+- **Context and plan limits.** Tick **StatusLine** under **Settings → Claude Code → Events** and
+  the session view shows context use and the session's cost, the island header shows the 5-hour
+  limit, and meters show the 5-hour and weekly windows with their reset times. It uses Claude
+  Code's own status line (a short line under the prompt), so it is opt-in, and Nöbetçi never
+  replaces a status line of yours.
+- **Allow all low-risk requests at once.** With two or more LOW requests waiting, one click allows
+  them all. Medium and above, questions and plans are never part of it, and the click must be a
+  real one when the click guard is on. The history marks them **Batch (low risk)**.
+
 ## [2.3.3] - 2026-11-19
 
 ### Fixed
@@ -335,7 +358,8 @@ pipe relay, the reviewed-diff hook installer and the island window were adapted 
 [Coucou](https://github.com/Louis-CFM/coucou) (MIT). Everything they had, and much more, shipped
 publicly in 0.2.0.
 
-[Unreleased]: https://github.com/tahap0l/nobetci/compare/v2.3.3...HEAD
+[Unreleased]: https://github.com/tahap0l/nobetci/compare/v2.4.0...HEAD
+[2.4.0]: https://github.com/tahap0l/nobetci/compare/v2.3.3...v2.4.0
 [2.3.3]: https://github.com/tahap0l/nobetci/compare/v2.3.2...v2.3.3
 [2.3.2]: https://github.com/tahap0l/nobetci/compare/v2.3.1...v2.3.2
 [2.3.1]: https://github.com/tahap0l/nobetci/compare/v2.3.0...v2.3.1

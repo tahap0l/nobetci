@@ -52,6 +52,8 @@ export interface HookStatus {
   events: string[];
   /** Some entry points at an old relay path. */
   stale: boolean;
+  /** settings.json has someone else's status line; Nöbetçi leaves it alone. */
+  foreignStatusLine?: boolean;
 }
 
 export interface HookPreview {
@@ -212,6 +214,14 @@ export interface DecisionOptions {
    */
   anchor?: { x: number; y: number; w: number; h: number };
 }
+
+/** The user's answer to one of Claude's questions, or a verdict on its plan. */
+export type InteractiveResponse =
+  | { kind: "answers"; answers: Record<string, string> }
+  | { kind: "approvePlan" }
+  | { kind: "revise"; feedback: string };
+
+export type Anchor = { x: number; y: number; w: number; h: number };
 
 export type NotifyKind = "approval" | "finished" | "error" | "waiting";
 export type QuietReason = "dnd" | "hours" | "fullscreen" | null;
@@ -374,6 +384,11 @@ export const Bridge = {
         anchor: opts.anchor ?? null,
       },
     }),
+  /** Answers a question or a plan; `anchor` is the button pressed. */
+  approvalRespond: (requestId: string, response: InteractiveResponse, anchor?: Anchor) =>
+    callOrThrow<void>("approval_respond", { requestId, response, anchor: anchor ?? null }),
+  /** Allows every waiting low-risk request with one click; returns how many. */
+  approvalAllowLow: (anchor?: Anchor) => callOrThrow<number>("approval_allow_low", { anchor: anchor ?? null }),
   /** "The card is up or queued" — until this lands the relay only waits a moment. */
   approvalAck: (requestId: string) => call<void>("approval_ack", { requestId }),
   /** Nobody will act on this here — Claude Code asks in the terminal right away. */

@@ -6,7 +6,7 @@ import { OwlEngine, type OwlEmote, type OwlMood } from "../baykus/owl";
 import { applyMascotPalette } from "../core/mascot-theme";
 import { OwlGreeting } from "../baykus/greeting";
 import { Spring, Tracked } from "../core/anim";
-import { Bridge, IS_TAURI, onEvent, type DecisionOptions } from "../core/bridge";
+import { Bridge, IS_TAURI, onEvent, type Anchor, type DecisionOptions, type InteractiveResponse } from "../core/bridge";
 import { Sound } from "../core/sound";
 import { State, type FlashTone, type IslandMode, type IslandView } from "../core/state";
 import { t } from "../i18n/island";
@@ -105,6 +105,8 @@ export class Island {
     this.viewActions = {
       decide: (id, d, opts) => this.decide(id, d, opts),
       handToTerminal: (id) => this.handToTerminal(id),
+      respond: (id, r, anchor) => this.respond(id, r, anchor),
+      allowLow: (anchor) => this.allowLow(anchor),
       openFolder: (cwd) => void Bridge.openFolder(cwd),
       focusSession: (id) => this.focusSession(id),
       showSession: (id) => this.showSession(id),
@@ -340,7 +342,11 @@ export class Island {
         break;
       case "allow":
         if (!a) break;
-        if (a.risk.level !== "low") {
+        if (a.kind !== "permission") {
+          // A question or a plan needs its answer, not a keystroke.
+          this.showApprovals();
+          this.flash(t("fl.answerOnCard"), "warn");
+        } else if (a.risk.level !== "low") {
           // Keystrokes can be synthesised, so the hotkey only covers low risk. Rust
           // would refuse it anyway; say so rather than failing silently.
           this.showApprovals();
@@ -426,42 +432,89 @@ export class Island {
             : t("out.allowed");
         this.finishApproval(requestId, note);
       })
-      .catch((err: unknown) => {
-        const code = String(err).replace(/^Error:\s*/, "").trim();
-        switch (code) {
-          case "not_pending":
-            // The relay already gave up; the terminal is asking instead.
-            this.finishApproval(requestId, t("out.fellBack"));
-            return;
-          case "input_not_physical":
-            // Something tried to approve without a real click. Keep the card, say
-            // it loudly, on the card itself: this is exactly what the guard exists for.
-            this.react("surprised");
-            State.cardWarning = { requestId, text: t("fl.notPhysical") };
-            this.flash(t("fl.notPhysical"), "error");
-            this.showApprovals();
-            void Bridge.log(`card warning shown for req=${requestId}`);
-            break;
-          case "guard_unavailable":
-            State.cardWarning = { requestId, text: t("fl.guardUnavailable") };
-            this.showApprovals();
-            break;
-          case "hold_incomplete":
-          case "hold_required":
-            this.flash(t("fl.holdRequired"), "error");
-            break;
-          case "hotkey_low_only":
-            this.flash(t("fl.hotkeyLowOnly"), "error");
-            break;
-          default:
-            if (!IS_TAURI) {
-              this.finishApproval(requestId, t("out.fellBack"));
-              return;
-            }
-            this.flash(code, "error");
+      .catch((err: unknown) => this.decisionFailed(requestId, err));
+  }
+
+  /** A question answered or a plan approved / sent back from its card. */
+  private respond(requestId: string, response: InteractiveResponse, anchor: Anchor) {
+    const a = State.approvals.find((x) => x.requestId === requestId);
+    if (!a) return;
+    void Bridge.log(`respond ${response.kind} req=${requestId}`);
+    Bridge.approvalRespond(requestId, response, anchor)
+      .then(() => {
+        const back = response.kind === "revise";
+        Sound.play(back ? "blip" : "allow");
+        this.react(back ? "hoot" : "approve");
+        const s = State.session(a.sessionId);
+        if (s && !back) s.approved++;
+        const note =
+          response.kind === "answers"
+            ? t("out.answered", { answer: Object.values(response.answers).join(" · ").slice(0, 80) })
+            : back
+              ? t("out.planRevise")
+              : t("out.planApproved");
+        this.finishApproval(requestId, note);
+      })
+      .catch((err: unknown) => this.decisionFailed(requestId, err));
+  }
+
+  /** One click for every waiting low-risk request. */
+  private allowLow(anchor: Anchor) {
+    const lows = State.lowApprovals;
+    if (!lows.length) return;
+    void Bridge.log(`allow-low n=${lows.length}`);
+    Bridge.approvalAllowLow(anchor)
+      .then(() => {
+        Sound.play("allow");
+        this.react("approve");
+        for (const a of lows) {
+          const s = State.session(a.sessionId);
+          if (s) s.approved++;
+          this.finishApproval(a.requestId, t("out.allowedBatch"));
         }
-        Sound.play("error");
-      });
+      })
+      .catch((err: unknown) => this.decisionFailed(lows[0].requestId, err));
+  }
+
+  private decisionFailed(requestId: string, err: unknown) {
+    const code = String(err).replace(/^Error:\s*/, "").trim();
+    switch (code) {
+      case "not_pending":
+        // The relay already gave up; the terminal is asking instead.
+        this.finishApproval(requestId, t("out.fellBack"));
+        return;
+      case "input_not_physical":
+        // Something tried to approve without a real click. Keep the card, say
+        // it loudly, on the card itself: this is exactly what the guard exists for.
+        this.react("surprised");
+        State.cardWarning = { requestId, text: t("fl.notPhysical") };
+        this.flash(t("fl.notPhysical"), "error");
+        this.showApprovals();
+        void Bridge.log(`card warning shown for req=${requestId}`);
+        break;
+      case "guard_unavailable":
+        State.cardWarning = { requestId, text: t("fl.guardUnavailable") };
+        this.showApprovals();
+        break;
+      case "hold_incomplete":
+      case "hold_required":
+        this.flash(t("fl.holdRequired"), "error");
+        break;
+      case "hotkey_low_only":
+        this.flash(t("fl.hotkeyLowOnly"), "error");
+        break;
+      case "needs_answer":
+      case "unanswered":
+        this.flash(t("fl.answerOnCard"), "warn");
+        break;
+      default:
+        if (!IS_TAURI) {
+          this.finishApproval(requestId, t("out.fellBack"));
+          return;
+        }
+        this.flash(code, "error");
+    }
+    Sound.play("error");
   }
 
   private handToTerminal(requestId: string) {
