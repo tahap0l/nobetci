@@ -15,6 +15,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   a little island and the owl in the sidebar: it waves on the welcome page and cheers when setup is
   done. New welcome and finish texts in Turkish and English, and the owl in the header of every
   page. The pictures are drawn with the app's own mascot engine (`scripts/installer-art.mjs`).
+- **A new look for the macOS disk image too.** The window that opens with the `.dmg` has the
+  same night sky, the island and a soft arrow from Nöbetçi to Applications, with the instruction in
+  Turkish and English, sharp on Retina screens.
 
 ## [2.4.0] - 2026-11-19
 
