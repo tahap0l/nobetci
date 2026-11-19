@@ -175,10 +175,40 @@ fn hook_command(event: &str) -> String {
     command_for(&settings::hook_exe_path().to_string_lossy(), event)
 }
 
-/// Git Bash on Windows: forward slashes in double quotes.
+/// Windows: Claude Code runs a hook in Git Bash, or in PowerShell when it cannot
+/// find Git Bash. The Claude desktop app often cannot, even when the terminal can,
+/// and in PowerShell a command that starts with a quoted path is only a string,
+/// so the relay never ran. A bare path with forward slashes runs in both, so that
+/// is written whenever the path allows it, trying the 8.3 short form for a path
+/// with spaces. Only a path that fits neither keeps the Git Bash-only quoting.
 #[cfg(windows)]
 fn command_for(exe: &str, event: &str) -> String {
+    if let Some(bare) = bare_path(exe).or_else(|| short_path(exe).as_deref().and_then(bare_path)) {
+        return format!("{bare} {event}");
+    }
     format!("\"{}\" {event}", exe.replace('\\', "/"))
+}
+
+/// `exe` with forward slashes, when no character in it means anything to Git
+/// Bash or PowerShell: letters (any script), digits and `/ : . _ -`, with `~`
+/// allowed after the start (8.3 names).
+#[cfg_attr(not(windows), allow(dead_code))]
+fn bare_path(exe: &str) -> Option<String> {
+    let path = exe.replace('\\', "/");
+    let plain =
+        |(i, c): (usize, char)| c.is_alphanumeric() || matches!(c, '/' | ':' | '.' | '_' | '-') || (c == '~' && i > 0);
+    (!path.is_empty() && path.char_indices().all(plain) && !path.starts_with('-')).then_some(path)
+}
+
+/// The 8.3 short form of `exe`, when the volume keeps one.
+#[cfg(windows)]
+fn short_path(exe: &str) -> Option<String> {
+    use windows::core::HSTRING;
+    use windows::Win32::Storage::FileSystem::GetShortPathNameW;
+    let long = HSTRING::from(exe);
+    let mut buf = vec![0u16; 1024];
+    let n = unsafe { GetShortPathNameW(&long, Some(&mut buf)) } as usize;
+    (n > 0 && n < buf.len()).then(|| String::from_utf16_lossy(&buf[..n]))
 }
 
 /// sh on macOS: single quotes, so nothing in the path is ever read as syntax.
@@ -282,8 +312,9 @@ pub(crate) fn fingerprint(bytes: &[u8]) -> String {
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
-/// Our entry points at another relay path (an older install location), or was
-/// written with another timeout (2.3.2 gave PreToolUse the decision timeout).
+/// Our entry has another command (an older install location, or the quoted form
+/// before 2.3.3 that PowerShell cannot run), or another timeout (2.3.2 gave
+/// PreToolUse the decision timeout).
 fn entry_is_stale(event: &str, entry: &Value) -> bool {
     let expected = hook_command(event);
     let timeout = HOOK_EVENTS.iter().find(|(e, _)| *e == event).map(|(_, t)| *t);
@@ -623,11 +654,46 @@ mod tests {
 
     #[cfg(windows)]
     #[test]
-    fn the_command_suits_git_bash() {
+    fn the_command_runs_in_git_bash_and_powershell() {
         assert_eq!(
-            command_for(r"C:\Users\a b\AppData\Local\Nobetci\bin\nobetci-hook.exe", "Stop"),
-            r#""C:/Users/a b/AppData/Local/Nobetci/bin/nobetci-hook.exe" Stop"#
+            command_for(r"C:\Users\afrap\AppData\Local\Nobetci\bin\nobetci-hook.exe", "Stop"),
+            "C:/Users/afrap/AppData/Local/Nobetci/bin/nobetci-hook.exe Stop"
         );
+        // A path that does not exist has no short form; it keeps the Git Bash quoting.
+        assert_eq!(
+            command_for(r"C:\Users\a b\NoSuchFolder\nobetci-hook.exe", "Stop"),
+            r#""C:/Users/a b/NoSuchFolder/nobetci-hook.exe" Stop"#
+        );
+    }
+
+    #[test]
+    fn a_bare_path_is_written_only_when_no_shell_reads_anything_in_it() {
+        assert_eq!(
+            bare_path(r"C:\Users\afrap\AppData\Local\Nobetci\bin\nobetci-hook.exe").as_deref(),
+            Some("C:/Users/afrap/AppData/Local/Nobetci/bin/nobetci-hook.exe")
+        );
+        assert_eq!(bare_path(r"C:\Users\Şükrü\nobetci-hook.exe").as_deref(), Some("C:/Users/Şükrü/nobetci-hook.exe"));
+        assert_eq!(
+            bare_path(r"C:\Users\JOHNDO~1\nobetci-hook.exe").as_deref(),
+            Some("C:/Users/JOHNDO~1/nobetci-hook.exe")
+        );
+        for odd in [
+            r"C:\Users\a b\x.exe",
+            r"C:\Users\o'neil\x.exe",
+            r"C:\Users\a,b\x.exe",
+            r"C:\Users\a$b\x.exe",
+            r"C:\Users\a&b\x.exe",
+            r"C:\Users\(x)\x.exe",
+            r"C:\Users\a;b\x.exe",
+            r"C:\Users\a`b\x.exe",
+            r"C:\Users\a@b\x.exe",
+            r"C:\Users\a#b\x.exe",
+            "~/x.exe",
+            "-x.exe",
+            "",
+        ] {
+            assert_eq!(bare_path(odd), None, "{odd}");
+        }
     }
 
     #[cfg(not(windows))]
