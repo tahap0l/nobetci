@@ -1,5 +1,5 @@
 # Builds the Windows installer, runs it on a GitHub Windows machine and takes a
-# screenshot of each page, so the installer's look can be checked without a
+# screenshot of each page (and opens the macOS disk image on a Mac runner), so the installer's look can be checked without a
 # Windows PC. Runs on pull requests that touch the installer, or by hand; the
 # pictures come back as the "installer-preview" artifact.
 
@@ -10,6 +10,8 @@ on:
   pull_request:
     paths:
       - src-tauri/nsis/**
+      - src-tauri/dmg/**
+      - src-tauri/tauri.macos.conf.json
       - src/baykus/installer-art.ts
       - .github/workflows/installer-preview.yml
 
@@ -94,9 +96,74 @@ jobs:
           if (-not $id) {
             $id = gh api -X POST "repos/${{ github.repository }}/releases" -f tag_name=$tag -f name=$tag -F draft=true -f body="Installer screenshots from the Installer preview workflow. Never published." --jq .id
           }
-          foreach ($a in (gh api "repos/${{ github.repository }}/releases/$id/assets" --jq ".[].id")) {
+          foreach ($a in (gh api "repos/${{ github.repository }}/releases/$id/assets" --jq '.[] | select(.name | startswith("mac-") | not) | .id')) {
             gh api -X DELETE "repos/${{ github.repository }}/releases/assets/$a" | Out-Null
           }
           foreach ($f in Get-ChildItem shots -Filter *.png) {
             gh api -X POST "https://uploads.github.com/repos/${{ github.repository }}/releases/$id/assets?name=$($f.Name)" -H "Content-Type: image/png" --input $f.FullName | Out-Null
           }
+
+  preview-mac:
+    name: Disk image screenshot (macOS)
+    runs-on: macos-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install the Rust targets
+        run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Build the disk image
+        run: npm run pack:mac
+        env:
+          # Tauri skips the Finder styling (background, icon places) on CI unless told.
+          TAURI_BUNDLER_DMG_IGNORE_CI: "true"
+
+      - name: Open it and take a screenshot
+        run: |
+          set -euo pipefail
+          mkdir -p shots
+          dmg=$(ls release/*.dmg | head -1)
+          hdiutil attach "$dmg" -nobrowse -noautoopen | tee attach.txt
+          vol=$(grep -o '/Volumes/.*' attach.txt | head -1)
+          open "$vol"
+          sleep 6
+          screencapture -x shots/mac-dmg.png
+          hdiutil detach "$vol" -force || true
+
+      - name: Upload the screenshot
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: installer-preview-mac
+          path: shots/*.png
+          retention-days: 7
+
+      - name: Put the screenshot on the draft release
+        if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          id=$(gh api "repos/$REPO/releases" --jq '.[] | select(.draft and .name == "installer-preview") | .id' | head -1)
+          [ -n "$id" ] || id=$(gh api -X POST "repos/$REPO/releases" -f tag_name=installer-preview -f name=installer-preview -F draft=true -f body="Installer screenshots from the Installer preview workflow. Never published." --jq .id)
+          for a in $(gh api "repos/$REPO/releases/$id/assets" --jq '.[] | select(.name | startswith("mac-")) | .id'); do
+            gh api -X DELETE "repos/$REPO/releases/assets/$a" > /dev/null
+          done
+          gh api -X POST "https://uploads.github.com/repos/$REPO/releases/$id/assets?name=mac-dmg.png" \
+            -H "Content-Type: image/png" --input shots/mac-dmg.png > /dev/null

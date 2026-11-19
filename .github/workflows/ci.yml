@@ -123,6 +123,9 @@ jobs:
 
       - name: Build the app (universal)
         run: npm run pack:mac
+        env:
+          # Tauri skips the Finder styling (background, icon places) on CI unless told.
+          TAURI_BUNDLER_DMG_IGNORE_CI: "true"
 
       - name: Upload the disk image
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

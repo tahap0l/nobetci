@@ -5,7 +5,13 @@
     "resources": { "../target/release/nobetci-hook": "nobetci-hook" },
     "macOS": {
       "minimumSystemVersion": "11.0",
-      "signingIdentity": "-"
+      "signingIdentity": "-",
+      "dmg": {
+        "background": "dmg/background.tiff",
+        "windowSize": { "width": 660, "height": 400 },
+        "appPosition": { "x": 180, "y": 196 },
+        "applicationFolderPosition": { "x": 480, "y": 196 }
+      }
     }
   }
 }

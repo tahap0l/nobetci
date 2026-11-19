@@ -108,6 +108,119 @@ function drawOwl(ctx: CanvasRenderingContext2D, engine: OwlEngine, x: number, y:
   ctx.restore();
 }
 
+/** The disk image window, in points, and where Finder puts the two icons' centres. */
+export const DMG = { w: 660, h: 400, app: { x: 180, y: 196 }, folder: { x: 480, y: 196 } };
+
+/**
+ * The background of the macOS disk image window: the same night as the
+ * installer, the island at the top, a soft arrow from the app to Applications,
+ * and the instruction in both languages (Finder cannot switch a picture).
+ */
+function dmgBackground(ctx: CanvasRenderingContext2D) {
+  const { w, h, app, folder } = DMG;
+  const bg = ctx.createLinearGradient(0, 0, 0, h);
+  bg.addColorStop(0, BG_TOP);
+  bg.addColorStop(1, BG_BOTTOM);
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, w, h);
+
+  const glow = (x: number, y: number, r: number, rgb: string, a: number) => {
+    const g = ctx.createRadialGradient(x, y, 4, x, y, r);
+    g.addColorStop(0, `rgba(${rgb}, ${a})`);
+    g.addColorStop(1, `rgba(${rgb}, 0)`);
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, w, h);
+  };
+  glow(app.x, app.y, 150, GLOW, 0.2);
+  glow(folder.x, folder.y, 130, "59, 158, 255", 0.1);
+  glow(w * 0.85, h + 20, 260, "139, 92, 246", 0.16);
+
+  // Stars.
+  const stars: [number, number, number][] = [
+    [40, 40, 0.9], [120, 92, 0.6], [598, 58, 0.8], [520, 30, 0.6], [628, 140, 0.5], [70, 300, 0.6],
+    [610, 320, 0.7], [330, 120, 0.5], [262, 46, 0.6], [400, 332, 0.5],
+  ];
+  for (const [x, y, r] of stars) {
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(255, 255, 255, 0.35)";
+    ctx.fill();
+  }
+
+  // The island at the top edge.
+  const pw = 120;
+  const ph = 22;
+  const px = (w - pw) / 2;
+  ctx.beginPath();
+  ctx.roundRect(px, -ph / 2, pw, ph + 10, 15);
+  ctx.fillStyle = "#000";
+  ctx.fill();
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.10)";
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(px + pw - 16, 8.5, 3, 0, Math.PI * 2);
+  ctx.fillStyle = "#34d399";
+  ctx.fill();
+
+  // Name.
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#f2f2f5";
+  ctx.font = "700 24px -apple-system, 'SF Pro Display', 'Segoe UI', system-ui, sans-serif";
+  ctx.fillText("Nöbetçi", w / 2, 68);
+  const line = ctx.createLinearGradient(w / 2 - 40, 0, w / 2 + 40, 0);
+  line.addColorStop(0, "rgba(245, 165, 36, 0)");
+  line.addColorStop(0.5, "rgba(245, 165, 36, 0.8)");
+  line.addColorStop(1, "rgba(245, 165, 36, 0)");
+  ctx.fillStyle = line;
+  ctx.fillRect(w / 2 - 40, 80, 80, 1.5);
+
+  // The arrow from the app to Applications: dashed, gently arched.
+  const x0 = app.x + 84;
+  const x1 = folder.x - 84;
+  const y = app.y - 4;
+  const grad = ctx.createLinearGradient(x0, 0, x1, 0);
+  grad.addColorStop(0, "rgba(245, 165, 36, 0.35)");
+  grad.addColorStop(1, "rgba(245, 165, 36, 0.95)");
+  ctx.strokeStyle = grad;
+  ctx.lineWidth = 2.5;
+  ctx.lineCap = "round";
+  ctx.setLineDash([2, 9]);
+  ctx.beginPath();
+  ctx.moveTo(x0, y);
+  ctx.quadraticCurveTo((x0 + x1) / 2, y - 34, x1 - 6, y);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = "rgba(245, 165, 36, 0.95)";
+  ctx.beginPath();
+  ctx.moveTo(x1 + 6, y + 1);
+  ctx.lineTo(x1 - 8, y - 9);
+  ctx.lineTo(x1 - 5, y + 7);
+  ctx.closePath();
+  ctx.fill();
+
+  // Plates under Finder's icon labels: Finder writes them black in Light Mode
+  // and white in Dark Mode, and this grey keeps both readable.
+  for (const x of [app.x, folder.x]) {
+    ctx.beginPath();
+    ctx.roundRect(x - 62, app.y + 71, 124, 22, 11);
+    ctx.fillStyle = "#8f8f9a";
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.18)";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+
+  // The instruction, in both languages. (The window's title bar takes about
+  // 28 points off the bottom, so this sits above that.)
+  ctx.fillStyle = "rgba(242, 242, 245, 0.88)";
+  ctx.font = "600 14px -apple-system, 'SF Pro Text', 'Segoe UI', system-ui, sans-serif";
+  ctx.fillText("Kurmak için Nöbetçi'yi Applications klasörüne sürükle", w / 2, 322);
+  ctx.fillStyle = "rgba(242, 242, 245, 0.5)";
+  ctx.font = "400 12.5px -apple-system, 'SF Pro Text', 'Segoe UI', system-ui, sans-serif";
+  ctx.fillText("Drag Nöbetçi to Applications to install", w / 2, 342);
+}
+
 /** One tile: the sidebar's own background under that rectangle, then the owl. */
 function tile(engine: OwlEngine): CanvasRenderingContext2D {
   const ctx = canvas(TILE.w, TILE.h);
@@ -207,6 +320,18 @@ export async function renderInstallerArt(): Promise<void> {
   for (const [name, act] of sequences) {
     const list = frames((e) => (act === "wave" ? e.wave() : e.triggerEmote(act)), 22, 5);
     list.forEach((f, i) => (art[`${name}-${String(i).padStart(2, "0")}.bmp`] = bmp(f)));
+  }
+
+  // The macOS disk image window, at 1x and 2x (a Retina TIFF is made from both on a Mac).
+  for (const scale of [1, 2]) {
+    const c = document.createElement("canvas");
+    c.width = DMG.w * scale;
+    c.height = DMG.h * scale;
+    const ctx = c.getContext("2d");
+    if (!ctx) throw new Error("no 2d context");
+    ctx.scale(scale, scale);
+    dmgBackground(ctx);
+    art[scale === 1 ? "dmg.png" : "dmg@2x.png"] = c.toDataURL("image/png").split(",")[1];
   }
 
   const pre = document.createElement("pre");
