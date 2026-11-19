@@ -129,6 +129,9 @@ jobs:
 
       - name: Build the disk image
         run: npm run pack:mac
+        env:
+          # Tauri skips the Finder styling (background, icon places) on CI unless told.
+          TAURI_BUNDLER_DMG_IGNORE_CI: "true"
 
       - name: Open it and take a screenshot
         run: |
