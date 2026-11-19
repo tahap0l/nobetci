@@ -203,7 +203,7 @@ function dmgBackground(ctx: CanvasRenderingContext2D) {
   // and white in Dark Mode, and this grey keeps both readable.
   for (const x of [app.x, folder.x]) {
     ctx.beginPath();
-    ctx.roundRect(x - 62, app.y + 77, 124, 22, 11);
+    ctx.roundRect(x - 62, app.y + 71, 124, 22, 11);
     ctx.fillStyle = "#8f8f9a";
     ctx.fill();
     ctx.strokeStyle = "rgba(255, 255, 255, 0.18)";
