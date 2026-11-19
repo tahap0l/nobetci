@@ -7,6 +7,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.4.1] - 2026-11-19
+
+### Changed
+
+- **A new look for the Windows installer.** Dark welcome and finish pages in Nöbetçi's colours, with
+  a little island and the owl in the sidebar: it waves on the welcome page and cheers when setup is
+  done. New welcome and finish texts in Turkish and English, and the owl in the header of every
+  page. The pictures are drawn with the app's own mascot engine (`scripts/installer-art.mjs`).
+
 ## [2.4.0] - 2026-11-19
 
 ### Added
@@ -358,7 +367,8 @@ pipe relay, the reviewed-diff hook installer and the island window were adapted 
 [Coucou](https://github.com/Louis-CFM/coucou) (MIT). Everything they had, and much more, shipped
 publicly in 0.2.0.
 
-[Unreleased]: https://github.com/tahap0l/nobetci/compare/v2.4.0...HEAD
+[Unreleased]: https://github.com/tahap0l/nobetci/compare/v2.4.1...HEAD
+[2.4.1]: https://github.com/tahap0l/nobetci/compare/v2.4.0...v2.4.1
 [2.4.0]: https://github.com/tahap0l/nobetci/compare/v2.3.3...v2.4.0
 [2.3.3]: https://github.com/tahap0l/nobetci/compare/v2.3.2...v2.3.3
 [2.3.2]: https://github.com/tahap0l/nobetci/compare/v2.3.1...v2.3.2

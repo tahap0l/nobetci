@@ -1,0 +1,102 @@
+# Builds the Windows installer, runs it on a GitHub Windows machine and takes a
+# screenshot of each page, so the installer's look can be checked without a
+# Windows PC. Runs on pull requests that touch the installer, or by hand; the
+# pictures come back as the "installer-preview" artifact.
+
+name: Installer preview
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - src-tauri/nsis/**
+      - src/baykus/installer-art.ts
+      - .github/workflows/installer-preview.yml
+
+permissions:
+  contents: read
+
+jobs:
+  preview:
+    name: Installer screenshots (Windows)
+    runs-on: windows-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Build the installer
+        run: npm run pack
+
+      - name: Run it and take screenshots
+        shell: powershell
+        run: |
+          Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+          New-Item -ItemType Directory -Force shots | Out-Null
+          function Shot($name) {
+            $b = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+            $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
+            $g = [System.Drawing.Graphics]::FromImage($bmp)
+            $g.CopyFromScreen($b.Location, [System.Drawing.Point]::Empty, $b.Size)
+            $bmp.Save("shots\$name.png", [System.Drawing.Imaging.ImageFormat]::Png)
+            $g.Dispose(); $bmp.Dispose()
+          }
+          $setup = Get-ChildItem release -Filter *-setup.exe | Select-Object -First 1
+          $p = Start-Process $setup.FullName -PassThru
+          $shell = New-Object -ComObject WScript.Shell
+          Start-Sleep 8
+          Shot "1-welcome-a"
+          Start-Sleep -Milliseconds 700
+          Shot "1-welcome-b"
+          for ($i = 2; $i -le 6; $i++) {
+            $null = $shell.AppActivate($p.Id)
+            Start-Sleep -Milliseconds 400
+            [System.Windows.Forms.SendKeys]::SendWait("{ENTER}")
+            Start-Sleep 6
+            Shot "$i-page"
+          }
+          Start-Sleep -Milliseconds 900
+          Shot "7-last-again"
+          Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+          Get-Process nobetci -ErrorAction SilentlyContinue | Stop-Process -Force
+
+      - name: Upload the screenshots
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: installer-preview
+          path: shots/*.png
+          retention-days: 7
+
+      # Also on a draft release named "installer-preview" (never published), whose
+      # files can be fetched where Actions artifacts cannot.
+      - name: Put the screenshots on the draft release
+        if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+        continue-on-error: true
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "installer-preview"
+          $id = gh api "repos/${{ github.repository }}/releases" --jq ".[] | select(.draft and .name == \"$tag\") | .id" | Select-Object -First 1
+          if (-not $id) {
+            $id = gh api -X POST "repos/${{ github.repository }}/releases" -f tag_name=$tag -f name=$tag -F draft=true -f body="Installer screenshots from the Installer preview workflow. Never published." --jq .id
+          }
+          foreach ($a in (gh api "repos/${{ github.repository }}/releases/$id/assets" --jq ".[].id")) {
+            gh api -X DELETE "repos/${{ github.repository }}/releases/assets/$a" | Out-Null
+          }
+          foreach ($f in Get-ChildItem shots -Filter *.png) {
+            gh api -X POST "https://uploads.github.com/repos/${{ github.repository }}/releases/$id/assets?name=$($f.Name)" -H "Content-Type: image/png" --input $f.FullName | Out-Null
+          }
