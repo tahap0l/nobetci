@@ -1,7 +1,12 @@
 // Masks secrets in text that leaves the approval card: the history file and
-// Windows notifications. The card itself always shows the request exactly as it
-// will run — a person approving a command must see all of it — but nothing that
+// notifications. The card itself always shows the request exactly as it will
+// run — a person approving a command must see all of it — but nothing that
 // lingers on disk or in the notification centre should carry a live token.
+//
+// Every pattern names the parts it hides `secret`, `secret2`… and keeps the
+// rest for context: `PASSWORD="•••"`, `curl -u admin:•••`. A word such as
+// "token" or "password" in a sentence is not a secret: only a value written
+// to it (`=`, `:`) or handed to a flag (`--password x`) is.
 
 use std::sync::LazyLock;
 
@@ -11,44 +16,144 @@ const MASK: &str = "•••";
 
 struct Pattern {
     re: Regex,
-    /// Capture group that holds the secret; everything else is kept for context.
-    group: usize,
+    /// Whether a match really holds a secret; None: it always does.
+    check: Option<fn(&Captures) -> bool>,
 }
 
-fn p(pattern: &str, group: usize) -> Pattern {
-    Pattern { re: Regex::new(pattern).expect("bad redaction pattern"), group }
+fn p(pattern: &str) -> Pattern {
+    // ASCII word boundaries: Unicode ones make long non-ASCII text slow to scan.
+    let pattern = pattern.replace(r"\b", r"(?-u:\b)");
+    Pattern { re: Regex::new(&pattern).expect("bad redaction pattern"), check: None }
+}
+
+fn checked(pattern: &str, check: fn(&Captures) -> bool) -> Pattern {
+    Pattern { check: Some(check), ..p(pattern) }
+}
+
+/// Names that hold a secret: the long words may follow other letters in the
+/// same word (`dbPassword`, `GITHUB_TOKEN`, `accessToken`); the short ones
+/// need a part of their own before them (`DB_PASS`, `SMTP_PWD`), so that
+/// `PWD` — the shell's current folder — stays as it is.
+const NAME: &str = r"(?:[a-z0-9_.-]*(?:password|passwd|passphrase|passcode|secret|token|api[_-]?key|access[_-]?key|secret[_-]?key|client[_-]?secret|private[_-]?key|auth[_-]?key|credentials?)|[a-z0-9]+[_.-](?:pass|pwd|pw))\d*";
+
+/// A value: quoted (all of it, spaces and all) or bare.
+const QUOTED: &str = r#""(?P<secret>[^"\n]*)"|'(?P<secret2>[^'\n]*)'"#;
+
+/// What starts a name: the start, a separator, a quote or a bracket.
+const BEFORE: &str = r#"(?:^|[\s?&;,{(\["'`])"#;
+
+/// A value that looks like a credential rather than a word: it has a digit or
+/// a symbol, or is long.
+fn looks_secret(value: &str) -> bool {
+    value.chars().count() >= 12 || value.chars().any(|c| c.is_ascii_digit() || !c.is_alphanumeric())
+}
+
+fn value_of<'t>(c: &Captures<'t>) -> &'t str {
+    ["secret", "secret2", "secret3"].iter().find_map(|n| c.name(n)).map_or("", |m| m.as_str())
+}
+
+/// A path handed to `--private-key` or `--token-file` is not the secret.
+fn not_a_path(c: &Captures) -> bool {
+    let v = value_of(c);
+    !(v.starts_with('/') || v.starts_with("./") || v.starts_with("../") || v.starts_with("~/") || v.starts_with('@'))
 }
 
 static PATTERNS: LazyLock<Vec<Pattern>> = LazyLock::new(|| {
     vec![
         // PEM private keys, whole block.
-        p(r"(?s)(-----BEGIN [A-Z ]*PRIVATE KEY-----.*?(?:-----END [A-Z ]*PRIVATE KEY-----|$))", 1),
+        p(r"(?s)(?P<secret>-----BEGIN [A-Z ]*PRIVATE KEY-----.*?(?:-----END [A-Z ]*PRIVATE KEY-----|$))"),
         // Vendor tokens with a recognisable prefix.
-        p(r"\b((?:sk-ant-|sk-proj-|sk-)[A-Za-z0-9_-]{16,})", 1),
-        p(r"\b((?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})", 1),
-        p(r"\b(glpat-[A-Za-z0-9_-]{16,})", 1),
-        p(r"\b(xox[abposr]-[A-Za-z0-9-]{10,})", 1),
-        p(r"\b((?:AKIA|ASIA)[0-9A-Z]{16})\b", 1),
-        p(r"\b(AIza[0-9A-Za-z_-]{30,})", 1),
-        p(r"\b((?:sk|rk|pk)_(?:live|test)_[0-9A-Za-z]{16,})", 1),
-        p(r"\b(npm_[A-Za-z0-9]{30,})", 1),
+        p(r"\b(?P<secret>(?:sk-ant-|sk-proj-|sk-)[A-Za-z0-9_-]{16,})"),
+        p(r"\b(?P<secret>(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})"),
+        p(r"\b(?P<secret>glpat-[A-Za-z0-9_-]{16,})"),
+        p(r"\b(?P<secret>xox[abposr]-[A-Za-z0-9-]{10,}|xapp-[A-Za-z0-9-]{10,})"),
+        p(r"\b(?P<secret>(?:AKIA|ASIA)[0-9A-Z]{16})\b"),
+        p(r"\b(?P<secret>AIza[0-9A-Za-z_-]{30,})"),
+        p(r"\b(?P<secret>(?:sk|rk|pk)_(?:live|test)_[0-9A-Za-z]{16,})"),
+        p(r"\b(?P<secret>npm_[A-Za-z0-9]{30,})"),
+        p(r"\b(?P<secret>hf_[A-Za-z0-9]{30,})"),
+        p(r"\b(?P<secret>dop_v1_[a-f0-9]{40,})"),
+        p(r"\b(?P<secret>SG\.[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,})"),
+        p(r"\b(?P<secret>shp(?:at|ca|pa|ss)_[a-fA-F0-9]{32})"),
+        p(r"\b(?P<secret>pypi-[A-Za-z0-9_-]{50,})"),
+        p(r"\b(?P<secret>dckr_pat_[A-Za-z0-9_-]{20,})"),
+        p(r"\b(?P<secret>lin_api_[A-Za-z0-9]{30,})"),
+        p(r"\b(?P<secret>PMAK-[A-Za-z0-9-]{20,})"),
+        p(r"\b(?P<secret>sbp_[a-f0-9]{30,})"),
         // JSON Web Tokens.
-        p(r"\b(eyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,})", 1),
-        // Authorization headers: keep the scheme, hide the credential.
+        p(r"\b(?P<secret>eyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,})"),
+        // Webhook addresses that are the credential themselves.
+        p(r"(?i)\bhooks\.slack\.com/(?:services|workflows|triggers)/(?P<secret>[A-Za-z0-9/_-]+)"),
+        p(r"(?i)\bdiscord(?:app)?\.com/api/webhooks/\d+/(?P<secret>[A-Za-z0-9_-]+)"),
+        p(r"(?i)\bapi\.telegram\.org/(?:file/)?bot(?P<secret>\d+:[A-Za-z0-9_-]+)"),
+        p(r"(?i)\.webhook\.office\.com/webhookb2/(?P<secret>[^\s'\x22]+)"),
+        // Authorization headers: keep the scheme, hide the credential — and
+        // never take the scheme's own name for the credential.
         p(
-            r#"(?i)\b(?:authorization|proxy-authorization)\s*[:=]\s*["']?(?:bearer|basic|token|bot)?\s*([^\s"',;]{6,})"#,
-            1,
+            r#"(?i)\b(?:authorization|proxy-authorization)\s*[:=]\s*["']?(?:bearer|basic|token|bot|digest)\s+(?P<secret>[^\s"',;]{6,})"#,
         ),
-        p(r#"(?i)\bbearer\s+([A-Za-z0-9._~+/=-]{12,})"#, 1),
-        // key=value / key: value / --key value for secret-looking names.
+        checked(r#"(?i)\b(?:authorization|proxy-authorization)\s*[:=]\s*["']?(?P<secret>[^\s"',;]{6,})"#, |c| {
+            !matches!(value_of(c).to_ascii_lowercase().as_str(), "bearer" | "basic" | "token" | "bot" | "digest")
+        }),
+        p(r"(?i)\bbearer\s+(?P<secret>[A-Za-z0-9._~+/=-]{12,})"),
+        // Cookies are sessions.
+        p(r#"(?i)\b(?:set-)?cookie\s*:\s*(?P<secret>[^"'\r\n]+)"#),
         p(
-            r#"(?i)(?:^|[\s?&;,{("'-])(?:[a-z0-9_-]*?)(?:password|passwd|pwd|secret|token|api[_-]?key|access[_-]?key|client[_-]?secret|private[_-]?key)["']?\s*(?:=|:|\s)\s*["']?([^\s"'&;,)}]{4,})"#,
-            1,
+            r#"(?i)(?:^|\s)(?:-b|--cookie)\s+(?:"(?P<secret>[^"\n]*=[^"\n]*)"|'(?P<secret2>[^'\n]*=[^'\n]*)'|(?P<secret3>[^\s'"]*=[^\s'"]*))"#,
+        ),
+        // Basic auth on a command line: `curl -u user:password`, `--user`, and
+        // smbclient's `-U user%password`.
+        p(
+            r#"(?i)(?:^|\s)(?:-u|--user|--proxy-user)\s*=?\s*(?:'[^':\n]*:(?P<secret>[^'\n]+)'|"[^":\n]*:(?P<secret2>[^"\n]+)"|[^\s:'"]+:(?P<secret3>[^\s'"]+))"#,
+        ),
+        p(r#"\bsmbclient\b[^\n|;&]*?\s-U\s+[^\s%]+%(?P<secret>[^\s'"]+)"#),
+        // Passwords handed to a short flag.
+        p(
+            r#"\b(?:mysql|mysqldump|mysqladmin|mysqlimport|mysqlshow|mysqlcheck|mysqlsh|mariadb|mariadb-dump)\b[^\n|;&]*?\s-p(?:'(?P<secret>[^'\n]*)'|"(?P<secret2>[^"\n]*)"|(?P<secret3>[^\s'"]+))"#,
+        ),
+        p(r#"\bsshpass\b[^\n|;&]*?\s-p\s*(?:'(?P<secret>[^'\n]*)'|"(?P<secret2>[^"\n]*)"|(?P<secret3>[^\s'"]+))"#),
+        p(
+            r#"\bredis-cli\b[^\n|;&]*?\s(?:-a|--pass)\s+(?:'(?P<secret>[^'\n]*)'|"(?P<secret2>[^"\n]*)"|(?P<secret3>[^\s'"]+))"#,
+        ),
+        p(
+            r#"\b(?:docker|podman|buildah|skopeo|helm|oras|nerdctl|crane|regctl)\b[^\n|;&]*?\blogin\b[^\n|;&]*?\s-p\s+(?:'(?P<secret>[^'\n]*)'|"(?P<secret2>[^"\n]*)"|(?P<secret3>[^\s'"]+))"#,
+        ),
+        p(r#"\s-pass(?:in|out)?\s+pass:(?P<secret>[^\s'"]+)"#),
+        p(r#"\bopenssl\b[^\n|;&]*?\s-k\s+(?:'(?P<secret>[^'\n]*)'|"(?P<secret2>[^"\n]*)"|(?P<secret3>[^\s'"]+))"#),
+        // NAME="a quoted value", whole: `PASSWORD="correct horse battery staple"`.
+        p(&format!(r#"(?i){BEFORE}-{{0,2}}["']?{NAME}["']?\s*[:=]\s*(?:{QUOTED})"#)),
+        // NAME=value, bare: `DB_PASS=hunter2`, `?token=…&`.
+        p(&format!(r#"(?i){BEFORE}-{{0,2}}["']?{NAME}["']?\s*=\s*(?P<secret3>[^\s"'&;,)}}]+)"#)),
+        // NAME: value — a header or YAML. A plain word there must look like a
+        // credential: "Password: change it" is a sentence.
+        checked(&format!(r#"(?i){BEFORE}["']?(?P<name>{NAME})["']?\s*:\s*(?P<secret3>[^\s"',;)}}]+)"#), |c| {
+            let name = c.name("name").map_or("", |m| m.as_str());
+            name.contains(['_', '-', '.']) || looks_secret(value_of(c))
+        }),
+        // --flag value: `--password hunter2`, `--api-key abc`.
+        checked(&format!(r#"(?i)(?:^|\s)--?{NAME}\s+(?:{QUOTED}|(?P<secret3>[^\s"'-][^\s"']*))"#), not_a_path),
+        // identifier value: `aws configure set aws_secret_access_key wJalr…`.
+        checked(
+            &format!(
+                r#"(?i)(?:^|\s)(?:[a-z0-9]+[_.-][a-z0-9_.-]*{NAME})\s+(?:{QUOTED}|(?P<secret3>[^\s"'-][^\s"']*))"#
+            ),
+            |c| looks_secret(value_of(c)) && not_a_path(c),
         ),
         // Credentials in URLs: scheme://user:password@host
-        p(r"(?i)\b[a-z][a-z0-9+.-]*://[^\s/:@]+:([^\s/@]{3,})@", 1),
+        p(r"(?i)\b[a-z][a-z0-9+.-]*://[^\s/:@]+:(?P<secret>[^\s/@]{3,})@"),
     ]
 });
+
+/// A value that only names another: `$DB_PASS`, `${TOKEN}`, `%TOKEN%`,
+/// `$env:TOKEN`, `$(cat secret)`. Masking it would hide nothing.
+fn is_reference(value: &str) -> bool {
+    let v = value.trim();
+    v.is_empty()
+        || v == MASK
+        || v.starts_with('$')
+        || v.starts_with('%') && v.ends_with('%') && v.len() > 2
+        || v.starts_with("<") && v.ends_with('>')
+}
 
 /// `text` with every recognised secret replaced by •••.
 pub fn redact(text: &str) -> String {
@@ -60,10 +165,30 @@ pub fn redact(text: &str) -> String {
         out = pat
             .re
             .replace_all(&out, |c: &Captures| {
-                let whole = c.get(0).unwrap();
-                let Some(secret) = c.get(pat.group) else { return whole.as_str().to_string() };
-                let (start, end) = (secret.start() - whole.start(), secret.end() - whole.start());
-                format!("{}{MASK}{}", &whole.as_str()[..start], &whole.as_str()[end..])
+                let whole = c.get(0).expect("a match");
+                if pat.check.is_some_and(|check| !check(c)) {
+                    return whole.as_str().to_string();
+                }
+                let mut secrets: Vec<regex::Match> = pat
+                    .re
+                    .capture_names()
+                    .flatten()
+                    .filter(|n| n.starts_with("secret"))
+                    .filter_map(|n| c.name(n))
+                    .filter(|m| !is_reference(m.as_str()))
+                    .collect();
+                secrets.sort_by_key(|m| m.start());
+                // Offsets are in the whole text; the match starts at `base`.
+                let (text, base) = (whole.as_str(), whole.start());
+                let mut s = String::new();
+                let mut at = 0;
+                for m in secrets {
+                    s.push_str(&text[at..m.start() - base]);
+                    s.push_str(MASK);
+                    at = m.end() - base;
+                }
+                s.push_str(&text[at..]);
+                s
             })
             .into_owned();
     }
@@ -109,6 +234,86 @@ mod tests {
     fn ordinary_commands_are_untouched() {
         for c in ["npm test", "git push origin main", "cargo build --release", "echo $PATH", "ls -la ~/.ssh"] {
             assert_eq!(redact(c), c);
+        }
+    }
+
+    /// The audit's list (adhoc-redact.txt): what each line must become.
+    #[test]
+    fn the_audits_list() {
+        for (input, want) in [
+            ("curl -u admin:S3cretP4ss https://api.x.test/v1", "curl -u admin:••• https://api.x.test/v1"),
+            ("export DB_PASS=hunter2hunter2", "export DB_PASS=•••"),
+            ("mysql -u root -phunter2hunter2 db", "mysql -u root -p••• db"),
+            ("docker login -u me -p hunter2hunter2", "docker login -u me -p •••"),
+            ("redis-cli -a hunter2hunter2 ping", "redis-cli -a ••• ping"),
+            ("export DB_PASSWORD='Xy&9;kL,2)pQ-longer'", "export DB_PASSWORD='•••'"),
+            ("export PASSWORD=\"correct horse battery staple\"", "export PASSWORD=\"•••\""),
+            ("export OPENAI_API_KEY=sk-proj-abcdefghijklmnopqrstuvwxyz0123456789", "export OPENAI_API_KEY=•••"),
+            (
+                "curl -H \"Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.abcdefghijklmnop\" https://api.x.test",
+                "curl -H \"Authorization: Bearer •••\" https://api.x.test",
+            ),
+            (
+                "git clone https://user:ghp_abcdefghijklmnopqrstuvwxyz0123456789@github.com/a/b.git",
+                "git clone https://user:•••@github.com/a/b.git",
+            ),
+            (
+                "aws configure set aws_secret_access_key wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+                "aws configure set aws_secret_access_key •••",
+            ),
+            ("AKIAIOSFODNN7EXAMPLE", "•••"),
+            (
+                concat!("curl https://hooks.slack.com/services/", "T00000000/B00000000/XXXXXXXXXXXXXXXXXXXXXXXX"),
+                "curl https://hooks.slack.com/services/•••",
+            ),
+            ("psql postgres://app:Sup3rS3cret@db.internal:5432/app", "psql postgres://app:•••@db.internal:5432/app"),
+            // Prose stays prose.
+            ("Renew the API token tomorrow", "Renew the API token tomorrow"),
+            ("git commit -m \"fix token refresh logic\"", "git commit -m \"fix token refresh logic\""),
+            ("grep -rn \"password reset\" src", "grep -rn \"password reset\" src"),
+            ("pwd && whoami", "pwd && whoami"),
+            ("pwd\nwhoami", "pwd\nwhoami"),
+        ] {
+            assert_eq!(redact(input), want, "{input}");
+        }
+    }
+
+    #[test]
+    fn more_shapes() {
+        for (input, want) in [
+            ("curl --user 'ada:p@ss word' https://x.test", "curl --user 'ada:•••' https://x.test"),
+            ("smbclient //srv/share -U ada%hunter2", "smbclient //srv/share -U ada%•••"),
+            ("sshpass -p 'hunter 2' ssh host", "sshpass -p '•••' ssh host"),
+            ("mysqldump -uroot -p\"pa ss\" db", "mysqldump -uroot -p\"•••\" db"),
+            ("openssl enc -aes256 -pass pass:hunter2 -in a", "openssl enc -aes256 -pass pass:••• -in a"),
+            ("curl -H 'Cookie: session=abc123; theme=dark' https://x.test", "curl -H 'Cookie: •••' https://x.test"),
+            ("curl -b 'sid=abc123' https://x.test", "curl -b '•••' https://x.test"),
+            (
+                "curl https://discord.com/api/webhooks/123456/AbC-dEf_123",
+                "curl https://discord.com/api/webhooks/123456/•••",
+            ),
+            (
+                "curl https://api.telegram.org/bot12345:AAH-x_y/sendMessage",
+                "curl https://api.telegram.org/bot•••/sendMessage",
+            ),
+            ("{\"password\": \"two words\", \"user\": \"ada\"}", "{\"password\": \"•••\", \"user\": \"ada\"}"),
+            ("password: hunter2", "password: •••"),
+            ("X-Api-Key: abcdef", "X-Api-Key: •••"),
+            ("const accessToken = \"abc123def\"", "const accessToken = \"•••\""),
+            ("gh auth login --with-token --token abc123", "gh auth login --with-token --token •••"),
+            ("export SMTP_PWD=letmein1", "export SMTP_PWD=•••"),
+            // A reference to a secret is not one; a path to a key file is not the key.
+            ("export DB_PASS=$DB_PASS_FROM_VAULT", "export DB_PASS=$DB_PASS_FROM_VAULT"),
+            ("PASSWORD=\"${PASSWORD}\" make deploy", "PASSWORD=\"${PASSWORD}\" make deploy"),
+            ("ssh-add --private-key ~/.ssh/id_ed25519", "ssh-add --private-key ~/.ssh/id_ed25519"),
+            ("PWD=/home/dev/project", "PWD=/home/dev/project"),
+            ("Password: change it before Friday", "Password: change it before Friday"),
+            ("the token: expired yesterday", "the token: expired yesterday"),
+            ("docker login registry.x.test", "docker login registry.x.test"),
+            ("mysql -u root -p db", "mysql -u root -p db"),
+            ("npm install --save-dev @types/node", "npm install --save-dev @types/node"),
+        ] {
+            assert_eq!(redact(input), want, "{input}");
         }
     }
 }
