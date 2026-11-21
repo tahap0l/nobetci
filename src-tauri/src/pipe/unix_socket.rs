@@ -25,8 +25,9 @@ use super::Conn;
 use crate::log;
 
 impl Conn for UnixStream {
-    // Dropping the stream closes it; the relay sees end-of-file.
-    fn close(&mut self) {}
+    // Dropping the stream closes it and the relay sees end-of-file — after
+    // reading whatever we wrote: a socket keeps unread data for its peer.
+    async fn close(&mut self) {}
 }
 
 /// The home folder from the user database, not `$HOME` — exactly as nobetci-hook

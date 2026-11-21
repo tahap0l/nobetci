@@ -508,7 +508,8 @@ struct DecisionOptions {
     stop: bool,
     /// Allow this exact request again for the rest of the session.
     remember: bool,
-    /// "user" (a click on the island) or "hotkey".
+    /// "user" (a click on the island) or "hotkey". An allow via the hotkey only
+    /// counts right after a real press of the allow shortcut (`hotkeys.rs`).
     via: Option<String>,
     /// Where the Allow button was, for the physical-click check.
     anchor: Option<pipe::Anchor>,
@@ -560,10 +561,11 @@ fn approval_respond(
     pipe::respond(&app, &request_id, response, anchor)
 }
 
-/// Allows every waiting low-risk request at once; returns how many.
+/// Allows, with one click, the low-risk requests the island listed in its batch
+/// row (`ids`) that are still waiting; returns how many.
 #[tauri::command]
-fn approval_allow_low(app: AppHandle, anchor: Option<pipe::Anchor>) -> Result<usize, String> {
-    pipe::allow_low(&app, anchor)
+fn approval_allow_low(app: AppHandle, anchor: Option<pipe::Anchor>, ids: Vec<String>) -> Result<usize, String> {
+    pipe::allow_low(&app, anchor, &ids)
 }
 
 /// The card is on screen or queued, so the long wait for a person may begin.
@@ -572,7 +574,22 @@ fn approval_ack(app: AppHandle, request_id: String) {
     pipe::acknowledge(&app, &request_id);
 }
 
+/// The card became the island's front, interactive card: approvals for it count
+/// from now (a moment later, and with a press made after this).
+#[tauri::command]
+fn approval_shown(app: AppHandle, request_id: String) {
+    pipe::shown(&app, &request_id);
+}
+
+/// Every request still waiting, as its `hook` event carried it — for an island
+/// that reloaded and has to put its cards back.
+#[tauri::command]
+fn approval_pending(app: AppHandle) -> Vec<Value> {
+    pipe::pending(&app)
+}
+
 /// Nobody will act on this request here; Claude Code asks in the terminal now.
+/// `expired`: the island's countdown ran out (recorded as a timeout).
 #[tauri::command]
 fn approval_decline(app: AppHandle, request_id: String, reason: Option<String>) {
     pipe::decline(&app, &request_id, reason.as_deref().unwrap_or("terminal"));
@@ -591,6 +608,13 @@ fn rules_test(app: AppHandle, tool: String, input: Value, cwd: String, draft: Op
         &s,
         &grants,
     )
+}
+
+/// Whether a rule's pattern compiles exactly as the rules will compile it; the
+/// regex engine's own message when it does not.
+#[tauri::command]
+fn rule_pattern_check(mode: String, pattern: String) -> Result<(), String> {
+    rules::pattern_error(&mode, &pattern).map_or(Ok(()), Err)
 }
 
 #[tauri::command]
@@ -927,10 +951,13 @@ pub fn run() {
             prompts::delete_openai_api_key,
             approval_decision,
             approval_ack,
+            approval_shown,
+            approval_pending,
             approval_decline,
             approval_respond,
             approval_allow_low,
             rules_test,
+            rule_pattern_check,
             risk_categories,
             audit_query,
             audit_stats,

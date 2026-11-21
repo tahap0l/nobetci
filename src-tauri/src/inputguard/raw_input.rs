@@ -3,11 +3,21 @@
 // A real mouse button press arrives with the handle of the device it came from;
 // input synthesised with SendInput has none, and a UI Automation invoke produces
 // no mouse input at all. While a request waits we listen to raw mouse input on a
-// message-only window (no hooks) and hand every left-button press to the shared
-// guard. Listening stops as soon as nothing is waiting, so a quiet Nöbetçi still
-// costs nothing.
+// message-only window (no hooks) and hand every press of the primary button to
+// the shared guard. Listening stops as soon as nothing is waiting, so a quiet
+// Nöbetçi still costs nothing.
+//
+// Raw input reports physical buttons: with "Primary mouse button: Right" (the
+// left-handed setting, SM_SWAPBUTTON) the click a page sees is the right one.
+//
+// Some laptops' precision touchpads also deliver presses without a device
+// handle. Those count as synthetic like SendInput's — the decision does not
+// change here — but the log says when such a press arrives, so a refused
+// touchpad click can be recognised (see the troubleshooting notes).
 
 use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::Mutex;
+use std::time::{Duration, Instant};
 
 use tauri::{AppHandle, WebviewWindow};
 use windows::core::w;
@@ -19,15 +29,18 @@ use windows::Win32::UI::Input::{
     RIDEV_REMOVE, RID_INPUT, RIM_TYPEMOUSE,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    CreateWindowExW, DefWindowProcW, DispatchMessageW, GetCursorPos, GetMessageW, PostThreadMessageW, RegisterClassW,
-    TranslateMessage, HWND_MESSAGE, MSG, WINDOW_EX_STYLE, WINDOW_STYLE, WM_APP, WM_INPUT, WNDCLASSW,
+    CreateWindowExW, DefWindowProcW, DispatchMessageW, GetCursorPos, GetMessageW, GetSystemMetrics, PostThreadMessageW,
+    RegisterClassW, TranslateMessage, HWND_MESSAGE, MSG, SM_SWAPBUTTON, WINDOW_EX_STYLE, WINDOW_STYLE, WM_APP,
+    WM_INPUT, WNDCLASSW,
 };
 
 use super::Rect;
 
-/// RI_MOUSE_LEFT_BUTTON_DOWN in RAWMOUSE::usButtonFlags.
+/// RI_MOUSE_*_BUTTON_DOWN / _UP in RAWMOUSE::usButtonFlags.
 const LEFT_DOWN: u16 = 0x0001;
 const LEFT_UP: u16 = 0x0002;
+const RIGHT_DOWN: u16 = 0x0004;
+const RIGHT_UP: u16 = 0x0008;
 /// Our own message: wParam 1 = start listening, 0 = stop.
 const WM_ARM: u32 = WM_APP + 1;
 
@@ -64,14 +77,43 @@ fn on_raw_input(lparam: LPARAM) {
         return;
     }
     let flags = unsafe { raw.data.mouse.Anonymous.Anonymous.usButtonFlags };
-    if flags & LEFT_DOWN != 0 {
+    // Read at every press, so a change in Windows' mouse settings applies at once.
+    let swapped = unsafe { GetSystemMetrics(SM_SWAPBUTTON) } != 0;
+    let (down, up) = primary_button(swapped);
+    if flags & down != 0 {
         let physical = !raw.header.hDevice.is_invalid();
+        if !physical {
+            note_press_without_device();
+        }
         let mut p = POINT::default();
         let _ = unsafe { GetCursorPos(&mut p) };
         super::record(physical, p.x as f64, p.y as f64);
     }
-    if flags & LEFT_UP != 0 {
+    if flags & up != 0 {
         super::release();
+    }
+}
+
+/// The raw flags of the button a click comes from: the right one when the user
+/// made it the primary button.
+fn primary_button(swapped: bool) -> (u16, u16) {
+    if swapped {
+        (RIGHT_DOWN, RIGHT_UP)
+    } else {
+        (LEFT_DOWN, LEFT_UP)
+    }
+}
+
+/// Logs, at most once a minute, that a press came without a device handle.
+fn note_press_without_device() {
+    static LAST: Mutex<Option<Instant>> = Mutex::new(None);
+    let mut last = LAST.lock().unwrap();
+    if last.is_none_or(|at| at.elapsed() > Duration::from_secs(60)) {
+        *last = Some(Instant::now());
+        crate::log::line(
+            "input guard: a press without a device handle counts as synthetic — SendInput makes such \
+             presses, and so can a precision touchpad on some laptops",
+        );
     }
 }
 
@@ -146,4 +188,15 @@ pub fn island_rect(win: &WebviewWindow, x: f64, y: f64, w: f64, h: f64) -> Optio
         right: pos.x as f64 + px(x + w),
         bottom: pos.y as f64 + px(y + h),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_primary_button_follows_the_swap_setting() {
+        assert_eq!(primary_button(false), (LEFT_DOWN, LEFT_UP));
+        assert_eq!(primary_button(true), (RIGHT_DOWN, RIGHT_UP), "left-handed: the right button clicks");
+    }
 }
