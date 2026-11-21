@@ -102,7 +102,6 @@ button {
   width: 640px;
   height: 100%;
   transform: translateX(-50%);
-  transition: opacity 0.18s;
 }
 
 #header {
@@ -572,24 +571,31 @@ mark.lvl-critical { background: #f4505e; color: #fff; }
 /* ── Compact ──────────────────────────────────────────────────────────────── */
 
 /* Hidden unless compact: visibility flips after the fade, so it can never sit
-   half-visible over an expanded card. */
+   half-visible over an expanded card. It keeps the pill's height (COMPACT_H)
+   at the top edge, so its text does not drift down while the island grows or
+   shrinks. */
 #compact {
   position: absolute;
-  inset: 0;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 34px;
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 0 12px 0 44px;
   opacity: 0;
   visibility: hidden;
-  transition: opacity 0.12s, visibility 0s linear 0.12s;
+  transition: opacity 0.1s cubic-bezier(0.4, 0, 1, 1), visibility 0s linear 0.1s;
   pointer-events: none;
 }
 
+/* It arrives once a closing island has nearly shrunk to the pill (the cards are
+   gone by then) and once a waking one is tall enough to hold it. */
 #compact.on {
   opacity: 1;
   visibility: visible;
-  transition: opacity 0.16s;
+  transition: opacity 0.18s cubic-bezier(0.2, 0.8, 0.2, 1) 0.14s;
 }
 
 .compact-text {
@@ -2020,13 +2026,15 @@ mark.lvl-critical { background: #f4505e; color: #fff; }
 .sys-spark { height: 46px; min-height: 0; }
 
 /* ── 2.3.1 island motion ────────────────────────────────────────────────────
-   Content arrives a beat after the island opens: each part of the view rises
-   out of a light blur, one after the other. Infinite animations above only run
-   while the island is open, so a hidden island costs nothing. The approval card
-   is left out: it appears at once, exactly as it will run. */
+   Content arrives a beat after the island opens (#content waits for it below),
+   and each part of the view rises out of a light blur, one after the other —
+   the first at once, so changing views never leaves the island blank for a
+   moment. Infinite animations above only run while the island is open, so a
+   hidden island costs nothing. The approval card is left out: it appears at
+   once, exactly as it will run. */
 #island[data-mode="expanded"] .view.on:not(.view-approval) > * {
   animation: view-in 0.42s cubic-bezier(0.2, 0.85, 0.25, 1) both;
-  animation-delay: calc(70ms + var(--n, 0) * 40ms);
+  animation-delay: calc(var(--n, 0) * 40ms);
 }
 .view.on > :nth-child(2) { --n: 1; }
 .view.on > :nth-child(3) { --n: 2; }
@@ -2037,7 +2045,11 @@ mark.lvl-critical { background: #f4505e; color: #fff; }
   from { opacity: 0; transform: translateY(-7px) scale(0.985); filter: blur(5px); }
   to { opacity: 1; transform: none; filter: none; }
 }
-#content { transition: opacity 0.22s ease; }
+/* The open island's content fades in a beat after the island starts to grow
+   (narrower than its 640 px, it would show clipped at both sides) and out
+   quickly on the way back, before the pill's own content arrives. */
+#content { transition: opacity 0.1s cubic-bezier(0.4, 0, 1, 1); }
+#island[data-mode="expanded"] #content { transition: opacity 0.2s cubic-bezier(0.2, 0.8, 0.2, 1) 0.1s; }
 #island { transition: box-shadow 0.4s ease; }
 #island[data-mode="expanded"] {
   box-shadow:

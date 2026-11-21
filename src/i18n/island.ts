@@ -27,6 +27,7 @@ const tr = {
   // Header
   "hdr.noSessions": "oturum yok",
   "hdr.sessions": "{n} oturum",
+  "hdr.sessions#one": "{n} oturum",
   "hdr.waiting": "{n} onay bekliyor",
   "hdr.paused": "duraklatıldı",
   "hdr.quiet": "sessiz: {why}",
@@ -86,6 +87,7 @@ const tr = {
   "ov.noRecentEvents": "Uzun süredir olay yok",
   "fl.guardUnavailable": "Fiziksel basılı tutma doğrulanamıyor. Kararı terminalden ver.",
   "ov.more": "+{n} oturum daha",
+  "ov.more#one": "+{n} oturum daha",
 
   // Session detail
   "sd.back": "Geri",
@@ -95,7 +97,9 @@ const tr = {
   "sd.gotoTitle": "{terminal} penceresini öne getir",
   "sd.gotoTitleAny": "Pencereyi öne getir",
   "sd.tools": "{n} araç",
+  "sd.tools#one": "{n} araç",
   "sd.subagents": "{n} etkin alt ajan",
+  "sd.subagents#one": "{n} etkin alt ajan",
   "sd.allowed": "{n} izin",
   "sd.denied": "{n} ret",
   "sd.auto": "{n} otomatik",
@@ -147,6 +151,7 @@ const tr = {
   "cp.idle": "Nöbetteyim",
   "cp.working": "{w}/{n} çalışıyor",
   "cp.sessions": "{n} oturum",
+  "cp.sessions#one": "{n} oturum",
 
   // Tools
   "tool.run": "Çalıştırıyor",
@@ -173,6 +178,7 @@ const tr = {
   "step.subStart": "+ alt-agent başladı",
   "step.subStop": "• alt-agent bitti",
   "step.timeout": "⏱ Karar verilmedi — terminale düştü",
+  "step.paused": "⏸ Duraklatıldı — karar terminale bırakıldı",
   "step.autoAllow": "✓ Otomatik izin ({who}) · {target}",
   "step.autoDeny": "⛔ Otomatik ret ({who}) · {target}",
   "who.trusted": "güvenilir proje",
@@ -192,6 +198,7 @@ const tr = {
   "fl.hooksLost": "Claude Code hook'ları kaldırılmış — Ayarlar'dan yeniden kur",
   "fl.hotkeyLowOnly": "Kısayolla yalnızca DÜŞÜK riskli istekler onaylanabilir",
   "fl.holdRequired": "Yüksek riskli isteklerde butonu basılı tut",
+  "fl.noHotkey": "Kısayol tuşuna basılmadan gelen bir onay reddedildi",
   "fl.notPhysical": "⚠ Onay fiziksel bir tıklamadan gelmedi ve reddedildi — bir program onaylamaya çalışmış olabilir",
   "toast.waitingBody": "Claude Code girdi bekliyor.",
   "toast.errorBody": "Tur bir hatayla bitti.",
@@ -263,6 +270,7 @@ const en: { [K in keyof typeof tr]: string } = {
 
   "hdr.noSessions": "no sessions",
   "hdr.sessions": "{n} sessions",
+  "hdr.sessions#one": "{n} session",
   "hdr.waiting": "{n} waiting",
   "hdr.paused": "paused",
   "hdr.quiet": "quiet: {why}",
@@ -321,6 +329,7 @@ const en: { [K in keyof typeof tr]: string } = {
   "ov.noRecentEvents": "No recent events",
   "fl.guardUnavailable": "The physical hold cannot be verified. Decide in the terminal.",
   "ov.more": "+{n} more sessions",
+  "ov.more#one": "+{n} more session",
 
   "sd.back": "Back",
   "sd.goto": "Go to window",
@@ -329,7 +338,9 @@ const en: { [K in keyof typeof tr]: string } = {
   "sd.gotoTitle": "Bring the {terminal} window to the front",
   "sd.gotoTitleAny": "Bring its window to the front",
   "sd.tools": "{n} tools",
+  "sd.tools#one": "{n} tool",
   "sd.subagents": "{n} active subagents",
+  "sd.subagents#one": "{n} active subagent",
   "sd.allowed": "{n} allowed",
   "sd.denied": "{n} denied",
   "sd.auto": "{n} automatic",
@@ -378,6 +389,7 @@ const en: { [K in keyof typeof tr]: string } = {
   "cp.idle": "On watch",
   "cp.working": "{w}/{n} working",
   "cp.sessions": "{n} sessions",
+  "cp.sessions#one": "{n} session",
 
   "tool.run": "Running",
   "tool.read": "Reading",
@@ -402,6 +414,7 @@ const en: { [K in keyof typeof tr]: string } = {
   "step.subStart": "+ subagent started",
   "step.subStop": "• subagent finished",
   "step.timeout": "⏱ No decision — handed to the terminal",
+  "step.paused": "⏸ Paused — decision handed to the terminal",
   "step.autoAllow": "✓ Auto-allowed ({who}) · {target}",
   "step.autoDeny": "⛔ Auto-denied ({who}) · {target}",
   "who.trusted": "trusted project",
@@ -421,6 +434,7 @@ const en: { [K in keyof typeof tr]: string } = {
   "fl.hooksLost": "Claude Code hooks are gone — reinstall them from Settings",
   "fl.hotkeyLowOnly": "Only LOW-risk requests can be allowed with the hotkey",
   "fl.holdRequired": "Hold the button for high-risk requests",
+  "fl.noHotkey": "An approval that came without the shortcut key being pressed was refused",
   "fl.notPhysical": "⚠ That approval didn't come from a physical click and was refused — a program may have tried to approve it",
   "toast.waitingBody": "Claude Code is waiting for input.",
   "toast.errorBody": "The turn ended with an error.",

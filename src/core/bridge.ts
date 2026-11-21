@@ -4,10 +4,16 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import { emit, listen } from "@tauri-apps/api/event";
+import { defineMessages } from "../i18n/core";
 import type { Settings } from "./settings-model";
 
 export const IS_TAURI =
   typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+
+const msg = defineMessages(
+  { notInApp: "Bu, yalnız masaüstü uygulamasında çalışır." },
+  { notInApp: "This only works in the desktop app." },
+);
 
 async function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T | null> {
   if (!IS_TAURI) return null;
@@ -19,9 +25,13 @@ async function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T |
   }
 }
 
-/** Same as `call`, but surfaces the error so the UI can show what went wrong. */
+/**
+ * Same as `call`, but surfaces the error so the UI can show what went wrong.
+ * In a plain browser (the preview, the website's demo) it fails with a readable
+ * message in the page's language.
+ */
 async function callOrThrow<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
-  if (!IS_TAURI) throw new Error("Nöbetçi içinde çalışmıyor");
+  if (!IS_TAURI) throw new Error(msg("notInApp"));
   return invoke<T>(cmd, args);
 }
 
@@ -106,6 +116,12 @@ export interface RiskFinding {
 /** Computed in Rust (src-tauri/src/risk.rs) for every permission request. */
 export interface RiskAssessment {
   level: RiskLevel;
+  /**
+   * The engine's own level, before a rule re-scored the request (C-2). The allow
+   * hotkey and a batch click only cover requests that are low by both. Absent
+   * from older payloads: then `level` is the engine's level.
+   */
+  engineLevel?: RiskLevel;
   kind: "command" | "write" | "read" | "web" | "mcp" | "other";
   target: string;
   preview: string | null;
@@ -370,7 +386,9 @@ export const Bridge = {
   /**
    * Rejects with an error code when Rust refuses the decision:
    * `not_pending` (the relay gave up), `hold_required` (plain allow on high risk),
-   * `input_not_physical` (no real mouse click behind it), `unknown_decision`.
+   * `input_not_physical` (no real mouse click behind it), `too_soon` (the card
+   * had only just appeared), `hotkey_low_only`, `no_hotkey` (a "hotkey" decision
+   * with no real key press behind it), `unknown_decision`.
    */
   approvalDecision: (requestId: string, decision: Decision, opts: DecisionOptions = {}) =>
     callOrThrow<void>("approval_decision", {
@@ -387,12 +405,23 @@ export const Bridge = {
   /** Answers a question or a plan; `anchor` is the button pressed. */
   approvalRespond: (requestId: string, response: InteractiveResponse, anchor?: Anchor) =>
     callOrThrow<void>("approval_respond", { requestId, response, anchor: anchor ?? null }),
-  /** Allows every waiting low-risk request with one click; returns how many. */
-  approvalAllowLow: (anchor?: Anchor) => callOrThrow<number>("approval_allow_low", { anchor: anchor ?? null }),
-  /** "The card is up or queued" — until this lands the relay only waits a moment. */
+  /**
+   * Allows, with one click, the waiting requests the batch row listed (`ids`);
+   * Rust skips any that are no longer pending or not low by both levels (C-2).
+   * Resolves to how many it allowed.
+   */
+  approvalAllowLow: (anchor: Anchor | undefined, ids: string[]) =>
+    callOrThrow<number>("approval_allow_low", { anchor: anchor ?? null, ids }),
+  /**
+   * "The card is up or queued" — until this lands the relay only waits a moment.
+   * A repeat (a reloaded island putting its cards back) changes nothing.
+   */
   approvalAck: (requestId: string) => call<void>("approval_ack", { requestId }),
-  /** Nobody will act on this here — Claude Code asks in the terminal right away. */
-  approvalDecline: (requestId: string, reason: "terminal" | "paused" | "busy" | "resolved" = "terminal") =>
+  /**
+   * Nobody will act on this here — Claude Code asks in the terminal right away.
+   * `expired`: the card's countdown ran out on the island (C-6).
+   */
+  approvalDecline: (requestId: string, reason: "terminal" | "paused" | "busy" | "resolved" | "expired" = "terminal") =>
     call<void>("approval_decline", { requestId, reason }),
 
   // ── Risk & rules ──────────────────────────────────────────────────────────
@@ -418,10 +447,38 @@ export const Bridge = {
   settingsReset: () => call<Settings>("settings_reset"),
 
   // ── Notifications & hotkeys ───────────────────────────────────────────────
-  /** A desktop notification, if settings allow it right now. */
+  /**
+   * A desktop notification, if settings allow it right now. `islandVisible`:
+   * the island is open (expanded) and so already shows it; the compact pill
+   * does not count (D4).
+   */
   notify: (kind: NotifyKind, title: string, body: string, islandVisible: boolean) =>
     call<boolean>("notify", { kind, title, body, islandVisible }),
   hotkeysStatus: () => call<HotkeyStatus[]>("hotkeys_status"),
+};
+
+/**
+ * Commands only the island calls (the window permissions let no other window
+ * call them, C-13). Kept off `Bridge`, which the settings window takes whole as
+ * its own api (and mocks in the browser preview).
+ */
+export const IslandBridge = {
+  /**
+   * A card just became the front, clickable one (C-1). Rust refuses an allow
+   * that comes too soon after this (`too_soon`), so a click meant for the card
+   * before can never land on this one.
+   */
+  approvalShown: (requestId: string) => call<void>("approval_shown", { requestId }),
+  /**
+   * Every request still waiting for an answer, as the `hook` event carried it
+   * (C-11): the island re-adds the cards when it (re)loads.
+   */
+  approvalPending: () => call<Record<string, unknown>[]>("approval_pending"),
+  /**
+   * Why it is quiet right now; rejects when Rust could not be asked, so a failed
+   * call is never mistaken for "not quiet" (the island's 60 s check, C-14).
+   */
+  quietNow: () => callOrThrow<QuietReason>("quiet_state"),
 };
 
 export async function onEvent<T>(name: string, handler: (payload: T) => void) {

@@ -104,7 +104,8 @@ export class IslandStateMachine {
     if (this.pinned) return;
     this.homeCollapse = window.setTimeout(() => {
       this.homeCollapse = null;
-      if (this.state === "home") this.transition("petit");
+      // Pinned since the mouse left (a card arrived, the keyboard came back): stay.
+      if (this.state === "home" && !this.pinned) this.transition("petit");
     }, this.homeToPetitDelay * 1000);
   }
 
