@@ -5,16 +5,16 @@
 Bu kılavuz Nöbetçi'yi indirmekten Claude Code'a bağlamaya, güncellemekten kaldırmaya kadar her
 adımı anlatır. Sonda bir sorun giderme bölümü var.
 
-> **Mac mi kullanıyorsun?** 1–3. ve 8–10. bölümler Windows'u anlatır. Bu adımlar için
-> [macOS](#macos) bölümünü oku — geri kalanı iki sistemde de aynı.
+> **Mac ya da Linux mu kullanıyorsun?** 1–3. ve 8–10. bölümler Windows'u anlatır. Bu adımlar için
+> [macOS](#macos) ya da [Linux](#linux) bölümünü oku — geri kalanı her sistemde aynı.
 
 ## İçindekiler
 
 1. [Gereksinimler](#1-gereksinimler)
-2. [İndirme ve doğrulama](#2-indirme-ve-doğrulama)
+2. [Dosyayı indirme ve doğrulama](#2-dosyayı-indirme-ve-doğrulama)
 3. [Kurulum](#3-kurulum)
 4. [Kurulum sihirbazı (ilk açılış)](#4-kurulum-sihirbazı-ilk-açılış)
-5. [Claude Code'a bağlama](#5-claude-codea-bağlama)
+5. [Claude Code'a bağlama](#5-claude-codea-bağlama) (ve Codex, ChatGPT Work ve Cursor)
 6. [Çalıştığını deneme](#6-çalıştığını-deneme)
 7. [Önerilen ilk ayarlar](#7-önerilen-ilk-ayarlar)
 8. [Güncelleme](#8-güncelleme)
@@ -23,32 +23,36 @@ adımı anlatır. Sonda bir sorun giderme bölümü var.
 11. [Sorun giderme](#11-sorun-giderme)
 12. [Kaynaktan derleme](#12-kaynaktan-derleme)
 13. [macOS](#macos)
+14. [Linux](#linux)
 
 ## 1. Gereksinimler
 
 | | |
 | --- | --- |
 | İşletim sistemi | Windows 10 ya da 11, 64 bit — ya da macOS 11 ve üstü, bkz. [macOS](#macos) — ya da Linux, bkz. [Linux](#linux) |
-| Claude Code | Windows üzerinde çalışan Claude Code (terminal, VS Code, Cursor…). WSL içindeki Claude Code ayarlarını başka yerde tuttuğu için kapsam dışıdır. |
+| Claude Code | Windows üzerinde çalışan Claude Code (terminal, VS Code, Cursor, Claude masaüstü uygulaması…). WSL içindeki Claude Code ayarlarını başka yerde tuttuğu için kapsam dışıdır. Codex, ChatGPT Work ve Cursor isteğe bağlıdır. |
 | WebView2 | Windows 11'de ve güncel Windows 10'da hazır gelir; yoksa kurulum programı indirir. |
 | Yetki | Yönetici yetkisi **gerekmez**; Nöbetçi sadece senin kullanıcı hesabına kurulur. |
 
-## 2. İndirme ve doğrulama
+## 2. Dosyayı indirme ve doğrulama
 
-1. [Son sürüm sayfasından](https://github.com/tahap0l/nobetci/releases/latest) iki dosyayı
-   indir:
-   - `Nobetci-x.y.z-setup.exe` — kurulum programı
-   - `SHA256SUMS.txt` — dosyanın parmak izi
+1. [Son sürüm sayfasından](https://github.com/tahap0l/nobetci/releases/latest) şunları indir:
+   - `Nobetci-x.y.z-setup.exe` — kurulum programı (`x.y.z` sürüm numarasıdır; 2.4.1'den sonraki
+     sürümlerde aynı dosya `Nobetci-setup.exe` adıyla da durur)
+   - `SHA256SUMS.txt` — sürümdeki her dosyanın parmak izi
 2. İndirdiğin dosyanın yayınlananla aynı olduğunu kontrol et. İndirme klasöründe PowerShell aç ve
    şunu çalıştır:
 
    ```powershell
-   Get-FileHash .\Nobetci-2.0.1-setup.exe -Algorithm SHA256
+   Get-FileHash .\Nobetci*setup.exe -Algorithm SHA256
    Get-Content .\SHA256SUMS.txt
    ```
 
-   İki satırdaki uzun değer **birebir aynı** olmalı (büyük/küçük harf fark etmez). Farklıysa dosyayı
-   çalıştırma, tekrar indir.
+   Uzun değer, o dosya için listelenenle **birebir aynı** olmalı (büyük/küçük harf fark etmez).
+   Farklıysa dosyayı çalıştırma, tekrar indir.
+
+Sürümler henüz kod imzalı olmadığı için (bkz. [kod imzalama politikası](../CODE_SIGNING_POLICY.md))
+dosyanın yayımlanan dosya olduğunu sana bu kontrol söyler.
 
 ## 3. Kurulum
 
@@ -57,9 +61,10 @@ adımı anlatır. Sonda bir sorun giderme bölümü var.
    SmartScreen yeni dosyayı tanımıyor. Parmak izini doğruladıysan **Ek bilgi → Yine de çalıştır**'a
    tıkla.
 3. Kurulum birkaç saniye sürer ve `%LOCALAPPDATA%\Nobetci` klasörüne yapılır. Başlat menüsünde
-   **Nobetci** olarak görünür.
+   **Nobetci** olarak görünür. Kurulum programı Türkçe Windows'ta Türkçe, diğer her dilde İngilizce
+   konuşur.
 
-> Sessiz kurulum için: `Nobetci-2.0.1-setup.exe /S`
+> Sessiz kurulum için: `.\Nobetci-x.y.z-setup.exe /S` (`x.y.z` yerine kendi sürümünle).
 
 ## 4. Kurulum sihirbazı (ilk açılış)
 
@@ -82,20 +87,40 @@ yeniden açmak için: **Ayarlar → Hakkında → Kurulum sihirbazını yeniden 
 ## 5. Claude Code'a bağlama
 
 Nöbetçi, Claude Code'u **hook**'lar üzerinden görür. Hook'lar `~/.claude/settings.json`
-(`C:\Users\<sen>\.claude\settings.json`) dosyasına eklenir.
+(`C:\Users\<sen>\.claude\settings.json`) dosyasına — Claude Code'un ayarlarını `CLAUDE_CONFIG_DIR`
+ile başka bir klasörde tutuyorsan oradaki `settings.json`'a — eklenir.
 
 1. Sihirbazın **Bağlantı** adımında ya da **Ayarlar → Claude Code → Hook'ları kur…** ile başlat.
 2. Nöbetçi dosyada yapılacak değişikliği **fark (diff)** olarak gösterir: eklenen satırlar yeşil.
-   Diğer ayarların ve başka araçların hook'ları olduğu gibi kalır.
+   Diğer ayarların ve başka araçların hook'ları olduğu gibi kalır. Önizleme açıkken sayfadaki başka
+   hiçbir şey yazılacak olanı değiştiremez.
 3. Değişikliğe göz at ve **Onayla ve yaz**'a tıkla. Yazmadan önce aynı klasöre tarihli bir yedek
-   alınır (`settings.json.bak-YYYYMMDD-HHMMSS`).
+   alınır (`settings.json.bak-YYYYMMDD-HHMMSS`). Dosya önizlemeden sonra değiştiyse Nöbetçi yazmayı
+   reddeder ve yeni bir önizleme sunar.
 4. **Ayarlar → Claude Code → Sağlık testi**'ne bas. Tüm satırlar ✓ olmalı:
-   - hook'lar `settings.json`'da,
+   - hook'lar `settings.json`'da, `PermissionRequest` ve `PreToolUse` da aralarında,
    - relay (`nobetci-hook.exe`) yerinde,
    - pipe üzerinden ping ulaşıyor (birkaç milisaniye),
    - fiziksel tıklama koruması hazır.
 5. **Açık olan Claude Code oturumlarını yeniden başlat.** Claude Code hook'ları oturum başlarken
    okur.
+
+`PreToolUse` göründüğünden önemlidir: adanın cevapladığı soruları ve planları, `PermissionRequest`'i
+hiç çalıştırmayan Claude masaüstü uygulamasında da bütün onayları o taşır. Açık bırak.
+
+### Codex, ChatGPT Work ve Cursor (isteğe bağlı)
+
+- **Codex ve ChatGPT Work:** **Ayarlar → ChatGPT → Bağla…** aynı türden incelenmiş bir farktan sonra
+  Nöbetçi'nin hook'larını Codex'in `hooks.json` dosyasına (`$CODEX_HOME` içinde ya da `~/.codex`
+  altında) yazar. Ardından hook'ları ChatGPT masaüstü uygulamasında **Ayarlar → Hooks**
+  bölümünde inceleyip güvenilir olarak işaretle (liste boşsa Codex görünümünde yerel bir proje ekleyip
+  listeyi yenile) ya da Codex CLI'da `/hooks` komutunu kullan. Yeni bir yerel sohbette mesaj gönder
+  ve geldiğini görmek için **Sağlık testi**'ni çalıştır. Work Cloud yerel hook'ları çalıştırmaz.
+- **Cursor:** **Ayarlar → Diğer ajanlar → Bağla…** `~/.cursor/hooks.json` dosyasını yazar. Nöbetçi
+  bir Cursor kabuk ya da MCP isteğine cevap vermezse — kapalı ya da duraklatılmışsa, isteği geri
+  verdiysen ya da süre dolduysa — Cursor sana kendisi sorar. Ama Nöbetçi Cursor izin hook'larını
+  *güvenli tarafta kapanacak* (fail-closed) biçimde kurar: relay'in kendisi çalışamazsa Cursor
+  komutu engeller. Nöbetçi'yi kaldırmadan önce bağlantıyı kaldır (bkz. [Kaldırma](#9-kaldırma)).
 
 ## 6. Çalıştığını deneme
 
@@ -104,7 +129,8 @@ Nöbetçi, Claude Code'u **hook**'lar üzerinden görür. Hook'lar `~/.claude/se
 2. Claude'dan izin gerektiren bir şey iste, örneğin önceden izin vermediğin bir komutu çalıştırmasını.
 3. Ada bir **onay kartıyla** açılır: komutun tamamı, risk seviyesi ve gerekçeler.
 4. **İzin ver**'e normal şekilde tıkla. YÜKSEK ve KRİTİK isteklerde butonu çubuk dolana kadar basılı
-   tut.
+   tut. Yeni açılmış bir kart bir an tıklama kabul etmez; böylece kazara yapılan bir çift tıklama onu
+   onaylayamaz.
 
 İstersen **Ayarlar → Güvenlik → Risk motorunu dene** bölümüne bir komut yazıp nasıl
 puanlandığını hiçbir şey çalıştırmadan görebilirsin.
@@ -122,28 +148,56 @@ mesajlarını otomatik okumaz ya da göndermez.
 | --- | --- | --- |
 | Windows açılınca başlat | Ayarlar → Genel | Açık — Nöbetçi kapalıyken sorular terminale düşer. |
 | Otomatik izin tavanı | Ayarlar → Güvenlik | **Sadece DÜŞÜK** (varsayılan). YÜKSEK ve KRİTİK zaten asla otomatik onaylanmaz. |
-| Fiziksel tıklama koruması | Ayarlar → Güvenlik | Açık (varsayılan). Dokunmatik ekran ya da erişilebilirlik aracı kullanıyorsan bkz. [sorun giderme](#onay-reddedildi-fiziksel-tıklama-değil). |
+| Fiziksel tıklama koruması | Ayarlar → Güvenlik | Açık (varsayılan). Dokunmatik ekran, dizüstü dokunmatik yüzeyi ya da erişilebilirlik aracı kullanıyorsan bkz. [sorun giderme](#onay-reddedildi-fiziksel-tıklama-değil). |
 | Kurallar | Ayarlar → Kurallar | Şablonlardan başla: `npm test`'e izin ver, force push yasak, `.env` dosyalarını okumasın. |
 | Kısayollar | Ayarlar → Bildirimler | Ctrl+Alt+N adayı açar, Ctrl+Alt+D karttaki isteği reddeder. |
 | Rahatsız etme | Adanın başlığındaki buton ya da tepsi menüsü | Sunum ya da oyun sırasında. Tam ekranda zaten kendiliğinden sessizleşir. |
 
 ## 8. Güncelleme
 
-Yeni sürümün kurulum programını indirip (parmak izini doğrulayarak) çalıştırman yeterli. Ayarların,
-geçmişin ve Claude Code hook'ların korunur. Güncelleme sırasında Nöbetçi kapanır; kurulum bitince
-yeniden aç.
+Yeni sürümün kurulum programını indirip (parmak izini doğrulayarak) çalıştırman yeterli. Güncelleme
+sırasında Nöbetçi kapanır; kurulum bitince yeniden aç.
+
+Kurulu sürümün üstüne başka bir sürüm kurmak — daha yeni ya da daha eski — kaldırma değil
+güncellemedir: ayarların, ajandan ve geçmişin, Claude Code, Codex ve Cursor hook'ların ve **Windows
+açılınca başlat** hangi sürümden güncellersen güncelle korunur. Bunları yalnızca, zaten kurulu olan
+sürümü yeniden çalıştırdığında kurulum programının gösterdiği sayfada kaldırmayı seçmek siler.
+
+Yeni bir sürüm hook'ların ihtiyacını değiştirirse **Ayarlar → Claude Code** (ya da **ChatGPT**,
+**Diğer ajanlar**) bağlantının güncel olmadığını söyler; farkı inceleyip orada güncelle.
 
 ## 9. Kaldırma
 
 **Ayarlar → Uygulamalar → Yüklü uygulamalar** (Windows 10'da **Uygulamalar ve özellikler**) içinde
 **Nobetci**'yi bulup **Kaldır**'a tıkla. Kaldırıcı:
 
-1. `~/.claude/settings.json` içindeki **yalnızca Nöbetçi'ye ait** girdileri siler; önce tarihli bir
-   yedek alır, dosyadaki başka hiçbir şeye dokunmaz;
-2. uygulamayı, relay'i ve kayıt dosyasını siler.
+1. Nöbetçi açıksa kapatmanı ister — orada **İptal** hiçbir şeyi değiştirmez;
+2. `nobetci.exe --remove-hooks` çalıştırır; bu da `~/.claude/settings.json`'dan, Codex'in
+   `hooks.json` dosyasından ve `~/.cursor/hooks.json`'dan **yalnızca Nöbetçi'ye ait** girdileri,
+   her birinin yanına tarihli bir yedek aldıktan sonra (`settings.json.bak-…`, `hooks.json.bak-…`)
+   siler. Bu dosyalarda başka hiçbir şey değişmez. Onlara ekranda fark göstermeden yapılan tek yazma
+   budur;
+3. uygulamayı, relay'i, kayıt dosyasını ve **Windows açılınca başlat** girdilerini siler.
 
-Ayarların (`%APPDATA%\Nobetci`) ve geçmişin (`%LOCALAPPDATA%\Nobetci\audit.jsonl`) kalır; yeniden
-kurarsan kaldığın yerden devam eder. İz bırakmamak için bu iki klasörü de sil.
+Hook'lar kaldırılamazsa (örneğin salt okunur ya da kilitli bir dosya yüzünden) kaldırıcı relay'i ve
+kayıt dosyasını yerinde bırakır; böylece Claude Code, Codex ve Cursor çalışmaya devam eder. Hangi
+girdileri elle sileceğini de gösterir; neyin ters gittiğini kayıt dosyası söyler.
+
+Ayarların ve ajandan (`%APPDATA%\Nobetci`) ve geçmişin (`%LOCALAPPDATA%\Nobetci\audit.jsonl`)
+kalır; yeniden kurarsan kaldığın yerden devam eder. `%APPDATA%\Nobetci`, `%LOCALAPPDATA%\Nobetci`
+ve WebView'ün kendi klasörlerini de silmek için kaldırıcıda **Uygulama verilerini sil** kutusunu
+işaretle.
+
+Her değişikliği incelemek istersen önce bağlantıları **Ayarlar → Claude Code → Kaldır…**,
+**Ayarlar → ChatGPT → Bağlantıyı kaldır…** ve **Ayarlar → Diğer ajanlar → Bağlantıyı kaldır…** ile
+kaldır.
+
+[ChatGPT Web köprüsünü](../integrations/chatgpt-web/README.md) kurduysan tarayıcı eklentisini de,
+PowerShell'de kaydını da kaldır (Edge için `Google\Chrome` yerine `Microsoft\Edge` yaz):
+
+```powershell
+Remove-Item 'HKCU:\Software\Google\Chrome\NativeMessagingHosts\io.github.tahap0l.nobetci.chatgpt'
+```
 
 ## 10. Dosyalar nerede?
 
@@ -152,9 +206,12 @@ kurarsan kaldığın yerden devam eder. İz bırakmamak için bu iki klasörü d
 | Uygulama | `%LOCALAPPDATA%\Nobetci\` |
 | Relay | `%LOCALAPPDATA%\Nobetci\bin\nobetci-hook.exe` |
 | Ayarlar | `%APPDATA%\Nobetci\settings.json` |
+| Ajanda | `%APPDATA%\Nobetci\agenda.json` |
 | Geçmiş | `%LOCALAPPDATA%\Nobetci\audit.jsonl` (+ `audit.1.jsonl`) |
 | Kayıt (log) | `%LOCALAPPDATA%\Nobetci\nobetci.log` |
 | Claude Code hook'ları | `%USERPROFILE%\.claude\settings.json` (yedekler: `settings.json.bak-*`) |
+| Codex hook'ları | `%CODEX_HOME%\hooks.json` ya da `%USERPROFILE%\.codex\hooks.json` (yedekler: `hooks.json.bak-*`) |
+| Cursor hook'ları | `%USERPROFILE%\.cursor\hooks.json` (yedekler: `hooks.json.bak-*`) |
 
 **Ayarlar → Hakkında** sayfasındaki butonlar bu dosyaları Dosya Gezgini'nde gösterir.
 
@@ -174,7 +231,8 @@ kurarsan kaldığın yerden devam eder. İz bırakmamak için bu iki klasörü d
 ### Sağlık testi: "Relay bulunamadı"
 
 Nöbetçi'yi kapatıp yeniden aç; relay her açılışta yerine kopyalanır. Antivirüs yazılımın
-`%LOCALAPPDATA%\Nobetci\bin\nobetci-hook.exe` dosyasını karantinaya aldıysa geri yükle ve istisna ekle.
+`%LOCALAPPDATA%\Nobetci\bin\nobetci-hook.exe` dosyasını karantinaya aldıysa geri yükle ve istisna
+ekle. Relay eksikken Nöbetçi hook kurmaz, çünkü o zaman her hook hata verirdi.
 
 ### Sağlık testi: "Ping pipe'a ulaşmadı"
 
@@ -192,8 +250,20 @@ doğrular. Şunlar "gerçek fare basışı" üretmeyebilir:
 - uzak masaüstü / uzaktan kontrol yazılımları,
 - ekran klavyesi, sesli kontrol gibi erişilebilirlik araçları.
 
-Bunlardan birini kullanıyorsan **Ayarlar → Güvenlik → Fiziksel tıklama koruması**'nı kapat. Normal
-bir fareyle tıkladığın hâlde reddediliyorsa lütfen bir issue aç. Bu bir hata olur.
+Bunlardan birini kullanıyorsan **Ayarlar → Güvenlik → Fiziksel tıklama koruması**'nı kapat. Koruma
+o zaman DÜŞÜK ve ORTA onayları denetlemeyi bırakır; YÜKSEK ve KRİTİK onaylar her zaman gerçek bir
+basış ve basılı tutma ister. Bunu yapamadığında o istekleri terminalde karara bağla (**Terminale
+bırak**).
+
+**Dizüstü dokunmatik yüzeyinde:** Bazı Windows dizüstülerinin hassas dokunmatik yüzeyleri basışı,
+geldiği aygıtın adını vermeden bildirir; bir programın sahte tıklaması da tam böyle görünür, bu yüzden
+Nöbetçi onu reddeder. Dokunmatik yüzeyle yaptığın tıklama reddediliyorsa
+`%LOCALAPPDATA%\Nobetci\nobetci.log` dosyasında *a press without a device handle counts as
+synthetic* diye başlayan bir satır ara. Varsa bir fareyle onayla ya da korumayı yukarıdaki gibi
+kapat. Korumanın bu aygıtı tanımayı öğrenebilmesi için dizüstünün modeliyle bir issue da aç.
+
+Normal bir fareyle tıkladığın hâlde reddediliyorsa lütfen bir issue aç; bu bir hata olur. Fare
+düğmelerini yer değiştirdiysen (solak kullanım) koruma seçtiğin birincil düğmeyi izler.
 
 > Bu uyarıyı **sen tıklamadığın hâlde** görüyorsan, bilgisayarındaki bir program senin yerine
 > onaylamaya çalışmış demektir. İsteği reddet ve o sırada ne çalıştığını kontrol et.
@@ -205,13 +275,42 @@ başka bir uygulama aynı tuşları kullanıyordur; farklı bir kombinasyon seç
 
 ### Ses ya da bildirim gelmiyor
 
-Rahatsız etme, sessiz saatler ya da tam ekran sessizliği açık olabilir (adanın başlığında yazar). Windows'un
-**Odaklanma / Rahatsız etmeyin** modu da Nöbetçi bildirimlerini gizler.
+Rahatsız etme, sessiz saatler ya da tam ekran sessizliği açık olabilir (adanın başlığında yazar).
+Başlangıcı ve bitişi aynı olan sessiz saatler hiç uygulanmaz. Windows'un **Odaklanma / Rahatsız
+etmeyin** modu da Nöbetçi bildirimlerini gizler. Varsayılan ayarlarla Nöbetçi bildirimi yalnızca ada
+açık değilken gönderir (**Ayarlar → Bildirimler**).
 
 ### Ada yanlış ekranda ya da bir şeyin üstünü kapatıyor
 
 **Ayarlar → Genel**'den **Konum** (sol / orta / sağ) ve **Ekran** (ana ekran / imlecin olduğu
 ekran) ayarlarını değiştir.
+
+### Cursor her komutta soruyor ya da her komutu engelliyor
+
+Nöbetçi bir Cursor isteğine cevap vermezse — kapalı ya da duraklatılmışsa, isteği geri verdiysen ya
+da süre dolduysa — Cursor sana kendisi sorar. Bu beklenen davranış. Cursor her kabuk ve MCP komutunu
+*engelliyorsa*, hook'ları çalışamayan bir relay'i gösteriyordur; çoğunlukla Nöbetçi, Cursor
+bağlantısı kaldırılmadan silindiği içindir: Nöbetçi'yi yeniden kurup **Ayarlar → Diğer ajanlar →
+Bağlantıyı kaldır…**'ı kullan ya da `~/.cursor/hooks.json` dosyasından `nobetci-hook` geçen
+girdileri sil (veya `hooks.json.bak-*` yedeklerinden birini geri yükle).
+
+### Claude masaüstü uygulamasında komutlar adayı bekliyor
+
+Claude masaüstü uygulaması Claude Code'un `PermissionRequest` hook'unu hiç çalıştırmaz; bu yüzden
+Nöbetçi `PreToolUse` üzerinden sorar. Bu hook uygulamanın kendi izin denetiminden önce çalıştığı
+için Claude izin kurallarının zaten izin verdiği komutlar da adayı bekler; kimse cevap vermezse
+uygulama en fazla 108 saniye sonra normalde nasıl davranacaksa öyle devam eder. Bir masaüstü
+oturumunu başında kimse olmadan çalışmaya bırakmadan önce Nöbetçi'yi tepsiden duraklat (istekler o
+zaman doğrudan geri döner) ya da DÜŞÜK istekleri güvenilir bir proje veya kurallarla geçir.
+
+### Ayarlarım sıfırlandı ve bir `.unreadable-…` dosyası belirdi
+
+Nöbetçi `settings.json`'ı okuyamazsa (JSON'u bozan bir elle düzenleme, bir disk hatası) varsayılan
+ayarlarla açılır, dosyayı yanına `settings.json.unreadable-<tarih>` adıyla kopyalar ve bunu
+Ayarlar'da söyler. Yeniden başlatana kadar asıl dosyanın üzerine kaydetmez. Dosyayı düzelt ya da
+geri yükle, sonra Nöbetçi'yi yeniden başlat. `agenda.json` için de aynı özen gösterilir: okunamayan
+bir öğe atlanır ve diğerleri korunur; hiç okunamayan bir dosya ise herhangi bir kayıttan önce
+`agenda.json.unreadable-<tarih>` adıyla kopyalanır.
 
 ### Windows Defender kurulum programını işaretledi
 
@@ -222,7 +321,8 @@ bildirmek de yardımcı olur.
 ### Nöbetçi'yi elle sildim, Claude Code her adımda hook hatası veriyor
 
 Hook'lar artık olmayan bir dosyayı gösteriyor. En kolayı Nöbetçi'yi yeniden kurup **Ayarlar → Claude
-Code → Kaldır…** ile hook'ları silmek ya da normal yoldan kaldırmak. Alternatif olarak
+Code → Kaldır…** (bağladıysan ChatGPT ve Diğer ajanlar altındaki **Bağlantıyı kaldır…**) ile
+hook'ları silmek ya da normal yoldan kaldırmak. Alternatif olarak
 `~/.claude/settings.json.bak-*` yedeklerinden birini geri yükleyebilirsin.
 
 ### Daha fazla yardım
@@ -249,6 +349,9 @@ Mac'te: Xcode Command Line Tools (`xcode-select --install`), iki Apple hedefiyle
 (`rustup target add aarch64-apple-darwin x86_64-apple-darwin`) ve Node.js 22 ya da üstünü kur;
 sonra `npm ci`, `npm test` ve `npm run pack:mac` (→ `release/Nobetci-<sürüm>-macos-universal.dmg`).
 
+Linux'ta: Rust, Node.js 22 ya da üstü ve [README](../README.tr.md#kaynaktan-derleme)'deki
+geliştirme paketleri; sonra `npm ci`, `npm test` ve `npm run pack:linux`.
+
 Ayrıntılar için [CONTRIBUTING.md](../CONTRIBUTING.md).
 
 ## macOS
@@ -262,7 +365,7 @@ olanları anlatır.
 | | |
 | --- | --- |
 | macOS | 11 Big Sur ya da üstü; Apple Silicon ya da Intel (tek, universal uygulama) |
-| Claude Code | Doğrudan Mac'te çalışan: Terminal, iTerm2, VS Code, Cursor… |
+| Claude Code | Doğrudan Mac'te çalışan: Terminal, iTerm2, VS Code, Cursor, Claude masaüstü uygulaması… |
 | Yetki | Bir uygulamayı Uygulamalar klasörüne sürüklemekten fazlası gerekmez |
 
 ### İndirme ve doğrulama
@@ -273,28 +376,29 @@ olanları anlatır.
 
    ```sh
    cd ~/Downloads
-   shasum -a 256 Nobetci-2.0.1-macos-universal.dmg
+   shasum -a 256 Nobetci*macos-universal.dmg
    grep macos SHA256SUMS.txt
    ```
 
-   İki satırdaki uzun değer aynı olmalı. Farklıysa dosyayı açma, tekrar indir.
+   Değer, o dosya için listelenenle aynı olmalı. Farklıysa dosyayı açma, tekrar indir.
 
 ### Kurulum ve ilk açılış
 
-1. Disk görüntüsünü aç, **Nobetci**'yi **Uygulamalar** (Applications) klasörüne sürükle, sonra
-   disk görüntüsünü çıkar.
-2. **Nobetci**'yi Uygulamalar'dan ya da Spotlight'tan aç. Sürümler henüz Apple tarafından
+1. Disk görüntüsünü aç, baykuşu **Uygulamalar** (Applications) klasörüne sürükle, sonra disk
+   görüntüsünü çıkar. (Finder uygulamayı Nöbetçi ya da Nobetci diye gösterebilir; diskte her zaman
+   `/Applications/Nobetci.app` olarak durur.)
+2. Uygulamayı Uygulamalar'dan ya da Spotlight'tan aç. Sürümler henüz Apple tarafından
    onaylanmadığı (notarize edilmediği) için macOS ilk seferde durdurur:
-   - **macOS 15 Sequoia ve sonrası:** Apple'ın "Nobetci"nin zararlı yazılım içermediğini
+   - **macOS 15 Sequoia ve sonrası:** Apple'ın uygulamanın zararlı yazılım içermediğini
      doğrulayamadığını söyleyen bir mesaj çıkar. **Bitti**'yi seç. **Sistem Ayarları → Gizlilik
-     ve Güvenlik**'i aç, *"Nobetci", Mac'inizi korumak için engellendi* satırına in, **Yine de
-     Aç**'a tıkla, parolan ya da Touch ID ile onayla ve bir kez daha **Yine de Aç**'ı seç.
-   - **macOS 14 ve öncesi:** Uygulamalar'da **Nobetci**'ye Control tuşuyla tıkla, **Aç**'ı seç,
-     sonra yine **Aç**'ı seç.
+     ve Güvenlik**'i aç, uygulamanın Mac'ini korumak için engellendiğini söyleyen satıra in, **Yine
+     de Aç**'a tıkla, parolan ya da Touch ID ile onayla ve bir kez daha **Yine de Aç**'ı seç.
+   - **macOS 14 ve öncesi:** Uygulamalar'da uygulamaya Control tuşuyla tıkla, **Aç**'ı seç, sonra
+     yine **Aç**'ı seç.
 
    Bunu bir kez, bir de her güncellemeden sonra yaparsın.
-3. **"Nobetci hasarlı ve açılamıyor" mu diyor?** Gerçek bir hasar değil, indirmenin karantina
-   işareti. SHA-256'yı doğruladıktan sonra Terminal'de işareti kaldırıp tekrar aç:
+3. **"… hasarlı ve açılamıyor" mu diyor?** Gerçek bir hasar değil, indirmenin karantina işareti.
+   SHA-256'yı doğruladıktan sonra Terminal'de işareti kaldırıp tekrar aç:
 
    ```sh
    xattr -dr com.apple.quarantine /Applications/Nobetci.app
@@ -302,8 +406,8 @@ olanları anlatır.
 
    (Bir ajan bu komutu çalıştırmak isterse Nöbetçi onu YÜKSEK sayar — burada az önce doğruladığın
    bir uygulama için bunu yapan sensin.)
-4. macOS sorduğunda bildirimlere izin ver. Sonradan **Sistem Ayarları → Bildirimler →
-   Nobetci**'den değiştirebilirsin.
+4. macOS sorduğunda bildirimlere izin ver. Sonradan **Sistem Ayarları → Bildirimler**'den
+   değiştirebilirsin.
 
 Baykuş menü çubuğunun hemen altında selam verir ve kurulum sihirbazı açılır —
 [4. bölümden](#4-kurulum-sihirbazı-ilk-açılış) devam et.
@@ -315,7 +419,8 @@ Baykuş menü çubuğunun hemen altında selam verir ve kurulum sihirbazı açı
 - **Ada menü çubuğunun altında durur.** Çentikli MacBook'larda kamera çıkıntısının arkasında
   hiçbir şey kaybolmaz.
 - **Kısayollar.** Ctrl, ⌃ Control; Alt, ⌥ Option tuşudur. Varsayılanlar ⌃⌥N (adayı aç) ve ⌃⌥D
-  (reddet). Kendi kısayollarında ⌘ da kullanabilirsin.
+  (reddet). Kendi kısayollarında ⌘ da kullanabilirsin. macOS kısayolu tuşun yerine bağlar; bu
+  yüzden harfler ABD klavyesindeki adlarıyla görünür.
 - **Pencereye git**, oturumun uygulamasını (Terminal, iTerm2, VS Code…) öne getirir; belirli bir
   pencereyi ya da sekmeyi değil.
 - **Ada hiç odak almaz.** Yüzen bir paneldir: ona tıklamak terminalini etkin uygulama olarak
@@ -333,21 +438,32 @@ Baykuş menü çubuğunun hemen altında selam verir ve kurulum sihirbazı açı
 
 ### Güncelleme
 
-Yeni disk görüntüsünü indirip doğrula, Nöbetçi'den menü çubuğundan çık, yeni **Nobetci**'yi
+Yeni disk görüntüsünü indirip doğrula, Nöbetçi'den menü çubuğundan çık, yeni uygulamayı
 Uygulamalar'a sürükle ve **Değiştir**'i seç. **Yine de Aç**'ı bir kez daha onaylaman gerekebilir.
-Ayarların, geçmişin ve Claude Code hook'ların korunur.
+Ayarların, ajandan, geçmişin ve hook'ların korunur.
 
 ### Kaldırma
 
-1. **Ayarlar → Claude Code → Kaldır…**, Nöbetçi'nin girdilerini `~/.claude/settings.json`'dan
-   çıkarır; her zamanki gibi fark gösterir ve tarihli yedek alır.
-2. **Oturum açınca başlat** açıksa **Ayarlar → Genel**'den kapat.
-3. Nöbetçi'den menü çubuğundan çık ve **Nobetci**'yi Uygulamalar'dan Çöp Sepeti'ne taşı.
-4. Hiç iz kalmasın istiyorsan `~/Library/Application Support/Nobetci` klasörünü de sil.
+Nöbetçi'nin hook'ları başka programların ayar dosyalarında durur; uygulamayı silmeden önce onları
+çıkar. Relay yerinde durduğu sürece unutulan bir hook zarar vermez; ama relay silinince Claude Code
+her adımda hook hatası bildirir, izin hook'ları güvenli tarafta kapanan (fail-closed) Cursor da her
+kabuk ve MCP komutunu engeller.
 
-1. adımı unuttun mu? Bir şey bozulmaz: relay o klasörde durur, dinleyen kimseyi bulamayıp çıkar ve
-Claude Code yoluna devam eder. Uygulamayı silmeden önce
-`/Applications/Nobetci.app/Contents/MacOS/nobetci --remove-hooks` komutunu da çalıştırabilirsin.
+1. Terminal'de şunu çalıştır:
+
+   ```sh
+   /Applications/Nobetci.app/Contents/MacOS/nobetci --remove-hooks
+   ```
+
+   Bu, `~/.claude/settings.json`'dan, Codex'in `hooks.json` dosyasından ve `~/.cursor/hooks.json`'dan
+   yalnızca Nöbetçi'nin kendi girdilerini, her birinin yanına tarihli bir yedek bırakarak siler ve
+   fark göstermez. (Bir ajan onu çalıştırmak isterse Nöbetçi bunu KRİTİK sayar — burada çalıştıran
+   sensin.) Her değişikliği incelemek istersen **Ayarlar → Claude Code → Kaldır…**, **Ayarlar →
+   ChatGPT → Bağlantıyı kaldır…** ve **Ayarlar → Diğer ajanlar → Bağlantıyı kaldır…** düğmelerini
+   kullan.
+2. **Oturum açınca başlat** açıksa **Ayarlar → Genel**'den kapat.
+3. Nöbetçi'den menü çubuğundan çık ve uygulamayı Uygulamalar'dan Çöp Sepeti'ne taşı.
+4. Hiç iz kalmasın istiyorsan `~/Library/Application Support/Nobetci` klasörünü de sil.
 
 ### Dosyalar nerede?
 
@@ -355,11 +471,13 @@ Claude Code yoluna devam eder. Uygulamayı silmeden önce
 | --- | --- |
 | Uygulama | `/Applications/Nobetci.app` |
 | Ayarlar | `~/Library/Application Support/Nobetci/settings.json` |
+| Ajanda | `~/Library/Application Support/Nobetci/agenda.json` |
 | Geçmiş | `~/Library/Application Support/Nobetci/audit.jsonl` (+ `audit.1.jsonl`) |
 | Kayıt (log) | `~/Library/Application Support/Nobetci/nobetci.log` |
 | Relay | `~/Library/Application Support/Nobetci/bin/nobetci-hook` |
 | Relay soketi | `~/Library/Application Support/Nobetci/nobetci.sock` |
 | Claude Code hook'ları | `~/.claude/settings.json` (yedekler: `settings.json.bak-*`) |
+| Codex ve Cursor hook'ları | `$CODEX_HOME/hooks.json` ya da `~/.codex/hooks.json`; `~/.cursor/hooks.json` (yedekler: `hooks.json.bak-*`) |
 
 Finder `~/Library` klasörünü gizler: **Git → Klasöre Git…** (⇧⌘G) ile yolu yapıştır ya da
 **Ayarlar → Hakkında**'daki butonları kullan.
@@ -372,50 +490,139 @@ Finder `~/Library` klasörünü gizler: **Git → Klasöre Git…** (⇧⌘G) il
   Universal Control (başka bir Mac'in klavye ve faresi) ve Sesle Denetim ya da Anahtar Denetimi
   gibi erişilebilirlik araçları, macOS'un "bir programdan geldi" diye işaretlediği tıklamalar
   gönderir. Mac'in kendi faresini ya da trackpad'ini kullan veya **Ayarlar → Güvenlik → Fiziksel
-  tıklama koruması**'nı kapat. Sıradan bir trackpad tıklaması reddediliyorsa lütfen bir issue aç
-  — macOS koruması yeni.
-- **Bildirim gelmiyor.** **Sistem Ayarları → Bildirimler → Nobetci**'den izin ver; bir Odak modu
-  da bildirimleri gizleyebilir.
+  tıklama koruması**'nı kapat (yalnızca DÜŞÜK ve ORTA için; YÜKSEK ve KRİTİK her zaman gerçek bir
+  basılı tutma ister). Sıradan bir trackpad tıklaması reddediliyorsa lütfen bir issue aç.
+- **Bildirim gelmiyor.** **Sistem Ayarları → Bildirimler**'den izin ver; bir Odak modu da
+  bildirimleri gizleyebilir.
+- **Medya kartı bir şey göstermiyor ya da oynatıcıyı yönetemiyor.** **Sistem Ayarları → Gizlilik
+  ve Güvenlik → Otomasyon**'dan Nöbetçi'ye izin ver.
 - **Kısayollar çalışmıyor.** **Ayarlar → Bildirimler → Kısayollar**, bir kombinasyonu başka bir
   uygulamanın kullanıp kullanmadığını gösterir.
 - **Ada istediğim ekranda değil.** **Ayarlar → Genel**'den **Ekran**'ı değiştir.
 
 ## Linux
 
-Kurulum sihirbazı, Claude Code'a bağlama, deneme ve önerilen ayarlar (4–7. bölümler) Linux'ta da
-aynı.
+Kurulum sihirbazı, Claude Code'a bağlama, deneme, önerilen ayarlar ve sorun gidermenin çoğu
+(4–7. ve 11. bölümler) Linux'ta da aynı.
 
 ### Gereksinimler
 
 | | |
 | --- | --- |
 | Dağıtım | WebKitGTK 4.1 olan x86-64: Ubuntu 22.04+, Debian 12+, Fedora 38+, Arch… |
-| Masaüstü | X11 ya da XWayland üzerinden Wayland (GNOME, KDE Plasma, Xfce, Cinnamon…) |
-| Tepsi | GNOME'da AppIndicator eklentisi gerekir; diğer masaüstlerinin çoğunda tepsi zaten var |
+| Masaüstü | X11 ya da XWayland üzerinden Wayland (GNOME, KDE Plasma, Xfce, Cinnamon…) — bkz. [Wayland](#wayland) |
+| Bileşikleştirici | X11'de bileşikleştirme yapan bir pencere yöneticisi: ada saydam bir penceredir. GNOME, KDE Plasma ve Cinnamon'da hazır gelir; Xfce'de pencere yöneticisinin ince ayarlarındaki (**Window Manager Tweaks**) **Compositor** sekmesinden aç; yalın bir pencere yöneticisinde `picom` gibi birini çalıştır |
+| Tepsi | GNOME'da AppIndicator eklentisi gerekir (Ubuntu'da zaten var); diğer masaüstlerinin çoğunda tepsi var |
 
 ### Kurulum
 
 [Son sürümden](https://github.com/tahap0l/nobetci/releases/latest) `.deb` ya da AppImage ile
-`SHA256SUMS.txt` dosyasını indir, `sha256sum` ile doğrula, sonra
-`sudo apt install ./Nobetci-x.y.z-linux-amd64.deb` çalıştır ya da
-`chmod +x Nobetci-x.y.z-linux-amd64.AppImage` deyip AppImage'ı aç.
+`SHA256SUMS.txt` dosyasını indir ve indirme klasöründe doğrula:
+
+```sh
+sha256sum --check --ignore-missing SHA256SUMS.txt
+```
+
+İndirdiğin her dosya için `OK` yazmalı. Sonra ya paketi kur:
+
+```sh
+sudo apt install ./Nobetci-x.y.z-linux-amd64.deb
+```
+
+ya da AppImage'ı çalıştırılabilir yapıp aç:
+
+```sh
+chmod +x Nobetci-x.y.z-linux-amd64.AppImage
+./Nobetci-x.y.z-linux-amd64.AppImage
+```
 
 ### Linux'ta neler farklı
 
 - **Pencere X11 üzerinden çalışır.** Wayland'de Nöbetçi kendini XWayland'de başlatır; böylece ada
   ekranın üstüne yerleşip diğer pencerelerin üstünde kalabilir.
-- **Tıklama koruması** XInput2 ham olaylarını okur ve `xdotool` gibi araçların kullandığı XTEST
-  aygıtından gelen tıklamaları reddeder.
+- **Tıklama koruması** XInput2 ham olaylarını okur ve her basışta arkasındaki aygıtı X sunucusuna
+  sorar: XTEST aygıtından gelen tıklamalar — `xdotool` gibi araçların kullandığı, bir programın
+  sonradan eklediği dahil — reddedilir.
 - **Pencereye git**, pencere yöneticisinden oturumun süreç zincirine ait pencereyi öne getirmesini
   ister.
 - **Medya kartı** MPRIS destekleyen her oynatıcıyla çalışır — Spotify, VLC, Firefox, Chromium,
   MPRIS eklentili mpv.
+- **Sesle yazma yok.** Linux'ta sistem dikte özelliği olmadığı için asistanda 🎙 düğmesi yok.
 - **Gizli bilgiler** (isteğe bağlı OpenAI anahtarı) Secret Service'e (GNOME Keyring, KWallet) gider.
+
+### Wayland
+
+Bir Wayland oturumunda (güncel Ubuntu, Fedora ve KDE Plasma'nın varsayılanı) Nöbetçi'nin penceresi
+XWayland'de çalışır ve yalnızca X11'in ona gösterdiğini görür:
+
+- **Genel kısayollar** yalnızca bir X11 (XWayland) penceresi odaktayken çalışır. Önde yerel bir
+  Wayland penceresi varken tepsi menüsünü kullan ya da adaya tıkla.
+- **Pencereye git**, doğrudan Wayland'de çalışan terminalleri ve editörleri (GNOME Terminal,
+  Konsole ve daha birçoğu) bulamaz; onun yerine oturumun klasörünü açar.
+- **Tam ekranda sessizlik**, tam ekrandaki yerel Wayland uygulamalarını fark etmez. Sunumlar için
+  Rahatsız etme'yi kullan.
+- **Tıklama koruması** X11 programlarının XTEST tıklamalarını yine reddeder. Ama bileşikleştiricinin
+  kendisinin ürettiği girdi XWayland'e sıradan işaretçi girdisi olarak ulaşır. GNOME ve KDE bunu
+  ancak bir uzak masaüstü onayından sonra yapar; wlroots tabanlı bileşikleştiriciler (sway, Hyprland,
+  river…) ise sanal işaretçi protokolleriyle her programın girdi üretmesine izin verir ve orada
+  koruma böyle bir tıklamayı seninkinden ayıramaz.
+
+Masaüstün sunuyorsa bir X11 oturumuyla giriş yapmak bu dördünü de ortadan kaldırır.
+
+### Güncelleme
+
+Yeni dosyaları indirip yukarıdaki gibi doğrula. Nöbetçi'den tepsiden çık, sonra yeni `.deb`'i
+`sudo apt install ./Nobetci-x.y.z-linux-amd64.deb` ile kur ya da AppImage'ı değiştir. **Oturum
+açınca başlat** açıksa ve yeni AppImage'ın dosya adı farklıysa, yeni dosyayı göstersin diye **Oturum
+açınca başlat**'ı kapatıp yeniden aç. Ayarlar, ajanda, geçmiş ve hook'lar korunur.
+
+### Kaldırma
+
+Paket yöneticisi root olarak çalışır ve hook'ları ev klasöründen çıkaramaz; bunu önce sen yap. Relay
+yerinde durduğu sürece unutulan bir hook zarar vermez; ama relay silinince Claude Code her adımda
+hook hatası bildirir, Cursor da her kabuk ve MCP komutunu engeller.
+
+1. Hook'ları kaldır:
+
+   ```sh
+   nobetci --remove-hooks                                # .deb
+   ./Nobetci-x.y.z-linux-amd64.AppImage --remove-hooks   # AppImage
+   ```
+
+   Bu, `~/.claude/settings.json`'dan, Codex'in `hooks.json` dosyasından ve `~/.cursor/hooks.json`'dan
+   yalnızca Nöbetçi'nin kendi girdilerini, her birinin yanına tarihli bir yedek bırakarak siler ve
+   fark göstermez. (Bir ajan onu çalıştırmak isterse Nöbetçi bunu KRİTİK sayar — burada çalıştıran
+   sensin.) Her değişikliği incelemek istersen **Ayarlar → Claude Code → Kaldır…**, **Ayarlar →
+   ChatGPT → Bağlantıyı kaldır…** ve **Ayarlar → Diğer ajanlar → Bağlantıyı kaldır…** düğmelerini
+   kullan.
+2. **Oturum açınca başlat** açıksa **Ayarlar → Genel**'den kapat
+   (`~/.config/autostart/Nobetci.desktop` dosyasıdır).
+3. Nöbetçi'den tepsiden çık, sonra `sudo apt remove nobetci` çalıştır ya da AppImage'ı sil.
+4. Hiç iz kalmasın istiyorsan `~/.config/nobetci`, `~/.local/share/nobetci` ve
+   `~/.local/state/nobetci` klasörlerini de sil.
 
 ### Dosyalar nerede?
 
 | | |
 | --- | --- |
-| Ayarlar | `~/.config/nobetci` |
-| Geçmiş, günlük ve relay | `~/.local/share/nobetci` |
+| Ayarlar ve ajanda | `~/.config/nobetci` (tanımlıysa `$XDG_CONFIG_HOME/nobetci`) |
+| Geçmiş, günlük ve relay | `~/.local/share/nobetci` (tanımlıysa `$XDG_DATA_HOME/nobetci`) |
 | Relay soketi | `~/.local/state/nobetci/nobetci.sock` (yedek olarak `/tmp/nobetci-<uid>/`) |
+| Oturum açınca başlat | `~/.config/autostart/Nobetci.desktop` |
+| Uygulama (`.deb`) | `/usr/bin/nobetci` |
+| Claude Code, Codex ve Cursor hook'ları | `~/.claude/settings.json`, `$CODEX_HOME/hooks.json` ya da `~/.codex/hooks.json`, `~/.cursor/hooks.json` |
+
+### Linux'ta sorun giderme
+
+- **Ekranın üstünde siyah bir kutu.** Bileşikleştirici yok, bu yüzden ada saydam olamıyor.
+  Masaüstünün bileşikleştiricisini aç ya da bir tane başlat (`picom`), sonra Nöbetçi'yi yeniden
+  başlat.
+- **GNOME'da tepsi simgesi yok.** AppIndicator eklentisini kur ve etkinleştir.
+- **AppImage'dan ses gelmiyor.** 2.4.1'e kadarki AppImage'lar GStreamer ses eklentilerini taşımaz;
+  sonrakiler taşır. `.deb`'i ya da daha yeni bir AppImage'ı kullan.
+- **Kısayollar, Pencereye git ya da tam ekran sessizliği çalışmıyor.** Büyük olasılıkla
+  Wayland'desin: bkz. [Wayland](#wayland).
+- **Onay reddedildi: fiziksel tıklama değil.** Uzak masaüstü araçları ve `xdotool` XTEST
+  tıklamaları gönderir; koruma bunları reddeder. Gerçek fareyi kullan ya da **Ayarlar → Güvenlik →
+  Fiziksel tıklama koruması**'nı kapat (yalnızca DÜŞÜK ve ORTA için).
+- **Kayıt dosyası** `~/.local/share/nobetci/nobetci.log`.
