@@ -192,6 +192,10 @@ async function main() {
         url.searchParams.set("lang", lang);
         // Animations at their end: virtual time does not run CSS animations.
         if (url.searchParams.has("demo")) url.searchParams.set("still", "1");
+        // The settings window fades each tab in, and virtual time would catch
+        // it half way (pale, a few pixels low). With reduced motion asked for,
+        // the tab is simply there.
+        const settings = url.pathname.endsWith("/settings.html");
         // A fresh profile per image: no storage or preference leaks between shots.
         const profile = mkdtempSync(join(profiles, "p-"));
         rmSync(file, { force: true });
@@ -205,6 +209,7 @@ async function main() {
           `--force-device-scale-factor=${scale * (shot.scale ?? 1)}`,
           // Chromium refuses to start its sandbox as root (containers, CI).
           ...(process.getuid?.() === 0 ? ["--no-sandbox"] : []),
+          ...(settings ? ["--force-prefers-reduced-motion"] : []),
           "--virtual-time-budget=6000",
           `--screenshot=${file}`,
           `--lang=${LANGS[lang].locale}`,
