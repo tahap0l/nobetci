@@ -671,16 +671,27 @@ pub fn shown(app: &AppHandle, request_id: &str) {
     }
 }
 
-/// Every request still waiting, oldest first, exactly as the island was sent it
-/// in the `hook` event — for an island that reloaded and lost its cards.
+/// Every request still waiting, oldest first, as the island was sent it in the
+/// `hook` event — for an island that reloaded and lost its cards. Each also says
+/// how long it has waited (`nobetci_waited_ms`), so a card put back counts down
+/// to the moment this side gives up, not from the start again.
 pub fn pending(app: &AppHandle) -> Vec<Value> {
-    payloads(&app.state::<Pending>().0.lock().unwrap())
+    payloads(&app.state::<Pending>().0.lock().unwrap(), Instant::now())
 }
 
-fn payloads(map: &HashMap<String, Waiting>) -> Vec<Value> {
+fn payloads(map: &HashMap<String, Waiting>, now: Instant) -> Vec<Value> {
     let mut waiting: Vec<&Waiting> = map.values().collect();
     waiting.sort_by_key(|w| w.queued_at);
-    waiting.into_iter().map(|w| w.payload.clone()).collect()
+    waiting
+        .into_iter()
+        .map(|w| {
+            // The long wait (DECISION_TIMEOUT) starts at the ack.
+            let waited = now.saturating_duration_since(w.acked_at.unwrap_or(w.queued_at));
+            let mut payload = w.payload.clone();
+            payload["nobetci_waited_ms"] = json!(u64::try_from(waited.as_millis()).unwrap_or(u64::MAX));
+            payload
+        })
+        .collect()
 }
 
 /// Nobody will act on this one here — the terminal takes it right away.
@@ -1257,11 +1268,15 @@ mod tests {
         let mut second = waiting("question", Level::Low, Level::Low);
         second.queued_at = first.queued_at + Duration::from_millis(5);
         second.payload = json!({ "request_id": "b" });
+        first.acked_at = Some(first.queued_at + Duration::from_secs(10));
+        let now = first.queued_at + Duration::from_secs(30);
         let map = HashMap::from([("b".to_string(), second), ("a".to_string(), first)]);
-        let back = payloads(&map);
+        let back = payloads(&map, now);
         assert_eq!(back.iter().map(|p| p["request_id"].clone()).collect::<Vec<_>>(), [json!("a"), json!("b")]);
-        assert_eq!(back[0]["risk"]["engineLevel"], "high", "exactly what the hook event carried");
-        assert!(payloads(&HashMap::new()).is_empty());
+        assert_eq!(back[0]["risk"]["engineLevel"], "high", "what the hook event carried");
+        assert_eq!(back[0]["nobetci_waited_ms"], 20_000, "counted from the ack, like the long wait");
+        assert_eq!(back[1]["nobetci_waited_ms"], 29_995, "never acknowledged: from its arrival");
+        assert!(payloads(&HashMap::new(), now).is_empty());
     }
 
     #[test]
