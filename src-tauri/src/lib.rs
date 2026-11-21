@@ -652,13 +652,16 @@ fn settings_window(app: &AppHandle) -> Option<tauri::WebviewWindow> {
     app.get_webview_window("settings")
 }
 
-/// Saves the filtered history as CSV or JSON where the user picks.
+/// Saves the filtered history as CSV or JSON where the user picks. A CSV is
+/// comma-separated unless `separator` is ";" (what Excel expects where a comma
+/// is the decimal mark, Turkish among them).
 #[tauri::command]
 async fn audit_export(
     app: AppHandle,
     filter: audit::Filter,
     format: String,
     tz_offset_min: i32,
+    separator: Option<String>,
 ) -> Result<Option<String>, String> {
     let json = format == "json";
     let entries = {
@@ -677,7 +680,8 @@ async fn audit_export(
         dialog = dialog.set_parent(&win);
     }
     let Some(path) = dialog.blocking_save_file().and_then(|p| p.into_path().ok()) else { return Ok(None) };
-    audit::write_export(&path, &entries, if json { "json" } else { "csv" }, tz_offset_min)
+    let sep = audit::separator(separator.as_deref());
+    audit::write_export(&path, &entries, if json { "json" } else { "csv" }, tz_offset_min, sep)
         .map_err(|e| e.to_string())?;
     Ok(Some(path.to_string_lossy().to_string()))
 }
