@@ -62,8 +62,8 @@
       "nsis": {
         "installMode": "currentUser",
         "languages": [
-          "Turkish",
-          "English"
+          "English",
+          "Turkish"
         ],
         "installerHooks": "nsis/hooks.nsh",
         "template": "nsis/installer.nsi",

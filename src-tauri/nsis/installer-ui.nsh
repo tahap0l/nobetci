@@ -37,6 +37,11 @@ LangString nobetciFinishTitle ${LANG_TURKISH} "Nöbetçi nöbette!"
 LangString nobetciFinishTitle ${LANG_ENGLISH} "Nöbetçi is on watch!"
 LangString nobetciFinishText ${LANG_TURKISH} "Kurulum tamamlandı. Nöbetçi açıldığında kısa bir sihirbaz Claude Code'u bağlamana yardım eder; ekranın üstündeki adaya fareyi götürmen yeterli."
 LangString nobetciFinishText ${LANG_ENGLISH} "All set. When Nöbetçi opens, a short wizard helps you connect Claude Code; just move the mouse to the island at the top of your screen."
+; The uninstaller, when `nobetci.exe --remove-hooks` fails (hooks.nsh).
+LangString nobetciHooksKeptDetail ${LANG_TURKISH} "Nöbetçi'nin hook'ları kaldırılamadı; aktarıcı ve günlük yerinde kalıyor."
+LangString nobetciHooksKeptDetail ${LANG_ENGLISH} "Nöbetçi's hooks could not be removed; the relay and the log stay."
+LangString nobetciHooksKept ${LANG_TURKISH} "Nöbetçi, hook'larını Claude Code, Codex ve Cursor ayarlarından kaldıramadı. Bu araçlar çalışmaya devam etsin diye aktarıcısı %LOCALAPPDATA%\Nobetci\bin klasöründe kalıyor. Nedenini %LOCALAPPDATA%\Nobetci\nobetci.log dosyasında bulursun.$\r$\n$\r$\nElle bitirmek için %USERPROFILE%\.claude\settings.json, %USERPROFILE%\.codex\hooks.json ve %USERPROFILE%\.cursor\hooks.json dosyalarından nobetci-hook geçen hook girdilerini sil, sonra %LOCALAPPDATA%\Nobetci klasörünü de sil."
+LangString nobetciHooksKept ${LANG_ENGLISH} "Nöbetçi could not remove its hooks from the Claude Code, Codex and Cursor settings. Its relay stays in %LOCALAPPDATA%\Nobetci\bin so that those tools keep working, and %LOCALAPPDATA%\Nobetci\nobetci.log says what went wrong.$\r$\n$\r$\nTo finish by hand, delete the hook entries that mention nobetci-hook from %USERPROFILE%\.claude\settings.json, %USERPROFILE%\.codex\hooks.json and %USERPROFILE%\.cursor\hooks.json, then delete the folder %LOCALAPPDATA%\Nobetci."
 
 Function nobetci.Unpack
   ${If} $nobetci.Unpacked != 1
