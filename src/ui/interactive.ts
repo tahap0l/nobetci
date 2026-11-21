@@ -6,6 +6,7 @@
 // innerHTML. The plan's Markdown is read line by line into plain elements.
 
 import type { FileChange, LimitWindow, SessionUsage } from "../core/state";
+import { getLang } from "../i18n/core";
 import { t } from "../i18n/island";
 import { lastPathComponent } from "../island/hooks";
 import { h } from "./dom";
@@ -549,6 +550,22 @@ function hm(ms: number): string {
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
+/**
+ * When a plan window resets: the clock time today, "tomorrow 17:14", the
+ * weekday within a week ("Tue 17:14"), else the date — a weekly window can be
+ * days away (dashboard#30).
+ */
+function resetNote(ms: number, now = new Date()): string {
+  const at = hm(ms);
+  const d = new Date(ms);
+  const midnight = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const days = Math.round((midnight(d) - midnight(now)) / 86_400_000);
+  if (days <= 0) return t("use.resets", { at });
+  if (days === 1) return t("use.resetsOn", { day: t("use.tomorrow"), at });
+  const day = new Intl.DateTimeFormat(getLang(), days < 7 ? { weekday: "long" } : { day: "numeric", month: "short" }).format(d);
+  return t("use.resetsOn", { day, at });
+}
+
 function meter(label: string, pct: number, note: string): HTMLElement {
   const p = Math.max(0, Math.min(100, pct));
   const tone = p >= 90 ? "hot" : p >= 70 ? "warm" : "ok";
@@ -569,7 +586,7 @@ export function usageView(usage: SessionUsage | null, limits: { fiveHour: LimitW
   if (usage?.context != null) rows.push(meter(t("use.context"), usage.context, usage.model));
   const win = (w: LimitWindow | null, key: "use.fiveHour" | "use.sevenDay") => {
     if (!w) return;
-    const note = w.resetsAt ? t("use.resets", { at: hm(w.resetsAt) }) : "";
+    const note = w.resetsAt ? resetNote(w.resetsAt) : "";
     rows.push(meter(t(key), w.used, note));
   };
   win(limits?.fiveHour ?? null, "use.fiveHour");

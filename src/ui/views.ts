@@ -12,7 +12,7 @@ import {
 } from "../core/bridge";
 import { Sound } from "../core/sound";
 import {
-  LEVEL_ORDER, State, isPlainLow, needsHold,
+  LEVEL_ORDER, SESSION_QUIET_MS, State, isPlainLow, needsHold,
   type Approval, type FlashTone, type IslandView, type Session, type SessionState,
 } from "../core/state";
 import { t } from "../i18n/island";
@@ -148,7 +148,7 @@ function paintMini(m: { canvas: HTMLCanvasElement; session: Session }, t: number
   const size = m.canvas.width / dpr;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, size, size);
-  drawOwlMini(ctx, size / 2, size / 2, size, STATE_MOOD[m.session.state], m.session.accent, t);
+  drawOwlMini(ctx, size / 2, size / 2, size, sessionMood(m.session, Date.now()), m.session.accent, t);
 }
 
 /** Redraws every mini owl still in the document; forgets the detached ones. */
@@ -193,6 +193,9 @@ function buildHeader(actions: ViewActions): ViewHost {
     el,
     height: () => HEADER_H,
     sync() {
+      // The assistant's coloured top edge lives on the header: the assistant
+      // view scrolls, and would clip a bar drawn above itself.
+      el.classList.toggle("asst-on", State.view === "assistant");
       const n = State.sessions.length;
       const waiting = State.approvals.length;
       const quiet = State.settings.dnd ? "dnd" : State.quiet;
@@ -226,15 +229,34 @@ function buildHeader(actions: ViewActions): ViewHost {
 
 // ── Overview ──────────────────────────────────────────────────────────────────
 
-const MAX_ROWS = 5;
-const ROW_H = 44;
-const QUIET_SESSION_MS = 3 * 60_000;
+/** A session row (.session) and the gap between rows (.sessions). */
+const ROW_H = 40;
+const ROW_GAP = 4;
+/** The list's padding above its first row. */
+const LIST_PAD = 6;
+/** The "+3 more" line under a list that scrolls (.sessions-more-row). */
+const MORE_ROW_H = 24;
+/** The view's padding under the list. */
+const VIEW_PAD_BOTTOM = 12;
+/** Everything above the list when it cannot be measured yet: widgets, search. */
+const LIST_TOP_GUESS = 190;
+
+/** Working or thinking, but nothing heard for a while (a closed terminal, a hung tool). */
+function isStale(session: Session, now: number): boolean {
+  const active = session.state === "working" || session.state === "thinking";
+  return active && now - session.lastEventAt >= SESSION_QUIET_MS;
+}
 
 function sessionLabel(session: Session, now: number): string {
-  const active = session.state === "working" || session.state === "thinking";
-  return active && now - session.lastEventAt >= QUIET_SESSION_MS
-    ? t("ov.noRecentEvents")
-    : stateLabel(session.state);
+  // Paused, nothing is being watched: what a row last said may no longer hold.
+  if (State.paused) return t("ov.notWatched");
+  return isStale(session, now) ? t("ov.noRecentEvents") : stateLabel(session.state);
+}
+
+/** The small mascot of a row: asleep while paused, calm once a session went quiet. */
+function sessionMood(session: Session, now: number): OwlMood {
+  if (State.paused) return "sleeping";
+  return isStale(session, now) ? "idle" : STATE_MOOD[session.state];
 }
 
 const SESSION_PRIORITY: Record<SessionState, number> = {
@@ -242,16 +264,67 @@ const SESSION_PRIORITY: Record<SessionState, number> = {
   thinking: 4, working: 4, finished: 5, idle: 5,
 };
 
+/**
+ * The ways a name can be lower-cased for a search: by Turkish rules (İ → i,
+ * I → ı) and by the default ones (I → i, with İ's combining dot dropped). A
+ * match under either counts, so "İzmir", "IŞIK" and "Inventory" all find what
+ * they should whatever the island's language.
+ */
+function searchForms(text: string): [string, string] {
+  return [text.toLocaleLowerCase("tr"), text.toLowerCase().replace(/\u0307/g, "")];
+}
+
+function matchesSearch(session: Session, query: [string, string]): boolean {
+  return [session.name, session.cwd, session.terminal].some((field) => {
+    const forms = searchForms(field);
+    return forms[0].includes(query[0]) || forms[1].includes(query[1]);
+  });
+}
+
+interface SessionRow {
+  el: HTMLButtonElement;
+  session: Session;
+  name: HTMLElement;
+  state: HTMLElement;
+  age: HTMLElement;
+  step: HTMLElement;
+}
+
 function buildOverview(actions: ViewActions): ViewHost {
   const list = h("div", { class: "sessions" });
-  const widgets = buildWidgets("overview", actions.openSettings);
+  const widgets = buildWidgets("overview", actions.openSettings, { react: actions.react });
   const search = h("input", {
     class: "session-search", type: "search", placeholder: t("ov.search"),
-    "aria-label": t("ov.search"), autocomplete: "off",
+    "aria-label": t("ov.search"), autocomplete: "off", spellcheck: "false",
+    // A text field: the island takes the keyboard for it on a click (it never
+    // does on its own), and lets it go when the field loses the focus.
+    "data-typing": "",
   });
-  const el = h("div", { class: "view view-overview" }, widgets.el, search, list);
-  let key = "";
+  const resume = h("button", { class: "btn btn-small", type: "button", text: t("hdr.resume"), onclick: () => actions.togglePause() });
+  const pausedNote = h("div", { class: "paused-note", role: "status", hidden: true },
+    icon(ICON.pause, 13), h("span", { class: "paused-text", text: t("ov.pausedNote") }), resume);
+  // "+3 more ↓" on its own line under a list that scrolls: the sessions below
+  // the fold, a click away, never covering a row.
+  const moreText = h("span");
+  const moreCue = h("button", { class: "sessions-more", type: "button", tabindex: -1 }, moreText, icon(ICON.chevron, 11));
+  const moreRow = h("div", { class: "sessions-more-row", hidden: true }, moreCue);
+  const el = h("div", { class: "view view-overview" }, widgets.el, search, pausedNote, list, moreRow);
+  const rows = new Map<string, SessionRow>();
+  const empty = h("p", { class: "more", role: "status" });
   let results: Session[] = [];
+
+  /**
+   * Whole rows only: as many as the panel leaves room for under the widgets and
+   * the search; past that the list scrolls and the "+N more" line shows (G-2).
+   */
+  const layout = () => {
+    const fixed = HEADER_H + (list.offsetTop || LIST_TOP_GUESS) + LIST_PAD + VIEW_PAD_BOTTOM;
+    const room = PANEL_H - 8 - fixed;
+    const all = Math.max(1, results.length);
+    const fitsAll = all * ROW_H + (all - 1) * ROW_GAP <= room;
+    const fit = fitsAll ? all : Math.max(1, Math.floor((room - MORE_ROW_H + ROW_GAP) / (ROW_H + ROW_GAP)));
+    return { fixed, rows: fit, more: !fitsAll };
+  };
 
   search.addEventListener("input", () => State.notify());
   search.addEventListener("keydown", (event) => {
@@ -262,12 +335,36 @@ function buildOverview(actions: ViewActions): ViewHost {
       if (session.parents.length) actions.focusSession(session.id);
       else actions.showSession(session.id);
     } else if (event.key === "ArrowDown") {
-      const first = list.querySelector<HTMLButtonElement>(".session");
+      const first = rowButtons()[0];
       if (first) {
         event.preventDefault();
+        // The rows are part of the search while the keys walk them: the island
+        // keeps the keyboard (it lets it go when the focus leaves both).
+        list.setAttribute("data-typing", "");
         first.focus();
       }
     }
+  });
+
+  const rowButtons = () => [...list.querySelectorAll<HTMLButtonElement>(".session")];
+  list.addEventListener("keydown", (event) => {
+    const buttons = rowButtons();
+    const at = buttons.indexOf(document.activeElement as HTMLButtonElement);
+    if (at < 0) return;
+    let next: HTMLElement | undefined;
+    switch (event.key) {
+      case "ArrowDown": next = buttons[Math.min(buttons.length - 1, at + 1)]; break;
+      case "ArrowUp": next = at === 0 ? search : buttons[at - 1]; break;
+      case "Home": next = buttons[0]; break;
+      case "End": next = buttons[buttons.length - 1]; break;
+      case "Escape": next = search; break;
+      default: return;
+    }
+    event.preventDefault();
+    next?.focus();
+  });
+  list.addEventListener("focusout", (event) => {
+    if (!list.contains(event.relatedTarget as Node | null)) list.removeAttribute("data-typing");
   });
 
   el.addEventListener("keydown", (event) => {
@@ -278,71 +375,107 @@ function buildOverview(actions: ViewActions): ViewHost {
     }
   });
 
-  const row = (s: Session) =>
-    h(
+  // One element per session, updated in place: a click whose press and release
+  // straddle a hook event still lands on the row it began on (island-ui#18).
+  const makeRow = (s: Session): SessionRow => {
+    const name = h("span", { class: "session-name" });
+    const state = h("span", { class: "session-state" });
+    const age = h("span", { class: "session-age" });
+    const step = h("span", { class: "session-step" });
+    const button = h(
       "button",
-      { class: `session state-${s.state}`, "data-session-id": s.id, title: t("ov.details"), onclick: () => actions.showSession(s.id) },
+      { class: "session", type: "button", "data-session-id": s.id, title: t("ov.details"), onclick: () => actions.showSession(s.id) },
       miniCanvas(s, 20),
-      h(
-        "span",
-        { class: "session-main" },
-        h(
-          "span",
-          { class: "session-top" },
-          h("span", { class: "session-name", text: s.name }),
-          h("span", { class: "session-state", text: sessionLabel(s, Date.now()) }),
-          h("span", { class: "session-age", "data-since": s.lastEventAt }),
-        ),
-        h("span", { class: "session-step", text: State.lastStep(s) || "—" }),
-      ),
+      h("span", { class: "session-main" }, h("span", { class: "session-top" }, name, state, age), step),
     );
+    return { el: button, session: s, name, state, age, step };
+  };
+
+  const paintRow = (r: SessionRow, now: number) => {
+    const s = r.session;
+    const cls = `session state-${s.state}${State.paused ? " paused" : isStale(s, now) ? " stale" : ""}`;
+    if (r.el.className !== cls) r.el.className = cls;
+    if (r.name.textContent !== s.name) r.name.textContent = s.name;
+    r.name.title = s.cwd;
+    const label = sessionLabel(s, now);
+    if (r.state.textContent !== label) r.state.textContent = label;
+    const since = ago(now - s.lastEventAt);
+    if (r.age.textContent !== since) r.age.textContent = since;
+    r.age.title = t("ov.lastEvent", { age: since });
+    const step = State.lastStep(s) || "—";
+    if (r.step.textContent !== step) {
+      r.step.textContent = step;
+      r.step.title = step;
+    }
+  };
+
+  /** How many rows are below what the list shows right now. */
+  const updateMore = () => {
+    // The line keeps its place while the list overflows (no jump when scrolled
+    // to the end); only its button comes and goes.
+    moreRow.hidden = !layout().more;
+    const count = rowButtons().length;
+    const seen = list.scrollTop + list.clientHeight - LIST_PAD;
+    const fully = Math.max(0, Math.floor((seen + ROW_GAP + 1) / (ROW_H + ROW_GAP)));
+    const below = list.clientHeight ? Math.max(0, count - fully) : 0;
+    moreCue.style.visibility = below ? "" : "hidden";
+    if (below) moreText.textContent = t("ov.more", { n: below });
+  };
+  list.addEventListener("scroll", updateMore, { passive: true });
+  moreCue.addEventListener("click", () => {
+    const smooth = !window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    list.scrollBy({ top: Math.max(ROW_H, list.clientHeight - ROW_H), behavior: smooth ? "smooth" : "auto" });
+  });
 
   return {
     el,
     height: () => {
-      const rows = Math.max(1, Math.min(MAX_ROWS, results.length)) + (results.length > MAX_ROWS ? 0.5 : 0);
-      return Math.max(150, HEADER_H + 14 + rows * ROW_H + 48) + widgetHeight();
+      const { fixed, rows: n, more } = layout();
+      return fixed + n * ROW_H + (n - 1) * ROW_GAP + (more ? MORE_ROW_H : 0);
     },
     sync() {
       widgets.refresh();
-      const query = search.value.trim().toLowerCase();
+      const now = Date.now();
+      pausedNote.hidden = !State.paused;
+      const raw = search.value.trim();
+      const query = searchForms(raw);
       results = State.sessions
-        .filter((session) => [session.name, session.cwd, session.terminal]
-          .some((field) => field.toLowerCase().includes(query)))
+        .filter((session) => !raw || matchesSearch(session, query))
         .sort((a, b) => SESSION_PRIORITY[a.state] - SESSION_PRIORITY[b.state] || b.lastEventAt - a.lastEventAt);
-      const shown = results.slice(0, MAX_ROWS);
-      const next =
-        shown.map((s) => `${s.id}:${s.state}:${s.name}:${s.steps.length}:${s.lastEventAt}:${State.lastStep(s)}`).join("|") +
-        `#${results.length}`;
-      if (next === key) return;
-      key = next;
-      const focusedId = list.contains(document.activeElement)
-        ? (document.activeElement as HTMLElement).dataset.sessionId
-        : undefined;
-      const rows = shown.map(row);
-      list.replaceChildren(...rows);
-      if (focusedId) (rows.find((button) => button.dataset.sessionId === focusedId) ?? search).focus();
-      if (!results.length) {
-        list.append(h("p", { class: "more", role: "status", text: t("ov.noMatches") }));
-      } else if (results.length > MAX_ROWS) {
-        list.append(h("div", { class: "more", text: t("ov.more", { n: results.length - MAX_ROWS }) }));
+
+      const wanted: HTMLElement[] = [];
+      const live = new Set<string>();
+      for (const s of results) {
+        let r = rows.get(s.id);
+        // A session that ended and came back under the same id is a new object.
+        if (!r || r.session !== s) {
+          r = makeRow(s);
+          rows.set(s.id, r);
+        }
+        paintRow(r, now);
+        live.add(s.id);
+        wanted.push(r.el);
       }
+      for (const id of [...rows.keys()]) if (!live.has(id)) rows.delete(id);
+      if (!results.length) {
+        // An empty search with no session at all is not "no match".
+        const text = raw ? t("ov.noMatches") : t("empty.hooked");
+        if (empty.textContent !== text) empty.textContent = text;
+        wanted.push(empty);
+      }
+      const current = [...list.children];
+      if (current.length !== wanted.length || current.some((node, i) => node !== wanted[i])) {
+        const focused = list.contains(document.activeElement) ? (document.activeElement as HTMLElement) : null;
+        list.replaceChildren(...wanted);
+        if (focused && document.activeElement !== focused) (focused.isConnected ? focused : search).focus();
+      }
+      updateMore();
     },
     tick() {
       widgets.refresh();
       const now = Date.now();
-      for (const age of el.querySelectorAll<HTMLElement>(".session-age")) {
-        const text = ago(now - Number(age.dataset.since));
-        if (age.textContent !== text) age.textContent = text;
-        age.title = t("ov.lastEvent", { age: text });
-        const row = age.closest<HTMLElement>("[data-session-id]");
-        const session = row?.dataset.sessionId ? State.session(row.dataset.sessionId) : undefined;
-        const label = row?.querySelector(".session-state");
-        if (session && label) {
-          const state = sessionLabel(session, now);
-          if (label.textContent !== state) label.textContent = state;
-        }
-      }
+      for (const r of rows.values()) paintRow(r, now);
+      updateMore();
     },
   };
 }
@@ -393,11 +526,24 @@ function buildSession(actions: ViewActions): ViewHost {
   });
   forgetBtn.addEventListener("click", () => shownId && actions.forgetSession(shownId));
 
+  // Esc goes back, as it does from the assistant. Wherever the focus is on the
+  // page (a click on the view leaves it on the body); a later relocalised copy
+  // of this view has its own listener, and this one goes quiet with its element.
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape" || e.defaultPrevented || !el.isConnected) return;
+    if (State.mode !== "expanded" || State.view !== "session") return;
+    if ((e.target as Element | null)?.closest?.("input, textarea, select, [contenteditable]")) return;
+    e.preventDefault();
+    actions.back();
+  });
+
   return {
     el,
     // Measured, like the approval card: meters, changed files and an open diff
-    // all add height (the panel caps it; the lists scroll).
-    height: () => Math.max(170, HEADER_H + el.scrollHeight + 12),
+    // all add height. The view is as tall as what it holds, up to the panel's
+    // cap (style.css), where it scrolls; it never stretches to the island, so
+    // measuring it can never feed the island's own height back (G-2).
+    height: () => Math.max(170, HEADER_H + el.offsetHeight + 12),
     sync() {
       const s = State.detailId ? State.session(State.detailId) : undefined;
       if (!s) return;
@@ -474,7 +620,7 @@ function buildSession(actions: ViewActions): ViewHost {
 function buildEmpty(actions: ViewActions): ViewHost {
   const hint = h("span", { class: "empty-hint" });
   const setup = h("button", { class: "btn btn-primary", text: t("empty.install"), onclick: () => actions.openSettings("claude") });
-  const widgets = buildWidgets("empty", actions.openSettings);
+  const widgets = buildWidgets("empty", actions.openSettings, { react: actions.react });
   const status = h("div", { class: "empty-status" }, h("strong", { text: t("empty.title") }), hint, setup);
   const el = h("div", { class: "view view-empty" }, status, widgets.el);
   return {
@@ -1721,21 +1867,30 @@ export function buildViews(actions: ViewActions): { header: ViewHost; views: Map
 
 // ── Compact island content ────────────────────────────────────────────────────
 
+/** Mini mascots the pill has room for; a "+N" says how many more there are. */
+const PILL_MINIS = 4;
+
 export function buildCompact(): { el: HTMLElement; sync(): void } {
   const text = h("span", { class: "compact-text" });
   const quiet = h("span", { class: "compact-quiet", title: t("cp.quiet") }, icon(ICON.moon, 12));
   const row = h("span", { class: "compact-minis" });
-  const el = h("div", { id: "compact" }, text, quiet, row);
+  const more = h("span", { class: "compact-more", hidden: true });
+  const el = h("div", { id: "compact" }, text, quiet, row, more);
   let key = "";
   const summary = compactWidgetSummary(() => { if (el.isConnected) compact.sync(); });
   const compact = {
     el,
     sync() {
-      const widget = summary();
-      const flash = State.flash && State.flash.until > Date.now() ? State.flash : null;
+      const now = Date.now();
+      const flash = State.flash && State.flash.until > now ? State.flash : null;
       const waiting = State.approvals.length;
+      // Live work only: a session silent for minutes no longer counts as working,
+      // as on its row and for the mascot.
+      const working = State.sessions.filter((s) => (s.state === "working" || s.state === "thinking") && !isStale(s, now)).length;
       let msg: string;
       let tone = "";
+      // The widget line (date, weather, agenda, music) is asked for only when it
+      // is what the pill shows: the media player is read for nothing otherwise.
       if (waiting) {
         // A waiting request outranks any passing message.
         msg = waiting === 1 ? t("cp.waitingOne") : t("cp.waitingMany", { n: waiting });
@@ -1746,20 +1901,29 @@ export function buildCompact(): { el: HTMLElement; sync(): void } {
       } else if (State.paused) {
         msg = t("cp.paused");
       } else if (State.sessions.length === 0) {
-        msg = widget || t("cp.idle");
+        msg = summary() || t("cp.idle");
+      } else if (working) {
+        msg = t("cp.working", { w: working, n: State.sessions.length });
       } else {
-        const working = State.sessions.filter((s) => s.state === "working" || s.state === "thinking").length;
-        msg = working ? t("cp.working", { w: working, n: State.sessions.length }) : widget || t("cp.sessions", { n: State.sessions.length });
+        msg = summary() || t("cp.sessions", { n: State.sessions.length });
       }
       if (text.textContent !== msg) text.textContent = msg;
+      // A long message is cut at the pill's edge: the whole of it on hover.
+      if (text.title !== msg) text.title = msg;
       text.dataset.tone = tone;
       quiet.style.display = State.isQuiet ? "" : "none";
 
-      const shown = State.sessions.slice(0, 4);
+      const shown = State.sessions.slice(0, PILL_MINIS);
       const next = shown.map((s) => s.id).join("|");
       if (next !== key) {
         key = next;
         row.replaceChildren(...shown.map((s) => miniCanvas(s, 16)));
+      }
+      const extra = State.sessions.length - shown.length;
+      more.hidden = extra <= 0;
+      if (extra > 0) {
+        more.textContent = `+${extra}`;
+        more.title = t("cp.sessions", { n: State.sessions.length });
       }
     },
   };
