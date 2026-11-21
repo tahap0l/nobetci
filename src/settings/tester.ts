@@ -8,7 +8,7 @@ import { t } from "./i18n";
 import { icon } from "./icons";
 import { levelChip } from "./ui";
 
-export const TESTER_TOOLS = ["Bash", "PowerShell", "Write", "Edit", "Read", "WebFetch", "mcp"] as const;
+export const TESTER_TOOLS = ["Bash", "PowerShell", "Write", "Edit", "Read", "WebFetch", "WebSearch", "mcp"] as const;
 export type TesterTool = (typeof TESTER_TOOLS)[number];
 
 /** Select label and input placeholder per tester tool, in the current language. */
@@ -26,30 +26,45 @@ export function toolHint(tool: TesterTool): { label: string; placeholder: string
       return { label: t("tester.tool.read"), placeholder: t("tester.ph.read") };
     case "WebFetch":
       return { label: "WebFetch", placeholder: "https://webhook.site/abc" };
+    case "WebSearch":
+      return { label: t("tester.tool.search"), placeholder: t("tester.ph.search") };
     case "mcp":
       return { label: t("tester.tool.mcp"), placeholder: '{"repo": "acme/app"}' };
   }
 }
 
-/** Builds the tool input the risk engine reads for `tool`. */
+/** `target` as a JSON object, when it is one. */
+function jsonObject(target: string): Record<string, unknown> | null {
+  try {
+    const v: unknown = JSON.parse(target);
+    if (v && typeof v === "object" && !Array.isArray(v)) return v as Record<string, unknown>;
+  } catch {
+    /* not JSON */
+  }
+  return null;
+}
+
+/**
+ * Builds the tool input the risk engine reads for `tool`, shaped like a real
+ * request of that tool, so the tester's verdict is the one the request would
+ * get (risk.rs picks the kind from the fields: any `command` is a shell command,
+ * a WebSearch `query` is never scanned like a URL).
+ */
 export function buildInput(tool: string, target: string): Record<string, unknown> {
   const name = tool.trim().toLowerCase();
+  if (name === "bash" || name === "powershell") return { command: target };
   if (name === "write") return { file_path: target, content: "" };
   if (name === "edit" || name === "multiedit") return { file_path: target, old_string: "", new_string: "" };
   if (name === "notebookedit") return { notebook_path: target };
   if (name === "read" || name === "notebookread") return { file_path: target };
   if (name === "glob" || name === "grep" || name === "ls") return { path: target };
-  if (name === "webfetch" || name === "websearch") return { url: target };
-  if (name.startsWith("mcp__")) {
-    try {
-      const v: unknown = JSON.parse(target);
-      if (v && typeof v === "object" && !Array.isArray(v)) return v as Record<string, unknown>;
-    } catch {
-      /* not JSON: pass as text */
-    }
-    return target.trim() ? { input: target } : {};
-  }
-  return { command: target };
+  if (name === "webfetch") return { url: target };
+  if (name === "websearch") return { query: target };
+  if (name.startsWith("mcp__")) return jsonObject(target) ?? (target.trim() ? { input: target } : {});
+  // Any other tool (Task, Skill, a tool Claude Code adds later…) has no
+  // `command`: the engine treats it as unrecognised, which always asks. A JSON
+  // object is its whole argument list; plain text stands in as its prompt.
+  return jsonObject(target) ?? (target.trim() ? { prompt: target } : {});
 }
 
 export function outcomeBadge(outcome: Evaluation["outcome"]): HTMLElement {
@@ -103,6 +118,8 @@ export function evaluationView(ev: Evaluation, opts: { compact?: boolean } = {})
     ),
     facts.childElementCount ? facts : null,
     findings,
+    // Rust never lets a rule, trusted project or grant approve these.
+    a.kind === "other" ? h("p", { class: "fine", text: t("tester.otherNote") }) : null,
   );
 }
 

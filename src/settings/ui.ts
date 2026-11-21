@@ -12,10 +12,15 @@ type Child = Node | string | null | undefined | false;
 
 // ── Esc layers (modals, menus, drawers), topmost last ─────────────────────────
 
-const layers: { close: () => void }[] = [];
+const layers: { close: () => void; alive?: () => boolean }[] = [];
 
-export function pushLayer(close: () => void): () => void {
-  const layer = { close };
+/**
+ * Registers something Esc closes, topmost last. `alive` tells whether it is
+ * still on the page: a layer whose element a redraw replaced is dropped instead
+ * of swallowing an Esc.
+ */
+export function pushLayer(close: () => void, alive?: () => boolean): () => void {
+  const layer = { close, alive };
   layers.push(layer);
   return () => {
     const i = layers.indexOf(layer);
@@ -25,6 +30,7 @@ export function pushLayer(close: () => void): () => void {
 
 /** Closes the topmost layer; false when there is none. */
 export function closeTopLayer(): boolean {
+  for (let i = layers.length - 1; i >= 0; i--) if (layers[i].alive && !layers[i].alive!()) layers.splice(i, 1);
   const top = layers[layers.length - 1];
   if (!top) return false;
   top.close();
@@ -491,18 +497,19 @@ export function slider(o: SliderOpts): HTMLElement & { setMin: (m: number) => vo
     o.onChange(Number(input.value));
   });
   paint();
+  const minEnd = h("span", { text: o.format(o.min) });
   const wrap = h(
     "div",
     { class: "slider" },
     h("div", { class: "slider-track" }, input, out),
-    o.ends
-      ? h("div", { class: "slider-ends" }, h("span", { text: o.format(o.min) }), h("span", { text: o.format(o.max) }))
-      : null,
+    o.ends ? h("div", { class: "slider-ends" }, minEnd, h("span", { text: o.format(o.max) })) : null,
   );
   return Object.assign(wrap, {
+    /** A new lower bound; the end label under the track follows it. */
     setMin: (m: number) => {
       input.min = String(m);
       if (Number(input.value) < m) input.value = String(m);
+      minEnd.textContent = o.format(m);
       paint();
     },
     setValue: (v: number) => {
@@ -628,11 +635,19 @@ export function inlineConfirm(o: {
   question: string;
   confirmLabel: string;
   onConfirm: () => Promise<void> | void;
+  /** Nothing to do (e.g. the history is already empty). */
+  disabled?: boolean;
 }): HTMLElement {
   const wrap = h("div", { class: "confirm" });
-  const idle = () => {
+  /** While asking, Esc cancels the question (not the whole window). */
+  let pop: (() => void) | null = null;
+  const idle = (refocus = false) => {
+    pop?.();
+    pop = null;
     wrap.classList.remove("asking");
-    wrap.replaceChildren(button(o.label, { kind: o.kind ?? "ghost", icon: o.icon, onClick: ask }));
+    const trigger = button(o.label, { kind: o.kind ?? "ghost", icon: o.icon, disabled: o.disabled, onClick: ask });
+    wrap.replaceChildren(trigger);
+    if (refocus && wrap.isConnected) trigger.focus();
   };
   const ask = () => {
     wrap.classList.add("asking");
@@ -647,8 +662,12 @@ export function inlineConfirm(o: {
         }
       },
     });
-    const no = button(t("common.cancel"), { kind: "subtle", onClick: idle });
+    const no = button(t("common.cancel"), { kind: "subtle", onClick: () => idle(true) });
     wrap.replaceChildren(h("span", { class: "confirm-q" }, icon("warn", 15), o.question), yes, no);
+    pop = pushLayer(
+      () => idle(true),
+      () => wrap.isConnected,
+    );
     no.focus();
   };
   idle();
@@ -658,7 +677,10 @@ export function inlineConfirm(o: {
 // ── Modal ─────────────────────────────────────────────────────────────────────
 
 export interface ModalHandle {
+  /** Closes at once (Save, an explicit Cancel). */
   close: () => void;
+  /** Closes like Esc does: asks first when there are unsaved edits. */
+  requestClose: () => void;
   root: HTMLElement;
   body: HTMLElement;
   foot: HTMLElement;
@@ -674,19 +696,61 @@ export function modal(o: {
   wide?: boolean;
   onClose?: () => void;
   cls?: string;
+  /**
+   * Unsaved edits: Esc, ✕ and a click beside the dialog ask before throwing
+   * them away instead of closing straight off.
+   */
+  isDirty?: () => boolean;
 }): ModalHandle {
   const body = h("div", { class: "modal-body" }, ...o.body);
   const foot = h("div", { class: "modal-foot" }, ...(o.foot ?? []));
   let closed = false;
+  /** The footer's own content while it asks about unsaved edits. */
+  let footBefore: Node[] | null = null;
+  let popAsk: (() => void) | null = null;
+  let focusBefore: HTMLElement | null = null;
   const close = () => {
     if (closed) return;
     closed = true;
+    popAsk?.();
     pop();
     overlay.classList.add("leaving");
     window.setTimeout(() => overlay.remove(), 120);
     o.onClose?.();
     // Gives the page back and the focus to whatever opened the dialog.
     release();
+  };
+  const keepEditing = () => {
+    popAsk?.();
+    popAsk = null;
+    if (!footBefore) return;
+    foot.replaceChildren(...footBefore);
+    footBefore = null;
+    if (!foot.childElementCount) foot.remove();
+    (focusBefore?.isConnected ? focusBefore : focusables(dialog)[0])?.focus();
+  };
+  const requestClose = () => {
+    if (closed) return;
+    if (!o.isDirty?.()) return close();
+    if (footBefore) {
+      foot.querySelector<HTMLElement>("[data-keep]")?.focus();
+      return;
+    }
+    const active = document.activeElement;
+    focusBefore = active instanceof HTMLElement && dialog.contains(active) ? active : null;
+    footBefore = Array.from(foot.childNodes);
+    const keep = button(t("common.keepEditing"), { kind: "subtle", onClick: keepEditing });
+    keep.setAttribute("data-keep", "");
+    foot.replaceChildren(
+      h("span", { class: "confirm-q", role: "alert" }, icon("warn", 15), t("common.discardQ")),
+      h("span", { class: "spacer" }),
+      keep,
+      button(t("common.discard"), { kind: "danger", onClick: close }),
+    );
+    if (!foot.isConnected) dialog.append(foot);
+    // Esc now answers "keep editing"; Discard is a deliberate click.
+    popAsk = pushLayer(keepEditing);
+    keep.focus();
   };
   const dialog = h(
     "div",
@@ -705,7 +769,7 @@ export function modal(o: {
         h("h2", { class: "modal-title", text: o.title }),
         o.subtitle ? h("p", { class: "modal-sub", text: o.subtitle }) : null,
       ),
-      iconButton("close", t("common.closeEsc"), () => close(), { cls: "modal-x" }),
+      iconButton("close", t("common.closeEsc"), () => requestClose(), { cls: "modal-x" }),
     ),
     body,
     o.status ?? null,
@@ -717,9 +781,9 @@ export function modal(o: {
     if (e.target !== overlay) return;
     // Keep the press from moving the focus to <body>: it goes back to the opener.
     e.preventDefault();
-    close();
+    requestClose();
   });
-  const pop = pushLayer(close);
+  const pop = pushLayer(requestClose);
   document.body.append(overlay);
   const release = holdKeyboard(overlay);
   window.setTimeout(() => {
@@ -727,7 +791,7 @@ export function modal(o: {
       dialog.querySelector<HTMLElement>("[data-autofocus]") ?? dialog.querySelector<HTMLElement>(".modal-x");
     first?.focus();
   }, 0);
-  return { close, root: dialog, body, foot };
+  return { close, requestClose, root: dialog, body, foot };
 }
 
 // ── Popover menu ──────────────────────────────────────────────────────────────
@@ -739,24 +803,54 @@ export interface MenuItem {
   onClick: () => void;
 }
 
+/** Open menus by the button that opened them: a second press closes, never stacks a copy. */
+const openMenus = new Map<HTMLElement, () => void>();
+
+/**
+ * A popover menu under `anchor`. Its button toggles it; the arrow keys, Home
+ * and End move between items; Tab, Esc or a press elsewhere closes it (that
+ * press does nothing else), and the focus goes back to the button.
+ */
 export function openMenu(anchor: HTMLElement, items: MenuItem[], title?: string): void {
+  const already = openMenus.get(anchor);
+  if (already) {
+    already();
+    return;
+  }
   const menu = h("div", { class: "menu", role: "menu" }, title ? h("div", { class: "menu-title", text: title }) : null);
   let done = false;
   const close = () => {
     if (done) return;
     done = true;
+    const hadFocus = menu.contains(document.activeElement);
     pop();
     menu.remove();
     document.removeEventListener("mousedown", outside, true);
     anchor.setAttribute("aria-expanded", "false");
+    openMenus.delete(anchor);
+    if (hadFocus && anchor.isConnected) anchor.focus({ preventScroll: true });
+  };
+  const swallow = (e: Event) => {
+    e.stopPropagation();
+    e.preventDefault();
   };
   const outside = (e: MouseEvent) => {
-    if (!menu.contains(e.target as Node) && e.target !== anchor && !anchor.contains(e.target as Node)) close();
+    if (menu.contains(e.target as Node) || anchor.contains(e.target as Node)) return;
+    close();
+    // The press that dismissed the menu stops there: it would otherwise also
+    // click whatever lies under it (a rule row opening its editor).
+    document.addEventListener("click", swallow, true);
+    document.addEventListener(
+      "mouseup",
+      () => window.setTimeout(() => document.removeEventListener("click", swallow, true), 0),
+      { capture: true, once: true },
+    );
   };
+  const buttons: HTMLButtonElement[] = [];
   for (const it of items) {
     const b = h(
       "button",
-      { type: "button", class: "menu-item", role: "menuitem" },
+      { type: "button", class: "menu-item", role: "menuitem", tabindex: "-1" },
       it.icon ? icon(it.icon, 16) : null,
       h(
         "span",
@@ -769,8 +863,39 @@ export function openMenu(anchor: HTMLElement, items: MenuItem[], title?: string)
       close();
       it.onClick();
     });
+    buttons.push(b);
     menu.append(b);
   }
+  menu.addEventListener("keydown", (e) => {
+    if (e.key === "Tab") {
+      // Leaves with the focus on the button, so Tab carries on from there.
+      close();
+      return;
+    }
+    const i = buttons.indexOf(document.activeElement as HTMLButtonElement);
+    const n = buttons.length;
+    const j =
+      e.key === "ArrowDown"
+        ? (i + 1) % n
+        : e.key === "ArrowUp"
+          ? (i - 1 + n) % n
+          : e.key === "Home"
+            ? 0
+            : e.key === "End"
+              ? n - 1
+              : -1;
+    if (j < 0 || !n) return;
+    e.preventDefault();
+    buttons[j].focus();
+  });
+  menu.addEventListener("focusout", (e) => {
+    const next = e.relatedTarget as Node | null;
+    if (next && (menu.contains(next) || anchor.contains(next))) return;
+    // Focus went elsewhere (a shortcut, another window): the menu goes too.
+    window.setTimeout(() => {
+      if (!menu.contains(document.activeElement)) close();
+    }, 0);
+  });
   document.body.append(menu);
   const r = anchor.getBoundingClientRect();
   const mw = menu.offsetWidth;
@@ -782,9 +907,10 @@ export function openMenu(anchor: HTMLElement, items: MenuItem[], title?: string)
   menu.style.left = `${left}px`;
   menu.style.top = `${top}px`;
   anchor.setAttribute("aria-expanded", "true");
-  const pop = pushLayer(close);
+  const pop = pushLayer(close, () => menu.isConnected);
+  openMenus.set(anchor, close);
   window.setTimeout(() => document.addEventListener("mousedown", outside, true), 0);
-  menu.querySelector<HTMLElement>(".menu-item")?.focus();
+  buttons[0]?.focus();
 }
 
 // ── Tooltip (one for the whole window) ───────────────────────────────────────

@@ -90,6 +90,9 @@ const M = {
   "common.chooseFolder": ["Klasör seç", "Choose folder"],
   "common.choose": ["Seç…", "Choose…"],
   "common.onlyInApp": ["Bu yalnız Nöbetçi içinde çalışır.", "This only works inside Nöbetçi."],
+  "common.discardQ": ["Kaydedilmemiş değişiklikler atılsın mı?", "Discard your unsaved changes?"],
+  "common.keepEditing": ["Düzenlemeye devam", "Keep editing"],
+  "common.discard": ["Değişiklikleri at", "Discard changes"],
   // Error codes Rust answers with (api.ts errText); anything else is Rust's own wording.
   "err.stalePreview": [
     "Dosya bu önizlemeden sonra değişti, bu yüzden hiçbir şey yazılmadı. Yeni bir önizleme oluştur.",
@@ -662,6 +665,11 @@ const M = {
   "guv.tryDone": ["Onaylanırdı ✓", "Approved ✓"],
   "guv.tryEarly": ["Erken bıraktın", "Released too early"],
   "guv.tryHold": ["Basılı tut…", "Keep holding…"],
+  "guv.tryMouse": ["Fareyle basılı tut", "Hold it with the mouse"],
+  "guv.tryHint": [
+    "Fare ya da dokunmatik yüzeyle basılı tutarak dene. Adada da YÜKSEK ve KRİTİK istekler klavyeyle değil, yalnız basılı tutularak onaylanır.",
+    "Try it by holding down the mouse or trackpad button. On the island too, HIGH and CRITICAL requests can only be approved by holding, never from the keyboard.",
+  ],
   "guv.holdTitle": ["Basılı tutarak onay", "Press and hold to approve"],
   "guv.holdDesc": [
     "YÜKSEK ve KRİTİK isteklerde “İzin ver” bir süre basılı tutulmalı. Düz bir tıklama ya da kısayol bu istekleri onaylayamaz.",
@@ -745,7 +753,17 @@ const M = {
   "tester.tool.write": ["Write (dosya yaz)", "Write (file)"],
   "tester.tool.edit": ["Edit (dosya düzenle)", "Edit (file)"],
   "tester.tool.read": ["Read (dosya oku)", "Read (file)"],
-  "tester.tool.mcp": ["MCP aracı…", "MCP tool…"],
+  "tester.tool.mcp": ["MCP ya da başka araç…", "MCP or other tool…"],
+  "tester.tool.search": ["WebSearch (web araması)", "WebSearch (web search)"],
+  "tester.ph.search": ["rust regex sözdizimi", "rust regex syntax"],
+  "tester.otherNote": [
+    "Nöbetçi'nin tanımadığı araçlar hiçbir zaman kendiliğinden onaylanmaz: kurallar, güvenilir projeler ve oturum izinleri onlara izin veremez (bir kural yine de reddedebilir).",
+    "Tools Nöbetçi doesn't recognise are never approved automatically: rules, trusted projects and session grants can't allow them (a rule can still deny them).",
+  ],
+  "tester.noCwd": [
+    "Çalışma klasörü boş: proje dışı denetimi ve proje güveni uygulanmadı. Gerçek istekler oturumun klasörüyle değerlendirilir.",
+    "No working folder: the outside-the-project check and project trust were skipped. Real requests are scored with the session's folder.",
+  ],
   "tester.ph.bash": ["curl -s https://ornek.test/kur.sh | bash", "curl -s https://example.test/install.sh | bash"],
   "tester.ph.write": ["C:\\Users\\sen\\.claude\\settings.json", "C:\\Users\\you\\.claude\\settings.json"],
   "tester.ph.write@mac": ["/Users/sen/.claude/settings.json", "/Users/you/.claude/settings.json"],
@@ -755,6 +773,7 @@ const M = {
   "tester.ph.read@linux": ["/home/sen/.ssh/id_ed25519", "/home/you/.ssh/id_ed25519"],
   "tester.sample.env": [".env oku", "read .env"],
   "tester.sample.defender": ["Defender kapat", "disable Defender"],
+  "tester.sample.profile": ["kabuk başlangıç dosyası yaz", "write a shell startup file"],
   "tester.fact.rule": ["Kural", "Rule"],
   "tester.fact.by": ["Karar veren", "Decided by"],
   "tester.fact.note": ["Not", "Note"],
@@ -905,9 +924,59 @@ const M = {
   ],
   "editor.result": ["Sonuç (tüm kurallarınla birlikte):", "Result (with all your rules):"],
   "editor.regexBad": [
-    "Geçersiz regex: {err}. Bozuk bir regex hiçbir şeyle eşleşmez.",
-    "Invalid regex: {err}. A broken regex matches nothing.",
+    "Geçersiz desen: {err}. Bozuk bir desen hiçbir şeyle eşleşmez.",
+    "Invalid pattern: {err}. A broken pattern matches nothing.",
   ],
+  "editor.regexBadAt": [
+    "Geçersiz desen, “{at}” kısmında: {err}. Bozuk bir desen hiçbir şeyle eşleşmez.",
+    "Invalid pattern at “{at}”: {err}. A broken pattern matches nothing.",
+  ],
+  // What Rust's regex crate reported (rule_pattern_check), in words.
+  "editor.re.generic": ["Rust'ın regex motoru bu deseni derleyemiyor", "Rust's regex engine can't compile it"],
+  "editor.re.tooBig": ["desen çok büyük; daha kısa bir desen dene", "the pattern is too big; try a shorter one"],
+  "editor.re.unclosedGroup": ["açılan bir parantez kapanmıyor", "a group is opened but never closed"],
+  "editor.re.unopenedGroup": ["kapanan bir parantez hiç açılmamış", "a closing parenthesis has no opening one"],
+  "editor.re.unclosedClass": ["[ ile başlayan karakter sınıfı kapanmıyor", "a [ character class is never closed"],
+  "editor.re.classEscape": [
+    "[ ] içinde geçersiz bir ters bölü dizisi var",
+    "there is an invalid backslash escape inside [ ]",
+  ],
+  "editor.re.hex": [
+    "\\x, \\u ya da \\U'dan sonra onaltılık bir sayı gelmeli; ters bölünün kendisi için \\\\ yaz (ör. C:\\\\Users)",
+    "\\x, \\u or \\U must be followed by a hex number; write \\\\ for a backslash itself (e.g. C:\\\\Users)",
+  ],
+  "editor.re.trailing": [
+    "desen tek bir ters bölüyle bitiyor; ters bölünün kendisi için \\\\ yaz",
+    "the pattern ends with a lone backslash; write \\\\ for a backslash itself",
+  ],
+  "editor.re.escape": [
+    "tanınmayan bir ters bölü dizisi var; ters bölünün kendisi için \\\\ yaz (ör. C:\\\\Users)",
+    "there is an unknown backslash escape; write \\\\ for a backslash itself (e.g. C:\\\\Users)",
+  ],
+  "editor.re.braces": [
+    "{ } içinde sayı olmalı (ör. {2,4}); süslü parantezin kendisi için \\{ yaz",
+    "{ } must hold numbers, like {2,4}; write \\{ for a literal brace",
+  ],
+  "editor.re.nothingToRepeat": [
+    "*, + ya da ? işaretinin önünde tekrarlanacak bir şey yok",
+    "*, + or ? has nothing before it to repeat",
+  ],
+  "editor.re.countOrder": ["{n,m} içinde n, m'den büyük", "in {n,m}, n is larger than m"],
+  "editor.re.rangeOrder": ["[ ] içinde ters bir aralık var (ör. z-a)", "a range inside [ ] runs backwards (like z-a)"],
+  "editor.re.rangeBoundary": [
+    "[ ] içindeki aralık iki karakter arasında olmalı; tirenin kendisi için onu başa ya da sona koy",
+    "a range inside [ ] must run between two characters; put - first or last to mean a dash",
+  ],
+  "editor.re.flag": [
+    "(?…) içinde geçersiz bir bayrak var (i, m, s, x, U kullanılabilir)",
+    "an inline flag (?…) is invalid (i, m, s, x and U work)",
+  ],
+  "editor.re.groupName": [
+    "grup adı geçersiz ya da tekrarlanmış: (?P<ad>…)",
+    "a group name is invalid or repeated: (?P<name>…)",
+  ],
+  "editor.re.unicode": ["bilinmeyen bir Unicode sınıfı var (\\p{…})", "there is an unknown Unicode class (\\p{…})"],
+  "editor.re.tooDeep": ["çok fazla iç içe parantez var", "it nests too many parentheses or brackets"],
   "editor.regexOk": [
     "Rust'ın regex motoru kullanılır (büyük/küçük harf duyarsız). Geri başvuru ve lookaround desteklenmez.",
     "Uses Rust's regex engine (case-insensitive). No backreferences or lookaround.",
@@ -928,6 +997,27 @@ const M = {
   "editor.patternHint": [
     "Büyük/küçük harf duyarsız. Hedef: komutun tamamı, dosya yolu ya da URL.",
     "Case-insensitive. The target is the full command, file path or URL.",
+  ],
+  "editor.prefixHint": [
+    "Hedef bu sözcüklerle başlamalı (büyük/küçük harf duyarsız): “npm test”, “npm test -- --watch”ı kapsar ama “npm testing”i kapsamaz.",
+    "The target must start with these words (case-insensitive): “npm test” covers “npm test -- --watch” but not “npm testing”.",
+  ],
+  "editor.edgeSpaces": ["Baştaki ve sondaki boşluklar yok sayılır.", "Spaces at either end are ignored."],
+  "editor.chainNote": [
+    "Bu kural tek bir komutu kapsar: desenin kendisinden fazla komut zincirleyen bir istek (;, &&, ||, |, satır sonu, $( )…) bu kurala uymaz.",
+    "This rule covers one command: a request that chains more commands than the pattern itself does (;, &&, ||, |, a line break, $( )…) doesn't match it.",
+  ],
+  "editor.denyEverything": [
+    "Desen boş ve araç “*”: bu kural her isteği reddeder, Claude hiçbir şey yapamaz.",
+    "No pattern and any tool: this rule denies every request, so Claude can't do anything.",
+  ],
+  "editor.askEverything": [
+    "Desen boş ve araç “*”: her istek sana sorulur ve alttaki kurallar hiç uygulanmaz.",
+    "No pattern and any tool: every request comes to you, and the rules below never apply.",
+  ],
+  "editor.rescoreEverything": [
+    "Desen boş ve araç “*”: her isteğin riski {level} yapılır ve alttaki kurallar hiç uygulanmaz.",
+    "No pattern and any tool: every request is set to {level}, and the rules below never apply.",
   ],
   "editor.allowOff": [
     "Otomatik izin tavanı “Kapalı”: bu kural hiçbir isteği kendiliğinden onaylamaz, sadece sorar.",
@@ -988,6 +1078,14 @@ const M = {
   "proj.suggest": ["Geçmişte görülen klasörler:", "Folders from your history:"],
   "proj.suggestTitle": ["{path} — geçmişte {n} istek", "{path} — {n} requests in history"],
   "proj.duplicate": ["Bu klasör zaten listede.", "That folder is already on the list."],
+  "proj.cleaned": [
+    "Yoldaki tırnaklar ve kenar boşlukları kaldırıldı; yol artık eşleşebilir.",
+    "Removed the quotes and spaces around the path, so it can match.",
+  ],
+  "rules.brokenPattern": [
+    "Desen geçersiz: bu kural hiçbir isteğe uymaz. Düzeltmek için tıkla.",
+    "Broken pattern: this rule never matches anything. Click to fix it.",
+  ],
   "reasons.title": ["Hazır ret gerekçeleri", "Quick deny reasons"],
   "reasons.desc": [
     "Adadaki “Reddet” menüsünde bu sırayla görünür; seçtiğin gerekçe Claude'a iletilir.",
@@ -1084,8 +1182,18 @@ const M = {
     "Her pencerede çalışan genel kısayollar. Değiştirmek için tıkla ve tuşlara bas.",
     "Global shortcuts that work in any window. Click one and press the new keys.",
   ],
+  "hk.desc@mac": [
+    "Her uygulamada çalışan genel kısayollar. Değiştirmek için tıkla ve tuşlara bas. macOS kısayolu tuşun yerine bağlar: harfler ABD klavyesindeki adlarıyla görünür.",
+    "Global shortcuts that work in any app. Click one and press the new keys. macOS ties a shortcut to the key's position, so letters are named as on a US keyboard.",
+  ],
   "quiet.now": ["Şu an", "Now"],
-  "quiet.allDay": ["Başlangıç ve bitiş aynı: bütün gün sessiz.", "Start and end are the same: quiet all day."],
+  "quiet.same": [
+    "Başlangıç ve bitiş aynı olduğu için sessiz saatler hiç uygulanmaz. Bütün gün sessizlik için yukarıdaki Rahatsız etme'yi aç.",
+    "Start and end are the same, so quiet hours never apply. For a whole day of quiet, turn on Do not disturb above.",
+  ],
+  "quiet.hourAria": ["{field}: saat", "{field}: hour"],
+  "quiet.minuteAria": ["{field}: dakika", "{field}: minutes"],
+  "quiet.periodAria": ["{field}: ÖÖ ya da ÖS", "{field}: AM or PM"],
   "quiet.wraps": [
     "{dur} sessiz · gece yarısını aşar ({from} → ertesi gün {to}).",
     "{dur} of quiet · runs past midnight ({from} → {to} the next day).",
@@ -1225,6 +1333,25 @@ const M = {
   "hist.readFailed": ["Geçmiş okunamadı.", "Couldn't read the history."],
   "hist.noMatch": ["Eşleşen kayıt yok", "No matching entries"],
   "hist.noMatchText": ["Filtreleri gevşet ya da aralığı genişlet.", "Loosen the filters or widen the range."],
+  "hist.noRangeTitle": ["Bu aralıkta kayıt yok", "Nothing in this range"],
+  "hist.noRangeText": ["Daha eski kayıtlar için aralığı genişlet.", "Widen the range to see older entries."],
+  "hist.emptyTitle": ["Henüz kayıt yok", "No decisions recorded yet"],
+  "hist.emptyText": [
+    "Claude bir izin istediğinde ve sen ya da bir kural karar verdiğinde burada görünür.",
+    "They show up here as soon as Claude asks for a permission and you or a rule decide.",
+  ],
+  "hist.offTitle": ["Kayıt kapalı", "Recording is off"],
+  "hist.offText": [
+    "Yeni kararları kaydetmek için yukarıdan “Geçmişi kaydet”i aç.",
+    "Turn on “Keep history” above to record new decisions.",
+  ],
+  "hist.sepComma": ["Ayırıcı: virgül", "Separator: comma"],
+  "hist.sepSemicolon": ["Ayırıcı: noktalı virgül", "Separator: semicolon"],
+  "hist.sepAria": ["CSV ayırıcısı", "CSV separator"],
+  "hist.sepTitle": [
+    "Ondalıkları virgülle yazan dillerde (Türkçe, Almanca…) Excel noktalı virgül bekler.",
+    "Excel in languages that write decimals with a comma (Turkish, German…) expects a semicolon.",
+  ],
   "hist.col.time": ["Zaman", "Time"],
   "hist.col.project": ["Proje", "Project"],
   "hist.col.risk": ["Risk", "Risk"],

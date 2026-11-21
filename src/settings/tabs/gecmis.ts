@@ -7,7 +7,7 @@
 import type { AuditEntry, AuditFilter, AuditPage, AuditStats, RiskLevel } from "../../core/bridge";
 import { locale } from "../../i18n/core";
 import { h } from "../../ui/dom";
-import { api, errText } from "../api";
+import { api, errText, type CsvSeparator } from "../api";
 import { SERIES, dailyChart, dailyTable, legend, rankList, riskBar } from "../charts";
 import { BY_KEYS, byLabel, decisionLabel } from "../data";
 import { t, type MsgKey } from "../i18n";
@@ -39,8 +39,18 @@ const PAGE = 50;
 
 type Range = "7" | "30" | "90";
 
-/** A message is either one of ours (re-translated on render) or Rust's own text. */
-type Msg = { kind: "ok" | "error" | "info"; key?: MsgKey; vars?: Record<string, string>; raw?: string };
+/** A message is either one of ours or a Rust error, both put in words on render (so a language switch follows). */
+type Msg = { kind: "ok" | "error" | "info"; key?: MsgKey; vars?: Record<string, string>; err?: unknown };
+
+const SEP_KEY = "nobetci.settings.csvSeparator";
+
+function storedSeparator(): CsvSeparator {
+  try {
+    return localStorage.getItem(SEP_KEY) === ";" ? ";" : ",";
+  } catch {
+    return ",";
+  }
+}
 
 const st = {
   range: "30" as Range,
@@ -58,7 +68,15 @@ const st = {
   showTable: false,
   exportMsg: null as Msg | null,
   stale: true,
-  seq: 0,
+  // Stats and pages load on their own counters: a page asked for while the
+  // stats are still loading must not throw the stats away.
+  statsSeq: 0,
+  pageSeq: 0,
+  /** The whole history (any range) is empty: asked only when a page with no filter comes back empty. */
+  historyEmpty: null as boolean | null,
+  /** The next page lands with its first rows in view (the pager sits at the bottom). */
+  scrollToEntries: false,
+  separator: storedSeparator(),
 };
 
 /** Fallback project names (pages and top-6 stats) when auditProjects is unavailable. */
@@ -66,11 +84,20 @@ const knownProjects = new Set<string>();
 /** Every project in the history with its count, busiest first. */
 let allProjects: [string, number][] | null = null;
 
+/**
+ * Start of the range: the same instant audit_stats counts from (days break at
+ * local midnight by today's UTC offset), so the entries listed are exactly the
+ * ones counted, even when the range crosses a daylight-saving change.
+ */
 function since(): number {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  d.setDate(d.getDate() - Number(st.range) + 1);
-  return d.getTime();
+  const off = new Date().getTimezoneOffset() * 60_000;
+  const today = Math.floor((Date.now() - off) / 86_400_000);
+  return (today - Number(st.range) + 1) * 86_400_000 + off;
+}
+
+function filterActive(): boolean {
+  const f = st.filter;
+  return !!(f.text.trim() || f.level || f.decision || f.by || f.project);
 }
 
 function currentFilter(): AuditFilter {
@@ -78,40 +105,62 @@ function currentFilter(): AuditFilter {
   return { text: f.text.trim(), level: f.level, decision: f.decision, by: f.by, project: f.project, since: since() };
 }
 
-async function loadAll() {
-  const my = ++st.seq;
+/** An empty page with no filter: is the history empty, or only this range? */
+async function checkEmpty(page: AuditPage | null) {
+  if (!page) return;
+  if (page.total > 0) st.historyEmpty = false;
+  else if (!filterActive()) st.historyEmpty = ((await api.auditQuery({ limit: 1 }))?.total ?? 1) === 0;
+}
+
+/** Stats, the current page and (unless only a new decision came in) the project list. */
+async function loadAll(withProjects = true) {
+  const my = ++st.statsSeq;
+  const myPage = ++st.pageSeq;
   st.loading = true;
   paintLoading();
   const [stats, page, projects] = await Promise.all([
     api.auditStats(Number(st.range)),
     api.auditQuery({ ...currentFilter(), limit: PAGE, offset: st.offset }),
-    api.auditProjects(),
+    withProjects || !allProjects ? api.auditProjects() : Promise.resolve(allProjects),
   ]);
-  if (my !== st.seq) return;
+  if (my !== st.statsSeq) return;
   st.stats = stats;
   allProjects = projects;
-  st.page = page;
-  st.loading = false;
   st.stale = false;
   for (const [p] of stats?.topProjects ?? []) knownProjects.add(p);
-  for (const e of page?.entries ?? []) if (e.project) knownProjects.add(e.project);
+  // A page asked for meanwhile (a filter, the search) is newer than this one.
+  if (myPage === st.pageSeq) {
+    await checkEmpty(page);
+    if (myPage !== st.pageSeq) return;
+    st.page = page;
+    st.loading = false;
+    for (const e of page?.entries ?? []) if (e.project) knownProjects.add(e.project);
+  }
   rerender("gecmis");
   maybeDevDetail();
 }
 
 async function loadPage() {
-  const my = ++st.seq;
+  const my = ++st.pageSeq;
   st.loading = true;
   paintLoading();
   const page = await api.auditQuery({ ...currentFilter(), limit: PAGE, offset: st.offset });
-  if (my !== st.seq) return;
+  if (my !== st.pageSeq) return;
+  await checkEmpty(page);
+  if (my !== st.pageSeq) return;
   st.page = page;
   st.loading = false;
   for (const e of page?.entries ?? []) if (e.project) knownProjects.add(e.project);
   rerender("gecmis");
+  if (st.scrollToEntries) {
+    st.scrollToEntries = false;
+    document.querySelector<HTMLElement>("[data-hist-entries]")?.scrollIntoView({ block: "start" });
+  }
 }
 
-const reloadSoon = debounce(() => void loadAll(), 400);
+// A new decision changes the stats and the page; the project list can wait for
+// the next time the tab is shown (one full read of the log fewer per decision).
+const reloadSoon = debounce(() => void loadAll(false), 400);
 const searchSoon = debounce(() => {
   st.offset = 0;
   void loadPage();
@@ -122,7 +171,7 @@ function paintLoading() {
 }
 
 function msgView(m: Msg): HTMLElement {
-  const text = m.key ? t(m.key, m.vars) : (m.raw ?? "");
+  const text = m.key ? t(m.key, m.vars) : errText(m.err);
   return notice(m.kind, h("span", { class: "verbatim", text }));
 }
 
@@ -252,7 +301,9 @@ function openDetail(index: number) {
         h("span", { class: "muted", text: byLabel(e.by) }),
       ),
       h("div", { class: "target-head" }, h("span", { class: "field-label", text: t("hist.targetFull") }), copyBtn),
-      h("pre", { class: "target-full mono", tabindex: "0", text: e.target || "—" }),
+      // The drawer body scrolls; the full target, the point of the drawer, is
+      // never the part that gives way (a flex item would shrink to its padding).
+      h("pre", { class: "target-full mono", tabindex: "0", style: "flex-shrink: 0", text: e.target || "—" }),
       h("div", { class: "field-label", text: t("hist.findings") }),
       labels,
       facts,
@@ -448,20 +499,29 @@ function table(): HTMLElement {
   const page = st.page;
   if (!page)
     return h("p", { class: "muted empty-line", text: st.loading ? t("common.loading") : t("hist.readFailed") });
-  if (!page.entries.length)
+  if (!page.entries.length) {
+    // Say why there is nothing: filters, the range, or an empty history.
+    const [title, text]: [MsgKey, MsgKey] = filterActive()
+      ? ["hist.noMatch", "hist.noMatchText"]
+      : st.historyEmpty
+        ? settings().auditEnabled
+          ? ["hist.emptyTitle", "hist.emptyText"]
+          : ["hist.offTitle", "hist.offText"]
+        : ["hist.noRangeTitle", "hist.noRangeText"];
     return h(
       "div",
       { class: "empty" },
       icon("gecmis", 26),
-      h("strong", { text: t("hist.noMatch") }),
-      h("span", { text: t("hist.noMatchText") }),
+      h("strong", { text: t(title) }),
+      h("span", { text: t(text) }),
     );
+  }
   const tbody = h("tbody", {});
   page.entries.forEach((e: AuditEntry, i) => {
     const tr = h(
       "tr",
       { tabindex: "0", "data-fk": `hrow:${e.id}` },
-      h("td", { class: "t-when", text: when(e.ts) }),
+      h("td", { class: "t-when", title: fullWhen(e.ts), text: when(e.ts) }),
       h("td", { class: "t-proj", title: e.cwd, text: e.project || "—" }),
       h("td", {}, levelChip(asLevel(e.level), true)),
       h("td", {}, decisionChip(e.decision)),
@@ -526,6 +586,7 @@ function table(): HTMLElement {
         fk: "pg:prev",
         onClick: () => {
           st.offset = Math.max(0, st.offset - PAGE);
+          st.scrollToEntries = true;
           void loadPage();
         },
       }),
@@ -537,6 +598,7 @@ function table(): HTMLElement {
         fk: "pg:next",
         onClick: () => {
           st.offset += PAGE;
+          st.scrollToEntries = true;
           void loadPage();
         },
       }),
@@ -544,14 +606,69 @@ function table(): HTMLElement {
   );
 }
 
+function entriesCard(): HTMLElement {
+  // Nothing matches: there is nothing to export either.
+  const none = st.page?.total === 0;
+  const sep = select(
+    [
+      [",", t("hist.sepComma")],
+      [";", t("hist.sepSemicolon")],
+    ] as const,
+    st.separator,
+    (v) => {
+      st.separator = v;
+      try {
+        localStorage.setItem(SEP_KEY, v);
+      } catch {
+        /* storage unavailable: the choice lasts until the window closes */
+      }
+    },
+    { fk: "csvSep", label: t("hist.sepAria") },
+  );
+  sep.title = t("hist.sepTitle");
+  // Sized like the small export buttons next to it.
+  sep.setAttribute("style", "height: 28px; border-radius: 8px; font-size: 12.5px");
+  const entries = card(
+    {
+      title: t("hist.entries"),
+      icon: "gecmis",
+      desc: t("hist.entriesDesc"),
+      actions: [
+        sep,
+        button(t("hist.exportCsv"), {
+          kind: "ghost",
+          small: true,
+          icon: "download",
+          title: t("hist.exportCsvTitle"),
+          disabled: none,
+          onClick: () => void doExport("csv"),
+        }),
+        button("JSON", {
+          kind: "ghost",
+          small: true,
+          icon: "download",
+          title: t("hist.exportJsonTitle"),
+          disabled: none,
+          onClick: () => void doExport("json"),
+        }),
+      ],
+    },
+    st.exportMsg ? msgView(st.exportMsg) : null,
+    filterBar(),
+    h("div", { class: `hist-live${st.loading ? " loading" : ""}` }, table()),
+  );
+  entries.setAttribute("data-hist-entries", "");
+  return entries;
+}
+
 async function doExport(fmt: "csv" | "json") {
   try {
-    const path = await api.auditExport(currentFilter(), fmt);
+    const path = await api.auditExport(currentFilter(), fmt, st.separator);
     st.exportMsg = path
       ? { kind: "ok", key: "common.savedPath", vars: { path } }
       : { kind: "info", key: "hist.exportCancelled" };
   } catch (err) {
-    st.exportMsg = { kind: "error", raw: errText(err) };
+    st.exportMsg = { kind: "error", err };
   }
   rerender("gecmis");
 }
@@ -624,32 +741,7 @@ function render(): HTMLElement {
       h("span", { class: "range-note muted", text: t("hist.rangeNote") }),
     ),
     statsSection(),
-    card(
-      {
-        title: t("hist.entries"),
-        icon: "gecmis",
-        desc: t("hist.entriesDesc"),
-        actions: [
-          button(t("hist.exportCsv"), {
-            kind: "ghost",
-            small: true,
-            icon: "download",
-            title: t("hist.exportCsvTitle"),
-            onClick: () => void doExport("csv"),
-          }),
-          button("JSON", {
-            kind: "ghost",
-            small: true,
-            icon: "download",
-            title: t("hist.exportJsonTitle"),
-            onClick: () => void doExport("json"),
-          }),
-        ],
-      },
-      st.exportMsg ? msgView(st.exportMsg) : null,
-      filterBar(),
-      h("div", { class: `hist-live${st.loading ? " loading" : ""}` }, table()),
-    ),
+    entriesCard(),
     h(
       "div",
       { class: "danger-zone" },
@@ -662,6 +754,7 @@ function render(): HTMLElement {
       inlineConfirm({
         label: t("hist.clearBtn"),
         icon: "trash",
+        disabled: st.historyEmpty === true,
         question: t("hist.clearQ"),
         confirmLabel: t("hist.clearYes"),
         onConfirm: async () => {
@@ -671,7 +764,7 @@ function render(): HTMLElement {
             st.exportMsg = { kind: "ok", key: "hist.cleared" };
             await loadAll();
           } catch (err) {
-            st.exportMsg = { kind: "error", raw: errText(err) };
+            st.exportMsg = { kind: "error", err };
             rerender("gecmis");
           }
         },

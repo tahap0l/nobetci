@@ -572,6 +572,10 @@ function assessRaw(tool: string, input: Record<string, unknown>, cwd: string, of
     kind = "web";
     target = str(input, "url")!;
     scan(WEB, target);
+  } else if (lower === "websearch" && str(input, "query")?.trim()) {
+    // Claude Code's own search: a known request, never scanned like a URL.
+    kind = "web";
+    target = str(input, "query")!;
   } else if (lower.startsWith("mcp__")) {
     kind = "mcp";
     const action = lower.split("__").pop() ?? "";
@@ -606,14 +610,25 @@ function assessRaw(tool: string, input: Record<string, unknown>, cwd: string, of
   }
   if (found.some((x) => x.tag === "secret") && found.some((x) => x.tag === "exfil"))
     synth("secret_exfil", "critical", SYNTHETIC[0][2]);
+  // As in risk.rs: a request it can't place is always looked at by a person.
+  const manualReview = kind === "other" || !target.trim();
+  if (manualReview)
+    found.push({
+      f: {
+        category: "unrecognized_request",
+        level: "medium",
+        label: ["Tanınmayan veya eksik istek", "Unrecognized or incomplete request"],
+        excerpt: "",
+      },
+      tag: "",
+    });
   const findings: RawFinding[] = [];
   for (const { f } of found) if (!findings.some((x) => x.label[1] === f.label[1])) findings.push(f);
   findings.sort((a, b) => RANK[b.level] - RANK[a.level]);
-  return { level: findings[0]?.level ?? ("low" as RiskLevel), kind, target, findings };
+  return { level: findings[0]?.level ?? ("low" as RiskLevel), kind, target, findings, manualReview };
 }
 
-function assess(tool: string, input: Record<string, unknown>, cwd: string, off: Set<string>): RiskAssessment {
-  const a = assessRaw(tool, input, cwd, off);
+function assessment(a: ReturnType<typeof assessRaw>): RiskAssessment {
   return {
     level: a.level,
     kind: a.kind,
@@ -640,12 +655,25 @@ function toolMatches(spec: string, tool: string): boolean {
     );
 }
 
+/** Letters, digits and what continues a command word (rules.rs is_word). */
+function isWord(c: string): boolean {
+  return /[\p{L}\p{N}_.-]/u.test(c);
+}
+
+/** `text` starts with `prefix`, ending where a word does (rules.rs starts_with_word). */
+function startsWithWord(text: string, prefix: string): boolean {
+  if (!text.startsWith(prefix)) return false;
+  const last = prefix.slice(-1);
+  const next = text.slice(prefix.length, prefix.length + 1);
+  return !last || !next || !(isWord(last) && isWord(next));
+}
+
 function patternMatches(mode: string, pattern: string, target: string): boolean {
   const p = pattern.trim();
   if (!p) return true;
   const low = target.toLowerCase();
   const lp = p.toLowerCase();
-  if (mode === "prefix") return low.trimStart().startsWith(lp);
+  if (mode === "prefix") return startsWithWord(low.trimStart(), lp);
   if (mode === "exact") return low.trim() === lp;
   if (mode === "glob" || mode === "regex") {
     const src =
@@ -656,12 +684,39 @@ function patternMatches(mode: string, pattern: string, target: string): boolean 
             .join("")}$`
         : p;
     try {
-      return new RegExp(src, "i").test(target);
+      // Globs cross line breaks too (rules.rs compiles them with (?s)).
+      return new RegExp(src, mode === "glob" ? "is" : "i").test(target);
     } catch {
       return false;
     }
   }
   return low.includes(lp);
+}
+
+/** How many more commands a shell would run, per kind (rules.rs separators). */
+function separators(text: string): number[] {
+  const chars = [...text.trim()];
+  const count = [0, 0, 0, 0, 0, 0, 0];
+  chars.forEach((c, i) => {
+    const prev = i > 0 ? chars[i - 1] : " ";
+    const next = chars[i + 1] ?? " ";
+    let kind = -1;
+    if ("\n\r\u0085\u2028\u2029".includes(c)) kind = 0;
+    else if (c === ";") kind = 1;
+    else if (c === "&") kind = prev === ">" || prev === "<" || next === ">" ? -1 : 2;
+    else if (c === "|") kind = prev === ">" ? -1 : 3;
+    else if (c === "`") kind = 4;
+    else if (c === "$" && next === "(") kind = 5;
+    else if ((c === "<" || c === ">") && next === "(") kind = 6;
+    if (kind >= 0) count[kind]++;
+  });
+  return count;
+}
+
+/** A loose allow (or calming) rule covers one command: no more chained commands than its pattern spells out. */
+function chainsMore(command: string, pattern: string): boolean {
+  const p = separators(pattern);
+  return separators(command).some((c, i) => c > p[i]);
 }
 
 /**
@@ -670,7 +725,7 @@ function patternMatches(mode: string, pattern: string, target: string): boolean 
  * escapes such as `\U` and stray `{`), after translating the syntax JS lacks
  * (inline flags, `\A`/`\z`, `(?P<name>…)`). Messages read like the crate's.
  */
-function patternCheck(mode: RuleMode, pattern: string): string | null {
+function patternCheck(mode: RuleMode, pattern: string): { msg: string; at?: [number, number] } | null {
   if (mode !== "regex" || !pattern.trim()) return null;
   // An escape is real when an odd number of backslashes precede the character.
   const escaped = (src: string, i: number) => {
@@ -680,11 +735,30 @@ function patternCheck(mode: RuleMode, pattern: string): string | null {
   };
   for (let i = 0; i < pattern.length; i++) {
     const c = pattern[i];
-    if (c === "(" && !escaped(pattern, i) && /^\(\?<?[=!]/.test(pattern.slice(i))) {
-      return "look-around, including look-ahead and look-behind, is not supported";
+    const look = /^\(\?<?[=!]/.exec(pattern.slice(i));
+    if (c === "(" && !escaped(pattern, i) && look) {
+      return {
+        msg: "look-around, including look-ahead and look-behind, is not supported",
+        at: [i, i + look[0].length],
+      };
     }
-    if (escaped(pattern, i) && (/[1-9]/.test(c) || (c === "k" && pattern[i + 1] === "<"))) {
-      return "backreferences are not supported";
+    if (!escaped(pattern, i)) continue;
+    // regex-syntax: any digit after a backslash is a backreference (no octal).
+    if (/[0-9]/.test(c)) return { msg: "backreferences are not supported", at: [i - 1, i + 1] };
+    // \x, \u and \U take 2, 4 and 8 hex digits (or {…}): C:\Users fails on the "s".
+    if (/[xuU]/.test(c) && pattern[i + 1] !== "{") {
+      const n = c === "x" ? 2 : c === "u" ? 4 : 8;
+      for (let k = 1; k <= n; k++) {
+        const d = pattern[i + k];
+        if (d === undefined) {
+          return { msg: "incomplete escape sequence, reached end of pattern prematurely", at: [i - 1, i + k] };
+        }
+        if (!/[0-9a-fA-F]/.test(d)) return { msg: "invalid hexadecimal digit", at: [i + k, i + k + 1] };
+      }
+    }
+    // Rust knows only these letters after a backslash.
+    if (/[a-zA-Z]/.test(c) && !/[dDwWsSbBAzpPxuUntrfva]/.test(c)) {
+      return { msg: "unrecognized escape sequence", at: [i - 1, i + 1] };
     }
   }
   const src = pattern
@@ -692,29 +766,57 @@ function patternCheck(mode: RuleMode, pattern: string): string | null {
     .replace(/\(\?[imsxU-]+:/g, "(?:")
     .replace(/\(\?P</g, "(?<")
     .replace(/(^|[^\\])\\A/g, "$1^")
-    .replace(/(^|[^\\])\\z/g, "$1$");
+    .replace(/(^|[^\\])\\z/g, "$1$")
+    // What Rust spells differently (or JS's Unicode mode refuses): \a, \< \>, \pL.
+    .replace(/(^|[^\\])\\a/g, "$1\\x07")
+    .replace(/(^|[^\\])\\[<>]/g, "$1\\b")
+    .replace(/(^|[^\\])\\([pP])([A-Za-z])/g, "$1\\$2{$3}");
+  const word = (msg: string) => ({ msg });
   try {
     new RegExp(src, "iu");
     return null;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    if (/Unterminated group|Unmatched '\('/i.test(msg)) return "unclosed group";
-    if (/Invalid escape|Invalid Unicode escape/i.test(msg)) return "unrecognized escape sequence";
-    if (/Lone quantifier brackets|Incomplete quantifier/i.test(msg)) return "repetition quantifier expects a valid decimal";
-    if (/Range out of order in character class/i.test(msg)) return "invalid character class range";
-    if (/out of order/i.test(msg)) return "invalid repetition count range, the start must be <= the end";
-    if (/Unterminated character class/i.test(msg)) return "unclosed character class";
-    return msg.replace(/^Invalid regular expression: \/.*\/[a-z]*: /, "").toLowerCase();
+    if (/\\ at end of pattern/i.test(msg))
+      return word("incomplete escape sequence, reached end of pattern prematurely");
+    if (/Unterminated group|Unmatched '\('/i.test(msg)) return word("unclosed group");
+    if (/Unmatched '\)'/i.test(msg)) return word("unopened group");
+    if (/Invalid escape|Invalid Unicode escape/i.test(msg)) return word("unrecognized escape sequence");
+    if (/Lone quantifier brackets|Incomplete quantifier/i.test(msg)) {
+      return word("repetition quantifier expects a valid decimal");
+    }
+    if (/Nothing to repeat/i.test(msg)) return word("repetition operator missing expression");
+    if (/Range out of order in character class/i.test(msg)) {
+      return word("invalid character class range, the start must be <= the end");
+    }
+    if (/out of order/i.test(msg)) return word("invalid repetition count range, the start must be <= the end");
+    if (/Unterminated character class/i.test(msg)) return word("unclosed character class");
+    return word(msg.replace(/^Invalid regular expression: \/.*\/[a-z]*: /, "").toLowerCase());
   }
 }
 
-function ruleMatches(rule: UserRule, tool: string, target: string, cwd: string): boolean {
-  return (
-    rule.enabled &&
-    toolMatches(rule.tool, tool) &&
-    (!rule.project.trim() || within(cwd, rule.project)) &&
-    patternMatches(rule.mode, rule.pattern, target)
-  );
+function ruleMatches(
+  rule: UserRule,
+  tool: string,
+  a: RiskAssessment,
+  input: Record<string, unknown>,
+  cwd: string,
+): boolean {
+  if (
+    !rule.enabled ||
+    !toolMatches(rule.tool, tool) ||
+    !(!rule.project.trim() || within(cwd, rule.project)) ||
+    !patternMatches(rule.mode, rule.pattern, a.target)
+  )
+    return false;
+  // rules.rs: a loose match that lets a command through or lowers its risk
+  // stands back when the command chains more than the pattern does.
+  const pattern = rule.pattern.trim();
+  const loose = !pattern || (rule.mode !== "exact" && rule.mode !== "regex");
+  const lowers = rule.action === "allow" || (rule.action in RANK && RANK[rule.action as RiskLevel] < RANK[a.level]);
+  const command = a.kind === "command" ? a.target : a.kind === "mcp" ? str(input, "command") : null;
+  if (loose && lowers && command != null) return !chainsMore(command, pattern);
+  return true;
 }
 
 const LEVEL_NAME: Record<RiskLevel, Pair> = {
@@ -725,7 +827,8 @@ const LEVEL_NAME: Record<RiskLevel, Pair> = {
 };
 
 function evaluate(tool: string, input: Record<string, unknown>, cwd: string, s: Settings): Evaluation {
-  const a = assess(tool, input, cwd, new Set(s.disabledCategories));
+  const raw = assessRaw(tool, input, cwd, new Set(s.disabledCategories));
+  const a = assessment(raw);
   const pol = s.projects
     .filter((p) => within(cwd, p.path))
     .sort((x, y) => norm(y.path).length - norm(x.path).length)[0];
@@ -739,7 +842,7 @@ function evaluate(tool: string, input: Record<string, unknown>, cwd: string, s: 
   // As in Rust: what the engine itself found high or critical is never
   // approved automatically, even after a rule re-scores it.
   const engineRank = RANK[a.level];
-  const mayAuto = (l: RiskLevel) => engineRank < RANK.high && cap >= 0 && RANK[l] <= cap;
+  const mayAuto = (l: RiskLevel) => !raw.manualReview && engineRank < RANK.high && cap >= 0 && RANK[l] <= cap;
   const v = (
     outcome: Evaluation["outcome"],
     by: Evaluation["by"],
@@ -756,7 +859,7 @@ function evaluate(tool: string, input: Record<string, unknown>, cwd: string, s: 
     policy: policy as Evaluation["policy"],
     grantable: RANK[a.level] <= RANK.medium && mayAuto(a.level),
   });
-  const rule = s.rules.find((x) => ruleMatches(x, tool, a.target, cwd));
+  const rule = s.rules.find((x) => ruleMatches(x, tool, a, input, cwd));
   // Rust reports a re-scoring rule with whatever outcome follows.
   let rescoredBy: string | null = null;
   if (rule) {
@@ -975,20 +1078,18 @@ function query(all: AuditEntry[], f: AuditFilter): AuditEntry[] {
     .reverse();
 }
 
-function ymd(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
 function stats(all: AuditEntry[], days: number): AuditStats {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const first = new Date(today);
-  first.setDate(first.getDate() - days + 1);
-  const rows = Array.from({ length: days }, (_, i) => {
-    const d = new Date(first);
-    d.setDate(first.getDate() + i);
-    return { date: ymd(d), allow: 0, deny: 0, none: 0 };
-  });
+  // As audit.rs: days break at local midnight by today's UTC offset.
+  const off = new Date().getTimezoneOffset() * 60_000;
+  const dayOf = (ts: number) => Math.floor((ts - off) / 86_400_000);
+  const today = dayOf(Date.now());
+  const firstDay = today - days + 1;
+  const rows = Array.from({ length: days }, (_, i) => ({
+    date: new Date((firstDay + i) * 86_400_000).toISOString().slice(0, 10),
+    allow: 0,
+    deny: 0,
+    none: 0,
+  }));
   const s: AuditStats = {
     total: 0,
     allowed: 0,
@@ -1010,9 +1111,8 @@ function stats(all: AuditEntry[], days: number): AuditStats {
   const labels = new Map<string, number>();
   const waits: number[] = [];
   for (const e of all) {
-    if (e.ts < first.getTime()) continue;
-    const idx = rows.findIndex((row) => row.date === ymd(new Date(e.ts)));
-    if (idx < 0) continue;
+    const idx = dayOf(e.ts) - firstDay;
+    if (idx < 0 || idx >= days) continue;
     s.total++;
     if (e.decision === "allow") {
       s.allowed++;
@@ -1533,9 +1633,13 @@ export function createMockApi(): Api {
     },
     rulePatternCheck: async (mode: RuleMode, pattern: string) => {
       await delay(20);
-      const err = patternCheck(mode, pattern.trim());
-      // The regex crate's own (English, multi-line) wording, as rules::pattern_error returns it.
-      if (err) throw new Error(`regex parse error:\n    ${pattern.trim()}\n    ^\nerror: ${err}`);
+      const p = pattern.trim();
+      const err = patternCheck(mode, p);
+      if (!err) return;
+      // The regex crate's own (English, multi-line) wording, as rules::pattern_error
+      // returns it: the pattern, carets under the spot when it is known, the error.
+      const caret = err.at ? `    ${" ".repeat(err.at[0])}${"^".repeat(err.at[1] - err.at[0])}\n` : "";
+      throw new Error(`regex parse error:\n    ${p}\n${caret}error: ${err.msg}`);
     },
     notify: async () => !settings.dnd,
     hotkeysStatus: async () => hotkeys(),
