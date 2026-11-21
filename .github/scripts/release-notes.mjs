@@ -73,6 +73,8 @@ if (!body) {
 
 const installer = `Nobetci-${version}-setup.exe`;
 const dmg = `Nobetci-${version}-macos-universal.dmg`;
+const deb = `Nobetci-${version}-linux-amd64.deb`;
+const appImage = `Nobetci-${version}-linux-amd64.AppImage`;
 const footer = [
   "---",
   "",
@@ -90,11 +92,19 @@ const footer = [
   `  shasum -a 256 ${dmg}`,
   "  ```",
   "",
-  "If this release isn't code-signed or notarized yet, Windows SmartScreen and macOS Gatekeeper warn the first time. " +
-    "The [installation guide](https://github.com/tahap0l/nobetci/blob/main/docs/install.md) shows how to get past them.",
+  `- **Linux** (x86-64 with WebKitGTK 4.1: Ubuntu 22.04+, Debian 12+, Fedora 38+, Arch…): \`${deb}\` for Debian and Ubuntu, ` +
+    `\`${appImage}\` for any distribution`,
   "",
-  "[Code signing policy](https://github.com/tahap0l/nobetci/blob/main/CODE_SIGNING_POLICY.md) · " +
-    "Free code signing provided by [SignPath.io](https://signpath.io), certificate by [SignPath Foundation](https://signpath.org).",
+  "  ```sh",
+  "  sha256sum --check --ignore-missing SHA256SUMS.txt",
+  "  ```",
+  "",
+  "`Nobetci-setup.exe`, `Nobetci-macos-universal.dmg`, `Nobetci-linux-amd64.deb` and `Nobetci-linux-amd64.AppImage` " +
+    "are the same files without the version in their names, for links that always fetch the newest release.",
+  "",
+  "[Installation guide](https://github.com/tahap0l/nobetci/blob/main/docs/install.md) · " +
+    "[Code signing policy](https://github.com/tahap0l/nobetci/blob/main/CODE_SIGNING_POLICY.md)",
+  // The release workflow adds which files this release has signed: only it knows.
 ].join("\n");
 
 const notes = `${unwrap(body)}\n\n${footer}\n`;
