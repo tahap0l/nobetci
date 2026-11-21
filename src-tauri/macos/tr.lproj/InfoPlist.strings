@@ -1,0 +1,6 @@
+/* Copied into Nobetci.app/Contents/Resources by tauri.macos.conf.json. Finder,
+   the Dock and the disk image window show the name with its Turkish letters;
+   the bundle on disk stays Nobetci.app (Info.plist: LSHasLocalizedDisplayName). */
+"CFBundleDisplayName" = "Nöbetçi";
+"CFBundleName" = "Nöbetçi";
+"NSAppleEventsUsageDescription" = "Nöbetçi, Spotify veya Music'te çalan şarkıyı gösterir ve kontrol eder.";

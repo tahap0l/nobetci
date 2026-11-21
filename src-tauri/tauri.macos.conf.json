@@ -1,11 +1,19 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
+  "build": {
+    "beforeBundleCommand": "node scripts/dmg-background.mjs"
+  },
   "bundle": {
     "targets": ["app", "dmg"],
     "resources": { "../target/release/nobetci-hook": "nobetci-hook" },
     "macOS": {
       "minimumSystemVersion": "11.0",
       "signingIdentity": "-",
+      "entitlements": "entitlements.plist",
+      "files": {
+        "Resources/en.lproj/InfoPlist.strings": "macos/en.lproj/InfoPlist.strings",
+        "Resources/tr.lproj/InfoPlist.strings": "macos/tr.lproj/InfoPlist.strings"
+      },
       "dmg": {
         "background": "dmg/background.tiff",
         "windowSize": { "width": 660, "height": 400 },

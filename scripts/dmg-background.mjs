@@ -1,6 +1,9 @@
 // Joins the macOS disk image backgrounds (src-tauri/dmg/dmg.png and dmg@2x.png,
 // drawn by scripts/installer-art.mjs) into one Retina TIFF, which Finder shows
-// sharp on both kinds of screen. macOS only (tiffutil); run by `npm run pack:mac`.
+// sharp on both kinds of screen. macOS only (tiffutil). Tauri runs it before
+// every bundle on a Mac (beforeBundleCommand in src-tauri/tauri.macos.conf.json),
+// so `npm run tauri build` works from a fresh clone; the TIFF itself is not
+// committed.
 
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
