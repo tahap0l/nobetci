@@ -395,7 +395,7 @@ async fn handle<C: Conn>(app: AppHandle, mut pipe: C) {
         } else {
             // Like a person's plain Deny: Claude reads why and carries on.
             let message = eval.message.clone().unwrap_or_default();
-            (json!({ "behavior": "deny", "message": message, "interrupt": false, "stop": false }), "deny")
+            (deny_reply(&message, false), "deny")
         };
         let delivered = deliver(&mut pipe, &reply).await;
         pipe.close().await;
@@ -881,13 +881,17 @@ pub fn answer(app: &AppHandle, request_id: &str, c: Choice) -> Result<(), String
             .chars()
             .take(500)
             .collect::<String>();
-        // A plain Deny tells Claude why and lets it carry on; "Deny and stop"
-        // also ends its turn. Both flags are always spelled out, so the relay
-        // never has to guess.
-        (json!({ "behavior": "deny", "message": message, "interrupt": c.stop, "stop": c.stop }), message)
+        (deny_reply(&message, c.stop), message)
     };
     send(app, request_id, Reply::Decision(Answer { reply: reply.to_string(), decision: word, by, message }), false);
     Ok(())
+}
+
+/// The line for a denial. A plain Deny — a person's, a rule's, a plan sent back
+/// with a note — tells Claude why and lets it carry on; "Deny and stop" also ends
+/// its turn. Both flags are always spelled out, so the relay never has to guess.
+fn deny_reply(message: &str, stop: bool) -> Value {
+    json!({ "behavior": "deny", "message": message, "interrupt": stop, "stop": stop })
 }
 
 /// The user's answer to a question or a plan.
@@ -952,11 +956,7 @@ fn response_reply(
                 return Err("unanswered");
             }
             // No interrupt: Claude reads the feedback and keeps planning.
-            Ok((
-                json!({ "behavior": "deny", "message": feedback, "interrupt": false, "stop": false }),
-                "deny",
-                feedback,
-            ))
+            Ok((deny_reply(&feedback, false), "deny", feedback))
         }
         _ => Err("wrong_kind"),
     }
@@ -1064,6 +1064,17 @@ mod tests {
         assert_eq!(response_reply("plan", &input, Response::Revise("".into())).err(), Some("unanswered"));
         assert_eq!(response_reply("question", &input, Response::ApprovePlan).err(), Some("wrong_kind"));
         assert_eq!(response_reply("permission", &input, Response::ApprovePlan).err(), Some("wrong_kind"));
+    }
+
+    #[test]
+    fn a_plain_deny_lets_claude_carry_on_and_deny_and_stop_ends_the_turn() {
+        let plain = deny_reply("Use the safe script", false);
+        assert_eq!(
+            plain,
+            json!({ "behavior": "deny", "message": "Use the safe script", "interrupt": false, "stop": false })
+        );
+        let stop = deny_reply("Stop here", true);
+        assert_eq!(stop, json!({ "behavior": "deny", "message": "Stop here", "interrupt": true, "stop": true }));
     }
 
     #[test]
