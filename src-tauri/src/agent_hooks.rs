@@ -1,16 +1,17 @@
 // User-level hook installation for Codex and Cursor. Like Claude's installer,
-// this previews a merge, backs up the original file and checks its fingerprint
-// before writing so unrelated settings are never silently overwritten.
+// this previews a merge in the file's own layout, backs up the original and
+// writes exactly the previewed bytes, only while the file still holds what the
+// preview was made from, so unrelated settings are never silently overwritten.
+// Removing takes out Nöbetçi's own commands and nothing else.
 
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
-use crate::i18n::{is_tr, pick};
+use crate::hooks::{self, Change};
+use crate::i18n::is_tr;
 use crate::settings;
-
-const MARKER: &str = "nobetci-hook";
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -81,12 +82,14 @@ pub struct Status {
     pub stale: bool,
 }
 
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Preview {
     pub diff: String,
-    pub backup: String,
+    /// Where the current file is copied before the write; null when there is no file yet.
+    pub backup: Option<String>,
     pub settings_path: String,
+    /// Names this exact preview: `apply` writes what it showed, or nothing.
     pub fingerprint: String,
 }
 
@@ -105,18 +108,23 @@ fn command(provider: Provider, event: &str) -> String {
     format!("{quoted} {} {event}", provider.name())
 }
 
-fn entry_is_ours(provider: Provider, event: &str, entry: &Value) -> bool {
-    let commands = match provider {
-        Provider::Codex => entry.get("hooks").and_then(Value::as_array).map(Vec::as_slice),
-        Provider::Cursor => Some(std::slice::from_ref(entry)),
-    };
-    commands.into_iter().flatten().any(|hook| hook_is_ours(provider, event, hook))
+/// The hooks of one entry: a Codex matcher group's `hooks`, or Cursor's entry itself.
+fn hooks_of(provider: Provider, entry: &Value) -> &[Value] {
+    match provider {
+        Provider::Codex => entry.get("hooks").and_then(Value::as_array).map(Vec::as_slice).unwrap_or_default(),
+        Provider::Cursor => std::slice::from_ref(entry),
+    }
 }
 
+fn entry_is_ours(provider: Provider, event: &str, entry: &Value) -> bool {
+    hooks_of(provider, entry).iter().any(|hook| hook_is_ours(provider, event, hook))
+}
+
+/// Runs the relay (see `hooks::runs_relay`) for this agent and event.
 fn hook_is_ours(provider: Provider, event: &str, hook: &Value) -> bool {
-    hook.get("command")
-        .and_then(Value::as_str)
-        .is_some_and(|command| command.contains(MARKER) && command.ends_with(&format!(" {} {event}", provider.name())))
+    hook.get("command").and_then(Value::as_str).is_some_and(|command| {
+        hooks::runs_relay(command) && command.ends_with(&format!(" {} {event}", provider.name()))
+    })
 }
 
 fn hook_is_stale(provider: Provider, event: &str, hook: &Value) -> bool {
@@ -126,79 +134,119 @@ fn hook_is_stale(provider: Provider, event: &str, hook: &Value) -> bool {
                 != provider.events().iter().find_map(|(name, timeout)| (*name == event).then_some(*timeout)))
 }
 
+/// `list` without Nöbetçi's commands; None when none was there. A Codex group
+/// loses only our commands, and goes only when nothing else was in it.
+fn strip_ours(provider: Provider, event: &str, list: &[Value]) -> Option<Vec<Value>> {
+    let mut found = false;
+    let kept = list
+        .iter()
+        .filter_map(|entry| match provider {
+            Provider::Codex => {
+                let Some(hooks) = entry.get("hooks").and_then(Value::as_array) else { return Some(entry.clone()) };
+                let others: Vec<Value> = hooks.iter().filter(|h| !hook_is_ours(provider, event, h)).cloned().collect();
+                if others.len() == hooks.len() {
+                    return Some(entry.clone());
+                }
+                found = true;
+                if others.is_empty() {
+                    return None;
+                }
+                let mut entry = entry.clone();
+                entry["hooks"] = Value::Array(others);
+                Some(entry)
+            }
+            Provider::Cursor if hook_is_ours(provider, event, entry) => {
+                found = true;
+                None
+            }
+            Provider::Cursor => Some(entry.clone()),
+        })
+        .collect();
+    found.then_some(kept)
+}
+
+/// The file with Nöbetçi's entries for every event (`install`) or none. Other
+/// entries stay where they are, keys keep their order, and a value that is not
+/// the shape we would write into is refused, never overwritten.
 fn merged(provider: Provider, existing: &Value, install: bool) -> Result<Value, String> {
     let mut root = existing.as_object().cloned().unwrap_or_default();
-    let mut hooks = match root.get("hooks") {
-        Some(value) => value.as_object().cloned().ok_or_else(|| {
-            if is_tr() {
-                "hooks ayarı bir JSON nesnesi değil — Nöbetçi dokunmayacak."
+    let original = match root.get("hooks") {
+        Some(Value::Object(map)) => Some(map.clone()),
+        None | Some(Value::Null) => None,
+        // Somebody else's value; none of ours can be in it.
+        Some(_) if !install => return Ok(existing.clone()),
+        Some(_) => {
+            return Err(if is_tr() {
+                "hooks ayarı bir JSON nesnesi değil — Nöbetçi dokunmayacak.".into()
             } else {
-                "The hooks setting isn't a JSON object — Nöbetçi won't touch it."
-            }
-        })?,
-        None => Default::default(),
+                "The hooks setting isn't a JSON object — Nöbetçi won't touch it.".into()
+            })
+        }
     };
-    for (event, timeout) in provider.events() {
-        let mut list = match hooks.get(*event) {
-            Some(value) => match value.as_array() {
-                Some(list) => list.clone(),
-                None if install => {
+    let mut hooks = original.clone().unwrap_or_default();
+    let mut touched: Vec<String> = Vec::new();
+    let names: Vec<String> = hooks.keys().cloned().collect();
+    for name in names {
+        let stripped = hooks.get(&name).and_then(Value::as_array).and_then(|list| strip_ours(provider, &name, list));
+        if let Some(list) = stripped {
+            hooks.insert(name.clone(), Value::Array(list));
+            touched.push(name);
+        }
+    }
+    if install {
+        for (event, timeout) in provider.events() {
+            let entry = match provider {
+                Provider::Codex => json!({
+                    "hooks": [{ "type": "command", "command": command(provider, event), "timeout": timeout }]
+                }),
+                Provider::Cursor => json!({
+                    "command": command(provider, event),
+                    "timeout": timeout,
+                    // Permission hooks must never silently run the tool if the
+                    // relay crashes or times out. The relay answers explicitly
+                    // when the app is unavailable.
+                    "failClosed": *timeout == 120
+                }),
+            };
+            match hooks.get_mut(*event) {
+                Some(Value::Array(list)) => list.push(entry),
+                None | Some(Value::Null) => {
+                    hooks.insert((*event).to_string(), Value::Array(vec![entry]));
+                }
+                Some(_) => {
                     return Err(if is_tr() {
                         format!("hooks.{event} bir liste değil — Nöbetçi bu ayarı ezmeyecek.")
                     } else {
                         format!("hooks.{event} isn't a list — Nöbetçi won't overwrite it.")
                     });
                 }
-                None => continue,
-            },
-            None => Vec::new(),
-        };
-        list.retain_mut(|entry| {
-            if provider == Provider::Codex {
-                if let Some(hooks) = entry.get_mut("hooks").and_then(Value::as_array_mut) {
-                    let before = hooks.len();
-                    hooks.retain(|hook| !hook_is_ours(provider, event, hook));
-                    return !hooks.is_empty() || before == 0;
-                }
-                true
-            } else {
-                !entry_is_ours(provider, event, entry)
             }
-        });
-        if install {
-            match provider {
-                Provider::Codex => list.push(json!({
-                    "hooks": [{ "type": "command", "command": command(provider, event), "timeout": timeout }]
-                })),
-                Provider::Cursor => list.push(json!({
-                    "command": command(provider, event),
-                    "timeout": timeout,
-                    // Permission hooks must never silently run the tool if the
-                    // relay crashes or times out. The relay returns an explicit
-                    // deny if the app is unavailable.
-                    "failClosed": *timeout == 120
-                })),
-            }
-        }
-        if list.is_empty() {
-            hooks.remove(*event);
-        } else {
-            hooks.insert((*event).to_string(), Value::Array(list));
+            touched.push((*event).to_string());
         }
     }
-    if hooks.is_empty() {
-        root.remove("hooks");
-    } else {
-        root.insert("hooks".into(), Value::Object(hooks));
+    for name in touched {
+        if hooks.get(&name).and_then(Value::as_array).is_some_and(Vec::is_empty) {
+            hooks.shift_remove(&name);
+        }
     }
-    if provider == Provider::Cursor {
+    match original {
+        Some(before) if hooks.is_empty() && !before.is_empty() => {
+            root.shift_remove("hooks");
+        }
+        Some(before) if before == hooks => {}
+        _ if hooks.is_empty() => {}
+        _ => {
+            root.insert("hooks".into(), Value::Object(hooks));
+        }
+    }
+    if install && provider == Provider::Cursor {
         root.entry("version").or_insert(json!(1));
     }
     Ok(Value::Object(root))
 }
 
 fn parse(bytes: &[u8], path: &str) -> Result<Value, String> {
-    let text = bytes.strip_prefix(&[0xEF, 0xBB, 0xBF]).unwrap_or(bytes);
+    let text = settings::strip_bom(bytes);
     if text.iter().all(u8::is_ascii_whitespace) {
         return Ok(json!({}));
     }
@@ -212,25 +260,16 @@ fn parse(bytes: &[u8], path: &str) -> Result<Value, String> {
 }
 
 fn snapshot(path: &Path) -> Result<(Value, Option<Vec<u8>>), String> {
-    let bytes = crate::hooks::settings_bytes(path)?;
+    let bytes = hooks::settings_bytes(path)?;
     let value = parse(bytes.as_deref().unwrap_or_default(), &path.display().to_string())?;
     Ok((value, bytes))
 }
 
-fn stamp() -> String {
-    crate::sys::local_time().compact()
-}
-
-fn backup_path(provider: Provider) -> PathBuf {
-    let path = provider.settings_path();
-    path.with_file_name(format!("hooks.json.bak-{}", stamp()))
-}
-
-pub fn status(provider: Provider) -> Status {
-    let current = snapshot(&provider.settings_path()).map(|(value, _)| value).unwrap_or_else(|_| json!({}));
+/// The events of `settings` with an entry of ours, and whether one is stale.
+fn installed_events(provider: Provider, settings: &Value) -> (Vec<String>, bool) {
     let mut events = Vec::new();
     let mut stale = false;
-    if let Some(hooks) = current.get("hooks").and_then(Value::as_object) {
+    if let Some(hooks) = settings.get("hooks").and_then(Value::as_object) {
         for (event, list) in hooks {
             let ours: Vec<&Value> =
                 list.as_array().into_iter().flatten().filter(|entry| entry_is_ours(provider, event, entry)).collect();
@@ -238,17 +277,17 @@ pub fn status(provider: Provider) -> Status {
                 continue;
             }
             events.push(event.clone());
-            stale |= ours.iter().any(|entry| {
-                match provider {
-                    Provider::Codex => entry.get("hooks").and_then(Value::as_array).map(Vec::as_slice),
-                    Provider::Cursor => Some(std::slice::from_ref(*entry)),
-                }
-                .into_iter()
-                .flatten()
-                .any(|hook| hook_is_stale(provider, event, hook))
-            });
+            stale |= ours
+                .iter()
+                .any(|entry| hooks_of(provider, entry).iter().any(|hook| hook_is_stale(provider, event, hook)));
         }
     }
+    (events, stale)
+}
+
+pub fn status(provider: Provider) -> Status {
+    let current = snapshot(&provider.settings_path()).map(|(value, _)| value).unwrap_or_else(|_| json!({}));
+    let (events, mut stale) = installed_events(provider, &current);
     if !events.is_empty() {
         stale |=
             provider.events().iter().any(|(event, _)| !events.iter().any(|installed| installed.as_str() == *event));
@@ -265,81 +304,39 @@ pub fn status(provider: Provider) -> Status {
     }
 }
 
+fn prepare(provider: Provider, install: bool) -> Result<Change, String> {
+    let path = provider.settings_path();
+    let (current, before) = snapshot(&path)?;
+    let next = merged(provider, &current, install)?;
+    let needs_relay = !installed_events(provider, &next).0.is_empty();
+    Ok(Change::new(path, before, &current, &next, install, needs_relay))
+}
+
+/// The diff to review before anything is written, remembered with the exact
+/// bytes it would write.
 pub fn preview(provider: Provider, install: bool) -> Result<Preview, String> {
-    let (current, bytes) = snapshot(&provider.settings_path())?;
-    let next = merged(provider, &current, install)?;
-    let mut current_text = serde_json::to_string_pretty(&current).unwrap_or_else(|_| "{}".into());
-    let mut next_text = serde_json::to_string_pretty(&next).unwrap_or_else(|_| "{}".into());
-    current_text.push('\n');
-    next_text.push('\n');
-    Ok(Preview {
-        diff: unified_diff(&current_text, &next_text),
-        backup: backup_path(provider).to_string_lossy().to_string(),
-        settings_path: provider.settings_path().to_string_lossy().to_string(),
-        fingerprint: crate::hooks::fingerprint(bytes.as_deref().unwrap_or_default()),
-    })
-}
-
-pub fn write(provider: Provider, install: bool, expected_fingerprint: &str) -> Result<String, String> {
-    let path = provider.settings_path();
-    let (current, bytes) = snapshot(&path)?;
-    if crate::hooks::fingerprint(bytes.as_deref().unwrap_or_default()) != expected_fingerprint {
-        return Err(crate::hooks::settings_changed(&path));
+    let change = prepare(provider, install)?;
+    if change.needs_relay && !hooks::relay_ready() {
+        return Err(hooks::RELAY_MISSING.into());
     }
-    let next = merged(provider, &current, install)?;
-    write_snapshot(provider, &path, bytes.as_deref(), &next)
+    let (diff, backup, settings_path) = (change.diff.clone(), change.backup_text(), change.path_text());
+    let fingerprint = hooks::remember(change);
+    Ok(Preview { diff, backup, settings_path, fingerprint })
 }
 
-fn write_snapshot(provider: Provider, path: &Path, bytes: Option<&[u8]>, next: &Value) -> Result<String, String> {
-    let backup = backup_path(provider);
-    let mut text = serde_json::to_string_pretty(next).map_err(|e| e.to_string())?;
-    text.push('\n');
-    crate::hooks::replace_settings(path, bytes, &backup, &text)?;
-    Ok(backup.to_string_lossy().to_string())
+/// Writes exactly what the preview `fingerprint` showed (`stale_preview` when
+/// the file changed since); returns the backup path, None when there was no file.
+pub fn apply(provider: Provider, install: bool, fingerprint: &str) -> Result<Option<String>, String> {
+    hooks::apply_reviewed(fingerprint, install, &provider.settings_path())
 }
 
+/// Removes every Nöbetçi entry without a preview (the uninstaller). None when
+/// there was nothing of ours.
 pub fn remove_for_uninstall(provider: Provider) -> Result<Option<String>, String> {
-    let path = provider.settings_path();
-    let (current, bytes) = snapshot(&path)?;
-    let installed =
-        current.get("hooks").and_then(Value::as_object).into_iter().flatten().any(|(event, list)| {
-            list.as_array().into_iter().flatten().any(|entry| entry_is_ours(provider, event, entry))
-        });
-    if !installed {
-        return Ok(None);
-    }
-    let next = merged(provider, &current, false)?;
-    write_snapshot(provider, &path, bytes.as_deref(), &next).map(Some)
-}
-
-fn unified_diff(before: &str, after: &str) -> String {
-    let old: Vec<&str> = before.lines().collect();
-    let new: Vec<&str> = after.lines().collect();
-    let mut out = format!("--- {}\n+++ Nöbetçi\n", pick("current", "mevcut"));
-    let mut prefix = 0;
-    while prefix < old.len().min(new.len()) && old[prefix] == new[prefix] {
-        prefix += 1;
-    }
-    let mut suffix = 0;
-    while suffix < old.len().saturating_sub(prefix).min(new.len().saturating_sub(prefix))
-        && old[old.len() - suffix - 1] == new[new.len() - suffix - 1]
-    {
-        suffix += 1;
-    }
-    let old_end = old.len().saturating_sub(suffix);
-    let new_end = new.len().saturating_sub(suffix);
-    out.push_str(&format!("@@ -{},{} +{},{} @@\n", prefix + 1, old_end - prefix, prefix + 1, new_end - prefix));
-    for line in &old[prefix..old_end] {
-        out.push('-');
-        out.push_str(line);
-        out.push('\n');
-    }
-    for line in &new[prefix..new_end] {
-        out.push('+');
-        out.push_str(line);
-        out.push('\n');
-    }
-    out
+    let change = prepare(provider, false)?;
+    hooks::write_change(&change)
+        .map(|kept| kept.map(|p| p.to_string_lossy().into_owned()))
+        .map_err(|e| e.describe(&change.path))
 }
 
 #[cfg(test)]
@@ -359,6 +356,7 @@ mod tests {
 
     #[test]
     fn codex_session_end_repair_detects_old_timeout_and_keeps_sibling_hooks() {
+        let _home = hooks::home_lock();
         let old = json!({"command": command(Provider::Codex, "SessionEnd"), "timeout": 10});
         let foreign = json!({"command": "other"});
         assert!(hook_is_stale(Provider::Codex, "SessionEnd", &old));
@@ -369,6 +367,9 @@ mod tests {
         let repaired = &result["hooks"]["SessionEnd"][1]["hooks"][0];
         assert_eq!(repaired["timeout"], 3);
         assert!(!hook_is_stale(Provider::Codex, "SessionEnd", repaired));
+        // Removal keeps the sibling, in its group.
+        let removed = merged(Provider::Codex, &result, false).unwrap();
+        assert_eq!(removed["hooks"]["SessionEnd"], json!([{"matcher": "*", "hooks": [foreign]}]));
     }
 
     #[cfg(windows)]
@@ -407,8 +408,36 @@ mod tests {
     }
 
     #[test]
+    fn removal_keeps_key_order_and_foreign_commands_that_mention_the_relay() {
+        let start =
+            json!({ "a": 1, "hooks": { "stop": [{ "command": "~/bin/nobetci-hook-log.sh cursor stop" }] }, "z": 2 });
+        let installed = merged(Provider::Cursor, &start, true).unwrap();
+        let removed = merged(Provider::Cursor, &installed, false).unwrap();
+        // The same text: key order included, and the look-alike command kept.
+        assert_eq!(
+            serde_json::to_string(&removed).unwrap(),
+            serde_json::to_string(&json!({
+                "a": 1,
+                "hooks": { "stop": [{ "command": "~/bin/nobetci-hook-log.sh cursor stop" }] },
+                "z": 2,
+                "version": 1
+            }))
+            .unwrap()
+        );
+        // A file with nothing of ours is left exactly as it is, no "version" added.
+        let theirs = json!({ "hooks": { "stop": [{ "command": "other" }] } });
+        assert_eq!(merged(Provider::Cursor, &theirs, false).unwrap(), theirs);
+        assert!(merged(Provider::Cursor, &theirs, false).unwrap().get("version").is_none());
+    }
+
+    #[test]
     fn invalid_hook_shapes_are_never_overwritten() {
         assert!(merged(Provider::Codex, &json!({"hooks": "someone else's value"}), true).is_err());
         assert!(merged(Provider::Codex, &json!({"hooks": {"SessionStart": "keep this"}}), true).is_err());
+        // Removal leaves them alone instead of failing.
+        let odd = json!({"hooks": {"SessionStart": "keep this"}});
+        assert_eq!(merged(Provider::Codex, &odd, false).unwrap(), odd);
+        let odder = json!({"hooks": "someone else's value"});
+        assert_eq!(merged(Provider::Codex, &odder, false).unwrap(), odder);
     }
 }

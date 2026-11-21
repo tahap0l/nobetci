@@ -40,7 +40,7 @@ use std::io::Write;
 use std::os::windows::process::CommandExt;
 use std::process::{Command, Stdio};
 use std::sync::atomic::Ordering;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
 use serde::Serialize;
@@ -91,10 +91,14 @@ pub struct BootInfo {
     screen: ScreenInfo,
     version: String,
     hook_path: String,
-    /// "windows" or "macos": the front end words a few things differently.
+    /// "windows", "macos" or "linux": the front end words a few things differently.
     platform: &'static str,
     /// Whether "quiet in full screen" can work on this OS.
     fullscreen_supported: bool,
+    /// settings.json was there but could not be used at start: what happened and
+    /// what to do. Defaults (or every value that could be read) are in use, and
+    /// nothing is saved over the file until Nöbetçi restarts. Null otherwise.
+    settings_load_error: Option<String>,
 }
 
 #[tauri::command]
@@ -114,30 +118,49 @@ fn boot(app: AppHandle, shared: State<Shared>) -> BootInfo {
         hook_path: settings::hook_exe_path().to_string_lossy().to_string(),
         platform: sys::PLATFORM,
         fullscreen_supported: sys::FULLSCREEN_SUPPORTED,
+        settings_load_error: settings::load_problem(),
     }
 }
 
-/// Stores new preferences and applies whatever they change.
-fn store(app: &AppHandle, next: Settings) -> Settings {
+/// Stores go one at a time, so the preferences in memory and settings.json
+/// change in the same order and the file never ends up older than memory.
+static STORING: Mutex<()> = Mutex::new(());
+
+/// Stores new preferences and applies whatever they change. They take effect
+/// even when settings.json cannot be written (a full disk, or a file that could
+/// not be read at start); the second half says whether it was, as the error the
+/// settings window understands (`save_failed: …`, `settings_unreadable`).
+///
+/// Starting at login is the exception: when the OS refuses the change, the
+/// setting keeps its old value and a `settings-warning` says why, instead of a
+/// switch that shows on while nothing starts at login.
+fn apply_settings(app: &AppHandle, next: Settings, autostart_is_the_os_state: bool) -> (Settings, Result<(), String>) {
     let mut next = next.sanitized();
     let shared = app.state::<Shared>();
-    let prev = {
-        let mut cur = shared.settings.lock().unwrap();
-        // Only the mascot's window moves it; a settings window opened before the
-        // last drag must not put it back where it was.
-        next.buddy_pos = cur.buddy_pos;
-        std::mem::replace(&mut *cur, next.clone())
-    };
-    if let Err(err) = settings::save(&next) {
-        log::line(format!("could not save settings: {err}"));
-    }
-    if prev.autostart != next.autostart {
-        let manager = app.autolaunch();
-        let result = if next.autostart { manager.enable() } else { manager.disable() };
-        if let Err(err) = result {
-            log::line(format!("autostart: {err}"));
+    let (prev, saved, refused) = {
+        let _in_order = STORING.lock().unwrap_or_else(PoisonError::into_inner);
+        let prev = shared.settings.lock().unwrap().clone();
+        let mut refused = None;
+        if prev.autostart != next.autostart && !autostart_is_the_os_state {
+            if let Err(err) = set_autostart(app, next.autostart) {
+                log::line(format!("autostart: {err}"));
+                next.autostart = prev.autostart;
+                refused = Some(err);
+            }
         }
-    }
+        {
+            let mut cur = shared.settings.lock().unwrap();
+            // Only the mascot's window moves it; a settings window opened before the
+            // last drag must not put it back where it was.
+            next.buddy_pos = cur.buddy_pos;
+            *cur = next.clone();
+        }
+        let saved = settings::save(&next).map_err(|err| {
+            log::line(format!("could not save settings: {err}"));
+            err.code()
+        });
+        (prev, saved, refused)
+    };
     if prev.buddy != next.buddy {
         buddy::apply(app, next.buddy);
     } else if prev.buddy_size != next.buddy_size {
@@ -159,12 +182,63 @@ fn store(app: &AppHandle, next: Settings) -> Settings {
     }
     // Keep both windows in step.
     let _ = app.emit("settings-changed", next.clone());
-    next
+    if let Some(detail) = refused {
+        let _ = app.emit("settings-warning", serde_json::json!({ "code": "autostart_failed", "detail": detail }));
+    }
+    (next, saved)
 }
 
+/// `apply_settings` for callers with nobody to show a failed save to (the
+/// island's buttons, the tray, the mascot): it is logged.
+fn store(app: &AppHandle, next: Settings) -> Settings {
+    apply_settings(app, next, false).0
+}
+
+/// `apply_settings` for the settings window, which shows a failed save.
+fn try_store(app: &AppHandle, next: Settings) -> Result<Settings, String> {
+    let (stored, saved) = apply_settings(app, next, false);
+    saved.map(|()| stored)
+}
+
+fn set_autostart(app: &AppHandle, on: bool) -> Result<(), String> {
+    let manager = app.autolaunch();
+    if on { manager.enable() } else { manager.disable() }.map_err(|e| e.to_string())
+}
+
+/// At start, the "Start at login" switch follows the OS. A login entry removed
+/// outside Nöbetçi (Task Manager, Login Items, the desktop's autostart settings,
+/// a cleanup tool) turns the setting off instead of being put back over that
+/// choice. On Linux an entry that is there is written again, because it names
+/// the program by path and an AppImage replaced by a newer file has a new one.
+fn reconcile_autostart(app: &AppHandle) {
+    if !current(app).autostart {
+        return;
+    }
+    let Some(manager) = app.try_state::<tauri_plugin_autostart::AutoLaunchManager>() else { return };
+    match manager.is_enabled() {
+        Ok(true) =>
+        {
+            #[cfg(target_os = "linux")]
+            if let Err(err) = manager.enable() {
+                log::line(format!("autostart: could not refresh the login entry: {err}"));
+            }
+        }
+        Ok(false) => {
+            log::line("autostart: the login entry is gone (changed outside Nöbetçi); the setting follows it");
+            let mut s = current(app);
+            s.autostart = false;
+            // A failed save is logged inside; the switch shows the truth meanwhile.
+            let _ = apply_settings(app, s, true);
+        }
+        Err(err) => log::line(format!("autostart: could not check the login entry: {err}")),
+    }
+}
+
+/// Saves new preferences; rejects with `save_failed: …` or `settings_unreadable`
+/// when settings.json could not be written (the change is in effect until a restart).
 #[tauri::command]
-fn save_settings(app: AppHandle, settings: Settings) -> Settings {
-    store(&app, settings)
+fn save_settings(app: AppHandle, settings: Settings) -> Result<Settings, String> {
+    try_store(&app, settings)
 }
 
 /// Shows or hides the desktop mascot (tray menu).
@@ -354,22 +428,28 @@ fn hooks_status() -> HookStatus {
     hooks::status()
 }
 
-/// Returns the diff the user has to look at before anything is written.
+/// Returns the diff the user has to look at before anything is written, for the
+/// chosen events (`install`) or for taking every entry of ours out. Rejects with
+/// `relay_missing` when the hooks would point at a relay that is not there.
 #[tauri::command]
 fn hooks_preview(app: AppHandle, install: bool) -> Result<HookPreview, String> {
     hooks::preview(install, &current(&app).hook_events)
 }
 
-/// Only ever called from an explicit click in the settings window.
+/// Only ever called from an explicit click in the settings window. Writes
+/// exactly what the preview `fingerprint` showed — not a fresh merge of whatever
+/// the settings say now — and rejects with `stale_preview` when settings.json
+/// changed in between. Returns the backup path, null when there was no file.
 #[tauri::command]
-fn hooks_apply(app: AppHandle, install: bool, fingerprint: String) -> Result<String, String> {
-    // The fingerprint comes from the preview the user actually looked at, so a
-    // settings.json that changed in between is refused rather than overwritten.
+fn hooks_apply(app: AppHandle, install: bool, fingerprint: String) -> Result<Option<String>, String> {
+    let backup = hooks::apply(install, &fingerprint)?;
+    // What the file holds now, not the button that was pressed: an update with
+    // every event unticked removed them all.
+    let status = hooks::status();
     let mut s = current(&app);
-    let backup = hooks::write(install, &fingerprint, &s.hook_events)?;
-    s.hooks_installed = install;
+    s.hooks_installed = status.installed;
     store(&app, s);
-    log::line(format!("hooks {}", if install { "installed" } else { "removed" }));
+    log::line(format!("hooks written: {}", if status.installed { status.events.join(", ") } else { "none".into() }));
     Ok(backup)
 }
 
@@ -389,20 +469,36 @@ struct HealthReport {
     /// The physical-click guard could register for raw mouse input.
     input_guard: bool,
     error: Option<String>,
+    /// Claude Code only: whose status line settings.json has, "ours", "foreign"
+    /// or "none". A foreign one is never counted as missing: Nöbetçi leaves it be.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    status_line: Option<&'static str>,
 }
 
 /// Checks hook entries and sends a ping through the installed relay.
 #[tauri::command]
 async fn hooks_health(app: AppHandle, provider: Option<agent_hooks::Provider>) -> HealthReport {
-    let (installed, settings_path, events_installed, stale, wanted) = match provider {
+    let (installed, settings_path, events_installed, stale, wanted, status_line) = match provider {
         Some(provider) => {
             let status = agent_hooks::status(provider);
             let wanted = provider.events().iter().map(|(event, _)| (*event).to_string()).collect();
-            (status.installed, status.settings_path, status.events, status.stale, wanted)
+            (status.installed, status.settings_path, status.events, status.stale, wanted, None)
         }
         None => {
             let status = hooks::status();
-            (status.installed, status.settings_path, status.events, status.stale, current(&app).hook_events)
+            let ours = status.events.iter().any(|e| e == hooks::STATUS_LINE);
+            let line = if status.foreign_status_line {
+                "foreign"
+            } else if ours {
+                "ours"
+            } else {
+                "none"
+            };
+            let mut wanted = current(&app).hook_events;
+            if status.foreign_status_line {
+                wanted.retain(|e| e != hooks::STATUS_LINE);
+            }
+            (status.installed, status.settings_path, status.events, status.stale, wanted, Some(line))
         }
     };
     let events_missing = wanted.into_iter().filter(|event| !events_installed.contains(event)).collect();
@@ -419,6 +515,7 @@ async fn hooks_health(app: AppHandle, provider: Option<agent_hooks::Provider>) -
         codex_activity: None,
         input_guard: inputguard::available(),
         error: None,
+        status_line,
     };
     if !report.relay_exists {
         report.error = Some(
@@ -484,14 +581,20 @@ fn agent_hooks_status(provider: agent_hooks::Provider) -> agent_hooks::Status {
     agent_hooks::status(provider)
 }
 
+/// Like `hooks_preview`, for Codex's or Cursor's hooks.json.
 #[tauri::command]
 fn agent_hooks_preview(provider: agent_hooks::Provider, install: bool) -> Result<agent_hooks::Preview, String> {
     agent_hooks::preview(provider, install)
 }
 
+/// Like `hooks_apply`: exactly the previewed content, or `stale_preview`.
 #[tauri::command]
-fn agent_hooks_apply(provider: agent_hooks::Provider, install: bool, fingerprint: String) -> Result<String, String> {
-    let backup = agent_hooks::write(provider, install, &fingerprint)?;
+fn agent_hooks_apply(
+    provider: agent_hooks::Provider,
+    install: bool,
+    fingerprint: String,
+) -> Result<Option<String>, String> {
+    let backup = agent_hooks::apply(provider, install, &fingerprint)?;
     log::line(format!("{} hooks {}", provider.name(), if install { "installed" } else { "removed" }));
     Ok(backup)
 }
@@ -713,13 +816,17 @@ async fn settings_export(app: AppHandle) -> Result<Option<String>, String> {
         dialog = dialog.set_parent(&win);
     }
     let Some(path) = dialog.blocking_save_file().and_then(|p| p.into_path().ok()) else { return Ok(None) };
-    let body = serde_json::to_string_pretty(&current(&app)).map_err(|e| e.to_string())?;
+    // Marked as Nöbetçi's, so an import can tell it from other JSON.
+    let body = settings::export_json(&current(&app))?;
     std::fs::write(&path, body).map_err(|e| e.to_string())?;
     Ok(Some(path.to_string_lossy().to_string()))
 }
 
-/// Loads preferences from a file. Everything is re-validated; whether hooks are
-/// installed always comes from ~/.claude/settings.json, never from the file.
+/// Loads preferences from a file. Only Nöbetçi's own settings are accepted
+/// (`not_nobetci_settings` for Claude Code's settings.json and any other JSON),
+/// and everything is re-validated. Whether hooks are installed always comes
+/// from ~/.claude/settings.json, never from the file, and an import never brings
+/// the welcome wizard back. The settings it replaces are kept in a dated copy.
 #[tauri::command]
 async fn settings_import(app: AppHandle) -> Result<Option<Settings>, String> {
     let mut dialog =
@@ -729,21 +836,34 @@ async fn settings_import(app: AppHandle) -> Result<Option<Settings>, String> {
     }
     let Some(path) = dialog.blocking_pick_file().and_then(|p| p.into_path().ok()) else { return Ok(None) };
     let bytes = std::fs::read(&path).map_err(|e| e.to_string())?;
-    let mut imported: Settings = serde_json::from_slice(&bytes).map_err(|e| {
-        if is_tr() {
-            format!("Geçerli bir Nöbetçi ayar dosyası değil: {e}")
-        } else {
-            format!("Not a valid Nöbetçi settings file: {e}")
-        }
-    })?;
+    let mut imported = settings::parse_import(&bytes)?;
     imported.hooks_installed = hooks::status().installed;
-    Ok(Some(store(&app, imported)))
+    imported.onboarded |= current(&app).onboarded;
+    if let Some(copy) = settings::keep_copy() {
+        log::line(format!(
+            "settings imported from {}; the previous ones are kept as {}",
+            path.display(),
+            copy.display()
+        ));
+    }
+    try_store(&app, imported).map(Some)
 }
 
+/// Everything back to the defaults, except what is a fact rather than a
+/// preference: whether hooks are installed, and that the welcome was seen (a
+/// reset must not bring the first-run wizard back). The settings it replaces
+/// are kept in a dated copy.
 #[tauri::command]
-fn settings_reset(app: AppHandle) -> Settings {
-    let fresh = Settings { hooks_installed: hooks::status().installed, ..Settings::default() };
-    store(&app, fresh)
+fn settings_reset(app: AppHandle) -> Result<Settings, String> {
+    let fresh = Settings {
+        hooks_installed: hooks::status().installed,
+        onboarded: current(&app).onboarded,
+        ..Settings::default()
+    };
+    if let Some(copy) = settings::keep_copy() {
+        log::line(format!("settings reset; the previous ones are kept as {}", copy.display()));
+    }
+    try_store(&app, fresh)
 }
 
 // ── Notifications and hotkeys ─────────────────────────────────────────────────
@@ -872,30 +992,57 @@ fn close_settings_window(app: AppHandle) {
 
 /// Command-line jobs that run instead of the app. Returns an exit code when one ran.
 ///
-/// `--remove-hooks` is what the uninstaller calls: it removes Nöbetçi's entries
-/// from ~/.claude/settings.json (with a dated backup), because hooks pointing at
-/// a relay that no longer exists make Claude Code report an error on every event.
+/// `--remove-hooks` is what the Windows uninstaller calls (and what anybody can
+/// run by hand): it takes Nöbetçi's own entries out of Claude Code's
+/// settings.json and Codex's and Cursor's hooks.json, each with a dated backup,
+/// and leaves every other setting and every other tool's hooks as they are.
+/// Hooks pointing at a relay that no longer exists make each tool report an
+/// error on every event (Cursor's would refuse every command).
+///
+/// Exit code 0: none of the three files has an entry of ours left (or it never
+/// had one). 1: at least one could not be cleaned — unreadable, changed while
+/// being written, a shape Nöbetçi will not overwrite — so the uninstaller keeps
+/// the relay those entries still point at. Each file's outcome goes to stderr
+/// and nobetci.log.
 pub fn cli() -> Option<i32> {
-    if !std::env::args().any(|a| a == "--remove-hooks") {
+    if !std::env::args_os().skip(1).any(|a| a == "--remove-hooks") {
         return None;
     }
     i18n::apply("auto");
+    Some(remove_all_hooks(&mut std::io::stderr()))
+}
+
+fn remove_all_hooks(out: &mut impl Write) -> i32 {
     let mut failed = false;
-    for result in [
-        hooks::remove_for_uninstall().map(|backup| ("Claude Code", backup)),
-        agent_hooks::remove_for_uninstall(agent_hooks::Provider::Codex).map(|backup| ("Codex", backup)),
-        agent_hooks::remove_for_uninstall(agent_hooks::Provider::Cursor).map(|backup| ("Cursor", backup)),
+    for (name, result) in [
+        ("Claude Code", hooks::remove_for_uninstall()),
+        ("Codex", agent_hooks::remove_for_uninstall(agent_hooks::Provider::Codex)),
+        ("Cursor", agent_hooks::remove_for_uninstall(agent_hooks::Provider::Cursor)),
     ] {
-        match result {
-            Ok((_, Some(backup))) => log::line(format!("uninstall: hooks removed (backup {backup})")),
-            Ok(_) => {}
-            Err(err) => {
-                log::line(format!("uninstall: could not remove hooks: {err}"));
-                failed = true;
+        let line = match result {
+            Ok(Some(backup)) => {
+                log::line(format!("uninstall: {name} hooks removed (backup {backup})"));
+                if is_tr() {
+                    format!("{name}: Nöbetçi'nin hook'ları kaldırıldı (yedek: {backup})")
+                } else {
+                    format!("{name}: Nöbetçi's hooks removed (backup: {backup})")
+                }
             }
-        }
+            Ok(None) if is_tr() => format!("{name}: kaldırılacak Nöbetçi hook'u yok"),
+            Ok(None) => format!("{name}: no Nöbetçi hooks to remove"),
+            Err(err) => {
+                failed = true;
+                log::line(format!("uninstall: could not remove the {name} hooks: {err}"));
+                if is_tr() {
+                    format!("{name}: Nöbetçi'nin hook'ları kaldırılamadı: {err}")
+                } else {
+                    format!("{name}: couldn't remove Nöbetçi's hooks: {err}")
+                }
+            }
+        };
+        let _ = writeln!(out, "{line}");
     }
-    Some(if failed { 1 } else { 0 })
+    i32::from(failed)
 }
 
 pub fn run() {
@@ -1016,18 +1163,77 @@ pub fn run() {
             inputguard::start(&handle);
             pipe::start(handle.clone());
             agenda::spawn_reminders(handle.clone());
+            let reconcile = handle.clone();
+            std::thread::spawn(move || reconcile_autostart(&reconcile));
 
-            // First run: the welcome wizard, once the owl has said hello.
-            if !loaded.onboarded {
+            // First run: the welcome wizard, once the owl has said hello — unless
+            // it was finished or skipped meanwhile (the settings page opens it
+            // itself, and the tray can show that page sooner). A settings file
+            // that could not be read is shown instead: until a restart, nothing
+            // is saved over it.
+            let unreadable = settings::load_problem().is_some();
+            if !loaded.onboarded || unreadable {
                 let welcome = handle.clone();
                 std::thread::spawn(move || {
                     std::thread::sleep(Duration::from_millis(4500));
                     let app = welcome.clone();
-                    let _ = welcome.run_on_main_thread(move || show_settings_window(&app, Some("hosgeldin")));
+                    let _ = welcome.run_on_main_thread(move || {
+                        if unreadable {
+                            show_settings_window(&app, None);
+                        } else if !current(&app).onboarded {
+                            show_settings_window(&app, Some("hosgeldin"));
+                        }
+                    });
                 });
             }
             Ok(())
         })
         .run(tauri::generate_context!())
         .expect("error while running Nöbetçi");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn remove_hooks_cleans_what_it_can_and_exits_1_for_what_it_cannot() {
+        let home = hooks::TempHome::new("cli");
+        let claude = home.dir.join(".claude").join("settings.json");
+        let codex = home.dir.join(".codex").join("hooks.json");
+        std::fs::create_dir_all(claude.parent().unwrap()).unwrap();
+        std::fs::create_dir_all(codex.parent().unwrap()).unwrap();
+        // Claude Code's file cannot be read as JSON: it is left alone and reported.
+        std::fs::write(&claude, b"{ broken").unwrap();
+        let ours = "'/opt/nobetci/bin/nobetci-hook' codex Stop";
+        std::fs::write(
+            &codex,
+            serde_json::to_vec_pretty(&serde_json::json!({
+                "hooks": { "Stop": [{ "hooks": [
+                    { "type": "command", "command": ours, "timeout": 10 },
+                    { "type": "command", "command": "notify-send done" }
+                ] }] }
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+
+        let mut out = Vec::new();
+        assert_eq!(remove_all_hooks(&mut out), 1, "a file that could not be cleaned must fail the run");
+        let said = String::from_utf8(out).unwrap();
+        assert!(said.contains("Claude Code") && said.contains("Codex") && said.contains("Cursor"), "{said}");
+        assert_eq!(std::fs::read(&claude).unwrap(), b"{ broken");
+        let left: Value = serde_json::from_slice(&std::fs::read(&codex).unwrap()).unwrap();
+        assert_eq!(
+            left["hooks"]["Stop"][0]["hooks"],
+            serde_json::json!([{ "type": "command", "command": "notify-send done" }]),
+            "only our command goes; the other one in the same group stays"
+        );
+
+        // Once every file can be read, the same run succeeds (nothing of ours left anywhere).
+        std::fs::write(&claude, b"{}").unwrap();
+        assert_eq!(remove_all_hooks(&mut Vec::new()), 0);
+        assert_eq!(std::fs::read(&claude).unwrap(), b"{}", "nothing of ours there: not rewritten");
+        drop(home);
+    }
 }
