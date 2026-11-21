@@ -2,10 +2,13 @@
 //! of the pipe, and the parent-process chain.
 //!
 //! Named pipes live in a machine-wide namespace, so `\\.\pipe\nobetci-<name>` can
-//! be created by *any* account that gets there first. Two defences, both cheap:
-//! the pipe name carries our SID, and once connected we check the server process
-//! really belongs to us before sending anything.
+//! be created by *any* account that gets there first. Three defences, all cheap:
+//! the pipe name carries our SID; we open it at the identification level, so
+//! whoever serves it may learn who we are but can never act as us; and once
+//! connected we check the server process really belongs to us before sending
+//! anything.
 
+use std::os::windows::fs::OpenOptionsExt;
 use std::os::windows::io::AsRawHandle;
 use std::time::{Duration, Instant};
 
@@ -25,6 +28,13 @@ const CONNECT_TIMEOUT: Duration = Duration::from_millis(300);
 /// the one error worth retrying: the server exists and a slot will free up.
 const ERROR_PIPE_BUSY: i32 = 231;
 
+/// `SECURITY_IDENTIFICATION` (winbase.h: `SecurityIdentification << 16`). Opening
+/// a pipe without a quality-of-service level lets its server impersonate us —
+/// act with our token — the moment we connect, before any check of ours runs.
+/// At this level it can only see who we are. Rust adds `SECURITY_SQOS_PRESENT`,
+/// without which the level would be ignored (`OpenOptionsExt::security_qos_flags`).
+const SECURITY_IDENTIFICATION: u32 = 1 << 16;
+
 /// `\\.\pipe\nobetci-<sid>`. The SID keeps two accounts on the same machine from
 /// ever meeting on the same pipe; the name falls back to the user name only if
 /// the SID cannot be read at all, which should not happen.
@@ -38,8 +48,10 @@ fn pipe_path() -> String {
 pub fn connect() -> Option<std::fs::File> {
     let path = pipe_path();
     let deadline = Instant::now() + CONNECT_TIMEOUT;
+    let mut options = std::fs::OpenOptions::new();
+    options.read(true).write(true).security_qos_flags(SECURITY_IDENTIFICATION);
     loop {
-        match std::fs::OpenOptions::new().read(true).write(true).open(&path) {
+        match options.open(&path) {
             Ok(file) => {
                 let handle = HANDLE(file.as_raw_handle());
                 // Somebody else's server on our pipe name gets nothing from us.

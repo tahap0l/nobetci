@@ -1,16 +1,17 @@
-//! nobetci-hook — the relay Claude Code runs on every hook event.
+//! nobetci-hook — the relay Claude Code, Codex and Cursor run on every hook event.
 //!
 //! Reads the hook JSON on stdin, adds a little terminal context, and hands it to
 //! Nöbetçi: over the named pipe `\\.\pipe\nobetci-<sid>` on Windows (`win.rs`),
 //! over a Unix socket in `~/Library/Application Support/Nobetci` on macOS
-//! (`mac.rs`).
+//! (`mac.rs`) and in `~/.local/state/nobetci` on Linux (`linux.rs`). It is also
+//! the native-messaging host of the ChatGPT Web extension (`browser.rs`).
 //!
 //! Hard rule: **never block Claude Code.**
 //! * If nobody is listening — Nöbetçi is closed — we exit 0 immediately with
 //!   nothing on stdout, and the session carries on untouched.
-//! * Every step runs under a deadline enforced by the main thread, so a pipe that
-//!   accepts the connection and then stops reading cannot wedge the session
-//!   either: we abandon the worker and exit.
+//! * Talking to the app runs under a deadline enforced by the main thread, so a
+//!   pipe that accepts the connection and then stops reading cannot wedge the
+//!   session either: we abandon the worker and exit.
 //! * Only `PermissionRequest` waits for an answer, because approving from the
 //!   island is the whole point. No answer means empty stdout, and Claude Code
 //!   asks in the terminal exactly as if Nöbetçi were not installed.
@@ -19,8 +20,18 @@
 //!   `PreToolUse` for a tool that would ask (see `desktop_gate`) is relayed as a
 //!   permission request and answered with a `PreToolUse` decision. Same budget,
 //!   same silence when nobody answers: the app's own dialog then appears.
+//! * Cursor is the one host that needs words instead of silence: its permission
+//!   hooks are installed fail-closed (a crashed relay must not let a command
+//!   through), so an empty answer would block the tool. Whenever Nöbetçi gives
+//!   no decision — closed, paused, handed back, timed out, or input it could not
+//!   read — the relay answers `ask`, and Cursor asks the user itself.
 //!
-//! Usage: `nobetci-hook <EventName>` (the name is also read from the JSON).
+//! A request too large for the app's frame limit (`MAX_FRAME`) has its long
+//! strings cut evenly until it fits, and the payload says it was cut (see
+//! `fit_frame`).
+//!
+//! Usage: `nobetci-hook <EventName>`, `nobetci-hook codex|cursor <EventName>`,
+//! `nobetci-hook statusline` (the event name is also read from the JSON).
 
 use std::io::{Read, Write};
 use std::sync::mpsc;
@@ -43,6 +54,20 @@ const MAX_FIELD_LEN: usize = 2_000;
 const MAX_APPROVAL_FIELD_LEN: usize = 64 * 1024;
 /// Set on the payload when any field had to be cut.
 const TRUNCATED_FLAG: &str = "nobetci_truncated";
+/// The longest line the app reads (`MAX_PAYLOAD` in src-tauri/src/pipe.rs), the
+/// newline not counted. A longer one is refused unread, so nothing of it reaches
+/// the island and the rules never see it.
+const MAX_FRAME: usize = 1 << 20;
+/// Making a request fit `MAX_FRAME` never cuts a string shorter than this: below
+/// it nothing reviewable would be left, and the terminal is the better place.
+const MIN_FIELD_LEN: usize = 256;
+/// Top-level strings — the event, the session, the folder, the tool's name — keep
+/// at least this much while a request is made to fit.
+const KEEP_TOP_LEVEL: usize = 4096;
+/// The fields the app reads first. From a line too large to take, it still tells
+/// the history what the request was, from whatever came before the cut
+/// (`too_long` in src-tauri/src/pipe.rs), so these go at the front.
+const LEAD_KEYS: &[&str] = &["hook_event_name", "session_id", "cwd", "tool_name", "agent_name"];
 
 mod browser;
 #[cfg(target_os = "linux")]
@@ -73,7 +98,12 @@ fn main() {
     }
     let provider = if first == "codex" || first == "cursor" { first.clone() } else { "claude".into() };
     let event_arg = if provider == "claude" { first } else { args.next().unwrap_or_default() };
-    let Some((payload, event, gated)) = read_event(&provider, event_arg) else { std::process::exit(0) };
+    // The event as named on the command line, for input that cannot be read.
+    let named = event_name(&provider, &event_arg).to_string();
+    let Some((payload, event, gated)) = read_event(&provider, event_arg) else {
+        // Nothing to relay, so nothing is decided either.
+        finish(no_decision_json(&provider, &named))
+    };
 
     let waits_for_answer = event == "PermissionRequest";
     let budget = if waits_for_answer { DECISION_BUDGET } else { FIRE_AND_FORGET_BUDGET };
@@ -85,23 +115,65 @@ fn main() {
         let _ = tx.send(talk(&payload, waits_for_answer));
     });
 
-    if let Ok(Some(decision)) = rx.recv_timeout(budget) {
-        let json = if gated { pre_tool_use_json(&decision) } else { output_json(&provider, &event, &decision) };
-        if let Some(json) = json {
-            let mut out = std::io::stdout();
-            let _ = writeln!(out, "{json}");
-            let _ = out.flush();
+    let decided = rx.recv_timeout(budget).ok().flatten().and_then(|decision| {
+        if gated {
+            pre_tool_use_json(&decision)
+        } else {
+            output_json(&provider, &event, &decision)
         }
-    } else if provider == "cursor" && event == "PermissionRequest" {
-        // Fail closed when Nöbetçi cannot make a decision. Cursor's `ask`
-        // behavior varies by approval mode, so an unavailable relay must not
-        // turn into an unreviewed tool execution.
-        let _ = writeln!(std::io::stdout(), "{{\"permission\":\"deny\",\"user_message\":\"Nobetci is unavailable; reopen it and retry.\",\"agent_message\":\"Nobetci was unavailable, so this action was blocked. Ask the user to reopen Nobetci and retry.\"}}");
-    } else if provider == "cursor" && event == "UserPromptSubmit" {
-        let _ = writeln!(std::io::stdout(), "{{\"continue\":true}}");
-    }
+    });
     // No decision: the host agent's own approval UI takes over.
-    std::process::exit(0);
+    finish(decided.or_else(|| no_decision_json(&provider, &event)))
+}
+
+/// Prints the host's answer, if there is one, and exits.
+fn finish(json: Option<String>) -> ! {
+    if let Some(json) = json {
+        let mut out = std::io::stdout();
+        let _ = writeln!(out, "{json}");
+        let _ = out.flush();
+    }
+    std::process::exit(0)
+}
+
+/// What the host is told when Nöbetçi gave no decision: the app is closed or
+/// paused, the island handed the request back or let it expire, the answer made
+/// no sense, or the input could not be read.
+///
+/// Claude Code and Codex get silence and ask in their own way. Cursor's
+/// permission hooks are fail-closed — silence would block the tool, and saying
+/// "unavailable" would be untrue for a paused or handed-back request — so Cursor
+/// is told to ask the user itself. (A relay that crashes still blocks: that is
+/// what fail-closed is for.)
+fn no_decision_json(provider: &str, event: &str) -> Option<String> {
+    match (provider, event) {
+        ("cursor", "PermissionRequest") => {
+            Some(serde_json::json!({ "permission": "ask", "user_message": LEFT_TO_CURSOR }).to_string())
+        }
+        ("cursor", "UserPromptSubmit") => Some(serde_json::json!({ "continue": true }).to_string()),
+        _ => None,
+    }
+}
+
+/// Shown by Cursor with its own approval prompt. In both languages: the relay
+/// does not know which one the app is set to.
+const LEFT_TO_CURSOR: &str = "Nöbetçi left this request to Cursor. · Nöbetçi bu isteği Cursor'a bıraktı.";
+
+/// Nöbetçi's name for a host's event: Cursor's events are mapped onto Claude
+/// Code's, which Codex already uses.
+fn event_name<'a>(provider: &str, event: &'a str) -> &'a str {
+    if provider != "cursor" {
+        return event;
+    }
+    match event {
+        "beforeSubmitPrompt" => "UserPromptSubmit",
+        "beforeShellExecution" | "beforeMCPExecution" => "PermissionRequest",
+        "afterShellExecution" | "afterMCPExecution" => "PostToolUse",
+        "sessionStart" => "SessionStart",
+        "sessionEnd" => "SessionEnd",
+        "afterAgentResponse" => "Stop",
+        other => other,
+    }
 }
 
 fn output_json(provider: &str, event: &str, answer: &str) -> Option<String> {
@@ -212,9 +284,11 @@ fn decision_json(answer: &str) -> Option<String> {
         }
         "deny" => {
             let message = clean(reply.get("message")).unwrap_or_else(|| DEFAULT_DENY.to_string());
-            // `interrupt: true` is what lets Claude see the message; without it the
-            // denial is silent and Claude carries on without knowing.
-            let interrupt = reply.get("interrupt").and_then(|v| v.as_bool()).unwrap_or(true);
+            // Claude always reads `message`. `interrupt: true` also stops it, which
+            // only "Deny and stop" asks for; a plain deny lets Claude carry on
+            // with the reason in hand. The app spells the flag out on every deny,
+            // so a missing one — an older app, the bare word `deny` — is plain.
+            let interrupt = reply.get("interrupt").and_then(|v| v.as_bool()).unwrap_or(false);
             serde_json::json!({
                 "hookSpecificOutput": {
                     "hookEventName": "PermissionRequest",
@@ -283,6 +357,12 @@ const EDIT_TOOLS: &[&str] = &["Write", "Edit", "MultiEdit", "NotebookEdit"];
 /// Whether a `PreToolUse` should be relayed as a permission request: only in the
 /// Claude desktop app (which never runs `PermissionRequest` hooks), only for tools
 /// that would normally ask, and only in modes where the app would ask at all.
+///
+/// The gate goes by tool, not by request: the relay cannot see the app's own
+/// allow list, so a command the app would have run without asking waits on the
+/// island too, up to the full budget when nobody is there. A known, documented
+/// trade-off (the island's rules and trusted projects can let such commands
+/// through); the gate never makes anything run that would not have run.
 fn desktop_gate(entrypoint: &str, tool: &str, mode: &str) -> bool {
     if entrypoint != DESKTOP_ENTRYPOINT {
         return false;
@@ -356,19 +436,7 @@ fn prepare(
         .map(str::to_string)
         .filter(|s| !s.is_empty())
         .unwrap_or(arg_event);
-    let mut event = if provider == "cursor" {
-        match source_event.as_str() {
-            "beforeSubmitPrompt" => "UserPromptSubmit".to_string(),
-            "beforeShellExecution" | "beforeMCPExecution" => "PermissionRequest".to_string(),
-            "afterShellExecution" | "afterMCPExecution" => "PostToolUse".to_string(),
-            "sessionStart" => "SessionStart".to_string(),
-            "sessionEnd" => "SessionEnd".to_string(),
-            "afterAgentResponse" => "Stop".to_string(),
-            other => other.to_string(),
-        }
-    } else {
-        source_event.clone()
-    };
+    let mut event = event_name(provider, &source_event).to_string();
     map.insert("hook_event_name".into(), serde_json::Value::String(event.clone()));
 
     if provider != "claude" {
@@ -464,9 +532,7 @@ fn prepare(
 
     let limit = if event == "PermissionRequest" { MAX_APPROVAL_FIELD_LEN } else { MAX_FIELD_LEN };
     if truncate_strings(&mut payload, limit) {
-        if let Some(map) = payload.as_object_mut() {
-            map.insert(TRUNCATED_FLAG.into(), serde_json::Value::Bool(true));
-        }
+        flag_cut(&mut payload);
     }
 
     // Added after the cut: the diff has its own, larger cap.
@@ -474,9 +540,95 @@ fn prepare(
         map.insert("nobetci_change".into(), change);
     }
 
-    let mut line = payload.to_string();
+    // One line, ended by a newline: the app reads up to it and drops a frame
+    // that ends without one.
+    let mut line = fit_frame(&mut payload, limit);
     line.push('\n');
     Some((line, event, gated))
+}
+
+fn flag_cut(payload: &mut serde_json::Value) {
+    if let Some(map) = payload.as_object_mut() {
+        map.insert(TRUNCATED_FLAG.into(), serde_json::Value::Bool(true));
+    }
+}
+
+/// The payload as the JSON line the app reads (no newline), cut to fit
+/// `MAX_FRAME`.
+///
+/// Usually it fits as it is. When it does not — a MultiEdit of many large edits,
+/// an MCP call with many large arguments — every string longer than some length
+/// is cut to that length, the longest at which the line fits, so each field
+/// keeps as much as the others. Top-level strings keep at least
+/// `KEEP_TOP_LEVEL`. The payload is then flagged as cut, which the app scores as
+/// high risk and never lets a rule or grant approve: what the card shows is not
+/// all of what would run.
+///
+/// If even `MIN_FIELD_LEN` is not enough, the request's shape itself is too large
+/// to show (say, an argument holding a hundred thousand numbers). The line then
+/// goes as it is: the app refuses it, writes what its start says into the
+/// history, and the host asks in its own way, where the whole request is seen.
+fn fit_frame(payload: &mut serde_json::Value, limit: usize) -> String {
+    let line = to_json(payload);
+    if line.len() <= MAX_FRAME {
+        return line;
+    }
+    // The longest cap that fits; caps are tried on copies, so a cap that does
+    // not fit leaves nothing behind. Cutting shorter can only shrink the line
+    // (give or take the three bytes of a "…"), so halving the range works.
+    let (mut lo, mut hi) = (MIN_FIELD_LEN.min(limit), limit);
+    let mut best: Option<(serde_json::Value, String)> = None;
+    while lo < hi {
+        let cap = lo + (hi - lo) / 2;
+        let mut trial = payload.clone();
+        if cap_strings(&mut trial, cap) {
+            flag_cut(&mut trial);
+        }
+        let candidate = to_json(&trial);
+        if candidate.len() <= MAX_FRAME {
+            best = Some((trial, candidate));
+            lo = cap + 1;
+        } else {
+            hi = cap;
+        }
+    }
+    match best {
+        Some((trial, candidate)) => {
+            *payload = trial;
+            candidate
+        }
+        None => line,
+    }
+}
+
+/// `truncate_strings` for a whole payload, sparing the top-level strings down to
+/// `KEEP_TOP_LEVEL`. True when anything was cut.
+fn cap_strings(payload: &mut serde_json::Value, cap: usize) -> bool {
+    match payload.as_object_mut() {
+        Some(map) => map.values_mut().fold(false, |cut, value| {
+            let limit = if value.is_string() { cap.max(KEEP_TOP_LEVEL) } else { cap };
+            truncate_strings(value, limit) | cut
+        }),
+        None => truncate_strings(payload, cap),
+    }
+}
+
+/// Compact JSON with `LEAD_KEYS` first, whatever order the map keeps its keys in.
+fn to_json(payload: &serde_json::Value) -> String {
+    let Some(map) = payload.as_object() else { return payload.to_string() };
+    let lead = LEAD_KEYS.iter().filter_map(|key| map.get(*key).map(|value| (*key, value)));
+    let rest = map.iter().filter(|(key, _)| !LEAD_KEYS.contains(&key.as_str())).map(|(k, v)| (k.as_str(), v));
+    let mut out = String::from("{");
+    for (i, (key, value)) in lead.chain(rest).enumerate() {
+        if i > 0 {
+            out.push(',');
+        }
+        out.push_str(&serde_json::Value::from(key).to_string());
+        out.push(':');
+        out.push_str(&value.to_string());
+    }
+    out.push('}');
+    out
 }
 
 /// Longest diff forwarded with a file change, in bytes.
@@ -599,7 +751,7 @@ fn status_payload(data: &serde_json::Value) -> Option<String> {
             "resets_at": number(&["rate_limits", name, "resets_at"]),
         })
     };
-    let payload = serde_json::json!({
+    let mut payload = serde_json::json!({
         "hook_event_name": "StatusLine",
         "session_id": session,
         "cwd": cwd,
@@ -610,7 +762,9 @@ fn status_payload(data: &serde_json::Value) -> Option<String> {
         "seven_day": window("seven_day"),
         "entrypoint": std::env::var("CLAUDE_CODE_ENTRYPOINT").unwrap_or_default(),
     });
-    let mut line = payload.to_string();
+    // A handful of short strings: capped, the line is always a fraction of a frame.
+    truncate_strings(&mut payload, MAX_FIELD_LEN);
+    let mut line = to_json(&payload);
     line.push('\n');
     Some(line)
 }
@@ -679,22 +833,49 @@ fn talk(payload: &str, waits_for_answer: bool) -> Option<String> {
         return None;
     }
 
+    // The answer is one line. An answer to a question or a plan echoes the tool's
+    // input and can be long, so each chunk is searched once, not the whole buffer.
     let mut buf = Vec::new();
-    let mut chunk = [0u8; 1024];
+    let mut chunk = [0u8; 8192];
     loop {
         match pipe.read(&mut chunk) {
-            Ok(0) => break,
+            Ok(0) | Err(_) => break,
             Ok(n) => {
-                buf.extend_from_slice(&chunk[..n]);
-                if buf.contains(&b'\n') {
+                if let Some(end) = chunk[..n].iter().position(|&b| b == b'\n') {
+                    buf.extend_from_slice(&chunk[..end]);
                     break;
                 }
+                buf.extend_from_slice(&chunk[..n]);
             }
-            Err(_) => break,
         }
     }
     let answer = String::from_utf8_lossy(&buf).trim().to_string();
     (!answer.is_empty()).then_some(answer)
+}
+
+/// The app's rules for a line from the relay (`read_frame` in
+/// src-tauri/src/pipe.rs): the bytes before the first newline, at most
+/// `MAX_FRAME` of them. A stream that ends before a newline is dropped unread,
+/// and a longer line is refused.
+#[cfg(test)]
+fn app_frame(mut wire: impl Read) -> Result<Vec<u8>, &'static str> {
+    let mut frame = Vec::new();
+    let mut chunk = [0u8; 4096];
+    loop {
+        let n = wire.read(&mut chunk).map_err(|_| "read failed: dropped")?;
+        if n == 0 {
+            return Err("ended before a newline: dropped");
+        }
+        let newline = chunk[..n].iter().position(|&b| b == b'\n');
+        let end = newline.unwrap_or(n);
+        if frame.len() + end > MAX_FRAME {
+            return Err("longer than the limit: refused");
+        }
+        frame.extend_from_slice(&chunk[..end]);
+        if newline.is_some() {
+            return Ok(frame);
+        }
+    }
 }
 
 #[cfg(test)]
@@ -703,6 +884,15 @@ mod tests {
 
     fn parsed(s: &str) -> serde_json::Value {
         serde_json::from_str(&decision_json(s).expect("a decision")).unwrap()
+    }
+
+    /// Runs a hook payload through `prepare` and the app's frame rules, and
+    /// returns what the app would read.
+    fn through_the_app(raw: &serde_json::Value, provider: &str) -> (serde_json::Value, String) {
+        let (line, event, _) = prepare(raw.to_string().as_bytes(), provider, String::new(), None).unwrap();
+        let frame = app_frame(line.as_bytes()).expect("the app takes the frame");
+        assert_eq!(frame.len() + 1, line.len(), "one frame, ended by its newline");
+        (serde_json::from_slice(&frame).unwrap(), event)
     }
 
     #[test]
@@ -718,7 +908,7 @@ mod tests {
         let deny = parsed("deny");
         let d = &deny["hookSpecificOutput"]["decision"];
         assert_eq!(d["behavior"], "deny");
-        assert_eq!(d["interrupt"], true, "Claude must see a denial by default");
+        assert_eq!(d["interrupt"], false, "a plain deny lets Claude carry on");
         assert!(d["message"].as_str().unwrap().contains("Nöbetçi"));
         assert!(deny.get("continue").is_none());
     }
@@ -728,17 +918,213 @@ mod tests {
         let out = parsed(r#"{"behavior":"deny","message":"Bunu yapma \"lütfen\"\u0007 — önce sor"}"#);
         let d = &out["hookSpecificOutput"]["decision"];
         assert_eq!(d["message"], "Bunu yapma \"lütfen\" — önce sor");
-        let silent = parsed(r#"{"behavior":"deny","interrupt":false}"#);
-        assert_eq!(silent["hookSpecificOutput"]["decision"]["interrupt"], false);
+        assert_eq!(d["interrupt"], false, "no flag: a plain deny");
+        let plain = parsed(r#"{"behavior":"deny","message":"Use the script","interrupt":false,"stop":false}"#);
+        assert_eq!(plain["hookSpecificOutput"]["decision"]["interrupt"], false);
+        assert!(plain.get("continue").is_none());
     }
 
     #[test]
     fn deny_and_stop_ends_the_turn() {
-        let out = parsed(r#"{"behavior":"deny","message":"Dur","stop":true}"#);
+        // What the app sends for "Deny and stop".
+        let out = parsed(r#"{"behavior":"deny","message":"Dur","interrupt":true,"stop":true}"#);
+        assert_eq!(out["hookSpecificOutput"]["decision"]["interrupt"], true);
         assert_eq!(out["continue"], false);
         assert_eq!(out["stopReason"], "Dur");
         // `stop` on an allow is meaningless and ignored.
         assert!(parsed(r#"{"behavior":"allow","stop":false}"#).get("continue").is_none());
+    }
+
+    #[test]
+    fn cursor_is_told_to_ask_whenever_nobetci_gives_no_decision() {
+        // Closed, paused, handed back, timed out, or input that could not be read:
+        // never a deny that blames an app that may well be running.
+        let ask: serde_json::Value =
+            serde_json::from_str(&no_decision_json("cursor", "PermissionRequest").unwrap()).unwrap();
+        assert_eq!(ask["permission"], "ask");
+        let note = ask["user_message"].as_str().unwrap();
+        assert!(note.contains("left this request to Cursor") && note.contains("Cursor'a bıraktı"), "{note}");
+        assert!(ask.get("agent_message").is_none());
+        let prompt: serde_json::Value =
+            serde_json::from_str(&no_decision_json("cursor", "UserPromptSubmit").unwrap()).unwrap();
+        assert_eq!(prompt, serde_json::json!({ "continue": true }));
+        // Display-only events, Claude Code and Codex: silence, and they ask themselves.
+        assert!(no_decision_json("cursor", "PostToolUse").is_none());
+        assert!(no_decision_json("claude", "PermissionRequest").is_none());
+        assert!(no_decision_json("codex", "PermissionRequest").is_none());
+        // An answer the relay does not understand is no decision either.
+        assert!(cursor_decision_json("PermissionRequest", r#"{"behavior":"ask"}"#).is_none());
+        assert!(cursor_decision_json("PermissionRequest", "garbage").is_none());
+    }
+
+    #[test]
+    fn cursor_events_are_named_like_claude_codes_even_unread() {
+        // The command line names the event even when stdin cannot be parsed.
+        assert_eq!(event_name("cursor", "beforeShellExecution"), "PermissionRequest");
+        assert_eq!(event_name("cursor", "beforeMCPExecution"), "PermissionRequest");
+        assert_eq!(event_name("cursor", "beforeSubmitPrompt"), "UserPromptSubmit");
+        assert_eq!(event_name("cursor", "afterShellExecution"), "PostToolUse");
+        assert_eq!(event_name("cursor", "afterAgentResponse"), "Stop");
+        assert_eq!(event_name("cursor", "somethingNew"), "somethingNew");
+        assert_eq!(event_name("claude", "beforeShellExecution"), "beforeShellExecution");
+        assert_eq!(event_name("codex", "PermissionRequest"), "PermissionRequest");
+        // Unparseable input, such as a lone surrogate serde_json refuses.
+        let lone = br#"{"hook_event_name":"beforeShellExecution","command":"echo \ud83d"}"#;
+        assert!(prepare(lone, "cursor", "beforeShellExecution".into(), None).is_none());
+    }
+
+    #[test]
+    fn every_line_the_relay_sends_is_one_frame_the_app_takes() {
+        let events = [
+            ("claude", serde_json::json!({ "hook_event_name": "SessionStart", "session_id": "s", "cwd": "/w" })),
+            (
+                "claude",
+                serde_json::json!({ "hook_event_name": "UserPromptSubmit", "session_id": "s", "cwd": "/w", "prompt": "çalış\nşimdi" }),
+            ),
+            (
+                "claude",
+                serde_json::json!({ "hook_event_name": "PreToolUse", "session_id": "s", "cwd": "/w", "tool_name": "Bash", "tool_input": { "command": "ls" } }),
+            ),
+            (
+                "claude",
+                serde_json::json!({ "hook_event_name": "PermissionRequest", "session_id": "s", "cwd": "/w", "tool_name": "Bash", "tool_input": { "command": "a\nb\r\n\"c\"" } }),
+            ),
+            (
+                "claude",
+                serde_json::json!({ "hook_event_name": "PostToolUse", "session_id": "s", "cwd": "/w", "tool_name": "Write", "tool_input": { "file_path": "/w/a", "content": "x\ny" } }),
+            ),
+            (
+                "codex",
+                serde_json::json!({ "hook_event_name": "PermissionRequest", "session_id": "s", "cwd": "/w", "tool_name": "Bash", "tool_input": { "command": "ls" } }),
+            ),
+            (
+                "cursor",
+                serde_json::json!({ "hook_event_name": "beforeShellExecution", "conversation_id": "c", "command": "ls\nrm -rf x", "cwd": "/w" }),
+            ),
+            (
+                "cursor",
+                serde_json::json!({ "hook_event_name": "beforeMCPExecution", "conversation_id": "c", "tool_name": "q", "tool_input": "{\"a\":1}" }),
+            ),
+        ];
+        for (provider, raw) in events {
+            let (sent, _) = through_the_app(&raw, provider);
+            assert!(sent["hook_event_name"].is_string(), "{raw}");
+        }
+        let status = status_payload(&serde_json::json!({ "session_id": "s", "cwd": "/w" })).unwrap();
+        assert!(app_frame(status.as_bytes()).is_ok());
+        assert!(app_frame(&b"{}"[..]).is_err(), "the rule the bridge once broke");
+    }
+
+    #[test]
+    fn a_request_too_large_for_one_frame_is_cut_evenly_to_fit() {
+        // Nine edits of two 70 KB strings: 1.2 MB after the per-field cap, more
+        // than the app reads. Every edit survives, each cut to the same length.
+        let edits: Vec<serde_json::Value> = (0..9)
+            .map(|i| serde_json::json!({ "old_string": format!("{i}").repeat(70_000), "new_string": "ş".repeat(35_000) }))
+            .collect();
+        let raw = serde_json::json!({
+            "hook_event_name": "PermissionRequest", "session_id": "s1", "cwd": "/home/dev/proj",
+            "tool_name": "MultiEdit", "tool_input": { "file_path": "/home/dev/proj/a.rs", "edits": edits },
+        });
+        let (sent, event) = through_the_app(&raw, "claude");
+        assert_eq!(event, "PermissionRequest");
+        assert_eq!(sent[TRUNCATED_FLAG], true, "cut, and the app is told so");
+        assert_eq!((sent["session_id"].as_str(), sent["cwd"].as_str()), (Some("s1"), Some("/home/dev/proj")));
+        assert_eq!(sent["tool_name"], "MultiEdit");
+        assert_eq!(sent["tool_input"]["file_path"], "/home/dev/proj/a.rs");
+        let sent_edits = sent["tool_input"]["edits"].as_array().unwrap();
+        assert_eq!(sent_edits.len(), 9);
+        let olds: Vec<usize> = sent_edits.iter().map(|e| e["old_string"].as_str().unwrap().len()).collect();
+        assert!(olds.iter().all(|n| *n == olds[0]), "evenly: {olds:?}");
+        assert!(olds[0] > 40_000 && olds[0] < 65_000, "as much as fits: {}", olds[0]);
+        assert!(sent_edits.iter().all(|e| e["new_string"].as_str().unwrap().ends_with('…')));
+    }
+
+    #[test]
+    fn escapes_count_toward_the_frame() {
+        // Quotes and control characters take two to six bytes on the wire each:
+        // 325 000 bytes of text, under every field cap, are 1.1 MB as JSON.
+        let n = 65_000;
+        let raw = serde_json::json!({
+            "hook_event_name": "PermissionRequest", "session_id": "s", "cwd": "/w", "tool_name": "mcp__x__y",
+            "tool_input": {
+                "a": "\"".repeat(n), "b": "\u{1}".repeat(n), "c": "\\".repeat(n), "d": "\u{2}".repeat(n), "e": "z".repeat(n),
+            },
+        });
+        assert!(raw.to_string().len() > MAX_FRAME);
+        let (sent, _) = through_the_app(&raw, "claude");
+        assert_eq!(sent[TRUNCATED_FLAG], true);
+        assert_eq!(sent["tool_name"], "mcp__x__y");
+        assert!(sent["tool_input"]["e"].as_str().unwrap().len() > 50_000, "as much as fits");
+    }
+
+    #[test]
+    fn display_only_events_fit_one_frame_too() {
+        let edits: Vec<serde_json::Value> = (0..600)
+            .map(|_| serde_json::json!({ "old_string": "o".repeat(1_500), "new_string": "n".repeat(1_500) }))
+            .collect();
+        let raw = serde_json::json!({
+            "hook_event_name": "PreToolUse", "session_id": "s", "cwd": "/w",
+            "tool_name": "MultiEdit", "tool_input": { "file_path": "/w/f", "edits": edits },
+        });
+        let (sent, event) = through_the_app(&raw, "claude");
+        assert_eq!(event, "PreToolUse");
+        assert_eq!(sent["tool_input"]["edits"].as_array().unwrap().len(), 600);
+        assert_eq!(sent[TRUNCATED_FLAG], true);
+    }
+
+    #[test]
+    fn a_request_that_fits_is_left_alone() {
+        let raw = serde_json::json!({
+            "hook_event_name": "PermissionRequest", "session_id": "s", "cwd": "/w", "tool_name": "Write",
+            "tool_input": { "file_path": "/w/big.txt", "content": "ç".repeat(30_000) },
+        });
+        let (sent, _) = through_the_app(&raw, "claude");
+        assert!(sent.get(TRUNCATED_FLAG).is_none());
+        assert_eq!(sent["tool_input"]["content"].as_str().unwrap().chars().count(), 30_000);
+        // Exactly at the limit is still one frame; one byte more is not.
+        let mut at_limit = vec![b'x'; MAX_FRAME];
+        at_limit.push(b'\n');
+        assert_eq!(app_frame(at_limit.as_slice()).unwrap().len(), MAX_FRAME);
+        at_limit.insert(0, b'x');
+        assert!(app_frame(at_limit.as_slice()).is_err());
+    }
+
+    #[test]
+    fn a_shape_too_large_to_cut_goes_whole_with_what_it_is_up_front() {
+        // No string to cut: the numbers alone are over a megabyte. The app
+        // refuses it and records it from the line's start, so that start names
+        // the event, the session, the folder and the tool.
+        let raw = serde_json::json!({
+            "session_id": "s1", "cwd": "/w", "hook_event_name": "PermissionRequest",
+            "tool_input": { "rows": vec![12345; 200_000] }, "tool_name": "mcp__db__insert",
+        });
+        let (line, _, _) = prepare(raw.to_string().as_bytes(), "claude", String::new(), None).unwrap();
+        assert!(line.len() > MAX_FRAME + 1);
+        assert!(app_frame(line.as_bytes()).is_err(), "refused by the app");
+        assert!(
+            line.starts_with(
+                r#"{"hook_event_name":"PermissionRequest","session_id":"s1","cwd":"/w","tool_name":"mcp__db__insert","#
+            ),
+            "{}",
+            &line[..120]
+        );
+        let whole: serde_json::Value = serde_json::from_str(&line).unwrap();
+        assert_eq!(whole["tool_input"]["rows"].as_array().unwrap().len(), 200_000, "never cut silently");
+    }
+
+    #[test]
+    fn the_wire_order_changes_nothing_but_the_order() {
+        let raw = serde_json::json!({
+            "z": [1, { "b": "x", "a": null }], "tool_name": "Bash", "cwd": "C:\\w \"q\"", "hook_event_name": "Stop",
+            "session_id": "s", "agent_name": "Codex", "a": true,
+        });
+        let line = to_json(&raw);
+        assert_eq!(serde_json::from_str::<serde_json::Value>(&line).unwrap(), raw);
+        assert!(line.starts_with(
+            r#"{"hook_event_name":"Stop","session_id":"s","cwd":"C:\\w \"q\"","tool_name":"Bash","agent_name":"Codex","#
+        ));
+        assert_eq!(to_json(&serde_json::json!([1, "a"])), r#"[1,"a"]"#);
     }
 
     #[test]
