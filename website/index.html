@@ -1,23 +1,39 @@
 <!doctype html>
-<html lang="tr">
+<html lang="tr" data-page="home">
   <head>
     <meta charset="utf-8" />
+    <!-- GitHub Pages sends no headers of ours (see public/_headers): the policy travels with the page. -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; frame-src 'self'; base-uri 'self'; form-action 'self'; object-src 'none'" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#070b14" />
     <meta name="color-scheme" content="dark" />
-    <meta name="description" content="Nöbetçi, Claude Code'un izin isteklerini ekranının üstündeki bir adada gösterir: komutu ve riskini gör, kararı sen ver. Asistan, ajanda, müzik, hava ve sistem kartlarıyla. Windows, macOS ve Linux için ücretsiz." />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+    <meta name="description" content="Nöbetçi, Claude Code'un izin isteklerini ekranının üstündeki bir adada gösterir: komutu ve riskini gör, kararı sen ver. Codex ve Cursor'u da izler. Asistan, ajanda, müzik, hava ve sistem kartlarıyla. Windows, macOS ve Linux için ücretsiz." />
     <meta name="nobetci-base" content="/" />
+    <link rel="canonical" href="https://tahap0l.github.io/nobetci/" />
     <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Nöbetçi" />
+    <meta property="og:url" content="https://tahap0l.github.io/nobetci/" />
     <meta property="og:title" content="Nöbetçi — Son karar sende" />
-    <meta property="og:description" content="Yapay zekâ kod yazsın. İzin isteklerini gör, riski anla, kararı sen ver." />
-    <meta property="og:image" content="/assets/social.png" />
+    <meta property="og:description" content="Claude Code, Codex ve Cursor'un izin isteklerini ekranının üstündeki adada gör, riski anla, kararı sen ver. Windows, macOS ve Linux için ücretsiz." />
+    <meta property="og:locale" content="tr_TR" />
+    <meta property="og:locale:alternate" content="en_US" />
+    <meta property="og:image" content="https://tahap0l.github.io/nobetci/social.png" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Nöbetçi'nin adası: kritik riskli bir komut için onay kartı ve baykuş" />
     <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Nöbetçi — Son karar sende" />
+    <meta name="twitter:description" content="Claude Code, Codex ve Cursor'un izin isteklerini ekranının üstündeki adada gör, riski anla, kararı sen ver." />
+    <meta name="twitter:image" content="https://tahap0l.github.io/nobetci/social.png" />
+    <meta name="twitter:image:alt" content="Nöbetçi'nin adası: kritik riskli bir komut için onay kartı ve baykuş" />
     <link rel="icon" type="image/png" href="/assets/owl.png" />
-    <link rel="preload" href="/shots/tr/idle-island.webp" as="image" type="image/webp" />
-    <link rel="stylesheet" href="/styles.css?v=2.3.1" />
-    <link rel="stylesheet" href="/home-themes.css?v=2.3.1" />
-    <link rel="stylesheet" href="/mascot-motion.css?v=mascots" />
+    <link rel="stylesheet" href="/styles.css?v=2.4.1" />
+    <link rel="stylesheet" href="/home-themes.css?v=2.4.1" />
+    <link rel="stylesheet" href="/mascot-motion.css?v=2.4.1" />
     <title>Nöbetçi — Son karar sende</title>
+    <script src="/i18n.js?v=2.4.1"></script>
   </head>
   <body>
     <a class="skip-link" href="#main" data-i18n="skip">İçeriğe atla</a>
@@ -28,7 +44,7 @@
       <header class="site-header">
         <div class="container nav">
           <a class="brand" href="/" aria-label="Nöbetçi"><img src="/assets/owl.png" alt="" width="36" height="36" /><span>Nöbetçi</span></a>
-          <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="site-nav" data-i18n="menu">Menü</button>
+          <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="site-nav"><span class="menu-icon" aria-hidden="true"><i></i><i></i><i></i></span><span data-menu-label data-i18n="menu">Menü</span></button>
           <nav class="nav-links" id="site-nav" aria-label="Ana gezinme" data-i18n-aria="navMain">
             <a href="#features" data-i18n="navFeatures">Özellikler</a>
             <a href="#new" data-i18n="navNew">Yenilikler</a>
@@ -37,7 +53,7 @@
             <a href="#faq" data-i18n="navFaq">SSS</a>
           </nav>
           <div class="nav-actions">
-            <button class="language-toggle" type="button" data-language-toggle aria-label="Switch language to English">EN</button>
+            <button class="language-toggle" type="button" data-language-toggle lang="en" aria-label="Switch language to English">EN</button>
             <a class="button button-small button-quiet" href="https://github.com/tahap0l/nobetci" target="_blank" rel="noreferrer">
               <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-3.2 19.5c.5.1.7-.2.7-.5v-1.7c-2.8.6-3.4-1.3-3.4-1.3-.4-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.5 2.3 1.1 2.9.8.1-.6.3-1.1.6-1.3-2.2-.3-4.6-1.1-4.6-5a3.9 3.9 0 0 1 1-2.7 3.6 3.6 0 0 1 .1-2.7s.8-.3 2.8 1a9.6 9.6 0 0 1 5 0c2-1.3 2.8-1 2.8-1 .4 1 .2 2 .1 2.7a3.9 3.9 0 0 1 1 2.7c0 3.9-2.4 4.7-4.6 5 .4.3.7.9.7 1.9V21c0 .3.2.6.7.5A10 10 0 0 0 12 2z"/></svg>
               <span>GitHub</span>
@@ -47,13 +63,13 @@
       </header>
 
       <main id="main">
-        <!-- Hero -->
+        <!-- Hero: it is on screen at once, so it rises in with CSS rather than waiting for the scroll reveals. -->
         <section class="hero container">
           <div class="hero-copy">
-            <a class="release-pill reveal" href="#new"><b>2.3.1</b><span data-i18n="pill">Sesle yazma, ajanda, sistem kartı</span><span aria-hidden="true">→</span></a>
-            <h1 class="reveal" data-i18n="heroTitle">Yapay zekâ kod yazsın.<br /><em>Son karar sende.</em></h1>
-            <p class="hero-lede reveal" data-i18n="heroText">Nöbetçi, Claude Code oturumlarını ekranının üstündeki küçük bir adada izler. Bir izin isteği geldiğinde komutu ve riskini tek bakışta gösterir; onaylamak ya da reddetmek sana kalır.</p>
-            <div class="hero-actions reveal">
+            <a class="release-pill rise" href="#new"><b>2.4.1</b><span data-i18n="pill">Sorular, planlar ve toplu onay adada</span><span aria-hidden="true">→</span></a>
+            <h1 class="rise d1" data-i18n="heroTitle">Yapay zekâ kod yazsın.<br /><em>Son karar sende.</em></h1>
+            <p class="hero-lede rise d2" data-i18n="heroText">Nöbetçi, Claude Code oturumlarını (Codex ve Cursor'u da) ekranının üstündeki küçük bir adada izler. Bir izin isteği geldiğinde komutu ve riskini tek bakışta gösterir; onaylamak ya da reddetmek sana kalır.</p>
+            <div class="hero-actions rise d3">
               <a class="button button-primary" href="#download" data-os-download>
                 <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11m0 0 4.5-4.5M12 15l-4.5-4.5M5 19.5h14"/></svg>
                 <span data-os-label data-i18n="download">Ücretsiz indir</span>
@@ -62,22 +78,30 @@
                 <span class="live-dot" aria-hidden="true"></span><span data-i18n="tryDemo">Canlı demoyu dene</span>
               </a>
             </div>
-            <div class="hero-meta reveal">
+            <div class="hero-meta rise d4">
               <span><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span data-i18n="meta1">Ücretsiz ve açık kaynak</span></span>
               <span><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span data-i18n="meta2">Hesap yok, telemetri yok</span></span>
               <span><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span data-i18n="meta3">Windows · macOS · Linux</span></span>
-              <span class="home-theme"><label for="home-theme-picker" id="home-theme-label">Site teması</label><select id="home-theme-picker" aria-labelledby="home-theme-label"></select></span>
+            </div>
+            <div class="home-theme rise d5" hidden>
+              <span class="home-theme-label" id="home-theme-label" data-i18n="themeLabel">Maskot</span>
+              <div class="home-theme-picker" id="home-theme-picker" role="radiogroup" aria-labelledby="home-theme-label" aria-describedby="home-theme-note"></div>
+              <span class="visually-hidden" id="home-theme-note" data-i18n="themeGroup">Sitenin maskotu ve renkleri</span>
             </div>
           </div>
 
-          <div class="hero-visual reveal">
+          <div class="hero-visual rise d2">
             <div class="stage" data-stage data-scene="tour">
               <div class="stage-bar" aria-hidden="true"><i></i><span>Nöbetçi</span><span data-i18n="barFile">Dosya</span><span data-i18n="barView">Görünüm</span><span class="clock" data-clock></span></div>
-              <img class="stage-poster" src="/shots/tr/idle-island.webp" alt="" width="1440" height="810" data-shot="idle-island" fetchpriority="high" />
+              <img class="stage-poster" alt="" width="1440" height="810" data-shot="idle-island" fetchpriority="high" decoding="async" />
+              <noscript><img class="stage-poster" src="/shots/tr/idle-island.webp" alt="" width="1440" height="810" /></noscript>
               <iframe class="stage-frame" title="Nöbetçi adası, canlı" data-i18n-title="frameTitle" tabindex="-1" loading="eager"></iframe>
-              <span class="stage-hint"><span class="live-dot" aria-hidden="true"></span><span data-i18n="stageHint">Canlı · gerçek uygulama arayüzü</span></span>
+              <div class="stage-hint">
+                <span class="live-dot" aria-hidden="true"></span><span data-i18n="stageHint">Canlı · gerçek uygulama arayüzü</span>
+                <button class="stage-pause" type="button" data-stage-pause hidden><span class="stage-pause-icon" aria-hidden="true"></span><span data-stage-pause-label>Durdur</span></button>
+              </div>
             </div>
-            <div class="float-chip one" aria-hidden="true"><span class="chip-icon chip-green"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><span><strong data-i18n="chip1">Karar sende</strong><small data-i18n="chip1s">Hiçbir istek kendiliğinden onaylanmaz</small></span></div>
+            <div class="float-chip one" aria-hidden="true"><span class="chip-icon chip-green"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><span><strong data-i18n="chip1">Karar sende</strong><small data-i18n="chip1s">Yüksek risk asla kendiliğinden onaylanmaz</small></span></div>
             <div class="float-chip two" aria-hidden="true"><span class="chip-icon chip-violet"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21.5s7.5-3.6 7.5-9.6V5.5L12 2.8 4.5 5.5v6.4c0 6 7.5 9.6 7.5 9.6z"/></svg></span><span><strong data-i18n="chip2">Risk motoru</strong><small data-i18n="chip2s">Her komut puanlanır ve açıklanır</small></span></div>
           </div>
         </section>
@@ -87,9 +111,11 @@
           <div class="container strip-inner">
             <span data-i18n="stripLead">Şunlarla çalışır:</span>
             <strong><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 17l6-5-6-5M12 19h8"/></svg>Claude Code</strong>
+            <strong><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l7.5 4.25v8.5L12 20.5l-7.5-4.25v-8.5zM9 10.5l2 1.5-2 1.5M13 14h2.5"/></svg>Codex</strong>
+            <strong><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 3.5l13 7.5-6 1.5-2.5 6z"/></svg>Cursor</strong>
             <strong><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M8 8l-4 4 4 4M16 8l4 4-4 4"/></svg>VS Code</strong>
             <strong><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 5h16v11H4zM8 20h8"/></svg><span data-i18n="stripDesktop">Claude masaüstü (Code)</span></strong>
-            <strong><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/></svg>ChatGPT · Gemini · Perplexity</strong>
+            <span class="strip-assistant"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/></svg><span data-i18n="stripAssistant">Asistan mesajını ChatGPT, Gemini, Perplexity ve diğerlerinde açar</span></span>
           </div>
         </section>
 
@@ -102,7 +128,7 @@
           </div>
           <div class="bento">
             <article class="tile tile-wide reveal">
-              <span class="tile-icon ic-red ic-amber"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21.5s7.5-3.6 7.5-9.6V5.5L12 2.8 4.5 5.5v6.4c0 6 7.5 9.6 7.5 9.6zM12 8v4.5M12 16v.1"/></svg></span>
+              <span class="tile-icon ic-amber"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21.5s7.5-3.6 7.5-9.6V5.5L12 2.8 4.5 5.5v6.4c0 6 7.5 9.6 7.5 9.6zM12 8v4.5M12 16v.1"/></svg></span>
               <h3 data-i18n="f1Title">Riski ve nedenini anla</h3>
               <p data-i18n="f1Text">İzin kartı komutun, dosya yolunun ya da bağlantının tamamını gösterir; riskli parçaları işaretler, nedenlerini sıralar. Yüksek riskte izin vermek için düğmeyi basılı tutman gerekir ve yalnızca gerçek bir fare tıklaması sayılır.</p>
               <div class="tile-shot"><img src="/shots/tr/critical.webp" data-shot="critical" alt="Kritik riskli bir komutu, riskli bölümlerini ve dört bulguyu gösteren onay kartı" data-i18n-alt="altCritical" width="1440" height="920" loading="lazy" decoding="async" /></div>
@@ -113,14 +139,22 @@
               <p data-i18n="f2Text">Terminal, VS Code ya da Claude masaüstü uygulaması: hangisinde çalışırsa çalışsın, her oturumun durumu ve son adımı adada.</p>
               <ul class="tile-list">
                 <li data-i18n="f2a">Çalışıyor, düşünüyor, onay bekliyor, bitti</li>
-                <li data-i18n="f2b">Tek tıkla doğru pencereye git</li>
-                <li data-i18n="f2c">Bitince küçük bir bildirim</li>
+                <li data-i18n="f2b">Değişen dosyalar ve farkları</li>
+                <li data-i18n="f2c">Bağlam ve plan limitleri (isteğe bağlı)</li>
+                <li data-i18n="f2d">Tek tıkla doğru pencereye git</li>
               </ul>
+              <div class="tile-shot"><img src="/shots/tr/session.webp" data-shot="session" alt="Bir oturumun ayrıntısı: son adımlar, değişen dosyalar ve plan limitleri" data-i18n-alt="altSession" width="1440" height="920" loading="lazy" decoding="async" /></div>
+            </article>
+            <article class="tile tile-half reveal">
+              <span class="tile-icon ic-green"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 5.5h15v10h-8l-4.5 3.5v-3.5H4.5zM9.6 8.8a2.4 2.4 0 1 1 3.4 2.2c-.6.3-1 .8-1 1.4M12 13.6v.1"/></svg></span>
+              <h3 data-i18n="fqTitle">Sorular ve planlar adada</h3>
+              <p data-i18n="fqText">Claude çoktan seçmeli bir soru sorduğunda ya da planını onaya sunduğunda kart onu gösterir: cevabı seç ya da kendin yaz, planı onayla ya da notla geri gönder. Birkaç düşük riskli istek bekliyorsa hepsine tek tıkla izin verirsin; orta ve üstü buna hiç girmez.</p>
+              <div class="tile-shot"><img src="/shots/tr/question.webp" data-shot="question" alt="Claude'un iki sorusunu seçenekleriyle gösteren soru kartı" data-i18n-alt="altQuestion" width="1440" height="920" loading="lazy" decoding="async" /></div>
             </article>
             <article class="tile tile-half reveal">
               <span class="tile-icon ic-violet"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/></svg></span>
               <h3 data-i18n="f3Title">Adada bir asistan</h3>
-              <p data-i18n="f3Text"><span class="kbd">Ctrl</span> <span class="kbd">Alt</span> <span class="kbd">Space</span> ile yaz ya da 🎙 ile konuş; mesajın ChatGPT, Claude, Gemini, Perplexity ve diğerlerinde açılsın. Uygulama yüklüyse doğrudan orada. Ne soracağını bilmiyorsan hazır promptlar yol gösterir.</p>
+              <p data-i18n="f3Text"><span class="kbd">Ctrl</span> <span class="kbd">Alt</span> <span class="kbd">Space</span> ile yaz ya da 🎙 ile konuş (Windows ve macOS); mesajın ChatGPT, Claude, Gemini, Perplexity ve diğerlerinde açılsın. Uygulama yüklüyse doğrudan orada. Ne soracağını bilmiyorsan hazır promptlar yol gösterir.</p>
               <div class="tile-shot"><img src="/shots/tr/assistant.webp" data-shot="assistant" alt="Hazır prompt kütüphanesi açık asistan" data-i18n-alt="altAssistant" width="1440" height="920" loading="lazy" decoding="async" /></div>
             </article>
             <article class="tile tile-half reveal">
@@ -140,12 +174,18 @@
                 <button type="button" aria-pressed="false" data-i18n="cSystem">Sistem</button>
               </div>
             </article>
-            <article class="tile tile-third reveal">
+            <article class="tile tile-half reveal">
               <span class="tile-icon ic-amber"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 19.5h4L19 9l-4-4L4.5 15.5v4zM13 7l4 4"/></svg></span>
               <h3 data-i18n="f5Title">Mesaj Atölyesi</h3>
               <p data-i18n="f5Text">Ajana göndermeden önce mesajını düzelt ve netleştir. Yerel Ollama ya da seçersen OpenAI; sonucu inceleyip kendin kopyalarsın.</p>
+              <figure class="prompt-demo">
+                <figcaption data-i18n="f5Example">Örnek</figcaption>
+                <div class="pd-row pd-before"><span class="pd-tag" data-i18n="f5BeforeTag">Taslak</span><p data-i18n="f5Before">login'i düzelt</p></div>
+                <span class="pd-arrow" aria-hidden="true"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14m0 0 5-5m-5 5-5-5"/></svg></span>
+                <div class="pd-row pd-after"><span class="pd-tag" data-i18n="f5AfterTag">Düzeltilmiş</span><p data-i18n="f5After">Giriş sayfasındaki XSS açığını bul ve kapat: kullanıcı girdisini kaçışla, bunun için bir test ekle ve neyi değiştirdiğini özetle.</p></div>
+              </figure>
             </article>
-            <article class="tile tile-wide reveal">
+            <article class="tile tile-full reveal">
               <span class="tile-icon ic-pink"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM9 10h.01M15 10h.01M9.5 14.5s1 1 2.5 1 2.5-1 2.5-1"/></svg></span>
               <h3 data-i18n="f6Title">Yedi maskot, hepsi canlı</h3>
               <p data-i18n="f6Text">Baykuş, kurt, şahin, ahtapot, aslan, kanarya ve kartal. Onaylayınca sevinir, reddedince kaşlarını çatar; istersen masaüstünde serbestçe dolaşır, boyunu sen seçersin.</p>
@@ -164,13 +204,44 @@
             <article class="release reveal">
               <span class="release-mark" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/></svg></span>
               <div class="release-body">
+                <header><h3>2.4.1</h3><time datetime="2026-11-19" data-i18n="d241">19 Kasım 2026</time></header>
+                <ul>
+                  <li data-i18n="n241a">Windows kurulum sihirbazı ve macOS disk görüntüsü için yeni görünüm</li>
+                  <li data-i18n="n241b">Kurulumda el sallayan, iş bitince sevinen baykuş</li>
+                </ul>
+              </div>
+            </article>
+            <article class="release reveal">
+              <span class="release-mark" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 5.5h15v10h-8l-4.5 3.5v-3.5H4.5z"/></svg></span>
+              <div class="release-body">
+                <header><h3>2.4.0</h3><time datetime="2026-11-19" data-i18n="d240">19 Kasım 2026</time></header>
+                <ul>
+                  <li data-i18n="n240a">Claude'un çoktan seçmeli sorularını adada cevapla</li>
+                  <li data-i18n="n240b">Planları adada onayla ya da notla geri gönder</li>
+                  <li data-i18n="n240c">Bekleyen düşük riskli isteklerin hepsine tek tıkla izin</li>
+                  <li data-i18n="n240d">Değişen dosyalar ve farkları; isteğe bağlı bağlam ve plan limitleri</li>
+                </ul>
+              </div>
+            </article>
+            <article class="release reveal">
+              <span class="release-mark" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 5h16v11H4zM8 20h8"/></svg></span>
+              <div class="release-body">
+                <header><h3>2.3.2 – 2.3.3</h3><time datetime="2026-11-19" data-i18n="d233">16–19 Kasım 2026</time></header>
+                <ul>
+                  <li data-i18n="n233a">Claude masaüstü uygulamasının izin istekleri de adaya geliyor</li>
+                  <li data-i18n="n233b">Windows'ta Claude masaüstü uygulaması için hook'lar düzeltildi</li>
+                </ul>
+              </div>
+            </article>
+            <article class="release reveal">
+              <span class="release-mark" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 21a8 8 0 1 0 0-16 8 8 0 0 0 0 16z"/></svg></span>
+              <div class="release-body">
                 <header><h3>2.3.1</h3><time datetime="2026-11-15" data-i18n="d231">15 Kasım 2026</time></header>
                 <ul>
-                  <li data-i18n="n231a">Sesle yazma ve 20'ye yakın hazır prompt</li>
+                  <li data-i18n="n231a">Sesle yazma (Windows ve macOS) ve 20'ye yakın hazır prompt</li>
                   <li data-i18n="n231b">Yüklü AI uygulaması varsa mesaj orada açılır</li>
                   <li data-i18n="n231c">Ajanda ve hatırlatıcılar, yeni takvim, animasyonlu hava durumu</li>
                   <li data-i18n="n231d">CPU · RAM · GPU kartı, ayarlanabilir odak süresi</li>
-                  <li data-i18n="n231e">Adada daha akıcı açılış animasyonları</li>
                 </ul>
               </div>
             </article>
@@ -186,16 +257,7 @@
                 </ul>
               </div>
             </article>
-            <article class="release reveal">
-              <span class="release-mark" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 21a8 8 0 1 0 0-16 8 8 0 0 0 0 16z"/></svg></span>
-              <div class="release-body">
-                <header><h3>2.2.0</h3><time datetime="2026-11-14" data-i18n="d220">14 Kasım 2026</time></header>
-                <ul>
-                  <li data-i18n="n220a">Masaüstünde serbestçe dolaşan maskot</li>
-                  <li data-i18n="n220b">Onay ve ret için animasyonlu tepkiler</li>
-                </ul>
-              </div>
-            </article>
+            <p class="timeline-more reveal"><a href="https://github.com/tahap0l/nobetci/blob/main/CHANGELOG.md" target="_blank" rel="noreferrer" data-i18n="newAll">Tüm sürüm notları →</a></p>
           </div>
         </section>
 
@@ -235,6 +297,7 @@
             <div class="eyebrow"><span class="eyebrow-dot"></span><span data-i18n="dlEyebrow">İndir</span></div>
             <h2 data-i18n="dlTitle">Nöbetçi <em>nöbete hazır.</em></h2>
             <p data-i18n="dlIntro">Ücretsiz indir, kurulum sihirbazıyla Claude Code'a bağla, ilk izin isteğinde kararını ver.</p>
+            <p class="download-latest"><span data-i18n="dlLatest">Son sürüm</span> <b>2.4.1</b> · <time datetime="2026-11-19" data-i18n="d241">19 Kasım 2026</time> · <a href="https://github.com/tahap0l/nobetci/blob/main/CHANGELOG.md" target="_blank" rel="noreferrer" data-i18n="footerChanges">Sürüm notları</a></p>
           </div>
           <div class="downloads">
             <a class="os-card reveal" data-os="windows" href="https://github.com/tahap0l/nobetci/releases/latest" target="_blank" rel="noreferrer">
@@ -242,7 +305,7 @@
               <span class="os-logo"><svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" aria-hidden="true"><path d="M3 5.5l7.5-1v7H3zM11.5 4.4 21 3v8.5h-9.5zM3 12.5h7.5v7L3 18.5zM11.5 12.5H21V21l-9.5-1.4z"/></svg></span>
               <h3>Windows</h3>
               <p data-i18n="winReq">Windows 10 ve 11, 64 bit. Kurulum sihirbazı her şeyi ayarlar.</p>
-              <span class="files">Nobetci-x.y.z-setup.exe</span>
+              <span class="files">setup.exe · x64</span>
               <span class="go"><span data-i18n="get">İndir</span> →</span>
             </a>
             <a class="os-card reveal" data-os="mac" href="https://github.com/tahap0l/nobetci/releases/latest" target="_blank" rel="noreferrer">
@@ -250,20 +313,20 @@
               <span class="os-logo"><svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" aria-hidden="true"><path d="M16.4 12.6c0-2.4 2-3.5 2-3.6-1.1-1.6-2.8-1.8-3.4-1.8-1.4-.2-2.8.8-3.5.8s-1.8-.8-3-.8C7 7.3 5.6 8.1 4.8 9.5c-1.7 2.9-.4 7.2 1.2 9.6.8 1.2 1.7 2.4 2.9 2.4s1.6-.8 3-.8 1.8.8 3 .7c1.3 0 2.1-1.2 2.8-2.3.9-1.3 1.3-2.6 1.3-2.7 0 0-2.6-1-2.6-3.8zM14.1 5.6c.6-.8 1.1-1.9 1-3-.9 0-2.1.6-2.7 1.4-.6.7-1.1 1.8-1 2.9 1 .1 2.1-.5 2.7-1.3z"/></svg></span>
               <h3>macOS</h3>
               <p data-i18n="macReq">macOS 11 ve üstü, Apple Silicon ve Intel tek pakette.</p>
-              <span class="files">Nobetci-x.y.z-macos-universal.dmg</span>
+              <span class="files">.dmg · Universal</span>
               <span class="go"><span data-i18n="get">İndir</span> →</span>
             </a>
             <a class="os-card reveal" data-os="linux" href="https://github.com/tahap0l/nobetci/releases/latest" target="_blank" rel="noreferrer">
               <span class="yours" data-i18n="yours">Senin sistemin</span>
               <span class="os-logo"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3c-2.2 0-3.2 1.8-3.2 4 0 1.6-.6 2.7-1.6 4.2C6 13 5 15 5.6 17c.4 1.4 1.8 2.4 3 2.6M12 3c2.2 0 3.2 1.8 3.2 4 0 1.6.6 2.7 1.6 4.2 1.2 1.8 2.2 3.8 1.6 5.8-.4 1.4-1.8 2.4-3 2.6M9 20.5c1 .6 2 .8 3 .8s2-.2 3-.8M10.5 7.5h.01M13.5 7.5h.01M10.8 9.6s.6.6 1.2.6 1.2-.6 1.2-.6"/></svg></span>
               <h3>Linux</h3>
-              <p data-i18n="linuxReq">x86-64, X11 ya da Wayland. Debian ve Ubuntu için .deb, her dağıtım için AppImage.</p>
-              <span class="files">.deb · .AppImage</span>
+              <p data-i18n="linuxReq">x86-64; X11 ya da XWayland üzerinden Wayland, pencere bileşikleştiricisi açık. Debian ve Ubuntu için .deb, her dağıtım için AppImage.</p>
+              <span class="files">.deb · .AppImage · x86-64</span>
               <span class="go"><span data-i18n="get">İndir</span> →</span>
             </a>
           </div>
           <p class="download-note" data-i18n="dlNote">Her sürümün yanında SHA256SUMS.txt var; indirdiğini doğrulayabilirsin. Kaynak kod MIT lisanslı.</p>
-          <p class="download-note"><span data-i18n="dlSignPath">Windows sürümleri için ücretsiz kod imzalama SignPath.io tarafından, sertifika SignPath Foundation tarafından sağlanmaktadır.</span> <a href="/code-signing.html" data-i18n="dlSigning">Kod imzalama politikası</a></p>
+          <p class="download-note"><span data-i18n="dlUnsigned">Windows sürümleri henüz kod imzalı değil (SignPath Foundation'ın ücretsiz imzalama programına başvurduk), bu yüzden SmartScreen uyarı gösterebilir.</span> <a href="/code-signing.html" data-i18n="dlSigning">Kod imzalama politikası</a></p>
         </section>
 
         <!-- FAQ -->
@@ -274,16 +337,17 @@
           </div>
           <div class="faq">
             <details class="reveal"><summary data-i18n="q1">Nöbetçi kapalıysa ajanım takılır mı?</summary><p data-i18n="a1">Hayır. Uygulama kapalıysa köprü hiçbir şey yapmadan çıkar ve Claude Code her zamanki gibi terminalde sorar. Açıkken bile bir isteğe yalnızca belirli bir süre bekler.</p></details>
-            <details class="reveal"><summary data-i18n="q2">Verilerim bir yere gönderiliyor mu?</summary><p data-i18n="a2">Hayır. Hesap, telemetri ya da analiz yok. Ağa yalnızca senin açtığın şeyler çıkar: Mesaj Atölyesi'nde seçtiğin sağlayıcı ve şehir seçtiysen hava durumu.</p></details>
+            <details class="reveal"><summary data-i18n="q2">Verilerim bir yere gönderiliyor mu?</summary><p data-i18n="a2">Hayır. Hesap, telemetri ya da analiz yok. Ağa yalnızca senin açtığın şeyler çıkar: Mesaj Atölyesi'nde ya da asistanın Burada sor seçeneğinde seçtiğin sağlayıcı ve şehir seçtiysen hava durumu. Asistan bir web uygulamasını açtığında mesajın, adresin içinde o servise gider.</p></details>
             <details class="reveal"><summary data-i18n="q3">Yüksek riskli bir komut kendiliğinden onaylanabilir mi?</summary><p data-i18n="a3">Hayır. Kurallar, güvenilen projeler ve oturum izinleri en fazla orta riske kadar otomatik izin verebilir. Yüksek ve kritik istekler her zaman basılı tutmayla, gerçek bir tıklamayla onaylanır.</p></details>
-            <details class="reveal"><summary data-i18n="q4">Claude masaüstü uygulamasıyla da çalışıyor mu?</summary><p data-i18n="a4">Evet; uygulamanın Code sekmesindeki Claude Code oturumları terminaldekilerle aynı şekilde izlenir ve adada ayrıca etiketlenir. Normal sohbet bölümü izlenemez.</p></details>
+            <details class="reveal"><summary data-i18n="q4">Claude masaüstü uygulamasıyla da çalışıyor mu?</summary><p data-i18n="a4">Evet. Uygulamanın Code sekmesindeki Claude Code oturumları terminaldekiler gibi izlenir, izin istekleri de adaya gelir; ada her oturumun nerede çalıştığını yazar. Normal sohbet bölümü izlenmez.</p></details>
+            <details class="reveal"><summary data-i18n="q6">Codex ve Cursor ile de çalışıyor mu?</summary><p data-i18n="a6">Evet, ayarlardan bağladığında: Codex ve Cursor oturumları, gönderdiğin mesajlar ve desteklenen izin istekleri adada görünür. Ne kadarının desteklendiği her ajanın hook'larına bağlı; risk incelemesinin tamamı Claude Code içindir.</p></details>
             <details class="reveal"><summary data-i18n="q5">Ücretli mi?</summary><p data-i18n="a5">Hayır. Nöbetçi ücretsiz ve MIT lisanslı açık kaynak bir projedir.</p></details>
           </div>
         </section>
 
         <section class="container">
           <div class="cta reveal">
-            <img class="cta-owl" src="/assets/owl.png" alt="" width="84" height="84" loading="lazy" />
+            <div class="cta-mascot" data-cta-mascot aria-hidden="true"><img class="cta-owl" src="/assets/owl.png" alt="" width="84" height="84" loading="lazy" /></div>
             <h2 data-i18n="ctaTitle">Yapay zekâ çalışsın, <em>sen izle.</em></h2>
             <p data-i18n="ctaText">Birkaç dakikada kur, ilk izin isteğinde farkı gör.</p>
             <a class="button button-primary" href="#download"><span data-i18n="download">Ücretsiz indir</span></a>
@@ -301,7 +365,7 @@
       </footer>
     </div>
 
-    <button class="owl-companion" type="button" aria-label="Baykuşun başını döndür" data-i18n-aria="owlLabel">
+    <button class="owl-companion is-away" type="button" aria-label="Baykuşun başını döndür" data-i18n-aria="owlLabel" hidden>
       <svg class="owl-art" viewBox="0 0 96 96" aria-hidden="true" focusable="false">
         <ellipse class="owl-body" cx="48" cy="65" rx="27" ry="28" />
         <path class="owl-belly" d="M29 70c0-15 8-23 19-23s19 8 19 23c0 11-8 18-19 18S29 81 29 70Z" />
@@ -318,10 +382,10 @@
       </svg>
       <span class="owl-hint" data-i18n="owlHint">Tıkla, selam versin</span>
     </button>
-    <script src="/site.js?v=2.3.1" defer></script>
-    <script src="/live-demo.js?v=2.3.1" defer></script>
-    <script src="/mascot-themes.js?v=mascots2" defer></script>
-    <script type="module" src="/mascot-engine.js?v=mascots3"></script>
-    <script src="/home-themes.js?v=2.3.1" defer></script>
+    <script src="/site.js?v=2.4.1" defer></script>
+    <script src="/live-demo.js?v=2.4.1" defer></script>
+    <script src="/mascot-themes.js?v=2.4.1" defer></script>
+    <script type="module" src="/mascot-engine.js?v=2.4.1"></script>
+    <script src="/home-themes.js?v=2.4.1" defer></script>
   </body>
 </html>
