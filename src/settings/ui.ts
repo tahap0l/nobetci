@@ -35,6 +35,167 @@ export function hasLayers(): boolean {
   return layers.length > 0;
 }
 
+// ── Overlays hold the keyboard ────────────────────────────────────────────────
+// A modal, a drawer or the wizard takes the keyboard: everything behind it is
+// made inert (no focus, no clicks) and Tab cycles inside it, so nothing under a
+// dialog can change while the dialog is up (a reviewed diff stays the diff that
+// gets written). Overlays are children of <body> appended in opening order: the
+// last one that is not fading out is on top, and what comes before it in <body>
+// is behind it. Closing one gives the focus back to whatever opened it.
+//
+// modal() and the wizard register themselves; overlays built elsewhere (the
+// history drawer) are picked up by a MutationObserver from their class names.
+
+const OVERLAY_SELECTOR = ".overlay, .drawer-overlay, .wz-overlay";
+
+interface Trap {
+  el: HTMLElement;
+  opener: HTMLElement | null;
+  openerFk: string | null;
+}
+
+const traps: Trap[] = [];
+/** Recently focused elements, newest last: where an overlay was opened from. */
+const recentFocus: HTMLElement[] = [];
+
+function syncInert() {
+  const top = traps[traps.length - 1];
+  for (const child of Array.from(document.body.children)) {
+    if (!(child instanceof HTMLElement)) continue;
+    const behind = !!top && child !== top.el && !!(child.compareDocumentPosition(top.el) & Node.DOCUMENT_POSITION_FOLLOWING);
+    if (behind) {
+      if (!child.hasAttribute("inert")) {
+        child.setAttribute("inert", "");
+        child.dataset.trapInert = "1";
+      }
+    } else if (child.dataset.trapInert) {
+      child.removeAttribute("inert");
+      delete child.dataset.trapInert;
+    }
+  }
+}
+
+/** What Tab can reach inside `root`, in order. */
+export function focusables(root: HTMLElement): HTMLElement[] {
+  const all = root.querySelectorAll<HTMLElement>(
+    'a[href], button, input:not([type="hidden"]), select, textarea, [tabindex], [contenteditable="true"]',
+  );
+  return Array.from(all).filter(
+    (el) =>
+      el.tabIndex >= 0 &&
+      !(el as HTMLButtonElement).disabled &&
+      !el.closest("[inert], [hidden]") &&
+      el.getClientRects().length > 0,
+  );
+}
+
+function pickOpener(el: HTMLElement): HTMLElement | null {
+  for (let i = recentFocus.length - 1; i >= 0; i--) {
+    const c = recentFocus[i];
+    if (c.isConnected && !el.contains(c) && !c.closest(".leaving")) return c;
+  }
+  return null;
+}
+
+/** Makes `el` (already in <body>) hold the keyboard until the returned function runs. */
+export function holdKeyboard(el: HTMLElement): () => void {
+  if (!traps.some((t) => t.el === el)) {
+    const opener = pickOpener(el);
+    traps.push({ el, opener, openerFk: opener?.getAttribute("data-fk") ?? null });
+    syncInert();
+  }
+  return () => releaseKeyboard(el);
+}
+
+function releaseKeyboard(el: HTMLElement) {
+  const i = traps.findIndex((t) => t.el === el);
+  if (i < 0) return;
+  const [trap] = traps.splice(i, 1);
+  syncInert();
+  const active = document.activeElement;
+  if (active && active !== document.body && !el.contains(active)) return;
+  // The focus was inside the overlay that closed: hand it back to its opener
+  // (found again by data-fk when a re-render replaced it), else into the overlay
+  // that is now on top.
+  let target: HTMLElement | null = trap.opener?.isConnected ? trap.opener : null;
+  if (!target && trap.openerFk) target = document.querySelector<HTMLElement>(`[data-fk="${CSS.escape(trap.openerFk)}"]`);
+  if (target && !target.closest("[inert]")) {
+    target.focus({ preventScroll: true });
+    if (document.activeElement === target) return;
+  }
+  const top = traps[traps.length - 1];
+  if (top) focusables(top.el)[0]?.focus({ preventScroll: true });
+}
+
+let trapsInstalled = false;
+
+/** Once, at start: Tab cycling, focus history, and overlays made elsewhere. */
+export function installKeyboardTraps() {
+  if (trapsInstalled) return;
+  trapsInstalled = true;
+  document.addEventListener(
+    "focusin",
+    (e) => {
+      const el = e.target;
+      if (!(el instanceof HTMLElement)) return;
+      const i = recentFocus.indexOf(el);
+      if (i >= 0) recentFocus.splice(i, 1);
+      recentFocus.push(el);
+      if (recentFocus.length > 16) recentFocus.shift();
+    },
+    true,
+  );
+  document.addEventListener(
+    "keydown",
+    (e) => {
+      if (e.key !== "Tab" || e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey) return;
+      const top = traps[traps.length - 1];
+      if (!top) return;
+      const list = focusables(top.el);
+      if (!list.length) {
+        e.preventDefault();
+        return;
+      }
+      const first = list[0];
+      const last = list[list.length - 1];
+      const active = document.activeElement;
+      if (!active || !top.el.contains(active)) {
+        e.preventDefault();
+        (e.shiftKey ? last : first).focus();
+      } else if (e.shiftKey && active === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && active === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    },
+    true,
+  );
+  const watchLeaving = (el: HTMLElement) => {
+    const mo = new MutationObserver(() => {
+      if (el.classList.contains("leaving")) {
+        mo.disconnect();
+        releaseKeyboard(el);
+      }
+    });
+    mo.observe(el, { attributes: true, attributeFilter: ["class"] });
+  };
+  new MutationObserver((records) => {
+    for (const r of records) {
+      for (const n of Array.from(r.addedNodes)) {
+        if (n instanceof HTMLElement && n.matches(OVERLAY_SELECTOR) && !traps.some((t) => t.el === n)) {
+          holdKeyboard(n);
+          watchLeaving(n);
+        }
+      }
+      for (const n of Array.from(r.removedNodes)) {
+        if (n instanceof HTMLElement && traps.some((t) => t.el === n)) releaseKeyboard(n);
+      }
+    }
+  }).observe(document.body, { childList: true });
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 export function debounce<A extends unknown[]>(fn: (...args: A) => void, ms: number) {
@@ -66,11 +227,20 @@ export function fmtSec(sec: number): string {
   return t("unit.sec", { n: fmtNum(sec, 1) });
 }
 
+/**
+ * "850 ms", "1.2 s", "42 s", "1 min 5 s". Rounded once, at the precision shown,
+ * so no value ever reads "1000 ms", "60 s" or "1 min 60 s".
+ */
 export function fmtDuration(ms: number): string {
-  if (ms < 1000) return t("unit.ms", { n: Math.round(ms) });
-  const s = ms / 1000;
-  if (s < 60) return t("unit.sec", { n: fmtNum(s, s < 10 ? 1 : 0) });
-  return t("unit.minSec", { m: Math.floor(s / 60), s: Math.round(s % 60) });
+  const whole = Math.round(ms);
+  if (whole < 1000) return t("unit.ms", { n: Math.max(0, whole) });
+  const tenths = Math.round(ms / 100);
+  if (tenths < 100) return t("unit.sec", { n: fmtNum(tenths / 10, 1) });
+  const total = Math.round(ms / 1000);
+  if (total < 60) return t("unit.sec", { n: fmtNum(total) });
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return s ? t("unit.minSec", { m, s }) : t("unit.min", { n: m });
 }
 
 export function fmtMinutes(min: number): string {
@@ -221,6 +391,10 @@ export function toggle(
   return el;
 }
 
+/**
+ * A radio group drawn as one pill. Like any radio group it is a single Tab stop
+ * (the chosen option); the arrow keys, Home and End move and choose.
+ */
 export function segmented<T extends string>(
   options: readonly (readonly [T, string])[],
   value: T,
@@ -233,6 +407,10 @@ export function segmented<T extends string>(
     "aria-label": opts.label,
   });
   const buttons: HTMLButtonElement[] = [];
+  const stops = () => {
+    const chosen = buttons.findIndex((b) => b.classList.contains("on"));
+    buttons.forEach((b, i) => (b.tabIndex = i === (chosen < 0 ? 0 : chosen) ? 0 : -1));
+  };
   for (const [v, label] of options) {
     const b = h("button", {
       type: "button",
@@ -248,11 +426,32 @@ export function segmented<T extends string>(
         o.classList.toggle("on", on);
         o.setAttribute("aria-checked", String(on));
       }
+      stops();
       onChange(v);
     });
     buttons.push(b);
     wrap.append(b);
   }
+  stops();
+  wrap.addEventListener("keydown", (e) => {
+    const i = buttons.indexOf(document.activeElement as HTMLButtonElement);
+    if (i < 0 || e.altKey || e.ctrlKey || e.metaKey) return;
+    const n = buttons.length;
+    const j =
+      e.key === "ArrowRight" || e.key === "ArrowDown"
+        ? (i + 1) % n
+        : e.key === "ArrowLeft" || e.key === "ArrowUp"
+          ? (i - 1 + n) % n
+          : e.key === "Home"
+            ? 0
+            : e.key === "End"
+              ? n - 1
+              : -1;
+    if (j < 0) return;
+    e.preventDefault();
+    buttons[j].focus();
+    buttons[j].click();
+  });
   return wrap;
 }
 
@@ -470,11 +669,12 @@ export function modal(o: {
   subtitle?: string;
   body: Child[];
   foot?: Child[];
+  /** Shown between the scrolling body and the footer, so it is always in view (errors). */
+  status?: HTMLElement;
   wide?: boolean;
   onClose?: () => void;
   cls?: string;
 }): ModalHandle {
-  const prevFocus = document.activeElement as HTMLElement | null;
   const body = h("div", { class: "modal-body" }, ...o.body);
   const foot = h("div", { class: "modal-foot" }, ...(o.foot ?? []));
   let closed = false;
@@ -485,7 +685,8 @@ export function modal(o: {
     overlay.classList.add("leaving");
     window.setTimeout(() => overlay.remove(), 120);
     o.onClose?.();
-    prevFocus?.focus?.();
+    // Gives the page back and the focus to whatever opened the dialog.
+    release();
   };
   const dialog = h(
     "div",
@@ -507,14 +708,20 @@ export function modal(o: {
       iconButton("close", t("common.closeEsc"), () => close(), { cls: "modal-x" }),
     ),
     body,
+    o.status ?? null,
     o.foot && o.foot.length ? foot : null,
   );
+  o.status?.classList.add("modal-status");
   const overlay = h("div", { class: "overlay" }, dialog);
   overlay.addEventListener("mousedown", (e) => {
-    if (e.target === overlay) close();
+    if (e.target !== overlay) return;
+    // Keep the press from moving the focus to <body>: it goes back to the opener.
+    e.preventDefault();
+    close();
   });
   const pop = pushLayer(close);
   document.body.append(overlay);
+  const release = holdKeyboard(overlay);
   window.setTimeout(() => {
     const first =
       dialog.querySelector<HTMLElement>("[data-autofocus]") ?? dialog.querySelector<HTMLElement>(".modal-x");

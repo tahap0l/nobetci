@@ -9,29 +9,34 @@
 // (C:\Users\dev, acme/…).
 //
 // Dev URL switches: ?lang=tr|en (UI language), ?sys=tr|en (Windows language the
-// mock reports), ?fresh=1 (not onboarded yet: the wizard opens).
+// mock reports), ?fresh=1 (not onboarded yet: the wizard opens),
+// ?platform=macos|linux (the wording of another OS). Failure switches, to see
+// every error path without a broken machine: ?relay=missing, ?previewError=1
+// (settings.json is not valid JSON), ?noFile=1 (no settings.json yet, so no
+// backup), ?foreignStatus=1 (someone else's status line), ?loadError=1 (the app's
+// own settings file was unreadable at start), ?saveError=unreadable|failed,
+// ?autostartFail=1 (a `settings-warning` after changing autostart), ?importBad=1.
+// In the console: __mockStale() makes the next hook write fail as a stale preview.
 
 import type {
   AuditEntry,
   AuditFilter,
   AuditStats,
-  AgentHookPreview,
   AgentHookStatus,
   AgentProvider,
   CategoryInfo,
   Evaluation,
-  HealthReport,
   HookStatus,
   HotkeyStatus,
   RiskAssessment,
   RiskFinding,
   RiskLevel,
 } from "../core/bridge";
-import { ALL_EVENTS, DEFAULT_SETTINGS, type Settings, type UserRule } from "../core/settings-model";
+import { ALL_EVENTS, DEFAULT_SETTINGS, type RuleMode, type Settings, type UserRule } from "../core/settings-model";
 import { getLang, type Lang } from "../i18n/core";
 // The preview shows the version being built, so screenshots never carry a stale one.
 import { version } from "../../package.json";
-import type { Api } from "./api";
+import type { Api, CsvSeparator, HealthReport, HookPreview, StatusLineOwner } from "./api";
 
 type Group = CategoryInfo["group"];
 type Tag = "" | "secret" | "exfil";
@@ -659,6 +664,50 @@ function patternMatches(mode: string, pattern: string, target: string): boolean 
   return low.includes(lp);
 }
 
+/**
+ * A stand-in for `rule_pattern_check`: what Rust's regex crate would refuse,
+ * approximated with a Unicode-mode JS RegExp (which, like Rust, rejects unknown
+ * escapes such as `\U` and stray `{`), after translating the syntax JS lacks
+ * (inline flags, `\A`/`\z`, `(?P<name>…)`). Messages read like the crate's.
+ */
+function patternCheck(mode: RuleMode, pattern: string): string | null {
+  if (mode !== "regex" || !pattern.trim()) return null;
+  // An escape is real when an odd number of backslashes precede the character.
+  const escaped = (src: string, i: number) => {
+    let n = 0;
+    for (let j = i - 1; j >= 0 && src[j] === "\\"; j--) n++;
+    return n % 2 === 1;
+  };
+  for (let i = 0; i < pattern.length; i++) {
+    const c = pattern[i];
+    if (c === "(" && !escaped(pattern, i) && /^\(\?<?[=!]/.test(pattern.slice(i))) {
+      return "look-around, including look-ahead and look-behind, is not supported";
+    }
+    if (escaped(pattern, i) && (/[1-9]/.test(c) || (c === "k" && pattern[i + 1] === "<"))) {
+      return "backreferences are not supported";
+    }
+  }
+  const src = pattern
+    .replace(/^\(\?[imsxU-]+\)/, "")
+    .replace(/\(\?[imsxU-]+:/g, "(?:")
+    .replace(/\(\?P</g, "(?<")
+    .replace(/(^|[^\\])\\A/g, "$1^")
+    .replace(/(^|[^\\])\\z/g, "$1$");
+  try {
+    new RegExp(src, "iu");
+    return null;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (/Unterminated group|Unmatched '\('/i.test(msg)) return "unclosed group";
+    if (/Invalid escape|Invalid Unicode escape/i.test(msg)) return "unrecognized escape sequence";
+    if (/Lone quantifier brackets|Incomplete quantifier/i.test(msg)) return "repetition quantifier expects a valid decimal";
+    if (/Range out of order in character class/i.test(msg)) return "invalid character class range";
+    if (/out of order/i.test(msg)) return "invalid repetition count range, the start must be <= the end";
+    if (/Unterminated character class/i.test(msg)) return "unclosed character class";
+    return msg.replace(/^Invalid regular expression: \/.*\/[a-z]*: /, "").toLowerCase();
+  }
+}
+
 function ruleMatches(rule: UserRule, tool: string, target: string, cwd: string): boolean {
   return (
     rule.enabled &&
@@ -1045,12 +1094,31 @@ export function createMockApi(): Api {
   const systemLang: Lang =
     sysParam === "tr" || sysParam === "en" ? sysParam : navigator.language.toLowerCase().startsWith("tr") ? "tr" : "en";
   const pref: Settings["language"] = forced === "tr" || forced === "en" ? forced : "auto";
-  // `?platform=macos` previews the Mac wording.
-  const platform: "windows" | "macos" = q.get("platform") === "macos" ? "macos" : "windows";
+  // `?platform=macos|linux` previews another OS's wording.
+  const pq = q.get("platform");
+  const platform: "windows" | "macos" | "linux" = pq === "macos" || pq === "linux" ? pq : "windows";
   // User data (rule names, notes, reasons) is written once, in the language the
   // window starts in — like a real user's would be.
   const lang0: Lang = pref === "auto" ? systemLang : pref;
   const U = (p: Pair) => (lang0 === "tr" ? p[0] : p[1]);
+  // Failure switches (see the header).
+  const relayMissing = q.get("relay") === "missing";
+  const previewError = q.get("previewError") === "1";
+  let noFile = q.get("noFile") === "1";
+  const foreignStatus = q.get("foreignStatus") === "1";
+  const saveError = q.get("saveError");
+  const autostartFail = q.get("autostartFail") === "1";
+  const importBad = q.get("importBad") === "1";
+  /** The next hook write fails as if the file changed after the preview. */
+  let staleNext = false;
+  const backupPath = (file: string) => (noFile ? null : `${file}.nobetci-2026-10-01-1432.bak`);
+  const invalidJson = () =>
+    new Error(
+      L([
+        "settings.json geçerli JSON değil (satır 3, sütun 5). Nöbetçi onun üzerine yazmaz; düzeltip ya da taşıyıp yeniden dene.",
+        "settings.json isn't valid JSON (line 3, column 5). Nöbetçi won't overwrite it; fix or move it, then try again.",
+      ]),
+    );
   let mockOpenAiKeyStored = false;
   const agentStatuses = new Map<AgentProvider, AgentHookStatus>();
   const agentStatus = (provider: AgentProvider): AgentHookStatus => {
@@ -1061,12 +1129,38 @@ export function createMockApi(): Api {
       installed: false,
       settingsPath: `${HOME}\\.${provider}\\hooks.json`,
       hookPath: `${HOME}\\AppData\\Local\\Nobetci\\bin\\nobetci-hook.exe`,
-      hookReady: true,
+      hookReady: !relayMissing,
       events: [],
       stale: false,
     };
     agentStatuses.set(provider, status);
     return status;
+  };
+  /** The events each agent connection installs (agent_hooks.rs). */
+  const AGENT_EVENTS: Record<AgentProvider, string[]> = {
+    codex: [
+      "SessionStart",
+      "SessionEnd",
+      "UserPromptSubmit",
+      "PreToolUse",
+      "PostToolUse",
+      "PreCompact",
+      "PostCompact",
+      "PermissionRequest",
+      "Stop",
+      "SubagentStart",
+      "SubagentStop",
+    ],
+    cursor: [
+      "sessionStart",
+      "sessionEnd",
+      "beforeSubmitPrompt",
+      "beforeShellExecution",
+      "beforeMCPExecution",
+      "afterShellExecution",
+      "afterMCPExecution",
+      "afterAgentResponse",
+    ],
   };
 
   let settings: Settings = sanitize({
@@ -1163,12 +1257,13 @@ export function createMockApi(): Api {
     installed: q.get("fresh") !== "1" && !lost,
     settingsPath: `${HOME}\\.claude\\settings.json`,
     hookPath: `${HOME}\\AppData\\Local\\Nobetci\\bin\\nobetci-hook.exe`,
-    hookReady: true,
+    hookReady: !relayMissing,
     events:
       q.get("fresh") === "1" || lost
         ? []
-        : ALL_EVENTS.filter((e) => !["StopFailure", "SubagentStart", "SubagentStop"].includes(e)),
-    stale: false,
+        : ALL_EVENTS.filter((e) => !["StopFailure", "SubagentStart", "SubagentStop", "StatusLine"].includes(e)),
+    stale: q.get("stale") === "1",
+    foreignStatusLine: foreignStatus,
   };
   const listeners = new Map<string, Set<(p: unknown) => void>>();
   const emit = (name: string, payload: unknown) => {
@@ -1218,23 +1313,7 @@ export function createMockApi(): Api {
 
   const api: Api = {
     mock: true,
-    toBuddy: async () => {},
-    buddyOpenIsland: async () => null,
     buddyResetPosition: async () => null,
-    assistantOpen: async () => ({ prefilled: true, app: null }),
-    assistantApps: async () => [{ target: "claude", name: "Claude" }],
-    assistantDictate: async () => undefined,
-    islandStats: async () => null,
-    buddyResizeBy: async () => null,
-    agendaList: async () => [],
-    agendaPut: async () => [],
-    agendaDelete: async () => [],
-    assistantAsk: async (text: string) => `(${text.length})`,
-    islandKeyboard: async () => null,
-    setAssistantTarget: async () => null,
-    islandMedia: async () => null,
-    islandMediaControl: async () => false,
-    islandWeather: async () => null,
     onEvent: async <T>(name: string, handler: (payload: T) => void) => {
       const set = listeners.get(name) ?? new Set();
       const fn = (p: unknown) => handler(p as T);
@@ -1251,52 +1330,72 @@ export function createMockApi(): Api {
       hookPath: hookStatus.hookPath,
       platform,
       fullscreenSupported: true,
+      settingsLoadError:
+        q.get("loadError") === "1"
+          ? L([
+              "settings.json okunamadı (satır 1, sütun 1'de beklenmeyen karakter). Bir kopyası settings.json.unreadable-20261021-0932 olarak saklandı.",
+              "settings.json couldn't be read (unexpected character at line 1, column 1). A copy was kept as settings.json.unreadable-20261021-0932.",
+            ])
+          : null,
     }),
     saveSettings: async (s: Settings) => {
       await delay(60);
+      if (saveError === "unreadable") throw new Error("settings_unreadable");
+      if (saveError === "failed") throw new Error(`save_failed: ${L(["disk dolu", "the disk is full"])}`);
+      const autostartChanged = s.autostart !== settings.autostart;
       settings = sanitize(s);
       emit("settings-changed", settings);
+      if (autostartChanged && autostartFail) {
+        emit("settings-warning", {
+          code: "autostart_failed",
+          detail: L(["kayıt defterine yazılamadı", "couldn't write the login item"]),
+        });
+      }
       return clone(settings);
     },
-    setDnd: async (on: boolean) => {
-      settings.dnd = on;
-      emit("settings-changed", settings);
-    },
     quietState: async () => (settings.dnd ? "dnd" : null),
-    setCollapsed: async () => {},
-    setIslandRect: async () => {},
-    reposition: async () => {},
-    openFolder: async () => true,
-    focusSession: async () => true,
     openLocation: async (what: string) => {
       console.info("[mock] openLocation", what);
       return true;
     },
-    quit: async () => {},
-    openSettingsWindow: async () => {},
     pickFolder: async () => {
       await delay(60);
       const picks = [`${HOME}\\src\\new-project`, `${HOME}\\src\\web-shop`, `${HOME}\\Documents\\notes`];
       return picks[Math.floor(Math.random() * picks.length)];
     },
     closeSettingsWindow: async () => {},
-    log: async () => {},
     hooksStatus: async () => clone(hookStatus),
     agentHooksStatus: async (provider: AgentProvider) => clone(agentStatus(provider)),
-    agentHooksPreview: async (provider: AgentProvider, install: boolean): Promise<AgentHookPreview> => {
-      const settingsPath = agentStatus(provider).settingsPath;
-      return {
-        diff: `--- ${settingsPath}\n+++ ${settingsPath} (Nöbetçi)\n@@ hooks @@\n${install ? "+" : "-"}    "hooks": { … ${provider} hooks … }`,
-        backup: `${settingsPath}.bak-20261020-1432`,
-        settingsPath,
-        fingerprint: "mock-agent-fp",
-      };
+    agentHooksPreview: async (provider: AgentProvider, install: boolean): Promise<HookPreview> => {
+      await delay(120);
+      const status = agentStatus(provider);
+      if (install && relayMissing) throw new Error("relay_missing");
+      if (previewError) throw invalidJson();
+      const settingsPath = status.settingsPath;
+      const lines = [`--- ${settingsPath}`, `+++ ${settingsPath} (Nöbetçi)`, "@@ hooks @@", '   "hooks": {'];
+      for (const ev of AGENT_EVENTS[provider]) {
+        const entry = `     "${ev}": [{ "command": "nobetci-hook ${provider} ${ev}" }],`;
+        const has = status.installed && !status.stale;
+        if (install && !has) lines.push(`+${entry.slice(1)}`);
+        else if (!install && status.installed) lines.push(`-${entry.slice(1)}`);
+        else lines.push(entry);
+      }
+      lines.push("   }");
+      return { diff: lines.join("\n"), backup: backupPath(settingsPath), settingsPath, fingerprint: "mock-agent-fp" };
     },
     agentHooksApply: async (provider: AgentProvider, install: boolean, _fingerprint: string) => {
+      await delay(150);
+      if (staleNext) {
+        staleNext = false;
+        throw new Error("stale_preview");
+      }
+      if (install && relayMissing) throw new Error("relay_missing");
       const status = agentStatus(provider);
+      const backup = backupPath(status.settingsPath);
       status.installed = install;
-      status.events = install ? ["SessionStart", "UserPromptSubmit", "PermissionRequest"] : [];
-      return `${status.settingsPath}.bak-20261020-1432`;
+      status.stale = false;
+      status.events = install ? [...AGENT_EVENTS[provider]] : [];
+      return backup;
     },
     rewritePrompt: async (text: string, _agent: string, provider: "ollama" | "openai") => {
       await delay(500);
@@ -1312,44 +1411,74 @@ export function createMockApi(): Api {
     deleteOpenAiKey: async () => {
       mockOpenAiKeyStored = false;
     },
-    hooksPreview: async (install: boolean) => {
+    hooksPreview: async (install: boolean): Promise<HookPreview> => {
       await delay(120);
+      if (install && relayMissing) throw new Error("relay_missing");
+      if (previewError) throw invalidJson();
       return {
         diff: diff(install),
-        backup: `${HOME}\\.claude\\settings.json.nobetci-2026-10-01-1432.bak`,
+        backup: backupPath(hookStatus.settingsPath),
         settingsPath: hookStatus.settingsPath,
         fingerprint: "mock-fp",
       };
     },
-    hooksApply: async (install: boolean) => {
+    hooksApply: async (install: boolean, _fingerprint: string) => {
       await delay(150);
-      hookStatus = { ...hookStatus, installed: install, events: install ? [...settings.hookEvents] : [], stale: false };
+      if (staleNext) {
+        staleNext = false;
+        throw new Error("stale_preview");
+      }
+      if (install && relayMissing) throw new Error("relay_missing");
+      const backup = backupPath(hookStatus.settingsPath);
+      noFile = false;
+      // A foreign status line stays theirs: ours is never written over it.
+      const events = install ? settings.hookEvents.filter((e) => !(foreignStatus && e === "StatusLine")) : [];
+      hookStatus = { ...hookStatus, installed: install, events, stale: false };
       settings.hooksInstalled = install;
       emit("settings-changed", settings);
-      return `${HOME}\\.claude\\settings.json.nobetci-2026-10-01-1432.bak`;
+      return backup;
     },
-    hooksHealth: async (): Promise<HealthReport> => {
+    hooksHealth: async (provider?: AgentProvider): Promise<HealthReport> => {
       await delay(700);
-      const missing = settings.hookEvents.filter((e) => !hookStatus.events.includes(e));
+      if (provider) {
+        const status = agentStatus(provider);
+        return {
+          installed: status.installed,
+          relayPath: status.hookPath,
+          relayExists: !relayMissing,
+          settingsPath: status.settingsPath,
+          eventsInstalled: [...status.events],
+          eventsMissing: AGENT_EVENTS[provider].filter((e) => !status.events.includes(e)),
+          stale: status.stale,
+          roundtripMs: relayMissing ? null : 23,
+          codexActivity: null,
+          inputGuard: q.get("noguard") !== "1",
+          error: null,
+        };
+      }
+      const statusLine: StatusLineOwner = foreignStatus
+        ? "foreign"
+        : hookStatus.events.includes("StatusLine")
+          ? "ours"
+          : "none";
+      const missing = settings.hookEvents.filter(
+        (e) => !hookStatus.events.includes(e) && !(e === "StatusLine" && statusLine === "foreign"),
+      );
       return {
         installed: hookStatus.installed,
         relayPath: hookStatus.hookPath,
-        relayExists: true,
+        relayExists: !relayMissing,
         settingsPath: hookStatus.settingsPath,
         eventsInstalled: [...hookStatus.events],
         eventsMissing: missing,
         stale: hookStatus.stale,
-        roundtripMs: 23,
+        roundtripMs: relayMissing ? null : 23,
         codexActivity: null,
         inputGuard: q.get("noguard") !== "1",
         error: null,
+        statusLine,
       };
     },
-    approvalDecision: async () => {},
-    approvalRespond: async () => {},
-    approvalAllowLow: async () => 0,
-    approvalAck: async () => {},
-    approvalDecline: async () => {},
     rulesTest: async (tool: string, input: Record<string, unknown>, cwd: string, draft?: Settings) => {
       await delay(30);
       return evaluate(tool, input, cwd, draft ?? settings);
@@ -1377,23 +1506,36 @@ export function createMockApi(): Api {
       history = [];
       emit("history-changed", null);
     },
-    auditExport: async (_f: AuditFilter, format: "csv" | "json") =>
-      `${HOME}\\Downloads\\nobetci-history-2026-10-01-14-32-05.${format}`,
+    auditExport: async (_f: AuditFilter, format: "csv" | "json", separator: CsvSeparator = ",") => {
+      console.info("[mock] auditExport", format, format === "csv" ? `separator ${separator}` : "");
+      return `${HOME}\\Downloads\\nobetci-history-2026-10-01-14-32-05.${format}`;
+    },
+    // Rust writes a "nobetciSettings": 1 marker into the export.
     settingsExport: async () => `${HOME}\\Desktop\\nobetci-settings.json`,
     settingsImport: async () => {
+      // Rust refuses JSON that isn't a Nöbetçi settings file (Claude's own settings.json, say).
+      if (importBad) throw new Error("not_nobetci_settings");
       emit("settings-changed", settings);
       return clone(settings);
     },
     settingsReset: async () => {
       const lang: Lang = settings.language === "auto" ? systemLang : settings.language;
+      // Like Rust: everything back to the defaults except `onboarded`, so a reset
+      // never brings the first-run wizard back.
       settings = sanitize({
         ...DEFAULT_SETTINGS,
-        onboarded: true,
+        onboarded: settings.onboarded,
         denyReasons: DENY_REASONS[lang],
         hooksInstalled: hookStatus.installed,
       });
       emit("settings-changed", settings);
       return clone(settings);
+    },
+    rulePatternCheck: async (mode: RuleMode, pattern: string) => {
+      await delay(20);
+      const err = patternCheck(mode, pattern.trim());
+      // The regex crate's own (English, multi-line) wording, as rules::pattern_error returns it.
+      if (err) throw new Error(`regex parse error:\n    ${pattern.trim()}\n    ^\nerror: ${err}`);
     },
     notify: async () => !settings.dnd,
     hotkeysStatus: async () => hotkeys(),
@@ -1403,11 +1545,24 @@ export function createMockApi(): Api {
   const w = window as unknown as {
     __mockDnd: (on: boolean) => void;
     __mockEmit: (name: string, payload: unknown) => void;
+    __mockStale: () => void;
+    __mockSettings: (patch: Partial<Settings>) => void;
+    __mockState: () => Settings;
   };
   w.__mockDnd = (on: boolean) => {
     settings = { ...settings, dnd: on };
     emit("settings-changed", settings);
   };
   w.__mockEmit = emit;
+  w.__mockStale = () => {
+    staleNext = true;
+  };
+  // Another window (or the island) changed something, e.g. __mockSettings({ hookEvents: [...] }).
+  w.__mockSettings = (patch: Partial<Settings>) => {
+    settings = sanitize({ ...settings, ...patch });
+    emit("settings-changed", settings);
+  };
+  // What "Rust" holds right now (for checks in the console).
+  w.__mockState = () => clone(settings);
   return api;
 }

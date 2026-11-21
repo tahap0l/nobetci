@@ -20,7 +20,11 @@ const M = {
   "genel.widgets.off": ["Kapalı", "Off"],
   "genel.appearance": ["Görünüm", "Appearance"],
   "genel.mascotTheme": ["Maskot teması", "Mascot theme"],
-  "genel.mascotThemeHint": ["Maskotu ve renkleri değiştir.", "Change the mascot and colors."],
+  "genel.mascotThemeHint": [
+    "Maskotu ve pencerelerin renklerini değiştirir. Bir temanın üstüne gelince onu canlı görürsün.",
+    "Changes the mascot and the colours of the windows. Point at a theme to see it move.",
+  ],
+  "genel.mascotStageTitle": ["Seçili maskot, canlı", "The chosen mascot, live"],
   "genel.buddy.title": ["Masaüstü maskotu", "Desktop mascot"],
   "genel.buddy.desc": [
     "Maskotun ekranda serbest dolaşan bir kopyası: fareyle istediğin yere sürükle. Adanın ruh hâlini taşır, onay ve retlere tepki verir; kararlar yine adadaki kartta verilir.",
@@ -30,6 +34,10 @@ const M = {
   "genel.buddy.showHint": [
     "Tek tık dürter, çift tık adayı açar. Tepsi menüsünden de açıp kapatabilirsin.",
     "A click pokes it, a double click opens the island. You can also switch it from the tray menu.",
+  ],
+  "genel.buddy.showHint@mac": [
+    "Tek tık dürter, çift tık adayı açar. Menü çubuğundaki Nöbetçi menüsünden de açıp kapatabilirsin.",
+    "A click pokes it, a double click opens the island. You can also switch it from Nöbetçi's menu in the menu bar.",
   ],
   "genel.buddy.size": ["Boyut", "Size"],
   "genel.buddy.sizeHint": [
@@ -47,7 +55,6 @@ const M = {
     "Odak sayacının başlangıç süresi. Kartın üstündeki − ve + da 5'er dakika değiştirir.",
     "How long the focus timer runs. The − and + on the card change it by 5 minutes too.",
   ],
-  "genel.widgets.focusUnit": ["dk", "min"],
   "genel.assistant.title": ["Asistan", "Assistant"],
   "genel.assistant.apps": ["Yüklü uygulamaları kullan", "Use installed apps"],
   "genel.assistant.appsHint": [
@@ -82,17 +89,38 @@ const M = {
   "common.savedPath": ["Kaydedildi: {path}", "Saved: {path}"],
   "common.chooseFolder": ["Klasör seç", "Choose folder"],
   "common.choose": ["Seç…", "Choose…"],
+  "common.onlyInApp": ["Bu yalnız Nöbetçi içinde çalışır.", "This only works inside Nöbetçi."],
+  // Error codes Rust answers with (api.ts errText); anything else is Rust's own wording.
+  "err.stalePreview": [
+    "Dosya bu önizlemeden sonra değişti, bu yüzden hiçbir şey yazılmadı. Yeni bir önizleme oluştur.",
+    "The file changed after this preview, so nothing was written. Make a new preview.",
+  ],
+  "err.relayMissing": [
+    "Relay (nobetci-hook) yerinde değil; hook'lar ona işaret edeceği için kurulum yapılmadı. Nöbetçi'yi yeniden başlatmak onu geri koyar.",
+    "The relay (nobetci-hook) isn't in place, and the hooks would point at it, so nothing was installed. Restarting Nöbetçi puts it back.",
+  ],
+  "err.settingsUnreadable": [
+    "Nöbetçi'nin ayar dosyası açılışta okunamadı. Üzerine yazılmasın diye Nöbetçi yeniden başlatılana kadar değişiklikler kaydedilmiyor.",
+    "Nöbetçi's settings file couldn't be read at start. So that it isn't overwritten, changes aren't saved until Nöbetçi restarts.",
+  ],
+  "err.saveFailed": ["Ayarlar diske yazılamadı.", "The settings couldn't be written to disk."],
+  "err.saveFailedDetail": ["Ayarlar diske yazılamadı: {detail}", "The settings couldn't be written to disk: {detail}"],
+  "err.notNobetci": [
+    "Bu bir Nöbetçi ayar dosyası değil (Claude Code'un settings.json'ı olabilir). Hiçbir şey değiştirilmedi.",
+    "This isn't a Nöbetçi settings file (it may be Claude Code's settings.json). Nothing was changed.",
+  ],
   "lang.tr": ["Türkçe", "Türkçe"],
   "lang.en": ["English", "English"],
 
   // ── Units ───────────────────────────────────────────────────────────────────
-  "unit.ms": ["{n} ms", "{n} ms"],
-  "unit.sec": ["{n} sn", "{n} s"],
-  "unit.minSec": ["{m} dk {s} sn", "{m} min {s} s"],
-  "unit.min": ["{n} dk", "{n} min"],
-  "unit.hour": ["{n} sa", "{n} h"],
-  "unit.hourMin": ["{h} sa {m} dk", "{h} h {m} min"],
-  "unit.mb": ["{n} MB", "{n} MB"],
+  // A no-break space (\u00A0) keeps a number and its unit on one line.
+  "unit.ms": ["{n}\u00A0ms", "{n}\u00A0ms"],
+  "unit.sec": ["{n}\u00A0sn", "{n}\u00A0s"],
+  "unit.minSec": ["{m}\u00A0dk {s}\u00A0sn", "{m}\u00A0min {s}\u00A0s"],
+  "unit.min": ["{n}\u00A0dk", "{n}\u00A0min"],
+  "unit.hour": ["{n}\u00A0sa", "{n}\u00A0h"],
+  "unit.hourMin": ["{h}\u00A0sa {m}\u00A0dk", "{h}\u00A0h {m}\u00A0min"],
+  "unit.mb": ["{n}\u00A0MB", "{n}\u00A0MB"],
 
   // ── Shared labels ───────────────────────────────────────────────────────────
   "lvl.low": ["DÜŞÜK", "LOW"],
@@ -141,6 +169,16 @@ const M = {
   "shell.quiet.hours": ["Sessiz saatlerdesin", "Quiet hours"],
   "shell.quiet.fullscreen": ["Tam ekran: sessiz", "Full screen: quiet"],
   "shell.hookWarn": ["Bağlantı ilgi bekliyor", "Connection needs attention"],
+  "shell.loadErrorTitle": ["Ayarlar okunamadı.", "Settings couldn't be read."],
+  "shell.loadErrorText": [
+    "Nöbetçi varsayılanlarla açıldı ve bozuk dosyanın bir kopyasını sakladı. Asıl dosyanın üzerine yazmamak için yeniden başlatana kadar değişiklikler kaydedilmez.",
+    "Nöbetçi started with the defaults and kept a copy of the broken file. To leave the original alone, changes aren't saved until you restart.",
+  ],
+  "shell.saveErrorTitle": ["Son değişiklik kaydedilemedi.", "The last change wasn't saved."],
+  "shell.warn.autostart": [
+    "Oturum açılışında başlatma ayarı değiştirilemedi",
+    "Starting at login couldn't be changed",
+  ],
   "shell.previewClose": [
     "Önizleme: gerçek uygulamada pencere burada kapanır.",
     "Preview: the real app would close this window here.",
@@ -163,6 +201,7 @@ const M = {
     "The language Nöbetçi speaks. Automatic follows your system language (LANG).",
   ],
   "genel.langAuto": ["Otomatik (sistem: {lang})", "Automatic (system: {lang})"],
+  "genel.glance.aria": ["Bir bakışta", "At a glance"],
   "genel.glance.claude": ["Claude Code", "Claude Code"],
   "genel.glance.checking": ["Kontrol ediliyor", "Checking"],
   "genel.glance.unknown": ["Bilinmiyor", "Unknown"],
@@ -249,7 +288,10 @@ const M = {
   "agents.title": ["Diğer ajanlar", "Other agents"],
   "agents.subtitle": ["Cursor oturumlarını bağla", "Connect Cursor sessions"],
   "agents.chatgptSubtitle": ["Masaüstü bağlantısı, sağlık testi ve web desteği", "Desktop connection, health check, and web support"],
-  "agents.hooksEmpty": ["ChatGPT masaüstünde Hook bulunamadı yazıyorsa Codex görünümünde bir yerel proje ekle. Ayarlar → Hook’lar ekranında listeyi yenile.", "If ChatGPT desktop shows No hooks found, add a local project in the Codex view and refresh Settings → Hooks."],
+  "agents.hooksEmpty": [
+    "ChatGPT masaüstü “Hook bulunamadı” diyorsa Codex görünümünde bir yerel proje ekle, sonra Ayarlar → Hook'lar ekranında listeyi yenile.",
+    "If the ChatGPT desktop app says “No hooks found”, add a local project in the Codex view, then refresh Settings → Hooks.",
+  ],
   "agents.intro": ["Cursor oturumlarını ve desteklenen izin isteklerini Nöbetçi'de izle.", "Watch Cursor sessions and supported permission requests in Nöbetçi."],
   "agents.promptLimit": ["Mesaj gönderimlerini oturum akışında görürsün. Ajanların hook'ları metni otomatik değiştiremez; düzeltme için Mesaj Atölyesi'nde metni iyileştirip kendin yapıştır.", "Submitted prompts appear in the session timeline. These agents' hooks cannot replace prompt text; use Prompt Studio to improve it, then paste it yourself."],
   "agents.codexTrust": ["ChatGPT masaüstünde Ayarlar → Hooks bölümünde Nöbetçi girdilerini incele ve güven. Yerel Work ve Codex bu dosyayı kullanır. Work Cloud bu yerel hook’ları çalıştırmaz.", "In the ChatGPT desktop app, open Settings → Hooks to review and trust the Nöbetçi entries. Local Work and Codex use this file. Work Cloud does not run these local hooks."],
@@ -269,19 +311,57 @@ const M = {
   "agents.relayReady": ["Relay hazır", "Relay ready"],
   "agents.relayMissing": ["Relay bulunamadı", "Relay missing"],
   "agents.loading": ["Durum okunuyor…", "Checking status…"],
+  "agents.testing": ["Bağlantı test ediliyor…", "Testing the connection…"],
+  "agents.health.attention": ["İlgi bekliyor", "Needs attention"],
+  "agents.health.entriesOk": ["Hook kayıtlarının hepsi yerinde ({n} olay).", "Every hook entry is in place ({n} events)."],
+  "agents.pill.stale": [
+    "Bir hook kaydı güncel değil. Bağlantıyı güncelle.",
+    "A hook entry is out of date. Update the connection.",
+  ],
+  "agents.codexDesc": [
+    "ChatGPT masaüstündeki yerel Work ve Codex oturumlarını adada gösterir; izin istekleri karta gelir.",
+    "Shows local Work and Codex sessions from the ChatGPT desktop app on the island; their permission requests come to the card.",
+  ],
+  "agents.web.title": ["ChatGPT Web", "ChatGPT Web"],
+  "agents.web.desc": [
+    "Chrome ya da Edge eklentisi, ChatGPT'nin yanıt durumunu adada gösterir. Sohbet metni tarayıcıda kalır. Köprü şimdilik yalnız Windows'ta kaydedilebiliyor.",
+    "A Chrome or Edge extension shows ChatGPT's response status on the island. The conversation text stays in the browser. For now the bridge can only be registered on Windows.",
+  ],
+  // Elsewhere the note below says it is Windows-only, so the description doesn't repeat it.
+  "agents.web.desc@mac": [
+    "Chrome ya da Edge eklentisi, ChatGPT'nin yanıt durumunu adada gösterir. Sohbet metni tarayıcıda kalır.",
+    "A Chrome or Edge extension shows ChatGPT's response status on the island. The conversation text stays in the browser.",
+  ],
+  "agents.web.desc@linux": [
+    "Chrome ya da Edge eklentisi, ChatGPT'nin yanıt durumunu adada gösterir. Sohbet metni tarayıcıda kalır.",
+    "A Chrome or Edge extension shows ChatGPT's response status on the island. The conversation text stays in the browser.",
+  ],
+  "agents.web.windowsOnly": [
+    "Bu bilgisayarda kullanılamaz: eklentinin köprüsü şimdilik yalnız Windows'ta kaydediliyor.",
+    "Not available on this computer: the extension's bridge can only be registered on Windows for now.",
+  ],
+  "agents.web.guide": ["Kurulum kılavuzunu aç", "Open the setup guide"],
+  "agents.web.guideTitle": ["Kılavuz tarayıcıda, GitHub'da açılır.", "The guide opens in your browser, on GitHub."],
   "agents.readFailed": ["Ajan bağlantı durumu okunamadı.", "Couldn't read agent connection status."],
   "agents.install": ["Bağla…", "Connect…"],
   "agents.update": ["Bağlantıyı güncelle…", "Update connection…"],
   "agents.remove": ["Bağlantıyı kaldır…", "Remove connection…"],
   "agents.reviewInstall": ["Ajan bağlantısını incele", "Review agent connection"],
   "agents.reviewRemove": ["Ajan bağlantısını kaldırmayı incele", "Review connection removal"],
+  "agents.reviewUpdate": ["Bağlantı güncellemesini incele", "Review the connection update"],
   "agents.installText": ["Görüntülenen değişiklik ayar dosyana yazılacak. Önce tarihli yedek alınır; diğer ayarlar korunur.", "The changes shown here will be written to the settings file. A dated backup is made first, and other settings are preserved."],
   "agents.removeText": ["Sadece Nöbetçi'nin hook girdileri kaldırılır.", "Only Nöbetçi hook entries will be removed."],
   "agents.backup": ["Tarihli yedek: ", "Dated backup: "],
   "agents.confirmInstall": ["Onayla ve bağla", "Approve and connect"],
   "agents.confirmRemove": ["Onayla ve kaldır", "Approve and remove"],
+  "agents.confirmUpdate": ["Onayla ve güncelle", "Approve and update"],
   "agents.written": ["Bağlandı. Yedek: {backup}", "Connected. Backup: {backup}"],
+  "agents.writtenNoBackup": [
+    "Bağlandı. Dosya yeni oluşturuldu; yedeklenecek bir şey yoktu.",
+    "Connected. The file was created, so there was nothing to back up.",
+  ],
   "agents.removed": ["Bağlantı kaldırıldı. Yedek: {backup}", "Connection removed. Backup: {backup}"],
+  "agents.removedNoBackup": ["Bağlantı kaldırıldı.", "Connection removed."],
   "agents.writeFailed": ["Değişiklik yazılamadı: ", "Couldn't write the change: "],
   "agents.previewFailed": ["Önizleme açılamadı: ", "Couldn't create the preview: "],
   "agents.changed": ["Dosya önizlemeden sonra değişti. Yeniden incele.", "The file changed after the preview. Review it again."],
@@ -301,8 +381,23 @@ const M = {
   "prompts.local": ["Yerel · Ollama", "Local · Ollama"],
   "prompts.openai": ["OpenAI API", "OpenAI API"],
   "prompts.model": ["Model adı", "Model name"],
-  "prompts.localHint": ["Önce Ollama'yı kurup gemma4 modelini indir. Ollama'da 'cloud' etiketli modeller taslağı bilgisayar dışına gönderebilir.", "Install Ollama and download the gemma4 model first. Models marked 'cloud' in Ollama may send the draft outside this computer."],
-  "prompts.openaiHint": ["Yalnızca aşağıdaki taslağı iyileştir dediğinde OpenAI'ye gönderir; API kullanım ücreti hesabına yansıyabilir. Nöbetçi mesajı ajana kendisi yollamaz.", "Sent to OpenAI only when you click Improve below; API usage may incur charges on your account. Nöbetçi never sends it to the agent for you."],
+  "prompts.setupTitle": ["Ajan ve model", "Agent and model"],
+  "prompts.localHint": ["Önce Ollama'yı kurup modeli indir (ör. ollama pull gemma4).", "Install Ollama and pull the model first (e.g. ollama pull gemma4)."],
+  "prompts.openaiHint": ["API kullanımı OpenAI hesabına ücretlendirilebilir.", "API use may be billed to your OpenAI account."],
+  "prompts.modelEmpty": [
+    "Bir model adı yaz. Yazana kadar kayıtlı olan ({model}) kullanılır.",
+    "Type a model name. Until you do, the saved one ({model}) is used.",
+  ],
+  "prompts.modelLong": ["Model adı en fazla {max} karakter olabilir.", "A model name can be at most {max} characters."],
+  "prompts.modelBad": ["Model adında kontrol karakteri olamaz.", "A model name can't contain control characters."],
+  "prompts.localPrivacy": [
+    "Taslak yalnız bu bilgisayardaki Ollama'ya gider. Ollama'da “cloud” etiketli modeller onu bilgisayar dışına gönderebilir.",
+    "The draft goes only to Ollama on this computer. Models marked “cloud” in Ollama may send it outside this computer.",
+  ],
+  "prompts.openaiPrivacy": [
+    "Taslak yalnız “Mesajı iyileştir”e bastığında OpenAI'ye gönderilir.",
+    "The draft is sent to OpenAI only when you click “Improve message”.",
+  ],
   "prompts.draft": ["Mesaj taslağın", "Your draft"],
   "prompts.draftHint": ["Niyetini ve önemli ayrıntıları koruyarak yazımını ve açıklığını düzeltir.", "Fixes spelling and clarity while keeping your intent and important details."],
   "prompts.placeholder": ["Ajanına ne yaptırmak istediğini buraya yaz…", "Write what you want the agent to do…"],
@@ -337,8 +432,8 @@ const M = {
     "You sent a prompt — the session shows as “thinking”.",
   ],
   "claude.ev.PreToolUse": [
-    "Bir araç çalışmak üzere — ne yaptığını gösterir.",
-    "A tool is about to run — shows what it's doing.",
+    "Bir araç çalışmak üzere — ne yaptığını gösterir. Claude'un soruları ve planları ile Claude masaüstü uygulamasındaki her onay da bununla gelir.",
+    "A tool is about to run — shows what it's doing. Claude's questions and plans, and every approval in the Claude desktop app, come through it too.",
   ],
   "claude.ev.PostToolUse": ["Araç bitti — adım tamamlanır.", "A tool finished — the step completes."],
   "claude.ev.PostToolUseFailure": [
@@ -376,16 +471,28 @@ const M = {
   "claude.interactive": ["Sorular ve planlar", "Questions and plans"],
   "claude.questions": ["Claude'un sorularını ve planlarını adada cevapla", "Answer Claude's questions and plans on the island"],
   "claude.questionsHint": [
-    "Claude çoktan seçmeli bir soru sorduğunda ya da plan onayı istediğinde kart adada açılır. Kapatırsan terminal ya da uygulama sorar.",
-    "When Claude asks a multiple-choice question or wants a plan approved, the card opens on the island. Off, the terminal or app asks.",
+    "Claude çoktan seçmeli bir soru sorduğunda ya da plan onayı istediğinde kart adada açılır. Kapatırsan terminal ya da uygulama sorar. PreToolUse olayı gerekir.",
+    "When Claude asks a multiple-choice question or wants a plan approved, the card opens on the island. Off, the terminal or app asks. Needs the PreToolUse event.",
+  ],
+  "claude.questionsNeedPreTool": [
+    "PreToolUse seçili değil: sorular ve planlar adaya gelmez, terminal ya da uygulama sorar. Aşağıdan seç ve hook'ları güncelle.",
+    "PreToolUse isn't selected: questions and plans won't reach the island; the terminal or app asks instead. Select it below and update the hooks.",
   ],
   "claude.written": [
     "Yazıldı. Yedek: {backup}. Açık Claude Code oturumları hook'ları yeniden başlatınca görür.",
     "Written. Backup: {backup}. Running Claude Code sessions pick up the hooks after a restart.",
   ],
+  "claude.writtenNoBackup": [
+    "Yazıldı. Önceden settings.json yoktu, yedeklenecek bir şey olmadı. Açık Claude Code oturumları hook'ları yeniden başlatınca görür.",
+    "Written. There was no settings.json before, so there was nothing to back up. Running Claude Code sessions pick up the hooks after a restart.",
+  ],
   "claude.removed": [
     "Kaldırıldı. Yedek: {backup}. Açık Claude Code oturumları yeniden başlatınca etkilenir.",
     "Removed. Backup: {backup}. Running Claude Code sessions notice after a restart.",
+  ],
+  "claude.removedNoBackup": [
+    "Kaldırıldı. Açık Claude Code oturumları yeniden başlatınca etkilenir.",
+    "Removed. Running Claude Code sessions notice after a restart.",
   ],
   "claude.writeFailed": ["Yazılamadı: ", "Couldn't write: "],
   "claude.reviewInstall": ["settings.json değişikliğini incele", "Review the change to settings.json"],
@@ -404,6 +511,19 @@ const M = {
     "Nothing to change — settings.json already matches this selection.",
   ],
   "claude.backupFirst": ["Önce tarihli yedek alınacak: ", "A dated backup is made first: "],
+  "review.noBackup": [
+    "Bu dosya henüz yok: yeni oluşturulacak, yedeklenecek bir şey yok.",
+    "This file doesn't exist yet: it will be created, so there is nothing to back up.",
+  ],
+  "review.again": ["Yeni önizleme", "New preview"],
+  "review.staleWrite": [
+    "Dosya bu önizlemeden sonra değişti, bu yüzden hiçbir şey yazılmadı. Güncel hâliyle yeniden incele.",
+    "The file changed after this preview, so nothing was written. Review it again as it is now.",
+  ],
+  "review.selectionChanged": [
+    "Olay seçimi bu önizlemeden sonra değişti; bu fark artık yazılacak olan değil. Yeni bir önizleme oluştur.",
+    "The event selection changed after this preview, so this diff is no longer what would be written. Make a new preview.",
+  ],
   "claude.fileChangedNote": [
     "Dosya bu önizlemeden sonra başka biri tarafından değiştirilirse yazma reddedilir; önizlemeyi yenilemen gerekir.",
     "If the file changes after this preview, the write is refused and you'll need a fresh preview.",
@@ -437,6 +557,26 @@ const M = {
   "claude.health.entriesMissing": ["settings.json'da Nöbetçi girdisi yok", "No Nöbetçi entries in settings.json"],
   "claude.health.missing": ["Eksik olaylar: {list}", "Missing events: {list}"],
   "claude.health.allEvents": ["Seçili olayların hepsi kurulu", "Every selected event is installed"],
+  "claude.health.routesOk": [
+    "Onaylar, sorular ve planlar adaya ulaşabilir",
+    "Approvals, questions and plans can reach the island",
+  ],
+  "claude.health.noPermission": [
+    "PermissionRequest seçili değil: izin istekleri adaya gelmez",
+    "PermissionRequest isn't selected: permission requests won't reach the island",
+  ],
+  "claude.health.noPreTool": [
+    "PreToolUse seçili değil: sorular, planlar ve masaüstü uygulamasının onayları adaya gelmez",
+    "PreToolUse isn't selected: questions, plans and the desktop app's approvals won't reach the island",
+  ],
+  "claude.health.statusLineOurs": [
+    "Durum satırı Nöbetçi'nin: bağlam ve limitler adada",
+    "The status line is Nöbetçi's: context use and limits show on the island",
+  ],
+  "claude.health.statusLineForeign": [
+    "settings.json'daki durum satırı senin; Nöbetçi ona dokunmaz, limitler adada görünmez",
+    "The status line in settings.json is your own; Nöbetçi leaves it alone, so limits don't show on the island",
+  ],
   "claude.health.noStale": ["Eski konum girdisi yok", "No entries point to an old location"],
   "claude.health.ping": ["Pipe ping: {ms} ms", "Pipe ping: {ms} ms"],
   "claude.health.noPing": ["Ping pipe'a ulaşmadı", "The ping never reached the pipe"],
@@ -452,11 +592,17 @@ const M = {
   ],
   "claude.eventsTitle": ["Dinlenecek olaylar", "Events to listen to"],
   "claude.eventsDesc": [
-    "Claude Code hangi anlarda Nöbetçi'yi çağırsın. Az olay = daha az ayrıntı; onaylar için PermissionRequest şart.",
-    "Which Claude Code moments call Nöbetçi. Fewer events mean less detail; approvals need PermissionRequest.",
+    "Claude Code hangi anlarda Nöbetçi'yi çağırsın. Az olay = daha az ayrıntı. Onaylar için PermissionRequest; sorular, planlar ve masaüstü uygulamasının onayları için PreToolUse şart.",
+    "Which Claude Code moments call Nöbetçi. Fewer events mean less detail. Approvals need PermissionRequest; questions, plans and the desktop app's approvals need PreToolUse.",
   ],
   "claude.selectAll": ["Tümünü seç", "Select all"],
   "claude.required": ["onaylar için gerekli", "needed for approvals"],
+  "claude.requiredPreTool": ["sorular, planlar ve masaüstü için gerekli", "needed for questions, plans and the desktop app"],
+  "claude.noPreTool": ["PreToolUse seçili değil. ", "PreToolUse isn't selected. "],
+  "claude.noPreToolText": [
+    "Claude'un soruları ve planları adada açılmaz; Claude masaüstü uygulamasındaki onaylar da Nöbetçi'ye gelmez, uygulama kendi penceresinde sorar.",
+    "Claude's questions and plans won't open on the island, and approvals in the Claude desktop app won't reach Nöbetçi — the app asks in its own dialog.",
+  ],
   "claude.noPermission": ["PermissionRequest seçili değil. ", "PermissionRequest isn't selected. "],
   "claude.noPermissionText": [
     "İzin istekleri adaya gelmez; Claude Code onları sadece terminalde sorar.",
@@ -529,6 +675,14 @@ const M = {
     "Onaylar gerçek bir fare tıklamasından gelmeli. Başka bir programın ürettiği tıklamalar (SendInput) ya da düğmeye UI Automation ile basılması reddedilir ve ada seni uyarır.",
     "Approvals must come from a real mouse click. Clicks synthesised by another program (SendInput) or a press through UI Automation are refused, and the island warns you.",
   ],
+  "guv.guardDesc@mac": [
+    "Onaylar gerçek bir fare ya da izleme dörtgeni tıklamasından gelmeli. Başka bir programın gönderdiği tıklamalar (CGEvent) ya da düğmeye erişilebilirlik arayüzüyle (AXPress) basılması reddedilir ve ada seni uyarır.",
+    "Approvals must come from a real mouse or trackpad click. Clicks another program posts (CGEvent) or a press through the accessibility interface (AXPress) are refused, and the island warns you.",
+  ],
+  "guv.guardDesc@linux": [
+    "Onaylar gerçek bir fare tıklamasından gelmeli. Sanal aygıtlardan (XTEST, xdotool) gelen ya da başka bir programın ürettiği tıklamalar reddedilir ve ada seni uyarır.",
+    "Approvals must come from a real mouse click. Clicks from virtual devices (XTEST, xdotool) or generated by another program are refused, and the island warns you.",
+  ],
   "guv.guardRow": ["Düşük ve orta riskte fiziksel tıklamayı doğrula", "Verify physical clicks for low and medium risk"],
   "guv.guardRowHint": [
     "Açık kalması önerilir: kötü niyetli bir program “İzin ver”e senin yerine basamaz.",
@@ -582,15 +736,23 @@ const M = {
   "tester.toolAria": ["Araç", "Tool"],
   "tester.examples": ["Örnekler:", "Examples:"],
   "tester.cwdPh": ["Çalışma klasörü (isteğe bağlı) — C:\\proje", "Working folder (optional) — C:\\project"],
+  "tester.cwdPh@mac": ["Çalışma klasörü (isteğe bağlı) — /Users/sen/proje", "Working folder (optional) — /Users/you/project"],
+  "tester.cwdPh@linux": ["Çalışma klasörü (isteğe bağlı) — /home/sen/proje", "Working folder (optional) — /home/you/project"],
   "tester.cwdAria": ["Çalışma klasörü", "Working folder"],
   "tester.defaultCwd": ["C:\\proje", "C:\\project"],
+  "tester.defaultCwd@mac": ["/Users/sen/proje", "/Users/you/project"],
+  "tester.defaultCwd@linux": ["/home/sen/proje", "/home/you/project"],
   "tester.tool.write": ["Write (dosya yaz)", "Write (file)"],
   "tester.tool.edit": ["Edit (dosya düzenle)", "Edit (file)"],
   "tester.tool.read": ["Read (dosya oku)", "Read (file)"],
   "tester.tool.mcp": ["MCP aracı…", "MCP tool…"],
   "tester.ph.bash": ["curl -s https://ornek.test/kur.sh | bash", "curl -s https://example.test/install.sh | bash"],
   "tester.ph.write": ["C:\\Users\\sen\\.claude\\settings.json", "C:\\Users\\you\\.claude\\settings.json"],
+  "tester.ph.write@mac": ["/Users/sen/.claude/settings.json", "/Users/you/.claude/settings.json"],
+  "tester.ph.write@linux": ["/home/sen/.claude/settings.json", "/home/you/.claude/settings.json"],
   "tester.ph.read": ["C:\\Users\\sen\\.ssh\\id_ed25519", "C:\\Users\\you\\.ssh\\id_ed25519"],
+  "tester.ph.read@mac": ["/Users/sen/.ssh/id_ed25519", "/Users/you/.ssh/id_ed25519"],
+  "tester.ph.read@linux": ["/home/sen/.ssh/id_ed25519", "/home/you/.ssh/id_ed25519"],
   "tester.sample.env": [".env oku", "read .env"],
   "tester.sample.defender": ["Defender kapat", "disable Defender"],
   "tester.fact.rule": ["Kural", "Rule"],
@@ -694,6 +856,14 @@ const M = {
   "editor.projectPh": [
     "C:\\Users\\sen\\projeler\\uygulama (boş = her proje)",
     "C:\\Users\\you\\projects\\app (empty = every project)",
+  ],
+  "editor.projectPh@mac": [
+    "/Users/sen/projeler/uygulama (boş = her proje)",
+    "/Users/you/projects/app (empty = every project)",
+  ],
+  "editor.projectPh@linux": [
+    "/home/sen/projeler/uygulama (boş = her proje)",
+    "/home/you/projects/app (empty = every project)",
   ],
   "editor.projectHint": [
     "Boşsa her projede geçerli; doluysa oturumun klasörü bunun içinde olmalı.",
@@ -802,6 +972,8 @@ const M = {
     "Everything counts one level higher: MEDIUM → HIGH, HIGH → CRITICAL (so it needs a hold).",
   ],
   "proj.pathPh": ["C:\\Users\\sen\\projeler\\uygulama", "C:\\Users\\you\\projects\\app"],
+  "proj.pathPh@mac": ["/Users/sen/projeler/uygulama", "/Users/you/projects/app"],
+  "proj.pathPh@linux": ["/home/sen/projeler/uygulama", "/home/you/projects/app"],
   "proj.pathAria": ["Proje klasörü", "Project folder"],
   "proj.pick": ["Klasör seç…", "Choose folder…"],
   "proj.trustAria": ["Güven", "Trust"],
@@ -1129,8 +1301,8 @@ const M = {
   "about.privacy": ["Gizlilik", "Privacy"],
   "about.noNet": ["İstek üzerine bağlantı", "On-demand connections"],
   "about.noNetText": [
-    "Varsayılan olarak ağ isteği yapılmaz. Mesaj Atölyesi yalnız seçtiğin modeli kullanır: Ollama yerelde, OpenAI ise sen açıkça seçip iyileştir dediğinde.",
-    "No network request is made by default. Prompt Studio uses only the model you choose: Ollama locally, or OpenAI only when you select it and click Improve.",
+    "Varsayılan olarak ağ isteği yapılmaz. Mesaj Atölyesi ve adadaki asistanın “Burada sor”u yalnız seçtiğin modeli, yalnız sen istediğinde kullanır: Ollama bu bilgisayarda (“cloud” etiketli modeller taslağı dışarı gönderebilir) ya da seçtiysen OpenAI. Hava durumu kartı, bir şehir seçersen Open-Meteo'ya yalnız o şehrin koordinatlarını sorar.",
+    "No network request is made by default. Prompt Studio and the island assistant's “Ask here” use only the model you choose, only when you ask: Ollama on this computer (models marked “cloud” may send the draft out) or OpenAI if you picked it. The weather card, once you pick a city, asks Open-Meteo with that city's coordinates only.",
   ],
   "about.noTelemetry": ["Telemetri yok", "No telemetry"],
   "about.noTelemetryText": [
@@ -1244,6 +1416,9 @@ const M = {
     "The hooks are out of date; review the change and reinstall them.",
   ],
   "wz.connect.none": ["Henüz bağlı değil.", "Not connected yet."],
+  "wz.connect.previewFailed": ["Önizleme açılamadı:", "Couldn't make the preview:"],
+  "wz.rail.done": ["Tamam", "Done"],
+  "wz.rail.skipped": ["Atlandı", "Skipped"],
   "wz.connect.noRelay": [
     "Relay bulunamadı; Nöbetçi'yi yeniden başlatmak onu tekrar yerleştirir.",
     "The relay is missing; restarting Nöbetçi puts it back.",

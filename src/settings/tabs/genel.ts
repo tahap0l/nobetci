@@ -1,8 +1,10 @@
-// Genel: the UI language first, then an at-a-glance strip, startup, where the
-// island lives and how long it stays.
+// Genel: the UI language first, then an at-a-glance strip, the look (mascot
+// theme with a live preview), the desktop mascot, island widgets, startup,
+// where the island lives and how long it stays.
 
-import { drawOwlMini } from "../../baykus/mini";
-import { applyMascotPalette, MASCOT_THEMES, type MascotTheme } from "../../core/mascot-theme";
+import { mountMascot, type EmbeddedMascot } from "../../baykus/embed";
+import { OwlEngine } from "../../baykus/owl";
+import { MASCOT_THEMES, type MascotTheme } from "../../core/mascot-theme";
 import { WEATHER_CITIES } from "../../core/island-widgets";
 import { getLang } from "../../i18n/core";
 import type { AuditStats } from "../../core/bridge";
@@ -15,7 +17,8 @@ import { icon, type IconName } from "../icons";
 import { languagePicker } from "../lang";
 import { app, go, rerender, type Tab, type TabId } from "../nav";
 import { settings, update } from "../store";
-import { button, card, fmtMinutes, fmtNum, fmtPct, row, segmented, slider, toast, toggle } from "../ui";
+import { applySettingsTheme } from "../theme";
+import { button, card, fmtMinutes, fmtNum, fmtPct, row, segmented, select, slider, toast, toggle } from "../ui";
 
 let week: AuditStats | null = null;
 let loading = false;
@@ -39,7 +42,7 @@ function tile(o: {
 }): HTMLElement {
   const b = h(
     "button",
-    { type: "button", class: `glance${o.tone ? ` tone-${o.tone}` : ""}`, "data-fk": `glance:${o.to}` },
+    { type: "button", class: `glance${o.tone ? ` tone-${o.tone}` : ""}`, "data-fk": `glance:${o.to}`, title: `${o.label}: ${o.value} · ${o.sub}` },
     h("span", { class: "glance-top" }, icon(o.ic, 15), h("span", { class: "glance-label", text: o.label })),
     h("span", { class: "glance-value", text: o.value }),
     h("span", { class: "glance-sub", text: o.sub }),
@@ -78,7 +81,7 @@ function glance(): HTMLElement {
         : t("genel.glance.soundOff");
   return h(
     "div",
-    { class: "glance-grid" },
+    { class: "glance-grid", role: "group", "aria-label": t("genel.glance.aria") },
     hookTile(),
     tile({
       ic: "guvenlik",
@@ -126,39 +129,173 @@ function screenPreview(pos: Settings["position"]): HTMLElement {
   );
 }
 
+// ── Mascot theme: a live preview and a portrait per theme ─────────────────────
+
+/** The animated mascot of the chosen theme; kept across redraws, stopped when the tab hides. */
+let stage: { host: HTMLElement; mascot: EmbeddedMascot | null } | null = null;
+
+function liveStage(theme: MascotTheme): HTMLElement {
+  if (!stage) {
+    const host = h("div", { class: "mascot-stage-canvas" });
+    let mascot: EmbeddedMascot | null = null;
+    try {
+      mascot = mountMascot(host, theme);
+      mascot.wave();
+    } catch {
+      mascot = null; // no canvas here: the portraits below still show every theme
+    }
+    stage = { host, mascot };
+  }
+  // An import or another window may have changed the theme since the last redraw.
+  stage.mascot?.setTheme(theme);
+  return stage.host;
+}
+
+function stopStage() {
+  stage?.mascot?.destroy();
+  stage = null;
+}
+
+/** Still portraits drawn by the real engine (no mood ring), cached per theme and pixel ratio. */
+const portraits = new Map<string, HTMLCanvasElement>();
+
+function portrait(theme: MascotTheme): HTMLCanvasElement {
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const key = `${theme}@${dpr}`;
+  const cached = portraits.get(key);
+  if (cached) return cached;
+  const css = 52;
+  const canvas = h("canvas", { width: Math.round(css * dpr), height: Math.round(css * dpr), "aria-hidden": "true" });
+  const ctx = canvas.getContext("2d");
+  if (ctx) {
+    const engine = new OwlEngine(7);
+    engine.setSkin(theme);
+    // Let the springs settle into the resting pose before the one drawing.
+    for (let i = 0; i < 90; i++) engine.update(1 / 60);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const size = 44;
+    ctx.translate((css - size) / 2, css - size - 1);
+    engine.draw(ctx, size, size);
+  }
+  portraits.set(key, canvas);
+  return canvas;
+}
+
+function appearanceCard(s: Settings): HTMLElement {
+  const lang = getLang();
+  const themeLabel = t("genel.mascotTheme");
+  const live = liveStage(s.mascotTheme);
+  const picker = h("div", { class: "mascot-gallery", role: "radiogroup", "aria-label": themeLabel });
+  const name = h("span", { class: "mascot-stage-name", text: MASCOT_THEMES[s.mascotTheme][lang] });
+  const preview = (theme: MascotTheme) => {
+    stage?.mascot?.setTheme(theme);
+    name.textContent = MASCOT_THEMES[theme][getLang()];
+  };
+  const choices: HTMLButtonElement[] = [];
+  const choose = (theme: MascotTheme) => {
+    if (settings().mascotTheme !== theme) {
+      update((x) => (x.mascotTheme = theme));
+      applySettingsTheme(theme);
+      stage?.mascot?.emote("happy");
+    }
+    for (const c of choices) {
+      const on = c.dataset.theme === theme;
+      c.setAttribute("aria-checked", String(on));
+      c.classList.toggle("on", on);
+      c.tabIndex = on ? 0 : -1;
+    }
+    preview(theme);
+  };
+  for (const theme of Object.keys(MASCOT_THEMES) as MascotTheme[]) {
+    const on = theme === s.mascotTheme;
+    const b = h(
+      "button",
+      {
+        type: "button",
+        class: `mascot-choice${on ? " on" : ""}`,
+        role: "radio",
+        "aria-checked": String(on),
+        tabindex: on ? "0" : "-1",
+        "data-theme": theme,
+        "data-fk": `mascotTheme-${theme}`,
+      },
+      portrait(theme),
+      h("span", { class: "mascot-name", text: MASCOT_THEMES[theme][lang] }),
+    );
+    b.addEventListener("click", () => choose(theme));
+    // Pointing at a theme (or tabbing to it) shows it moving in the stage.
+    b.addEventListener("pointerenter", () => preview(theme));
+    b.addEventListener("pointerleave", () => preview(settings().mascotTheme));
+    choices.push(b);
+    picker.append(b);
+  }
+  // One Tab stop; the arrow keys walk the themes, like any radio group.
+  picker.addEventListener("keydown", (e) => {
+    const i = choices.indexOf(document.activeElement as HTMLButtonElement);
+    if (i < 0) return;
+    const n = choices.length;
+    const j =
+      e.key === "ArrowRight" || e.key === "ArrowDown"
+        ? (i + 1) % n
+        : e.key === "ArrowLeft" || e.key === "ArrowUp"
+          ? (i - 1 + n) % n
+          : e.key === "Home"
+            ? 0
+            : e.key === "End"
+              ? n - 1
+              : -1;
+    if (j < 0) return;
+    e.preventDefault();
+    choices[j].focus();
+    choose(choices[j].dataset.theme as MascotTheme);
+  });
+
+  return card(
+    { title: t("genel.appearance"), icon: "palette" },
+    h(
+      "div",
+      { class: "mascot-theme" },
+      h(
+        "div",
+        { class: "mascot-stage", title: t("genel.mascotStageTitle") },
+        live,
+        name,
+      ),
+      h(
+        "div",
+        { class: "mascot-theme-side" },
+        h("div", { class: "row-label", text: themeLabel }),
+        h("div", { class: "row-hint", text: t("genel.mascotThemeHint") }),
+        picker,
+      ),
+    ),
+    row(
+      t("genel.islandMascot"),
+      t("genel.islandMascotHint"),
+      slider({
+        value: s.islandMascotSize,
+        min: 80,
+        max: 130,
+        step: 5,
+        format: (v) => fmtPct(v, 100),
+        onChange: (v) => update((x) => (x.islandMascotSize = v)),
+        fk: "islandMascotSize",
+        label: t("genel.islandMascot"),
+        ends: true,
+      }),
+    ),
+  );
+}
+
 function render(): HTMLElement {
   const s = settings();
   const preview = screenPreview(s.position);
-  const lang = getLang();
-  const weather = h("select", {
-    "aria-label": t("genel.widgets.weather"),
-    "data-fk": "islandWeatherCity",
-    class: "mascot-theme-picker",
-  }, h("option", { value: "", text: t("genel.widgets.off") }));
-  for (const [id, name] of Object.entries(WEATHER_CITIES)) weather.append(h("option", { value: id, text: name }));
-  weather.value = s.islandWeatherCity;
-  weather.addEventListener("change", () => update((x) => (x.islandWeatherCity = weather.value)));
-  const appearance = t("genel.appearance");
-  const themeLabel = t("genel.mascotTheme");
-  const picker = h("div", { class: "mascot-gallery", role: "group", "aria-label": themeLabel });
-  for (const theme of Object.keys(MASCOT_THEMES) as MascotTheme[]) {
-    const canvas = h("canvas", { width: 88, height: 88, "aria-hidden": "true" });
-    const ctx = canvas.getContext("2d");
-    if (ctx) drawOwlMini(ctx, 44, 44, 72, "idle", null, 0, theme);
-    const button = h("button", {
-      type: "button", class: "mascot-choice", "aria-pressed": theme === s.mascotTheme,
-      "data-theme": theme, "data-fk": "mascotTheme-" + theme,
-      onclick: () => {
-        update((x) => (x.mascotTheme = theme));
-        applyMascotPalette(theme);
-        for (const choice of picker.querySelectorAll<HTMLButtonElement>(".mascot-choice")) {
-          choice.setAttribute("aria-pressed", String(choice.dataset.theme === theme));
-        }
-      },
-    }, canvas, MASCOT_THEMES[theme][lang]);
-    button.setAttribute("aria-pressed", String(theme === s.mascotTheme));
-    picker.append(button);
-  }
+  const weather = select<string>(
+    [["", t("genel.widgets.off")], ...Object.entries(WEATHER_CITIES)],
+    s.islandWeatherCity,
+    (v) => update((x) => (x.islandWeatherCity = v)),
+    { label: t("genel.widgets.weather"), fk: "islandWeatherCity", cls: "select-weather" },
+  );
 
   return h(
     "div",
@@ -167,27 +304,11 @@ function render(): HTMLElement {
       { title: t("genel.langTitle"), icon: "globe", desc: t("genel.langDesc"), cls: "card-lang" },
       languagePicker("lang"),
     ),
+    // The summary belongs at the top: that is what "at a glance" means.
+    glance(),
+    appearanceCard(s),
     card(
-      { title: appearance, icon: "eye" },
-      row(themeLabel, t("genel.mascotThemeHint"), picker),
-      row(
-        t("genel.islandMascot"),
-        t("genel.islandMascotHint"),
-        slider({
-          value: s.islandMascotSize,
-          min: 80,
-          max: 130,
-          step: 5,
-          format: (v) => `%${v}`,
-          onChange: (v) => update((x) => (x.islandMascotSize = v)),
-          fk: "islandMascotSize",
-          label: t("genel.islandMascot"),
-          ends: true,
-        }),
-      ),
-    ),
-    card(
-      { title: t("genel.buddy.title"), icon: "eye", desc: t("genel.buddy.desc") },
+      { title: t("genel.buddy.title"), icon: "mascot", desc: t("genel.buddy.desc") },
       row(
         t("genel.buddy.show"),
         t("genel.buddy.showHint"),
@@ -201,7 +322,7 @@ function render(): HTMLElement {
           min: 60,
           max: 200,
           step: 10,
-          format: (v) => `%${v}`,
+          format: (v) => fmtPct(v, 100),
           onChange: (v) => update((x) => (x.buddySize = v)),
           fk: "buddySize",
           label: t("genel.buddy.size"),
@@ -221,12 +342,13 @@ function render(): HTMLElement {
       ),
     ),
     card(
-      { title: t("genel.widgets.title"), icon: "eye" },
+      { title: t("genel.widgets.title"), icon: "widgets" },
       row(
         t("genel.widgets.media"),
         t("genel.widgets.mediaHint"),
         toggle(s.islandMedia, (v) => update((x) => (x.islandMedia = v)), {
-          label: t("genel.widgets.media"), fk: "islandMedia",
+          label: t("genel.widgets.media"),
+          fk: "islandMedia",
         }),
       ),
       row(t("genel.widgets.weather"), t("genel.widgets.weatherHint"), weather),
@@ -235,10 +357,11 @@ function render(): HTMLElement {
         t("genel.widgets.focusHint"),
         slider({
           value: s.focusMinutes,
+          // The island's − / + go up to 180 and Rust keeps 5–180: the same range here.
           min: 5,
-          max: 120,
+          max: 180,
           step: 5,
-          format: (v) => `${v} ${t("genel.widgets.focusUnit")}`,
+          format: (v) => fmtMinutes(v),
           onChange: (v) => update((x) => (x.focusMinutes = v)),
           fk: "focusMinutes",
           label: t("genel.widgets.focus"),
@@ -247,18 +370,18 @@ function render(): HTMLElement {
       ),
     ),
     card(
-      { title: t("genel.assistant.title"), icon: "eye" },
+      { title: t("genel.assistant.title"), icon: "assistant" },
       row(
         t("genel.assistant.apps"),
         t("genel.assistant.appsHint"),
         toggle(s.assistantUseApps, (v) => update((x) => (x.assistantUseApps = v)), {
-          label: t("genel.assistant.apps"), fk: "assistantUseApps",
+          label: t("genel.assistant.apps"),
+          fk: "assistantUseApps",
         }),
       ),
     ),
-    glance(),
     card(
-      { title: t("genel.startup"), icon: "genel" },
+      { title: t("genel.startup"), icon: "power" },
       row(
         t("genel.autostart"),
         t("genel.autostartHint"),
@@ -266,7 +389,7 @@ function render(): HTMLElement {
       ),
     ),
     card(
-      { title: t("genel.island"), icon: "eye", desc: t("genel.islandDesc") },
+      { title: t("genel.island"), icon: "island", desc: t("genel.islandDesc") },
       row(
         t("genel.screen"),
         t("genel.screenHint"),
@@ -327,7 +450,7 @@ function render(): HTMLElement {
       ),
     ),
     card(
-      { title: t("genel.sessions"), icon: "claude" },
+      { title: t("genel.sessions"), icon: "sessions" },
       row(
         t("genel.stale"),
         t("genel.staleHint"),
@@ -354,4 +477,5 @@ export const genelTab: Tab = {
   icon: "genel",
   render,
   onShow: () => void load(),
+  onHide: stopStage,
 };
