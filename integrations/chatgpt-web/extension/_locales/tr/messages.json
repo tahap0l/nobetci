@@ -1,0 +1,10 @@
+{
+  "extName": {
+    "message": "Nöbetçi · ChatGPT Web",
+    "description": "Tarayıcıda görünen eklenti adı."
+  },
+  "extDescription": {
+    "message": "ChatGPT'nin yanıt yazıp yazmadığını Nöbetçi'nin adasında gösterir. Sohbeti hiçbir zaman göndermez.",
+    "description": "Tarayıcının eklenti listesinde görünen açıklama."
+  }
+}
