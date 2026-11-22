@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Baykuş preview</title>
+    <title>Mascot preview</title>
     <style>
       :root {
         color-scheme: dark;
@@ -35,8 +35,9 @@
       button.on { border-color: #6d6afc; background: #23234a; }
       canvas { display: block; }
       .island { background: #000; border-radius: 12px; padding: 0 6px; display: inline-block; }
-      .zoom { image-rendering: pixelated; background: #000; outline: 1px solid #222; }
-      .cards { display: grid; grid-template-columns: repeat(5, auto); gap: 12px; justify-content: start; }
+      .zoom { image-rendering: pixelated; background: #000; outline: 1px solid #222; max-width: 100%; height: auto; }
+      #app { max-width: 100%; }
+      .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 12px; }
       .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px 10px; }
       .card .head { display: flex; justify-content: space-between; gap: 8px; color: var(--text); margin-bottom: 6px; }
       .badge { font-size: 10px; color: #7dd3fc; }
@@ -45,17 +46,17 @@
       .strip { padding: 0; border-radius: 6px; margin-bottom: 6px; }
       .strip-labels { display: flex; color: var(--muted); font-size: 11px; margin-top: 2px; }
       .strip-labels span { flex: 1; text-align: center; }
-      .minis { display: grid; grid-template-columns: repeat(10, auto); gap: 10px 18px; justify-content: start; }
+      .minis { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 10px 18px; }
       .mini { display: flex; flex-direction: column; align-items: center; gap: 4px; color: var(--muted); font-size: 11px; }
       .mini .row { display: flex; gap: 8px; align-items: center; background: #000; padding: 6px 8px; border-radius: 9px; }
-      #greet { background: #000; border-radius: 14px; outline: 1px dashed #2a2a30; }
+      #greet { background: #000; border-radius: 14px; outline: 1px dashed #2a2a30; max-width: 100%; height: auto; }
       .icons { display: flex; gap: 16px; }
       .icons > div { display: flex; gap: 12px; align-items: end; padding: 12px; border-radius: 10px; }
     </style>
   </head>
   <body>
-    <h1>Baykuş — Nöbetçi owl preview</h1>
-    <p class="hint">Mouse drives lookX / lookY. Click an owl to poke it (three quick pokes → dizzy).</p>
+    <h1>Nöbetçi mascot preview</h1>
+    <p class="hint">Mouse drives lookX / lookY. Click a mascot to poke it (three quick pokes → dizzy).</p>
     <div id="app"></div>
     <script type="module" src="./baykus.ts"></script>
   </body>

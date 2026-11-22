@@ -2,17 +2,21 @@
 // small window of its own, dragged anywhere with the mouse.
 //
 // It only shows what is going on. The island sends it its mood and its
-// reactions (`buddy-mood`, `buddy-emote`); a click opens the island, where every
-// decision is still taken. Dragging spreads its wings, letting go lands it.
+// reactions (`buddy-mood`, `buddy-emote`); a double click opens the island, where
+// every decision is still taken, and a single click pokes it. Dragging spreads
+// its wings, letting go lands it.
 //
 // Like the island it draws only while something moves: once it has nodded off
-// (two minutes of calm) the frame loop stops and costs nothing.
+// (two minutes of calm) the frame loop stops and costs nothing. With the
+// system's "reduce motion" setting the engine keeps still, so the loop also
+// stops whenever nothing changes.
 
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { OwlEngine, type OwlEmote, type OwlMood } from "../baykus/owl";
 import { Bridge, IS_TAURI, onEvent } from "../core/bridge";
 import type { MascotTheme } from "../core/mascot-theme";
 import type { Settings } from "../core/settings-model";
+import { guardWebview } from "../core/webview";
 
 /** How far the pointer must travel with the button down before it is a drag. */
 const DRAG_SLOP = 4;
@@ -20,6 +24,11 @@ const DRAG_SLOP = 4;
 const LANDING_MS = 180;
 /** Calm for this long and the mascot falls asleep (and the loop stops). */
 const DOZE_MS = 120_000;
+/**
+ * A single click waits this long for a second one before it counts as a poke:
+ * the two presses of a double click (which opens the island) are not pokes.
+ */
+const POKE_DELAY_MS = 320;
 /**
  * The mascot's width as a share of the window's; the rest is room for badges and
  * sparkles. The window itself is sized by the `buddySize` setting.
@@ -38,6 +47,7 @@ let running = false;
 let last = 0;
 let carried = false;
 let landing: number | null = null;
+let dozeTimer: number | null = null;
 
 function size() {
   body = Math.round(window.innerWidth * BODY_SHARE);
@@ -55,18 +65,38 @@ function stir() {
 }
 
 function wake() {
+  if (dozeTimer != null) {
+    window.clearTimeout(dozeTimer);
+    dozeTimer = null;
+  }
   if (running || document.hidden) return;
   running = true;
   last = performance.now();
   requestAnimationFrame(frame);
 }
 
+/** Waiting requests and work keep it awake; plain idling does not. */
+function mayDoze(): boolean {
+  return islandMood === "idle" || islandMood === "finished" || islandMood === "sleeping";
+}
+
+/**
+ * A still mascot (reduced motion) stops its loop while awake: come back when it
+ * is time to nod off, so it still falls asleep after two calm minutes.
+ */
+function scheduleDoze() {
+  if (dozeTimer != null || !mayDoze() || carried) return;
+  const left = DOZE_MS - (performance.now() - lastStir);
+  dozeTimer = window.setTimeout(() => {
+    dozeTimer = null;
+    wake();
+  }, Math.max(0, left) + 50);
+}
+
 function frame(now: number) {
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
-  // Waiting requests and work keep it awake; plain idling does not.
-  const calm = islandMood === "idle" || islandMood === "finished" || islandMood === "sleeping";
-  if (calm && !carried && now - lastStir > DOZE_MS) owl.setMood("sleeping");
+  if (mayDoze() && !carried && now - lastStir > DOZE_MS) owl.setMood("sleeping");
 
   owl.flight += ((carried ? 1 : 0) - owl.flight) * Math.min(1, dt * 10);
   if (owl.flight < 0.01) owl.flight = 0;
@@ -81,7 +111,10 @@ function frame(now: number) {
   owl.draw(ctx, body, body + owl.overhang);
 
   if (owl.busy && !document.hidden) requestAnimationFrame(frame);
-  else running = false;
+  else {
+    running = false;
+    if (!document.hidden) scheduleDoze();
+  }
 }
 
 // ── Pointer: look, poke, drag, open ─────────────────────────────────────────
@@ -114,10 +147,27 @@ canvas.addEventListener("pointerdown", (e) => {
 });
 
 canvas.addEventListener("pointerup", () => {
-  // A press that never moved is a poke.
-  if (down && !dragged) owl.poke();
   down = null;
   stir();
+});
+
+// A click that was not a drag pokes the mascot, unless it was half of a double
+// click: the poke waits a moment and a second click cancels it.
+let pokeTimer: number | null = null;
+function cancelPoke() {
+  if (pokeTimer == null) return;
+  window.clearTimeout(pokeTimer);
+  pokeTimer = null;
+}
+canvas.addEventListener("click", (e) => {
+  if (dragged || e.button !== 0) return;
+  cancelPoke();
+  if (e.detail > 1) return; // the second (or third) press of a double click
+  pokeTimer = window.setTimeout(() => {
+    pokeTimer = null;
+    owl.poke();
+    stir();
+  }, POKE_DELAY_MS);
 });
 
 // Ctrl (⌘ on a Mac) + wheel resizes the mascot, ten percent a notch.
@@ -131,8 +181,14 @@ canvas.addEventListener("wheel", (e) => {
   void Bridge.buddyResizeBy(e.deltaY < 0 ? 10 : -10);
 }, { passive: false });
 
-// A double click opens the island — on the waiting card, if there is one.
-canvas.addEventListener("dblclick", () => void Bridge.buddyOpenIsland());
+// A double click opens the island — on the waiting card, if there is one — and
+// the mascot waves to say so.
+canvas.addEventListener("dblclick", () => {
+  cancelPoke();
+  owl.wave();
+  stir();
+  void Bridge.buddyOpenIsland();
+});
 
 /** The window moves while it is carried; when the moves stop, it lands. */
 function carriedAlong() {
@@ -160,6 +216,8 @@ function applySettings(s: Settings) {
 }
 
 async function main() {
+  // No webview context menu or reload keys in the app window (D12).
+  if (IS_TAURI) guardWebview();
   size();
   window.addEventListener("resize", () => {
     size();
