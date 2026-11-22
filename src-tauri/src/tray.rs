@@ -41,6 +41,14 @@ pub fn build(app: &AppHandle) -> tauri::Result<()> {
         },
     );
 
+    // macOS: a monochrome template the menu bar tints itself, for light, dark
+    // and coloured menu bars alike; drawn 18 pt tall, so 36 px stays sharp on
+    // Retina. Windows and Linux keep the colour owl.
+    #[cfg(target_os = "macos")]
+    {
+        builder = builder.icon(menu_bar_icon()).icon_as_template(true);
+    }
+    #[cfg(not(target_os = "macos"))]
     if let Some(icon) = app.default_window_icon().cloned() {
         builder = builder.icon(icon);
     }
@@ -49,9 +57,32 @@ pub fn build(app: &AppHandle) -> tauri::Result<()> {
     Ok(())
 }
 
+/// The owl's silhouette for the macOS menu bar: black, with the shape in the
+/// alpha channel only (eyes and beak cut out), as template images are.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+fn menu_bar_icon() -> tauri::image::Image<'static> {
+    tauri::include_image!("icons/tray-template.png")
+}
+
 /// Rebuilds the menu in the current language.
 pub fn relabel(app: &AppHandle) {
     if let (Some(tray), Ok(menu)) = (app.tray_by_id(TRAY_ID), menu(app)) {
         let _ = tray.set_menu(Some(menu));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn the_menu_bar_owl_is_a_template_image() {
+        let icon = super::menu_bar_icon();
+        // 18 pt tall in the menu bar: twice that for Retina.
+        assert_eq!((icon.width(), icon.height()), (36, 36));
+        let px = icon.rgba();
+        assert!(px.chunks(4).all(|p| p[..3] == [0, 0, 0]), "black only: a template's shape lives in its alpha");
+        let solid = px.chunks(4).filter(|p| p[3] > 128).count();
+        assert!((300..36 * 36 - 300).contains(&solid), "a silhouette, neither blank nor a full square: {solid}");
+        // The macOS builder call, type-checked everywhere.
+        let _ = tauri::tray::TrayIconBuilder::<tauri::Wry>::with_id("t").icon(icon).icon_as_template(true);
     }
 }
