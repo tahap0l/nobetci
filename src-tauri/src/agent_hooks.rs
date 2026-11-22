@@ -203,8 +203,10 @@ fn merged(provider: Provider, existing: &Value, install: bool) -> Result<Value, 
                     "command": command(provider, event),
                     "timeout": timeout,
                     // Permission hooks must never silently run the tool if the
-                    // relay crashes or times out. The relay answers explicitly
-                    // when the app is unavailable.
+                    // relay crashes or times out: they stay fail-closed. Whenever
+                    // Nöbetçi gives no decision (closed, paused, handed back,
+                    // timed out, input it could not read) the relay answers
+                    // `ask`, so Cursor asks the user itself instead of blocking.
                     "failClosed": *timeout == 120
                 }),
             };

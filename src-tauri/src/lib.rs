@@ -387,17 +387,22 @@ fn find_on_path(stem: &str) -> Option<std::path::PathBuf> {
     None
 }
 
+/// The ChatGPT Web guide: its Turkish page for a Turkish interface, otherwise
+/// the folder, whose page is the English README.md.
+fn chatgpt_web_guide(turkish: bool) -> &'static str {
+    if turkish {
+        "https://github.com/tahap0l/nobetci/blob/main/integrations/chatgpt-web/README.tr.md"
+    } else {
+        "https://github.com/tahap0l/nobetci/tree/main/integrations/chatgpt-web"
+    }
+}
+
 /// Shows a file or folder of ours in Explorer / Finder; "chatgpt-web" opens the
 /// ChatGPT Web guide, in Turkish when the interface is.
 #[tauri::command]
 fn open_location(what: String) -> bool {
     if what == "chatgpt-web" {
-        let url = if is_tr() {
-            "https://github.com/tahap0l/nobetci/blob/main/integrations/chatgpt-web/README.tr.md"
-        } else {
-            "https://github.com/tahap0l/nobetci/tree/main/integrations/chatgpt-web"
-        };
-        return sys::open_url(url);
+        return sys::open_url(chatgpt_web_guide(is_tr()));
     }
     let (path, select) = match what.as_str() {
         "log" => (settings::local_dir().join("nobetci.log"), true),
@@ -902,16 +907,25 @@ fn settings_reset(app: AppHandle) -> Result<Settings, String> {
 
 // ── Notifications and hotkeys ─────────────────────────────────────────────────
 
-/// A desktop notification for `kind` (approval, finished, error, waiting), if the
-/// settings want one right now. Returns whether it was shown. Off the main
-/// thread: on Linux the first one asks the notification server what it reads.
+/// Whether a desktop notification of `kind` may show now. Claude's session
+/// events (approval, finished, error, waiting) follow the chosen event list;
+/// `focus`, the end of the island's own focus timer, is the user's timer like
+/// an agenda reminder and needs no entry there. Never while notifications are
+/// off or it is quiet, nor while the open island already shows it if the
+/// settings say so.
+fn notification_wanted(s: &Settings, kind: &str, island_visible: bool, quiet: bool) -> bool {
+    let listed = kind == "focus" || s.toast_events.iter().any(|event| event == kind);
+    s.toast_enabled && listed && !quiet && !(s.toast_only_when_hidden && island_visible)
+}
+
+/// A desktop notification for `kind` (approval, finished, error, waiting, or
+/// focus), if the settings want one right now. Returns whether it was shown.
+/// Off the main thread: on Linux the first one asks the notification server
+/// what it reads.
 #[tauri::command(async)]
 fn notify(app: AppHandle, kind: String, title: String, body: String, island_visible: bool) -> bool {
     let s = current(&app);
-    if !s.toast_enabled || !s.toast_events.contains(&kind) || quiet::reason(&s).is_some() {
-        return false;
-    }
-    if s.toast_only_when_hidden && island_visible {
+    if !notification_wanted(&s, &kind, island_visible, quiet::reason(&s).is_some()) {
         return false;
     }
     // Notifications linger in the action centre and can show on the lock screen:
@@ -1364,9 +1378,10 @@ mod tests {
         assert!(!can("intruder", "boot"));
 
         // Tauri's own commands: events for all three, sending events only from
-        // the island (the mascot's mood) and the mascot (its "ready"), dragging
-        // only for the mascot, and nothing that builds windows, trays, menus or
-        // images, or changes a window behind Rust's back.
+        // the island (the mascot's mood; the mascot says it is ready through
+        // buddy_ready, so a script in its page cannot forge a card or any other
+        // event), dragging only for the mascot, and nothing that builds windows,
+        // trays, menus or images, or changes a window behind Rust's back.
         for w in WINDOWS {
             assert!(can(w, "plugin:event|listen") && can(w, "plugin:event|unlisten"), "{w} listens");
             for command in [
@@ -1386,8 +1401,8 @@ mod tests {
                 assert!(!can(w, command), "{w} must not call {command}");
             }
         }
-        assert!(can("island", "plugin:event|emit") && can("buddy", "plugin:event|emit"));
-        assert!(!can("settings", "plugin:event|emit"));
+        assert!(can("island", "plugin:event|emit"));
+        assert!(!can("settings", "plugin:event|emit") && !can("buddy", "plugin:event|emit"));
         assert!(can("buddy", "plugin:window|start_dragging"));
         assert!(!can("island", "plugin:window|start_dragging") && !can("settings", "plugin:window|start_dragging"));
         // Plugins are driven from Rust only.
@@ -1396,6 +1411,38 @@ mod tests {
                 assert!(!can(w, command), "{w} must not call {command}");
             }
         }
+    }
+
+    #[test]
+    fn notifications_follow_the_settings_and_a_focus_run_needs_no_event_entry() {
+        let s = Settings::default();
+        assert!(notification_wanted(&s, "approval", false, false));
+        assert!(!notification_wanted(&s, "finished", false, false), "not in the default list");
+        assert!(notification_wanted(&s, "focus", false, false), "the user's own timer");
+        assert!(!notification_wanted(&s, "unknown", false, false));
+        for kind in ["approval", "focus"] {
+            assert!(!notification_wanted(&s, kind, false, true), "{kind}: quiet");
+            assert!(!notification_wanted(&s, kind, true, false), "{kind}: the open island shows it");
+            let off = Settings { toast_enabled: false, ..Settings::default() };
+            assert!(!notification_wanted(&off, kind, false, false), "{kind}: notifications off");
+            let always = Settings { toast_only_when_hidden: false, ..Settings::default() };
+            assert!(notification_wanted(&always, kind, true, false), "{kind}: wanted even when shown");
+        }
+    }
+
+    #[test]
+    fn the_chatgpt_web_guide_opens_in_the_interface_language() {
+        let repo = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+        let tr = chatgpt_web_guide(true);
+        let en = chatgpt_web_guide(false);
+        assert!(tr.ends_with("/integrations/chatgpt-web/README.tr.md"), "{tr}");
+        assert!(en.ends_with("/integrations/chatgpt-web"), "{en}");
+        for url in [tr, en] {
+            assert!(url.starts_with("https://github.com/tahap0l/nobetci/"), "{url}");
+        }
+        // The pages they show are in the tree.
+        assert!(repo.join("integrations/chatgpt-web/README.tr.md").is_file());
+        assert!(repo.join("integrations/chatgpt-web/README.md").is_file());
     }
 
     #[test]
