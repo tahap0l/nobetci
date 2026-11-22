@@ -126,6 +126,11 @@ export interface RiskAssessment {
   target: string;
   preview: string | null;
   previewBefore?: string | null;
+  /**
+   * A MultiEdit's edits one by one (absent when there are none). `preview` and
+   * `previewBefore` then hold all of them joined, for older readers.
+   */
+  edits?: { before: string; after: string }[];
   findings: RiskFinding[];
   truncated: boolean;
 }
@@ -295,7 +300,10 @@ export interface AgendaItem {
 
 export const Bridge = {
   // ── Desktop mascot ────────────────────────────────────────────────────────
-  /** Tells the island and the desktop mascot something about the other. */
+  /**
+   * The island tells the desktop mascot its mood, reactions and colour. Only
+   * the island sends: the mascot's page has no right to emit events (C-13).
+   */
   toBuddy: async (event: string, payload: unknown) => {
     if (!IS_TAURI) return;
     try {
@@ -305,10 +313,19 @@ export const Bridge = {
     }
   },
   buddyOpenIsland: () => call<void>("buddy_open_island"),
+  /**
+   * The mascot's page is listening: Rust asks the island ("buddy-ready") to
+   * send its mood and colour, so the mascot never emits an event itself.
+   */
+  buddyReady: () => call<void>("buddy_ready"),
   // ── Assistant ─────────────────────────────────────────────────────────────
-  /** Opens an AI app with the prompt; `prefilled` says it went in the address. */
+  /**
+   * Opens an AI app with the prompt; `prefilled` says it went in the address,
+   * `maySendOnOpen` that the app may send it as it opens (absent from older
+   * builds: then any prefilled prompt may be on its way).
+   */
   assistantOpen: (target: string, prompt: string) =>
-    callOrThrow<{ prefilled: boolean; app: string | null }>("assistant_open", { target, prompt }),
+    callOrThrow<{ prefilled: boolean; maySendOnOpen?: boolean; app: string | null }>("assistant_open", { target, prompt }),
   /** Targets that have a desktop app on this computer. */
   assistantApps: () => call<{ target: string; name: string }[]>("assistant_apps"),
   /** Starts the system's dictation into the focused text box. */
@@ -321,9 +338,15 @@ export const Bridge = {
   buddyResizeBy: (step: number) => call<void>("buddy_resize_by", { step }),
   buddyResetPosition: () => call<void>("buddy_reset_position"),
 
-  islandMedia: (includeArtwork = false) => call<IslandMedia>("island_media", { includeArtwork }),
-  islandMediaControl: (source: string, action: MediaAction, positionMs?: number) =>
-    call<boolean>("island_media_control", { source, action, positionMs: positionMs ?? null }),
+  /**
+   * The player that is playing (or paused). Read only while the music card is
+   * on, unless `explicit`: the user typed /play, /next or /prev in the
+   * assistant (C-19). Either way Rust only asks a player that already runs.
+   */
+  islandMedia: (includeArtwork = false, explicit = false) =>
+    call<IslandMedia>("island_media", { includeArtwork, explicit }),
+  islandMediaControl: (source: string, action: MediaAction, positionMs?: number, explicit = false) =>
+    call<boolean>("island_media_control", { source, action, positionMs: positionMs ?? null, explicit }),
   islandWeather: (cityId: string) => call<IslandWeather>("island_weather", { cityId }),
   islandStats: () => call<IslandStats>("island_stats"),
   agendaList: () => call<AgendaItem[]>("agenda_list"),

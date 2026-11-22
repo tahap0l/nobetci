@@ -259,8 +259,9 @@ async function main() {
       if (down || carried) carriedAlong();
     });
   }
-  // Ask the island where things stand.
-  await Bridge.toBuddy("buddy-ready", null);
+  // Ask the island where things stand. Rust passes the question on, so this
+  // window never sends an event of its own (it has no right to, C-13).
+  await Bridge.buddyReady();
   stir();
 
   if (!IS_TAURI) {

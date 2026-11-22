@@ -2,13 +2,13 @@
 // frame loop. The loop only runs while something is moving, and never while the
 // island is hidden — a sleeping Nöbetçi costs no CPU.
 
-import { OwlEngine, type OwlEmote, type OwlMood } from "../baykus/owl";
+import { OwlEngine, prefersReducedMotion, type OwlEmote, type OwlMood } from "../baykus/owl";
 import { applyMascotPalette } from "../core/mascot-theme";
 import { OwlGreeting } from "../baykus/greeting";
 import { Spring, Tracked, clamp } from "../core/anim";
 import { Bridge, IS_TAURI, IslandBridge, onEvent, type Anchor, type DecisionOptions, type InteractiveResponse } from "../core/bridge";
 import { Sound } from "../core/sound";
-import { State, isPlainLow, type FlashTone, type IslandMode, type IslandView } from "../core/state";
+import { State, handBackTo, isPlainLow, type FlashTone, type IslandMode, type IslandView } from "../core/state";
 import { t } from "../i18n/island";
 import { h } from "../ui/dom";
 import { buildCompact, buildViews, drawMinis, type ViewActions, type ViewHost } from "../ui/views";
@@ -22,6 +22,10 @@ const modeOrder = (m: IslandMode) => (m === "hidden" ? 0 : m === "compact" ? 1 :
 
 /** How often the island asks Rust whether it is quiet (quiet hours start and end on their own). */
 const QUIET_POLL_MS = 60_000;
+
+/** The mascot's position and size springs (Spring's defaults). */
+const OWL_RESPONSE = 0.5;
+const OWL_DAMPING = 0.72;
 
 export class Island {
   readonly fsm = new IslandStateMachine();
@@ -44,9 +48,9 @@ export class Island {
   private width = new Tracked(HIDDEN_W);
   private height = new Tracked(0);
   private radius = new Tracked(COMPACT_CORNER);
-  private owlX = new Spring(26);
-  private owlY = new Spring(12);
-  private owlSize = new Spring(8);
+  private owlX = new Spring(26, OWL_RESPONSE, OWL_DAMPING);
+  private owlY = new Spring(12, OWL_RESPONSE, OWL_DAMPING);
+  private owlSize = new Spring(8, OWL_RESPONSE, OWL_DAMPING);
 
   private greeting = new OwlGreeting();
 
@@ -661,9 +665,12 @@ export class Island {
   }
 
   private handToTerminal(requestId: string) {
+    // The note names the place the card's button named: Cursor, the Claude app or the terminal.
+    const a = State.approvals.find((x) => x.requestId === requestId);
+    const place = handBackTo(a && State.session(a.sessionId));
     void Bridge.approvalDecline(requestId);
     Sound.play("blip");
-    this.finishApproval(requestId, t("out.toTerminal"));
+    this.finishApproval(requestId, t(place === "cursor" ? "out.toCursor" : place === "app" ? "out.toApp" : "out.toTerminal"));
   }
 
   private finishApproval(requestId: string, note: string) {
@@ -690,7 +697,9 @@ export class Island {
     const r = State.mode === "expanded" ? EXPANDED_CORNER : COMPACT_CORNER;
     // Like a phone's island: opening, the width leads with a little overshoot
     // and the height follows a beat later; closing, the height goes first.
-    if (shrinking) {
+    // With the system's "reduce motion" it eases both ways, with no overshoot
+    // and no bounce (M-5).
+    if (shrinking || prefersReducedMotion()) {
       this.width.curveTowards(w, 360);
       this.height.curveTowards(hh, 270);
       this.radius.curveTowards(r, 320);
@@ -721,6 +730,12 @@ export class Island {
   private retargetHeight() {
     if (State.mode !== "expanded") return;
     const { h: hh } = islandSize(State.mode, State.view, this.viewHeight());
+    if (prefersReducedMotion()) {
+      // An ease to the new height, started again only when that height moves:
+      // a spring would overshoot it, as after an Allow (M-5).
+      if (Math.abs(this.height.target - hh) > 0.5) this.height.curveTowards(hh, 270);
+      return;
+    }
     if (Math.abs(this.height.value - hh) > 0.5 && !this.height.animating) this.height.springTo(hh);
     else if (this.height.animating) this.height.springTo(hh);
   }
@@ -948,6 +963,12 @@ export class Island {
     this.owlX.target = place.cx;
     this.owlY.target = place.cy;
     this.owlSize.target = place.size;
+    // With "reduce motion" the mascot glides into place without overshooting
+    // (critically damped), like the island around it (M-5).
+    const damping = prefersReducedMotion() ? 1 : OWL_DAMPING;
+    if (this.owlX.zeta !== damping) {
+      for (const s of [this.owlX, this.owlY, this.owlSize]) s.configure(OWL_RESPONSE, damping);
+    }
     this.owlX.step(dt);
     this.owlY.step(dt);
     this.owlSize.step(dt);

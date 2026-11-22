@@ -5,6 +5,15 @@
   color-scheme: dark;
   --bg: #0a0a0c;
   --panel: #141418;
+  /* Shades of the panel, worked out per mascot theme in src/core/mascot-theme.ts
+     as plain colours (older WebKit has no color-mix()); these are the owl's. */
+  --panel-hover: #222226;
+  --panel-focus: #1b1b1f;
+  --dash-surface: #1d1e26;
+  --dash-glow: rgba(174, 188, 255, 0.17);
+  --dash-accent-rgb: 174, 188, 255;
+  --dash-accent-light: #bac6ff;
+  --dash-weekday: #b8c0ed;
   --line: rgba(255, 255, 255, 0.08);
   --text: #f2f2f4;
   --muted: rgba(242, 242, 244, 0.56);
@@ -208,7 +217,7 @@ button {
 
 /* Lighter on hover in every theme: the panel colour, lifted (dashboard#13). */
 .session:hover {
-  background: color-mix(in srgb, var(--panel), white 6%);
+  background: var(--panel-hover);
 }
 
 /* Paused: nothing is watched, so the rows step back and say so (dashboard#26). */
@@ -255,7 +264,7 @@ button {
   font-size: 11px;
   font-weight: 600;
 }
-.sessions-more:hover { color: var(--text); background: color-mix(in srgb, var(--panel), white 6%); }
+.sessions-more:hover { color: var(--text); background: var(--panel-hover); }
 
 .session-main {
   display: flex;
@@ -310,7 +319,7 @@ button {
 
 .session-search:focus {
   border-color: rgba(255, 255, 255, 0.18);
-  background-color: color-mix(in srgb, var(--panel), white 3%);
+  background-color: var(--panel-focus);
   outline: none;
 }
 
@@ -1318,7 +1327,9 @@ mark.lvl-critical { background: #f4505e; }
 
 .island-widgets {
   --dash-accent: var(--accent, #aebcff);
-  --dash-surface: color-mix(in srgb, var(--panel), var(--dash-accent) 6%);
+  /* The cards' surface (--dash-surface) comes from :root as a plain colour:
+     without color-mix() older WebKit would drop the cards' backgrounds
+     altogether (settings-shell#12; the glow's stand-in is at the end). */
   --dash-sheen: radial-gradient(ellipse at 15% 0%, color-mix(in srgb, var(--dash-accent) 17%, transparent), transparent 70%);
   --dash-entry: 8px;
   --dash-time: 280ms;
@@ -2973,4 +2984,31 @@ mark.lvl-critical { background: #f4505e; }
   overscroll-behavior: contain;
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+}
+
+/* WebKit before Safari 16.2 (macOS 11 and 12 without Safari updates) has no
+   color-mix(): a background, border or shadow that uses one is dropped there,
+   and today's date in the calendar would be dark text on nothing. Plain
+   stand-ins, from the shades mascot-theme.ts works out (settings-shell#12). */
+@supports not (color: color-mix(in srgb, red, red)) {
+  .island-widgets { --dash-sheen: radial-gradient(ellipse at 15% 0%, var(--dash-glow), transparent 70%); }
+  .island-widget-indicator {
+    border: 1px solid rgba(var(--dash-accent-rgb), 0.3);
+    background: linear-gradient(180deg, rgba(var(--dash-accent-rgb), 0.24), rgba(var(--dash-accent-rgb), 0.12));
+    box-shadow: 0 4px 14px -6px rgba(var(--dash-accent-rgb), 0.7);
+  }
+  .island-card-focus.done { border-color: rgba(var(--dash-accent-rgb), 0.6); }
+  .agenda-editor { border: 1px solid rgba(var(--dash-accent-rgb), 0.45); }
+  .agenda-input:focus, .agenda-time:focus {
+    border-color: rgba(var(--dash-accent-rgb), 0.7);
+    box-shadow: 0 0 0 2px rgba(var(--dash-accent-rgb), 0.22);
+  }
+  .cal-day.weekend:not(.today) .cal-weekday { color: var(--dash-weekday); }
+  .cal-day.today {
+    background: linear-gradient(160deg, var(--dash-accent-light), var(--dash-accent));
+    box-shadow: 0 6px 16px -6px rgba(var(--dash-accent-rgb), 0.8);
+  }
+  .media-toggle { box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35); }
+  .media-toggle:hover:not(:disabled) { background: var(--media-accent); filter: brightness(1.15); }
+  .media-note { color: var(--media-accent); }
 }

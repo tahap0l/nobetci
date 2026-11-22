@@ -12,7 +12,7 @@ import {
 } from "../core/bridge";
 import { Sound } from "../core/sound";
 import {
-  LEVEL_ORDER, SESSION_QUIET_MS, State, isPlainLow, needsHold,
+  LEVEL_ORDER, SESSION_QUIET_MS, State, handBackTo, isPlainLow, needsHold,
   type Approval, type FlashTone, type IslandView, type Session, type SessionState,
 } from "../core/state";
 import { t } from "../i18n/island";
@@ -874,15 +874,14 @@ function mcpParts(tool: string): { server: string; name: string } | null {
   return cut < 0 ? { server: rest, name: "" } : { server: rest.slice(0, cut), name: rest.slice(cut + 2) };
 }
 
-/** A MultiEdit's edits one by one, when Rust sends them apart (`risk.edits`). */
-function editsOf(risk: RiskAssessment): { before: string; after: string }[] {
-  const list = (risk as RiskAssessment & { edits?: unknown }).edits;
-  if (!Array.isArray(list)) return [];
-  return list.filter(
-    (e): e is { before: string; after: string } =>
-      !!e && typeof e === "object" && typeof (e as { after?: unknown }).after === "string" &&
-      typeof (e as { before?: unknown }).before === "string",
-  );
+/**
+ * A MultiEdit's edits one by one, when Rust sends them apart (`risk.edits`);
+ * otherwise the card shows `preview` / `previewBefore`. An entry that is not a
+ * pair of strings is left out rather than trusted.
+ */
+function editsOf(risk: RiskAssessment): NonNullable<RiskAssessment["edits"]> {
+  if (!Array.isArray(risk.edits)) return [];
+  return risk.edits.filter((e) => !!e && typeof e.after === "string" && typeof e.before === "string");
 }
 
 /** Messages the island raises when Rust or the hotkey refuses something on the card (A-7). */
@@ -1325,6 +1324,14 @@ function buildApproval(actions: ViewActions): ViewHost {
   document.addEventListener("mousedown", (e) => {
     if (!denyGroup.contains(e.target as Node)) closeMenu(false);
   });
+  // Esc closes the menu wherever the focus is, and hands it to the chevron: a
+  // click does not focus a button in every webview (WebKit leaves it on the
+  // page), so the handlers above would not hear it (website#6).
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape" || e.defaultPrevented || !menuOpen() || !el.isConnected) return;
+    e.preventDefault();
+    closeMenu(true);
+  });
 
   const holdStep = () => {
     if (!holdStart || !shown) return;
@@ -1612,6 +1619,15 @@ function buildApproval(actions: ViewActions): ViewHost {
     return true;
   };
 
+  /** How long until the terminal takes over, in the card's head. */
+  const paintTimer = () => {
+    if (!shown) return;
+    const left = shown.expiresAt - Date.now();
+    const text = mmss(left);
+    if (timer.textContent !== text) timer.textContent = text;
+    timer.classList.toggle("urgent", left < 20_000);
+  };
+
   const render = (a: Approval, handOver: boolean) => {
     refit = true;
     endSending();
@@ -1620,14 +1636,20 @@ function buildApproval(actions: ViewActions): ViewHost {
     note = null;
     press = null;
     body.scrollTop = 0;
+    // The countdown is right from the card's first frame, not a tick later: it
+    // never shows the previous card's time, and the head does not shift.
+    paintTimer();
     const session = State.session(a.sessionId);
     whoName.textContent = session?.name ?? t("ap.session");
     // A session from the Claude desktop app asks in its own window, not a
     // terminal: its button says so, with the app's icon rather than a prompt.
-    const inApp = session?.terminal === "Claude";
-    termIcon.replaceChildren(icon(inApp ? ICON.window : ICON.terminal, 13));
-    termLabel.textContent = t(inApp ? "ap.toApp" : "ap.toTerminal");
-    termBtn.title = t(inApp ? "ap.toAppTitle" : "ap.toTerminalTitle");
+    // So does Cursor, which shows its own prompt when Nöbetçi hands a request
+    // back (the relay answers "ask", D3). The note left after the hand-off
+    // names the same place (`handBackTo`, island.ts).
+    const place = handBackTo(session);
+    termIcon.replaceChildren(icon(place === "terminal" ? ICON.terminal : ICON.window, 13));
+    termLabel.textContent = t(place === "cursor" ? "ap.toCursor" : place === "app" ? "ap.toApp" : "ap.toTerminal");
+    termBtn.title = t(place === "cursor" ? "ap.toCursorTitle" : place === "app" ? "ap.toAppTitle" : "ap.toTerminalTitle");
     // The next request comes in with a short fade, so the hand-over is seen (approvals#12).
     if (handOver) {
       el.classList.remove("card-in");
@@ -1824,10 +1846,7 @@ function buildApproval(actions: ViewActions): ViewHost {
     },
     tick() {
       if (!shown) return;
-      const left = shown.expiresAt - Date.now();
-      const text = mmss(left);
-      if (timer.textContent !== text) timer.textContent = text;
-      timer.classList.toggle("urgent", left < 20_000);
+      paintTimer();
       if (note && note.until <= Date.now()) State.notify();
       watchLayout();
     },
