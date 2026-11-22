@@ -98,6 +98,9 @@ struct Waiting {
     session: String,
     tool: String,
     target: String,
+    /// The path the target resolves to, "" when it is not a path: a session
+    /// grant covers that file only (`rules::SessionGrants`).
+    resolved: String,
     /// "permission", or "question" / "plan" for Claude's own interactive tools.
     kind: &'static str,
     /// What the island was sent, for an island that reloads while it waits. Its
@@ -459,6 +462,7 @@ async fn handle<C: Conn>(app: AppHandle, mut pipe: C) {
                 session: session.clone(),
                 tool: tool.clone(),
                 target: a.target.clone(),
+                resolved: a.resolved_path().to_string(),
                 kind,
                 payload: payload.clone(),
             },
@@ -831,7 +835,7 @@ pub struct Choice<'a> {
 
 /// Called by the island's Allow / Deny controls and the global shortcuts.
 pub fn answer(app: &AppHandle, request_id: &str, c: Choice) -> Result<(), String> {
-    let (level, engine_level, grantable, since, session, tool, target, kind) = {
+    let (level, engine_level, grantable, since, session, tool, target, resolved, kind) = {
         let pending = app.state::<Pending>();
         let map = pending.0.lock().unwrap();
         match map.get(request_id) {
@@ -843,6 +847,7 @@ pub fn answer(app: &AppHandle, request_id: &str, c: Choice) -> Result<(), String
                 w.session.clone(),
                 w.tool.clone(),
                 w.target.clone(),
+                w.resolved.clone(),
                 w.kind,
             ),
             None => return Err("not_pending".into()),
@@ -880,7 +885,7 @@ pub fn answer(app: &AppHandle, request_id: &str, c: Choice) -> Result<(), String
 
     let (reply, message) = if word == "allow" {
         if c.remember && grantable && level <= Level::Medium {
-            app.state::<SessionGrants>().grant(&session, &tool, &target);
+            app.state::<SessionGrants>().grant(&session, &tool, &target, &resolved);
         }
         (json!({ "behavior": "allow" }), String::new())
     } else {
@@ -1200,6 +1205,7 @@ mod tests {
             session: String::new(),
             tool: String::new(),
             target: String::new(),
+            resolved: String::new(),
             kind,
             payload: Value::Null,
         }

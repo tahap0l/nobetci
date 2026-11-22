@@ -88,6 +88,19 @@ pub struct Assessment {
     pub truncated: bool,
     #[serde(skip)]
     pub manual_review: bool,
+    /// For a file or folder path (and a Glob pattern): the names it goes by
+    /// once resolved against the session's folder, the resolved path itself
+    /// first (`resolved_names`). The user's rules and session grants check
+    /// them as well as the path as written. Empty for anything else.
+    #[serde(skip)]
+    pub resolved: Vec<String>,
+}
+
+impl Assessment {
+    /// The path the target resolves to, "" when it is not a path.
+    pub fn resolved_path(&self) -> &str {
+        self.resolved.first().map_or("", String::as_str)
+    }
 }
 
 /// Groups rules that mean more together than apart.
@@ -166,6 +179,12 @@ const L_PERSISTENCE: Label =
     ("Kalıcılık: açılışta otomatik çalışacak bir şey kuruyor", "Persistence: installs something that runs at startup");
 const L_CLAUDE_SETTINGS: Label =
     ("Claude Code izin/hook ayarlarını değiştiriyor", "Changes Claude Code permission/hook settings");
+const L_CLAUDE_HOOKS: Label = (
+    "Claude Code hook/eklenti/agent dosyası (otomatik çalışabilir)",
+    "Claude Code hook, plugin or agent file (may run automatically)",
+);
+const L_SETTINGS_TOUCH: Label =
+    ("Ajanın izin/hook ayarlarına dokunuyor", "Touches an agent's permission or hook settings");
 const L_AGENT_HOOKS: Label =
     ("Codex veya Cursor hook/onay ayarlarını değiştiriyor", "Changes Codex or Cursor hook or approval settings");
 const L_GIT_HOOKS: Label =
@@ -642,9 +661,11 @@ static COMMAND_RULES: LazyLock<Vec<Rule>> = LazyLock::new(|| {
         rule(
             "claude_settings_touch",
             Medium,
-            ("Ajanın izin/hook ayarlarına dokunuyor", "Touches an agent's permission or hook settings"),
+            L_SETTINGS_TOUCH,
             Tag::None,
-            r"\.claude[\\/]+(\.[\\/]+)*(settings(\.local)?|managed-settings)\.json|\.mcp\.json|\.(codex|cursor)[\\/]+(\.[\\/]+)*hooks\.json|\.codex[\\/]+config\.toml",
+            // `$CLAUDE_CONFIG_DIR` (also `${…}`, `%…%`, `$env:…`) is where Claude
+            // Code keeps what is otherwise in ~/.claude.
+            r"(\.claude|claude_config_dir[}%]?)[\\/]+(\.[\\/]+)*(settings(\.local)?|managed-settings)\.json|\.mcp\.json|\.(codex|cursor)[\\/]+(\.[\\/]+)*hooks\.json|\.codex[\\/]+config\.toml",
         ),
         // Low — context, not alarm.
         rule(
@@ -834,7 +855,11 @@ static WRITE_PATH_RULES: LazyLock<Vec<Rule>> = LazyLock::new(|| {
             Critical,
             L_CLAUDE_SETTINGS,
             Tag::None,
-            r"(^|[\\/])\.claude[\\/](settings(\.local)?\.json|managed-settings\.json)$|managed-settings\.json$",
+            // The folder by name, or the variable that moves it, as a path starts
+            // with it (`$CLAUDE_CONFIG_DIR/…`, `${…}`, `%…%`, `$env:…`). Where the
+            // variable points on this machine is checked separately
+            // (`config_dir_writes`).
+            r"(^|[\\/])(\.claude|(\$\{?|\$env:|%)claude_config_dir[}%]?)[\\/](settings(\.local)?\.json|managed-settings\.json)$|managed-settings\.json$",
         ),
         rule(
             "agent_hooks",
@@ -853,12 +878,9 @@ static WRITE_PATH_RULES: LazyLock<Vec<Rule>> = LazyLock::new(|| {
         rule(
             "claude_hooks",
             High,
-            (
-                "Claude Code hook/eklenti/agent dosyası (otomatik çalışabilir)",
-                "Claude Code hook, plugin or agent file (may run automatically)",
-            ),
+            L_CLAUDE_HOOKS,
             Tag::None,
-            r"(^|[\\/])\.claude[\\/](hooks|agents|commands|skills|plugins)([\\/]|$)",
+            r"(^|[\\/])(\.claude|(\$\{?|\$env:|%)claude_config_dir[}%]?)[\\/](hooks|agents|commands|skills|plugins)([\\/]|$)",
         ),
         rule(
             "mcp_config",
@@ -1190,6 +1212,101 @@ fn placed(resolved: &str, home: &str) -> Option<String> {
     (lower.is_empty() || lower == "/" || lower == "//" || lower.ends_with(':')).then(|| resolved.to_string())
 }
 
+/// `resolved` written from `~` when it lies in `home`; None otherwise.
+fn home_relative(resolved: &str, home: &str) -> Option<String> {
+    let home = resolve("", home);
+    let home = home.trim_end_matches('/');
+    if home.is_empty() || !is_absolute(home) {
+        return None;
+    }
+    let rest = resolved.get(home.len()..)?;
+    (resolved[..home.len()].eq_ignore_ascii_case(home) && (rest.is_empty() || rest.starts_with('/')))
+        .then(|| format!("~{rest}"))
+}
+
+/// The names a path goes by once resolved against `cwd` (`resolve`): the
+/// resolved path first, then with the home folder written out and written as
+/// `~`, Git Bash's `/c/…` as `c:/…`, and each of those in backslashes. Every
+/// one names the same file; none of them can climb out with `..`.
+fn resolved_names(cwd: &str, path: &str, home: &str) -> Vec<String> {
+    let resolved = resolve(cwd, path);
+    let mut names = vec![resolved.clone()];
+    if let Some(placed) = placed(&resolved, home) {
+        names.push(placed.replace('\\', "/"));
+    }
+    if let Some(short) = home_relative(&resolved, home) {
+        names.push(short);
+    }
+    let b = resolved.as_bytes();
+    if b.len() > 2 && b[0] == b'/' && b[1].is_ascii_alphabetic() && b[2] == b'/' {
+        names.push(format!("{}:{}", b[1] as char, &resolved[2..]));
+    }
+    let backslashed: Vec<String> = names.iter().map(|n| n.replace('/', "\\")).collect();
+    names.extend(backslashed);
+    let mut seen = HashSet::new();
+    names.retain(|n| seen.insert(n.clone()));
+    names
+}
+
+/// Claude Code's configuration folder when $CLAUDE_CONFIG_DIR moves it out of
+/// ~/.claude, read as hooks.rs reads it (an absolute folder, or nothing). The
+/// one place the engine looks at the environment for it: everything below is
+/// handed the folder, so tests never set the variable.
+fn claude_config_dir() -> Option<String> {
+    std::env::var_os("CLAUDE_CONFIG_DIR")
+        .map(std::path::PathBuf::from)
+        .filter(|dir| dir.is_absolute())
+        .map(|dir| dir.to_string_lossy().into_owned())
+}
+
+/// Where `resolved` lies inside the folder `dir`: the rest of its path, lower
+/// case, forward slashes. None outside it, or for a path that cannot be placed.
+fn inside_dir(resolved: &str, home: &str, dir: &str) -> Option<String> {
+    let dir = norm(&resolve("", dir));
+    if dir.is_empty() {
+        return None;
+    }
+    let path = norm(&placed(resolved, home)?);
+    path.strip_prefix(&dir)?.strip_prefix('/').map(str::to_string)
+}
+
+/// A write into Claude Code's configuration folder when $CLAUDE_CONFIG_DIR
+/// (`claude`) puts it somewhere else than ~/.claude: its settings.json and
+/// settings.local.json, and its hooks, agents, commands, skills and plugins,
+/// score as they would in ~/.claude. Anything else there keeps its own level.
+fn config_dir_writes(resolved: &str, home: &str, claude: Option<&str>, off: &Disabled, found: &mut Found) {
+    let Some(rest) = claude.and_then(|dir| inside_dir(resolved, home, dir)) else { return };
+    let (category, level, (tr, en)) = if matches!(rest.as_str(), "settings.json" | "settings.local.json") {
+        ("claude_settings", Critical, L_CLAUDE_SETTINGS)
+    } else if matches!(rest.split('/').next(), Some("hooks" | "agents" | "commands" | "skills" | "plugins")) {
+        ("claude_hooks", High, L_CLAUDE_HOOKS)
+    } else {
+        return;
+    };
+    found.add(Finding { category, level, label: i18n::pick(en, tr), excerpt: excerpt(resolved) }, Tag::None, off);
+}
+
+/// A command that names those settings files by their full path (or from `~`),
+/// as `claude_settings_touch` reads `.claude/settings.json`.
+fn config_dir_touch(cmd: &str, home: &str, claude: Option<&str>, off: &Disabled, found: &mut Found) {
+    let Some(dir) = claude.map(|dir| resolve("", dir)) else { return };
+    let dir = dir.trim_end_matches('/');
+    if dir.is_empty() {
+        return;
+    }
+    let text = cmd.replace('\\', "/").to_lowercase();
+    let spelled = [Some(dir.to_string()), home_relative(dir, home)];
+    let named = spelled
+        .iter()
+        .flatten()
+        .flat_map(|d| ["settings.json", "settings.local.json"].map(|file| format!("{}/{file}", d.to_lowercase())));
+    if let Some(path) = named.into_iter().find(|path| text.contains(path.as_str())) {
+        let label = i18n::pick(L_SETTINGS_TOUCH.1, L_SETTINGS_TOUCH.0);
+        let f = Finding { category: "claude_settings_touch", level: Medium, label, excerpt: excerpt(&path) };
+        found.add(f, Tag::None, off);
+    }
+}
+
 /// Whether a resolved path lies outside `cwd`. A path that cannot be placed
 /// (another user's home, an environment variable) is not inside it.
 fn outside(resolved: &str, cwd: &str, home: &str) -> bool {
@@ -1247,9 +1364,18 @@ fn scan_path<'r>(
     }
 }
 
-/// Reads a command as text and as commands; `cwd` is where it runs.
-fn command_findings(cmd: &str, dialect: shell::Dialect, cwd: &str, home: &str, off: &Disabled, found: &mut Found) {
+/// Reads a command as text and as commands; `cwd` is where it runs, `claude`
+/// Claude Code's configuration folder when $CLAUDE_CONFIG_DIR moves it.
+fn command_findings(
+    cmd: &str,
+    dialect: shell::Dialect,
+    cwd: &str,
+    (home, claude): (&str, Option<&str>),
+    off: &Disabled,
+    found: &mut Found,
+) {
     scan(&*COMMAND_RULES, cmd, off, found);
+    config_dir_touch(cmd, home, claude, off, found);
     let pipes = shell::parse(cmd, dialect);
     for d in DETECTORS {
         if let Some(text) = (d.find)(&pipes) {
@@ -1263,6 +1389,7 @@ fn command_findings(cmd: &str, dialect: shell::Dialect, cwd: &str, home: &str, o
     for w in shell::writes(&pipes, cwd) {
         if w.content {
             scan_path(write_rules(&w.path, cwd, home), &w.raw, &w.path, off, found);
+            config_dir_writes(&w.path, home, claude, off, found);
         } else {
             scan_path(WRITE_PATH_RULES.iter().filter(|r| r.category == "nobetci_self"), &w.raw, &w.path, off, found);
         }
@@ -1569,6 +1696,8 @@ struct McpContext<'a> {
     reads: bool,
     cwd: &'a str,
     home: &'a str,
+    /// Claude Code's configuration folder when $CLAUDE_CONFIG_DIR moves it.
+    claude: Option<&'a str>,
 }
 
 /// Reads what an MCP tool is handed, the way it would be read for Bash, Write
@@ -1577,7 +1706,7 @@ fn mcp_arguments(value: &Value, key: &str, cx: &McpContext, off: &Disabled, foun
     match value {
         Value::String(s) if !s.trim().is_empty() => {
             if MCP_COMMAND_KEYS.contains(&key) {
-                command_findings(s, shell::Dialect::Posix, cx.cwd, cx.home, off, found);
+                command_findings(s, shell::Dialect::Posix, cx.cwd, (cx.home, cx.claude), off, found);
             } else if MCP_SQL_KEYS.contains(&key) && (key != "query" || !cx.reads) {
                 scan(&*COMMAND_RULES, s, off, found);
             }
@@ -1588,6 +1717,7 @@ fn mcp_arguments(value: &Value, key: &str, cx: &McpContext, off: &Disabled, foun
                 let resolved = resolve(cx.cwd, s);
                 if cx.changes {
                     scan_path(write_rules(&resolved, cx.cwd, cx.home), s, &resolved, off, found);
+                    config_dir_writes(&resolved, cx.home, cx.claude, off, found);
                     if outside(&resolved, cx.cwd, cx.home) {
                         found.synthetic("outside_project", Medium, excerpt(&resolved), off);
                     }
@@ -1694,14 +1824,32 @@ fn home_dir() -> String {
 
 /// Scores one permission request, skipping the categories in `off`.
 pub fn assess_with(tool: &str, input: &Value, cwd: &str, truncated: bool, off: &Disabled) -> Assessment {
-    assess_in(tool, input, cwd, truncated, off, &home_dir())
+    let claude = claude_config_dir();
+    assess_at(tool, input, cwd, truncated, off, (&home_dir(), claude.as_deref()))
 }
 
+/// `assess_at` with no $CLAUDE_CONFIG_DIR, whatever this process's environment says.
+#[cfg(test)]
 fn assess_in(tool: &str, input: &Value, cwd: &str, truncated: bool, off: &Disabled, home: &str) -> Assessment {
+    assess_at(tool, input, cwd, truncated, off, (home, None))
+}
+
+/// Scores one request for a user whose home folder is `home` ("" when unknown)
+/// and whose Claude Code keeps its configuration in `claude` when
+/// $CLAUDE_CONFIG_DIR moves it out of ~/.claude.
+fn assess_at(
+    tool: &str,
+    input: &Value,
+    cwd: &str,
+    truncated: bool,
+    off: &Disabled,
+    (home, claude): (&str, Option<&str>),
+) -> Assessment {
     let mut found = Found::default();
     let lower = tool.to_ascii_lowercase();
     let mut edits = Vec::new();
     let mut preview_before = None;
+    let mut names = Vec::new();
 
     let (kind, target, preview) = if lower.starts_with("mcp__") {
         // Checked first: an MCP tool is an MCP tool whatever its arguments are
@@ -1727,14 +1875,14 @@ fn assess_in(tool: &str, input: &Value, cwd: &str, truncated: bool, off: &Disabl
         }
         // What it is handed still counts.
         let reads = action_words(tool).first().is_some_and(|w| MCP_READ.contains(&w.as_str()));
-        let cx = McpContext { changes: level >= Medium, reads, cwd, home };
+        let cx = McpContext { changes: level >= Medium, reads, cwd, home, claude };
         mcp_arguments(input, "", &cx, off, &mut found, 0);
         // Every argument, whole: Allow authorises all of them, and a session
         // grant must match all of them.
         (Kind::Mcp, canonical(input), None)
     } else if let Some(cmd) = str_field(input, "command") {
         let dialect = if lower == "powershell" { shell::Dialect::PowerShell } else { shell::Dialect::Posix };
-        command_findings(cmd, dialect, cwd, home, off, &mut found);
+        command_findings(cmd, dialect, cwd, (home, claude), off, &mut found);
         if cmd.len() > 2000 {
             found.synthetic("long_command", Medium, String::new(), off);
         }
@@ -1746,7 +1894,9 @@ fn assess_in(tool: &str, input: &Value, cwd: &str, truncated: bool, off: &Disabl
         let path = str_field(input, "file_path").or_else(|| str_field(input, "notebook_path")).unwrap_or("");
         let resolved = resolve(cwd, path);
         if !path.is_empty() {
+            names = resolved_names(cwd, path, home);
             scan_path(write_rules(&resolved, cwd, home), path, &resolved, off, &mut found);
+            config_dir_writes(&resolved, home, claude, off, &mut found);
             if outside(&resolved, cwd, home) {
                 let label = i18n::pick("Writes outside the project folder", "Proje klasörü dışına yazıyor");
                 let f = Finding { category: "outside_project", level: Medium, label, excerpt: excerpt(&resolved) };
@@ -1765,12 +1915,14 @@ fn assess_in(tool: &str, input: &Value, cwd: &str, truncated: bool, off: &Disabl
         edits = list;
         (Kind::Write, path.to_string(), after)
     } else if matches!(lower.as_str(), "read" | "glob" | "grep" | "ls" | "notebookread") {
-        let path = str_field(input, "file_path")
-            .or_else(|| str_field(input, "path"))
-            .or_else(|| str_field(input, "pattern"))
-            .unwrap_or("");
+        let named = str_field(input, "file_path").or_else(|| str_field(input, "path"));
+        let path = named.or_else(|| str_field(input, "pattern")).unwrap_or("");
         let resolved = resolve(cwd, path);
         if !path.is_empty() {
+            // Glob's pattern is a path with wildcards; Grep's is a regular expression.
+            if named.is_some() || lower != "grep" {
+                names = resolved_names(cwd, path, home);
+            }
             scan_path(&*READ_PATH_RULES, path, &resolved, off, &mut found);
             if outside(&resolved, cwd, home) {
                 let label = i18n::pick("Reads outside the project folder", "Proje klasörü dışını okuyor");
@@ -1818,7 +1970,18 @@ fn assess_in(tool: &str, input: &Value, cwd: &str, truncated: bool, off: &Disabl
     findings.sort_by_key(|f| std::cmp::Reverse(f.level));
     let level = findings.first().map(|f| f.level).unwrap_or(Low);
 
-    Assessment { level, kind, target, preview, preview_before, edits, findings, truncated, manual_review }
+    Assessment {
+        level,
+        kind,
+        target,
+        preview,
+        preview_before,
+        edits,
+        findings,
+        truncated,
+        manual_review,
+        resolved: names,
+    }
 }
 
 #[cfg(test)]
@@ -2319,5 +2482,104 @@ mod tests {
         assert!(!outside("~/project/a.txt", p, "/home/dev"));
         assert!(outside("~/project/a.txt", p, ""), "an unknown home is not inside the project");
         assert!(outside("%APPDATA%/x", p, "/home/dev"));
+    }
+
+    #[test]
+    fn a_path_is_known_by_every_name_it_resolves_to() {
+        let has = |names: &[String], name: &str| names.iter().any(|n| n == name);
+        let names = resolved_names("/home/dev/app", "../app/./src//x.rs", "/home/dev");
+        assert_eq!(names[0], "/home/dev/app/src/x.rs");
+        assert!(has(&names, "~/app/src/x.rs") && has(&names, r"\home\dev\app\src\x.rs"), "{names:?}");
+        let names = resolved_names("/home/dev/app", "~/notes/../.ssh/id", "/home/dev");
+        assert_eq!(names[0], "~/.ssh/id");
+        assert!(has(&names, "/home/dev/.ssh/id"), "{names:?}");
+        let names = resolved_names(r"C:\Users\dev\app", r"..\..\..\Windows\x.dll", r"C:\Users\dev");
+        assert_eq!(names[0], "C:/Windows/x.dll");
+        assert!(has(&names, r"C:\Windows\x.dll"), "{names:?}");
+        assert!(names.iter().all(|n| !n.split(['/', '\\']).any(|part| part == "..")), "{names:?}");
+        let names = resolved_names(r"C:\Users\dev\app", r"C:\Users\Dev\.ssh\id", r"C:\Users\dev");
+        assert!(has(&names, "~/.ssh/id") && has(&names, r"~\.ssh\id"), "{names:?}");
+        assert!(has(&resolved_names("/c/Users/dev/app", "x.rs", ""), "c:/Users/dev/app/x.rs"));
+        // A home folder is a whole folder, not a prefix of a name.
+        assert!(!resolved_names("/", "/home/devil/x", "/home/dev").iter().any(|n| n.starts_with('~')));
+        // Only paths have them: a Write's or a Read's, not a command, not Grep's regex.
+        let off = Disabled::new();
+        let write = assess_in("Write", &json!({ "file_path": "a/../b.txt", "content": "" }), "/w", false, &off, "/h");
+        assert_eq!(write.resolved_path(), "/w/b.txt");
+        let bash = assess_in("Bash", &json!({ "command": "cat ../x" }), "/w", false, &off, "/h");
+        assert!(bash.resolved.is_empty());
+        let grep = assess_in("Grep", &json!({ "pattern": "a\\.b" }), "/w", false, &off, "/h");
+        assert!(grep.resolved.is_empty());
+        let grep = assess_in("Grep", &json!({ "pattern": "x", "path": "src/.." }), "/w", false, &off, "/h");
+        assert_eq!(grep.resolved_path(), "/w");
+        let glob = assess_in("Glob", &json!({ "pattern": "src/../../etc/*" }), "/w", false, &off, "/h");
+        assert_eq!(glob.resolved_path(), "/etc/*");
+    }
+
+    #[test]
+    fn claude_code_settings_where_claude_config_dir_keeps_them() {
+        // The folder is handed in (`assess_at`), as assess_with hands in what
+        // $CLAUDE_CONFIG_DIR says: this test never sets the variable.
+        const DIR: &str = "/home/dev/.config/claude";
+        let off = Disabled::new();
+        let at = |tool: &str, input: Value, claude: Option<&str>| {
+            assess_at(tool, &input, "/work/app", false, &off, ("/home/dev", claude))
+        };
+        let write = |path: &str, claude| at("Write", json!({ "file_path": path, "content": "{}" }), claude).level;
+        let bash = |command: &str, claude| at("Bash", json!({ "command": command }), claude).level;
+        let dir = Some(DIR);
+
+        for path in [
+            "/home/dev/.config/claude/settings.json",
+            "/home/dev/.config/claude/settings.local.json",
+            "~/.config/claude/settings.json",
+            "/home/dev/.config/claude/plugins/../settings.json",
+            "/HOME/dev/.config/Claude/Settings.json",
+        ] {
+            assert_eq!(write(path, dir), Critical, "{path}");
+        }
+        assert_eq!(write("/home/dev/.config/claude/agents/reviewer.md", dir), High);
+        assert_eq!(write("/home/dev/.config/claude/commands/deploy.md", dir), High);
+        assert_eq!(bash("echo '{}' > /home/dev/.config/claude/settings.json", dir), Critical);
+        assert_eq!(bash("cd ~/.config/claude && cp /tmp/x.json settings.local.json", dir), Critical);
+        assert_eq!(bash("cat /home/dev/.config/claude/settings.json", dir), Medium, "like cat ~/.claude/settings.json");
+        let mcp = at("mcp__fs__write_file", json!({ "path": "/home/dev/.config/claude/settings.json" }), dir);
+        assert_eq!(mcp.level, Critical);
+        let windows = assess_at(
+            "Write",
+            &json!({ "file_path": r"C:\Users\dev\claude-config\settings.json", "content": "{}" }),
+            r"C:\work\app",
+            false,
+            &off,
+            (r"C:\Users\dev", Some(r"C:\Users\dev\claude-config")),
+        );
+        assert_eq!(windows.level, Critical);
+        // The variable by name means that folder, whatever Nöbetçi's own environment says.
+        assert_eq!(bash("echo '{}' > \"$CLAUDE_CONFIG_DIR/settings.json\"", None), Critical);
+        assert_eq!(bash("echo '{}' > ${CLAUDE_CONFIG_DIR}/settings.local.json", None), Critical);
+        assert_eq!(write("$CLAUDE_CONFIG_DIR/settings.json", None), Critical);
+        assert_eq!(write("%CLAUDE_CONFIG_DIR%\\hooks\\stop.ps1", None), High);
+        assert_eq!(bash("cat $CLAUDE_CONFIG_DIR/settings.json", None), Medium);
+
+        // Stays as it was: another file in that folder, the same name elsewhere,
+        // and the folder when the variable is not set.
+        for path in [
+            "/home/dev/.config/claude/notes.md",
+            "/home/dev/.config/claude/settings.json.bak",
+            "/home/dev/.config/claude/projects/x/settings.json",
+            "/work/app/settings.json",
+            "/work/app/config/settings.local.json",
+            "/work/app/agents/reviewer.md",
+        ] {
+            assert_eq!(write(path, dir), write(path, None), "{path}");
+        }
+        assert_eq!(write("/work/app/settings.json", dir), Low);
+        assert_eq!(write("/work/app/commands/deploy.md", dir), Low);
+        assert_eq!(bash("cat settings.json && npm test", dir), Low);
+        assert_eq!(bash("cat /work/app/settings.local.json", dir), Low);
+        assert_eq!(write("/home/dev/.config/claude/settings.json", None), Medium, "only outside the project");
+        assert_eq!(bash("echo $CLAUDE_CONFIG_DIR", None), Low);
+        // A folder of a similar name is not the folder.
+        assert_eq!(write("/home/dev/.config/claude-old/settings.json", dir), Medium);
     }
 }

@@ -9,7 +9,9 @@
 // Matching is deliberately lopsided. A rule that denies, asks or raises the risk
 // matches as widely as its pattern reads: there a wider net is the safe side. A
 // rule that lets a command through, or calms its risk down, covers that command
-// alone — "npm test" → allow says nothing about `npm test && curl … | sh`.
+// alone — "npm test" → allow says nothing about `npm test && curl … | sh` — and
+// a path only where it really leads: `Write /p/*` says nothing about
+// `/p/../etc/hosts`, while `Write /etc/*` does catch it.
 
 use std::collections::HashSet;
 use std::sync::Mutex;
@@ -58,20 +60,24 @@ pub struct Evaluation {
 
 /// "Don't ask again in this session", granted from the card. In memory only:
 /// a restart forgets them, which is the point.
+///
+/// A grant is for the target as written and, for a path, for the file it
+/// resolved to at the time (`resolved`, `Assessment::resolved_path`): the same
+/// relative path is another file once the session works in another folder.
 #[derive(Default)]
-pub struct SessionGrants(Mutex<HashSet<(String, String, String)>>);
+pub struct SessionGrants(Mutex<HashSet<(String, String, String, String)>>);
 
 impl SessionGrants {
-    pub fn grant(&self, session: &str, tool: &str, target: &str) {
-        self.0.lock().unwrap().insert((session.into(), tool.into(), target.into()));
+    pub fn grant(&self, session: &str, tool: &str, target: &str, resolved: &str) {
+        self.0.lock().unwrap().insert((session.into(), tool.into(), target.into(), resolved.into()));
     }
 
-    pub fn has(&self, session: &str, tool: &str, target: &str) -> bool {
-        self.0.lock().unwrap().contains(&(session.into(), tool.into(), target.into()))
+    pub fn has(&self, session: &str, tool: &str, target: &str, resolved: &str) -> bool {
+        self.0.lock().unwrap().contains(&(session.into(), tool.into(), target.into(), resolved.into()))
     }
 
     pub fn forget_session(&self, session: &str) {
-        self.0.lock().unwrap().retain(|(s, _, _)| s != session);
+        self.0.lock().unwrap().retain(|(s, ..)| s != session);
     }
 }
 
@@ -174,16 +180,48 @@ fn starts_with_word(text: &str, prefix: &str) -> bool {
 
 /// Whether `pattern` (in `mode`) matches `target`. A broken regex matches nothing.
 pub fn pattern_matches(mode: &str, pattern: &str, target: &str) -> bool {
+    matches_any(mode, pattern, [target])
+}
+
+/// Whether `pattern` (in `mode`) matches any of `targets`, compiled once.
+fn matches_any<'t>(mode: &str, pattern: &str, targets: impl IntoIterator<Item = &'t str>) -> bool {
     let pattern = pattern.trim();
     if pattern.is_empty() {
         return true;
     }
-    let (t, p) = (target.to_lowercase(), pattern.to_lowercase());
-    match mode {
-        "prefix" => starts_with_word(t.trim_start(), &p),
-        "exact" => t.trim() == p,
-        "glob" | "regex" => compile(mode, pattern).map(|re| re.is_match(target)).unwrap_or(false),
-        _ => t.contains(&p),
+    let p = pattern.to_lowercase();
+    let re = match mode {
+        "glob" | "regex" => match compile(mode, pattern) {
+            Ok(re) => Some(re),
+            Err(_) => return false,
+        },
+        _ => None,
+    };
+    targets.into_iter().any(|target| {
+        let t = target.to_lowercase();
+        match (&re, mode) {
+            (Some(re), _) => re.is_match(target),
+            (None, "prefix") => starts_with_word(t.trim_start(), &p),
+            (None, "exact") => t.trim() == p,
+            (None, _) => t.contains(&p),
+        }
+    })
+}
+
+/// Whether the rule's pattern covers the request's target. A path counts as
+/// written and as it resolves (`Assessment::resolved`): a rule that lets the
+/// request through or calms it down must cover both, one that denies, asks or
+/// raises the risk either.
+fn covers(rule: &UserRule, a: &Assessment, loosens: bool) -> bool {
+    let written = pattern_matches(&rule.mode, &rule.pattern, &a.target);
+    if a.resolved.is_empty() {
+        return written;
+    }
+    let resolved = || matches_any(&rule.mode, &rule.pattern, a.resolved.iter().map(String::as_str));
+    if loosens {
+        written && resolved()
+    } else {
+        written || resolved()
     }
 }
 
@@ -246,10 +284,11 @@ fn command_of<'a>(a: &'a Assessment, input: &'a Value) -> Option<&'a str> {
 }
 
 fn rule_matches(rule: &UserRule, req: &Request, a: &Assessment) -> bool {
+    let loosens = lets_through(&rule.action, a.level);
     if !rule.enabled
         || !tool_matches(&rule.tool, req.tool)
         || !(rule.project.trim().is_empty() || within(req.cwd, &rule.project))
-        || !pattern_matches(&rule.mode, &rule.pattern, &a.target)
+        || !covers(rule, a, loosens)
     {
         return false;
     }
@@ -259,7 +298,7 @@ fn rule_matches(rule: &UserRule, req: &Request, a: &Assessment) -> bool {
     // regex pattern says precisely what it means.
     let pattern = rule.pattern.trim();
     let loose = pattern.is_empty() || !matches!(rule.mode.as_str(), "exact" | "regex");
-    if loose && lets_through(&rule.action, a.level) {
+    if loose && loosens {
         if let Some(command) = command_of(a, req.input) {
             return !runs_more_than(command, pattern);
         }
@@ -359,7 +398,10 @@ pub fn evaluate(req: &Request, settings: &Settings, grants: &SessionGrants) -> E
 
     // A grant from the card is still an automatic approval: it obeys the same
     // ceiling as rules and trusted projects (and never goes past medium).
-    if grants.has(req.session, req.tool, &a.target) && a.level <= Level::Medium && may_auto_allow(a.level) {
+    if grants.has(req.session, req.tool, &a.target, a.resolved_path())
+        && a.level <= Level::Medium
+        && may_auto_allow(a.level)
+    {
         return verdict(
             Outcome::Allow,
             Some("session"),
@@ -478,7 +520,7 @@ mod tests {
         assert!(!e.grantable, "and it cannot be granted for the session either");
 
         let grants = SessionGrants::default();
-        grants.grant("s1", "Bash", "git push --force origin main");
+        grants.grant("s1", "Bash", "git push --force origin main", "");
         let input = bash("git push --force origin main");
         let req = Request { tool: "Bash", input: &input, cwd: CWD, session: "s1", truncated: false };
         assert_eq!(evaluate(&req, &with_rule(rescore), &grants).outcome, Outcome::Ask);
@@ -567,7 +609,7 @@ mod tests {
         let grants = SessionGrants::default();
         let input = bash("npm test");
         let req = Request { tool: "Bash", input: &input, cwd: CWD, session: "s1", truncated: false };
-        grants.grant("s1", "Bash", "npm test");
+        grants.grant("s1", "Bash", "npm test", "");
         let off = Settings { auto_allow_max: "none".into(), ..Settings::default() };
         assert_eq!(evaluate(&req, &off, &grants).outcome, Outcome::Ask, "ceiling off: no grants either");
         assert_eq!(evaluate(&req, &Settings::default(), &grants).by, Some("session"), "low under a low ceiling");
@@ -580,14 +622,14 @@ mod tests {
         let input = bash("git push origin main");
         let req = Request { tool: "Bash", input: &input, cwd: CWD, session: "s1", truncated: false };
         assert_eq!(evaluate(&req, &s, &grants).outcome, Outcome::Ask);
-        grants.grant("s1", "Bash", "git push origin main");
+        grants.grant("s1", "Bash", "git push origin main", "");
         assert_eq!(evaluate(&req, &s, &grants).by, Some("session"));
         // Another session is not covered.
         let other = Request { session: "s2", ..req };
         assert_eq!(evaluate(&other, &s, &grants).outcome, Outcome::Ask);
 
         let risky = bash("git push --force");
-        grants.grant("s1", "Bash", "git push --force");
+        grants.grant("s1", "Bash", "git push --force", "");
         let req = Request { tool: "Bash", input: &risky, cwd: CWD, session: "s1", truncated: false };
         assert_eq!(evaluate(&req, &s, &grants).outcome, Outcome::Ask, "high stays with a person");
     }
@@ -779,5 +821,119 @@ mod tests {
         let input = bash("echo hi");
         let req = Request { tool: "Bash", input: &input, cwd: CWD, session: "s1", truncated: true };
         assert_eq!(evaluate(&req, &s, &SessionGrants::default()).outcome, Outcome::Ask);
+    }
+
+    const APP: &str = "/work/app";
+
+    fn path_request(settings: &Settings, tool: &str, input: Value, cwd: &str) -> Evaluation {
+        let req = Request { tool, input: &input, cwd, session: "s1", truncated: false };
+        evaluate(&req, settings, &SessionGrants::default())
+    }
+
+    fn write_to(settings: &Settings, path: &str, cwd: &str) -> Evaluation {
+        path_request(settings, "Write", json!({ "file_path": path, "content": "x" }), cwd)
+    }
+
+    fn for_writes(r: UserRule) -> UserRule {
+        UserRule { tool: "Write".into(), ..r }
+    }
+
+    #[test]
+    fn an_allow_rule_on_a_folder_does_not_reach_past_it() {
+        // A path counts where it leads: `Write /work/app/*` says nothing about
+        // `/work/app/../other`.
+        let s = Settings {
+            auto_allow_max: "medium".into(),
+            rules: vec![for_writes(rule("/work/app/*", "glob", "allow"))],
+            ..Settings::default()
+        };
+        for path in ["/work/app/src/main.rs", "/work/app/./src/../README.md", "/work/app/docs//guide.md"] {
+            let e = write_to(&s, path, APP);
+            assert_eq!((e.outcome, e.by), (Outcome::Allow, Some("rule")), "{path}");
+        }
+        for path in ["/work/app/../other/notes.txt", "/work/app/src/../../../etc/hosts"] {
+            let e = write_to(&s, path, APP);
+            assert_eq!(e.outcome, Outcome::Ask, "{path}");
+            assert!(e.rule.is_none(), "{path}: the rule stands back entirely");
+        }
+        // The same with Windows paths, in their own spelling.
+        let s = Settings {
+            auto_allow_max: "medium".into(),
+            rules: vec![for_writes(rule(r"C:\work\app\*", "glob", "allow"))],
+            ..Settings::default()
+        };
+        let e = write_to(&s, r"C:\work\app\src\main.rs", r"C:\work\app");
+        assert_eq!((e.outcome, e.by), (Outcome::Allow, Some("rule")));
+        let e = write_to(&s, r"C:\work\app\..\other\notes.txt", r"C:\work\app");
+        assert_eq!((e.outcome, e.rule.as_deref()), (Outcome::Ask, None));
+        // A home folder spelled `~`: no climbing out of it either.
+        let s = Settings {
+            auto_allow_max: "medium".into(),
+            rules: vec![for_writes(rule("~/notes/*", "glob", "allow"))],
+            ..Settings::default()
+        };
+        assert_eq!(write_to(&s, "~/notes/todo.md", APP).outcome, Outcome::Allow);
+        let e = write_to(&s, "~/notes/../.ssh/authorized_keys", APP);
+        assert_eq!((e.outcome, e.rule.as_deref()), (Outcome::Ask, None));
+    }
+
+    #[test]
+    fn a_deny_or_raising_rule_catches_a_path_that_climbs_into_its_folder() {
+        let s = with_rule(for_writes(rule("/etc/*", "glob", "deny")));
+        for path in ["/etc/hosts", "/work/app/../../etc/hosts", "../../etc/hosts", "/work//app/..//../etc/hosts"] {
+            let e = write_to(&s, path, APP);
+            assert_eq!((e.outcome, e.by), (Outcome::Deny, Some("rule")), "{path}");
+        }
+        assert_ne!(write_to(&s, "/work/app/etc/config.toml", APP).outcome, Outcome::Deny, "a folder of the same name");
+        let s = with_rule(for_writes(rule(r"C:\Windows\*", "glob", "deny")));
+        let e = write_to(&s, r"C:\work\app\..\..\Windows\System32\drivers\etc\hosts", r"C:\work\app");
+        assert_eq!(e.outcome, Outcome::Deny);
+        let s = with_rule(for_writes(rule("/etc/", "prefix", "critical")));
+        assert_eq!(write_to(&s, "/work/app/../../etc/hosts", APP).assessment.level, Level::Critical);
+    }
+
+    #[test]
+    fn a_lowering_rule_on_a_folder_does_not_reach_past_it_either() {
+        // Calming a request down drops the hold a high one needs.
+        let s = with_rule(for_writes(rule("/shared/*", "glob", "low")));
+        let e = write_to(&s, "/shared/notes.txt", APP);
+        assert_eq!((e.assessment.level, e.rule.as_deref()), (Level::Low, Some("/shared/*")));
+        let e = write_to(&s, "/shared/../etc/hosts", APP);
+        assert_eq!((e.assessment.level, e.rule.as_deref()), (Level::High, None), "the engine's high stands");
+    }
+
+    #[test]
+    fn a_session_grant_covers_the_file_it_was_given_for() {
+        let grants = SessionGrants::default();
+        let input = json!({ "file_path": "notes/todo.md", "content": "x" });
+        let at = |cwd| Request { tool: "Write", input: &input, cwd, session: "s1", truncated: false };
+        let s = Settings::default();
+        let first = evaluate(&at(APP), &s, &grants);
+        assert_eq!(first.outcome, Outcome::Ask);
+        assert!(first.grantable);
+        assert_eq!(first.assessment.resolved_path(), "/work/app/notes/todo.md");
+        grants.grant("s1", "Write", &first.assessment.target, first.assessment.resolved_path());
+        assert_eq!(evaluate(&at(APP), &s, &grants).by, Some("session"), "the same file again");
+        // The session works elsewhere now: the same words name another file.
+        assert_eq!(evaluate(&at("/work/other"), &s, &grants).outcome, Outcome::Ask);
+        // An absolute path is the same file wherever the session is.
+        let input = json!({ "file_path": "/work/app/src/lib.rs", "content": "x" });
+        let req = |cwd| Request { tool: "Write", input: &input, cwd, session: "s1", truncated: false };
+        let e = evaluate(&req(APP), &s, &grants);
+        grants.grant("s1", "Write", &e.assessment.target, e.assessment.resolved_path());
+        assert_eq!(evaluate(&req(APP), &s, &grants).by, Some("session"));
+    }
+
+    #[test]
+    fn a_glob_pattern_is_a_path_and_a_grep_pattern_is_not() {
+        let s = with_rule(UserRule { tool: "Glob".into(), ..rule("/work/app/", "prefix", "allow") });
+        let glob = |pattern: &str| path_request(&s, "Glob", json!({ "pattern": pattern }), APP);
+        assert_eq!(glob("/work/app/src/**/*.rs").outcome, Outcome::Allow);
+        assert_eq!(glob("/work/app/../../etc/*").outcome, Outcome::Ask);
+        // A regular expression is matched as written, backslashes and all.
+        let s = with_rule(UserRule { tool: "Grep".into(), ..rule("fn main", "prefix", "allow") });
+        let e = path_request(&s, "Grep", json!({ "pattern": "fn main\\(" }), APP);
+        assert_eq!((e.outcome, e.by), (Outcome::Allow, Some("rule")));
+        assert!(e.assessment.resolved.is_empty());
     }
 }
