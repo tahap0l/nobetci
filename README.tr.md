@@ -330,9 +330,9 @@ geldin sihirbazı açılır: dilini seç, Claude Code'a bağlan, sağlık testin
 temellerini ayarla, bitti. İstersen atlayabilirsin — sihirbazdaki her şey Ayarlar'da da var.
 
 Nöbetçi'nin Claude Code'u görebilmesi için hook'larının `~/.claude/settings.json` dosyasında
-olması gerekir (Claude Code'un ayarlarını kendi seçtiğin bir klasörde tutuyorsan ve Nöbetçi de o
-değişkeni görüyorsa `$CLAUDE_CONFIG_DIR/settings.json` dosyasında; hangi dosyanın kullanıldığını
-**Ayarlar → Claude Code** gösterir). Sihirbazın **Claude Code'a bağlan** adımı — ya da istediğin
+olması gerekir (Claude Code'un ayarlarını `CLAUDE_CONFIG_DIR` ile kendi seçtiğin bir klasörde
+tutuyorsan ve Nöbetçi de bu değişkeni görüyorsa `$CLAUDE_CONFIG_DIR/settings.json` dosyasında; hangi
+dosyanın kullanıldığını **Ayarlar → Claude Code** gösterir). Sihirbazın **Claude Code'a bağlan** adımı — ya da istediğin
 zaman **Ayarlar → Claude Code → Hook'ları kur…** — bunu dikkatle yapar:
 
 - yapılacak değişikliği, dosyaya dokunulmadan önce fark (diff) olarak görürsün;
