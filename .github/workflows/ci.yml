@@ -146,12 +146,16 @@ jobs:
         with:
           persist-credentials: false
 
+      # The GStreamer plugins and patchelf are for the AppImage, which carries
+      # every plugin installed here (bundleMediaFramework): the island's sounds
+      # are WebAudio, which WebKitGTK plays through appsrc and autoaudiosink.
       - name: Install the system libraries
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev \
-            libxi-dev libxdo-dev libdbus-1-dev libssl-dev file
+            libxi-dev libxdo-dev libdbus-1-dev libssl-dev file patchelf \
+            gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-pulseaudio gstreamer1.0-alsa
 
       - name: Set up Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -183,6 +187,18 @@ jobs:
 
       - name: Build the .deb and the AppImage
         run: npm run pack:linux
+
+      # Without these the AppImage plays none of the island's sounds.
+      - name: Check the AppImage carries the audio plugins
+        run: |
+          set -euo pipefail
+          appimage=$(ls "$GITHUB_WORKSPACE"/release/Nobetci-*-linux-amd64.AppImage)
+          cd "$RUNNER_TEMP"
+          "$appimage" --appimage-extract > /dev/null
+          for plugin in libgstapp.so libgstautodetect.so libgstaudioconvert.so libgstaudioresample.so libgstpulseaudio.so libgstalsa.so; do
+            test -f "squashfs-root/usr/lib/gstreamer-1.0/$plugin" || { echo "::error::The AppImage has no $plugin, so its sounds would not play."; exit 1; }
+          done
+          echo "The AppImage carries the audio plugins."
 
       - name: Upload the packages
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

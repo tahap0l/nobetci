@@ -38,7 +38,11 @@ jobs:
         env:
           CF_PAGES: "1"
           NOBETCI_WEBSITE_BASE: /${{ github.event.repository.name }}/
-      - uses: actions/upload-pages-artifact@v5
+      # GitHub Pages sends no custom headers and would publish _headers as a
+      # plain file. The pages carry their policy in <meta> tags instead (see
+      # website/public/_headers for what that covers and what it cannot).
+      - run: rm -f dist/_headers
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
           path: dist
 
@@ -52,6 +56,6 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/deploy-pages@v5
+      - uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
         id: deployment
 

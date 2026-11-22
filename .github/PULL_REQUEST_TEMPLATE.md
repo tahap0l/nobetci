@@ -14,8 +14,9 @@
 
 - [ ] `npm run check:invisible`, `npx tsc --noEmit`, `cargo fmt --all --check`, `npm run lint` and `npm test` pass locally.
 - [ ] Tests are added or updated. A new risk rule comes with a test **and** a "stays low" case for everyday commands.
-- [ ] Every new or changed UI string exists in **Turkish and English**.
+- [ ] Every new or changed UI string exists in **Turkish and English** (with `@mac` / `@linux` variants where the wording differs).
 - [ ] No `innerHTML` (nor `outerHTML`, `insertAdjacentHTML` or `document.write`): the DOM is built with `h()` and text nodes.
 - [ ] UI changes come with screenshots in both languages.
-- [ ] The ground rules still hold: Claude Code is never blocked, `~/.claude/settings.json` is only written after a reviewed diff, nothing HIGH or CRITICAL is approved without a person, and there is no telemetry or network access.
-- [ ] User-visible changes are noted under **Unreleased** in `CHANGELOG.md`.
+- [ ] The ground rules still hold: Claude Code is never blocked, `~/.claude/settings.json` is only written after a reviewed diff, nothing HIGH or CRITICAL is approved without a person, and there is no telemetry and no network access the user didn't switch on.
+- [ ] OS-specific code sits behind `#[cfg(…)]` in its own module, and CI is green on Windows, macOS and Linux.
+- [ ] User-visible changes are noted under **Unreleased** in `CHANGELOG.md`, and the README and the installation guide (both languages) say what changed.
