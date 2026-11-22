@@ -388,7 +388,8 @@ Esc, ✕ or the shortcut close it again.
 
 The island doesn't take the keyboard: clicking it, or the desktop mascot, leaves your terminal or
 editor active, and on Windows neither shows up in Alt-Tab. Only the island's text boxes — the
-assistant, the session search, the agenda — take the keyboard, while you type in them.
+assistant, the session search, the agenda, and the answer and note boxes on question and plan
+cards — take the keyboard, while you type in them.
 
 The tray icon (the menu bar icon on a Mac) has **Open Nöbetçi**, **Settings…**, **Pause / resume**,
 **Do not disturb on / off**, **Desktop mascot on / off** and **Quit**. Pausing hands every waiting request
@@ -726,7 +727,9 @@ command until its entries are removed.
 `nobetci --remove-hooks` removes only Nöbetçi's own entries from all three files, leaves every
 other setting and every other tool's hooks alone, and saves a dated backup next to each file
 (`settings.json.bak-…`, `hooks.json.bak-…`). It shows no diff — it is the uninstaller's command —
-but prints one line per file, and exits with status 1 if a file couldn't be cleaned.
+but in a terminal on macOS and Linux it prints one line per file, and it exits with status 1 if a
+file couldn't be cleaned. On Windows it has no console: what it removed, or couldn't, goes to
+`%LOCALAPPDATA%\Nobetci\nobetci.log`, and the uninstaller reads the exit status.
 (If an agent asks to run it, Nöbetçi scores it CRITICAL: only you should.) To review each change
 instead, use **Settings → Claude Code → Remove…**, **Settings → ChatGPT → Remove connection…**
 and **Settings → Other agents → Remove connection…**.

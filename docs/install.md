@@ -191,8 +191,15 @@ choose **Uninstall**. The uninstaller:
 
 If the hooks can't be removed (a read-only or locked file, for example), the uninstaller keeps the
 relay and the log, so Claude Code, Codex and Cursor go on working, and shows which entries to delete
-by hand; the log says what went wrong. `nobetci.exe --remove-hooks` prints one line per file and
-exits with status 1 when a file couldn't be cleaned (0 when no entry of Nöbetçi's is left).
+by hand; the log says what went wrong. `nobetci.exe --remove-hooks` opens no console window, so
+nothing it prints shows up: each file it cleans, or fails to clean, is noted in
+`%LOCALAPPDATA%\Nobetci\nobetci.log`, and the uninstaller reads its exit status — 1 when a file
+couldn't be cleaned, 0 when no entry of Nöbetçi's is left. To see that status when you run it
+yourself, start it from PowerShell like this:
+
+```powershell
+(Start-Process "$env:LOCALAPPDATA\Nobetci\nobetci.exe" -ArgumentList '--remove-hooks' -Wait -PassThru).ExitCode
+```
 
 Your preferences and agenda (`%APPDATA%\Nobetci`) and history (`%LOCALAPPDATA%\Nobetci\audit.jsonl`)
 stay, so a reinstall picks up where you left off. Tick **Delete the application data** in the
@@ -352,8 +359,9 @@ requests don't.
 
 It shouldn't: on Windows the island and the desktop mascot stay out of Alt-Tab and Task View, and
 clicking them leaves your terminal or editor active. Only the island's text boxes — the assistant,
-the session search, the agenda — take the keyboard, while you type in them. If you see otherwise,
-please open an issue with your Windows version.
+the session search, the agenda, and the answer and note boxes on question and plan cards — take
+the keyboard, while you type in them. If you see otherwise, please open an issue with your Windows
+version.
 
 ### Windows Defender flags the installer
 
@@ -468,7 +476,8 @@ The owl says hello just below the menu bar, and the setup wizard opens — carry
 - **Go to window** brings the session's app (Terminal, iTerm2, VS Code…) to the front, not one
   particular window or tab.
 - **The island never takes focus.** It is a floating panel: clicking it leaves your terminal the
-  active app. Only the assistant's text box takes the keyboard, while you type in it.
+  active app. Only its text boxes (the assistant, the session search, the agenda, and the answer
+  and note boxes on question and plan cards) take the keyboard, while you type in them.
 - **Quiet in full screen** works as on Windows: a full-screen video, game or presentation in
   front keeps Nöbetçi silent.
 - **The media card** shows Spotify and Music while one of them is open. The first time macOS asks
@@ -591,7 +600,8 @@ chmod +x Nobetci-x.y.z-linux-amd64.AppImage
   can sit at the top of the screen and stay above other windows. Programs it opens for you — a link
   in your browser, VS Code, the file manager — start the way they always do, natively on Wayland.
 - **The island doesn't take the keyboard.** Clicking it leaves your terminal focused; only its text
-  boxes (the assistant, the session search, the agenda) take the keyboard, while you type in them.
+  boxes (the assistant, the session search, the agenda, and the answer and note boxes on question
+  and plan cards) take the keyboard, while you type in them.
 - **The click guard** reads XInput2 raw events and asks the X server about the device behind every
   press: clicks from an XTEST device — what `xdotool` and similar tools use, including one a
   program adds later — are refused.

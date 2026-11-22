@@ -390,7 +390,7 @@ açılır; Esc, ✕ ya da kısayol onu yeniden kapatır.
 
 Ada klavyeyi almaz: ona ya da masaüstü maskotuna tıklamak terminalini ya da editörünü etkin bırakır;
 Windows'ta ikisi de Alt-Tab'da görünmez. Klavyeyi yalnızca adanın yazı kutuları — asistan, oturum
-araması, ajanda — sen içlerine yazarken alır.
+araması, ajanda ve soru ile plan kartlarındaki cevap ve not kutuları — sen içlerine yazarken alır.
 
 Tepsi simgesinde (Mac'te menü çubuğu simgesinde) **Nöbetçi'yi aç**, **Ayarlar…**, **Duraklat /
 devam et**, **Rahatsız etme aç / kapat**, **Masaüstü maskotu aç / kapat** ve **Çıkış** var.
@@ -734,7 +734,9 @@ kaldırılana kadar her kabuk ve MCP komutunu engeller.
 `nobetci --remove-hooks` üç dosyadan da yalnızca Nöbetçi'nin kendi girdilerini kaldırır; diğer
 ayarlara ve başka araçların hook'larına dokunmaz, her dosyanın yanına tarihli bir yedek bırakır
 (`settings.json.bak-…`, `hooks.json.bak-…`). Fark göstermez — kaldırma programının komutudur — ama
-her dosya için bir satır yazar ve temizleyemediği bir dosya olursa 1 koduyla çıkar. (Bir
+macOS'ta ve Linux'ta terminalde her dosya için bir satır yazar; temizleyemediği bir dosya olursa da
+1 koduyla çıkar. Windows'ta konsolu yoktur: neyi kaldırdığı ya da kaldıramadığı
+`%LOCALAPPDATA%\Nobetci\nobetci.log` dosyasına yazılır, çıkış kodunu da kaldırma programı okur. (Bir
 ajan onu çalıştırmak isterse Nöbetçi bunu KRİTİK sayar: onu yalnız sen çalıştırmalısın.) Her
 değişikliği incelemek istersen **Ayarlar → Claude Code → Kaldır…**, **Ayarlar → ChatGPT →
 Bağlantıyı kaldır…** ve **Ayarlar → Diğer ajanlar → Bağlantıyı kaldır…** düğmelerini kullan.

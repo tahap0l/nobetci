@@ -197,8 +197,14 @@ Yeni bir sürüm hook'ların ihtiyacını değiştirirse **Ayarlar → Claude Co
 Hook'lar kaldırılamazsa (örneğin salt okunur ya da kilitli bir dosya yüzünden) kaldırıcı relay'i ve
 kayıt dosyasını yerinde bırakır; böylece Claude Code, Codex ve Cursor çalışmaya devam eder. Hangi
 girdileri elle sileceğini de gösterir; neyin ters gittiğini kayıt dosyası söyler.
-`nobetci.exe --remove-hooks` her dosya için bir satır yazar; temizleyemediği bir dosya olursa 1
-koduyla, Nöbetçi'ye ait hiçbir girdi kalmadıysa 0 koduyla çıkar.
+`nobetci.exe --remove-hooks` konsol penceresi açmaz, bu yüzden yazdığı hiçbir şey görünmez:
+temizlediği ya da temizleyemediği her dosyayı `%LOCALAPPDATA%\Nobetci\nobetci.log` dosyasına not
+eder, çıkış kodunu da kaldırıcı okur — temizleyemediği bir dosya olursa 1, Nöbetçi'ye ait hiçbir
+girdi kalmadıysa 0. Kendin çalıştırıp bu kodu görmek istersen PowerShell'de şöyle başlat:
+
+```powershell
+(Start-Process "$env:LOCALAPPDATA\Nobetci\nobetci.exe" -ArgumentList '--remove-hooks' -Wait -PassThru).ExitCode
+```
 
 Ayarların ve ajandan (`%APPDATA%\Nobetci`) ve geçmişin (`%LOCALAPPDATA%\Nobetci\audit.jsonl`)
 kalır; yeniden kurarsan kaldığın yerden devam eder. `%APPDATA%\Nobetci`, `%LOCALAPPDATA%\Nobetci`
@@ -359,8 +365,8 @@ uygulamasında, istekler ulaşmaz.
 
 Bunu yapmamalı: Windows'ta ada ve masaüstü maskotu Alt-Tab'da ve Görev Görünümü'nde yer almaz,
 onlara tıklamak terminalini ya da editörünü etkin bırakır. Klavyeyi yalnızca adanın yazı kutuları —
-asistan, oturum araması, ajanda — sen içlerine yazarken alır. Başka türlü görüyorsan lütfen Windows
-sürümünle bir issue aç.
+asistan, oturum araması, ajanda ve soru ile plan kartlarındaki cevap ve not kutuları — sen içlerine
+yazarken alır. Başka türlü görüyorsan lütfen Windows sürümünle bir issue aç.
 
 ### Windows Defender kurulum programını işaretledi
 
@@ -474,7 +480,8 @@ Baykuş menü çubuğunun hemen altında selam verir ve kurulum sihirbazı açı
 - **Pencereye git**, oturumun uygulamasını (Terminal, iTerm2, VS Code…) öne getirir; belirli bir
   pencereyi ya da sekmeyi değil.
 - **Ada hiç odak almaz.** Yüzen bir paneldir: ona tıklamak terminalini etkin uygulama olarak
-  bırakır. Klavyeyi yalnızca asistanın yazı kutusu, sen içine yazarken alır.
+  bırakır. Klavyeyi yalnızca yazı kutuları (asistan, oturum araması, ajanda ve soru ile plan
+  kartlarındaki cevap ve not kutuları), sen içlerine yazarken alır.
 - **Tam ekranda sessizlik** Windows'taki gibi çalışır: önde tam ekran bir video, oyun ya da sunum
   varken Nöbetçi sessiz kalır.
 - **Medya kartı** Spotify ya da Müzik açıkken onları gösterir. İlk seferde macOS, Nöbetçi'nin o
@@ -597,7 +604,8 @@ chmod +x Nobetci-x.y.z-linux-amd64.AppImage
   ekranın üstüne yerleşip diğer pencerelerin üstünde kalabilir. Senin için açtığı programlar —
   tarayıcıda bir bağlantı, VS Code, dosya yöneticisi — her zamanki gibi, doğrudan Wayland'de açılır.
 - **Ada klavyeyi almaz.** Ona tıklamak terminalini odakta bırakır; klavyeyi yalnızca yazı kutuları
-  (asistan, oturum araması, ajanda), sen içlerine yazarken alır.
+  (asistan, oturum araması, ajanda ve soru ile plan kartlarındaki cevap ve not kutuları), sen
+  içlerine yazarken alır.
 - **Tıklama koruması** XInput2 ham olaylarını okur ve her basışta arkasındaki aygıtı X sunucusuna
   sorar: XTEST aygıtından gelen tıklamalar — `xdotool` gibi araçların kullandığı, bir programın
   sonradan eklediği dahil — reddedilir.

@@ -139,9 +139,12 @@ while deny, always-ask and raising rules match the path as written or as resolve
 **What you see is what runs.** The relay forwards every field of a permission request whole, up to
 64 KiB. Anything longer is cut, flagged and scored HIGH, with a finding telling you to review the
 request in the terminal; that category can't be switched off, and the card marks the cut. A
-request too large for the channel altogether never reaches a card: it is logged, recorded in the
-history and left to the terminal. Write and edit requests show the whole content, and every edit
-of a multi-edit. On the card:
+request too large for the channel (over 1 MiB in all) has its longest fields cut evenly until it
+fits: it reaches the card cut and HIGH, and no rule or grant can approve it. Two kinds never reach
+a card: a request whose shape alone is too large (say, an argument holding a hundred thousand
+numbers), and a question or a plan that had to be cut, whose answer would hand the cut text back
+as if it were whole. Both are logged, recorded in the history and left to the agent's own prompt.
+Write and edit requests show the whole content, and every edit of a multi-edit. On the card:
 
 - invisible and direction-changing characters — zero-width characters and direction marks, the
   Arabic letter mark, bidirectional embeddings, overrides and isolates, word joiners, the soft
@@ -257,9 +260,10 @@ variable; Settings → Claude Code shows which file it uses.
 macOS and Linux you run it by hand before deleting the app. It removes only Nöbetçi's own hook
 commands — never another tool's hook, even one that shares a matcher group with Nöbetçi's — from
 `~/.claude/settings.json`, Codex's `hooks.json` and `~/.cursor/hooks.json`, keeps a dated backup of
-each, and prints one line per file. It exits with status 1 when a file couldn't be cleaned (0 when
-no entry of Nöbetçi's is left), in which case the Windows uninstaller keeps the relay in place and
-tells you what is left.
+each, and prints one line per file in a terminal on macOS and Linux (on Windows, where it has no
+console, `nobetci.log` notes each file it cleaned or couldn't clean). It exits with status 1 when a
+file couldn't be cleaned (0 when no entry of Nöbetçi's is left), in which case the Windows
+uninstaller keeps the relay in place and tells you what is left.
 
 **Nöbetçi guards itself.** A request from the agent to change Claude Code's permission or hook
 settings (in `~/.claude`, or in the folder `CLAUDE_CONFIG_DIR` names), or Codex's or Cursor's hook
