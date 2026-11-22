@@ -47,21 +47,26 @@ export const ASSISTANT_TARGETS = [
 
 export type AssistantTarget = (typeof ASSISTANT_TARGETS)[number]["id"];
 
+/** What a command says: a plain string when it did what was asked. */
+type Said = string | { text: string; failed: true };
+
 interface Command {
   /** The Turkish name first, then the English one, then other spellings. */
   names: string[];
   hint: () => string;
-  run(arg: string, a: AssistantActions): Promise<string> | string;
+  run(arg: string, a: AssistantActions): Promise<Said> | Said;
 }
 
-async function media(action: "toggle" | "next" | "previous"): Promise<string> {
-  // The player is read only with the music card on (Rust says nothing otherwise):
-  // say that, rather than "nothing is playing" over music (island-ui#19).
-  if (!State.settings.islandMedia) return t("as.mediaOff");
-  const now = await Bridge.islandMedia();
-  if (!now) return t("as.noMedia");
-  const ok = await Bridge.islandMediaControl(now.source, action);
-  return ok ? t("as.mediaDone", { title: now.title }) : t("as.mediaFailed");
+/**
+ * /play, /next, /prev. Typed by the user, so they work with the music card off
+ * too (`explicit`, C-19): Rust still only talks to a player that is already
+ * running and never starts one, so with none open the answer says so.
+ */
+async function media(action: "toggle" | "next" | "previous"): Promise<Said> {
+  const now = await Bridge.islandMedia(false, true);
+  if (!now) return { text: t("as.noPlayer"), failed: true };
+  const ok = await Bridge.islandMediaControl(now.source, action, undefined, true);
+  return ok ? t("as.mediaDone", { title: now.title }) : { text: t("as.mediaFailed"), failed: true };
 }
 
 /** An error as a sentence: never "Error: …" (dashboard#19). */
@@ -367,8 +372,14 @@ export function buildAssistant(actions: AssistantActions): ViewHost & {
     const command = findCommand(text);
     if (command) {
       try {
-        say(await command.cmd.run(command.arg, actions), "ok");
-        actions.react("happy");
+        const said = await command.cmd.run(command.arg, actions);
+        if (typeof said === "string") {
+          say(said, "ok");
+          actions.react("happy");
+        } else {
+          // It ran but could not do it (no player to control): said as a failure.
+          say(said.text, "error");
+        }
       } catch {
         say(t("as.failed"), "error");
       }
@@ -417,9 +428,13 @@ export function buildAssistant(actions: AssistantActions): ViewHost & {
         const opened = await Bridge.assistantOpen(target, text);
         const app = opened?.app ?? targetLabel(target);
         const paste = getPlatform() === "macos" ? "⌘V" : "Ctrl+V";
+        // A prompt in the address may be sent as soon as the page opens (B-11):
+        // "just press send" only where the link is known to wait for the user.
+        // A build that does not say counts every prefilled prompt as on its way.
+        const mayAnswer = opened?.maySendOnOpen ?? true;
         say(
           opened?.prefilled
-            ? t("as.sent", { app })
+            ? t(mayAnswer ? "as.sentMayAnswer" : "as.sent", { app })
             : copied
               ? t("as.pasteIt", { app, keys: paste })
               : t("as.openedOnly", { app }),

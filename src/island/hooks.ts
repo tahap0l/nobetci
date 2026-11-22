@@ -212,6 +212,7 @@ function sessionFor(p: HookPayload): Session {
   if (p.nobetci_parents?.length) s.parents = p.nobetci_parents.map((x) => x.pid);
   const term = terminalName(p);
   if (term) s.terminal = term;
+  if (p.agent_name) s.agent = p.agent_name;
   return s;
 }
 

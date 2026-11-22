@@ -45,6 +45,8 @@ export interface Session {
   parents: number[];
   /** Terminal program the session runs in, when the relay could tell. */
   terminal: string;
+  /** The agent other than Claude Code that sent it ("Codex", "Cursor"), or "". */
+  agent: string;
   tools: number;
   subagents: Set<string>;
   approved: number;
@@ -225,6 +227,7 @@ class AppState {
         stateSince: now,
         parents: [],
         terminal: "",
+        agent: "",
         tools: 0,
         subagents: new Set(),
         approved: 0,
