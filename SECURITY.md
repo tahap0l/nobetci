@@ -89,8 +89,9 @@ Network access is limited to what you switch on: Prompt Studio's model request (
 whose cloud-tagged models may forward the draft, or the OpenAI API after you select it and click
 Improve), the island assistant's **Ask here** (the same provider), and the weather card, which asks
 Open-Meteo for the forecast of the city you pick. Sending a message to an AI app from the assistant
-opens that app or your browser at a fixed `https://` address; for some web apps the message is part
-of that address.
+opens that app through a fixed link, or your browser at a fixed `https://` address; for most
+targets the message travels in that link or address, and the service may answer it as soon as it
+opens (the [privacy policy](PRIVACY.md) says which).
 
 Nöbetçi runs on Windows, on macOS (since 0.2.0) and on Linux (since 2.3.0). Where they differ, this
 page says so.
@@ -130,14 +131,20 @@ deny.
 line breaks, and a loose pattern (*starts with*, *contains*, glob or empty) that allows or lowers a
 request doesn't match a command that chains more commands than the pattern itself — a line break,
 `;`, `&&`, `||`, `|`, `&`, backticks or `$(` — so `npm test` can't carry `rm -rf ~` behind it.
-Deny rules match anywhere.
+Deny rules match anywhere. For a file path, an allow rule, a rule that lowers the level and a
+"don't ask again" grant match only where the path really leads once `..`, `.`, `~` and relative
+parts are resolved — an allow rule for `/work/app/*` doesn't cover `/work/app/../../etc/hosts` —
+while deny, always-ask and raising rules match the path as written or as resolved.
 
 **What you see is what runs.** The relay forwards every field of a permission request whole, up to
 64 KiB. Anything longer is cut, flagged and scored HIGH, with a finding telling you to review the
 request in the terminal; that category can't be switched off, and the card marks the cut. A
-request too large for the channel altogether never reaches a card: it is logged, recorded in the
-history and left to the terminal. Write and edit requests show the whole content, and every edit
-of a multi-edit. On the card:
+request too large for the channel (over 1 MiB in all) has its longest fields cut evenly until it
+fits: it reaches the card cut and HIGH, and no rule or grant can approve it. Two kinds never reach
+a card: a request whose shape alone is too large (say, an argument holding a hundred thousand
+numbers), and a question or a plan that had to be cut, whose answer would hand the cut text back
+as if it were whole. Both are logged, recorded in the history and left to the agent's own prompt.
+Write and edit requests show the whole content, and every edit of a multi-edit. On the card:
 
 - invisible and direction-changing characters — zero-width characters and direction marks, the
   Arabic letter mark, bidirectional embeddings, overrides and isolates, word joiners, the soft
@@ -158,7 +165,14 @@ field of it.
 **No HTML from requests.** The island and the settings window build their DOM from text nodes and
 never use `innerHTML`, so text from a request can't become markup or script in a window that can
 approve commands. The webview runs under a Content Security Policy that only allows the app's own
-scripts.
+scripts. On Linux, a notification's text is escaped for notification servers that read markup, so
+a command can't turn into a link or formatting there.
+
+**Each window can do only its own job.** The island, the settings window and the desktop mascot
+can each call only the app commands they use. The approval commands answer the island alone;
+previewing and writing hooks, testing rules and reading or clearing the history answer the settings
+window alone; the desktop mascot only shows itself and opens the island. A script running in the
+settings window or the mascot can't approve a request.
 
 **Physical-click guard.** While a request is waiting, Nöbetçi records every press of the primary
 mouse button and whether it came from a real device:
@@ -180,7 +194,9 @@ mouse button and whether it came from a real device:
   by adding a master pointer of its own later; such a press, or one from a device the server no
   longer knows, counts as synthetic. Pressing the button through the accessibility bus (AT-SPI)
   makes no mouse event at all. Nöbetçi asks for XInput 2.2, so it also sees the release while the
-  island's own toolkit holds the pointer, and Rust measures the hold.
+  island's own toolkit holds the pointer, and Rust measures the hold. It follows the button maps
+  (`xinput set-button-map`, or `xmodmap -e 'pointer = 3 2 1'` for a left-handed mouse), so the press
+  it records is the one that acts as the primary click.
 
 Nöbetçi also notes where each press landed. An approval made on the island is accepted only if the
 most recent press was physical, began after the card appeared, is fresh — released within 3
@@ -209,8 +225,9 @@ and takes one physical click.
   with an explicit DACL that grants access to your account and SYSTEM only, rejects remote
   clients, and refuses to start serving if another process already owns that name. Before
   sending anything, the relay checks that the process serving the pipe runs under your SID; if it
-  can't tell, it sends nothing. An answer is flushed before the pipe is disconnected, so a decision
-  made on the spot by a rule is never lost.
+  can't tell, it sends nothing. It also opens the pipe at the identification level, so a server
+  that grabbed the name first could at most learn who you are, never act as you. An answer is
+  flushed before the pipe is disconnected, so a decision made on the spot by a rule is never lost.
 - **macOS:** they talk over a Unix socket, `~/Library/Application Support/Nobetci/nobetci.sock`.
   The app keeps that folder at mode 0700 and the socket at 0600, refuses to start if something
   already answers on the socket, and drops any connection whose peer (`getpeereid`) isn't your
@@ -229,20 +246,29 @@ command rather than run it unreviewed.
 
 **Careful with `~/.claude/settings.json`.** Installing or removing hooks from the app always shows
 a diff first, saves a dated backup, merges without touching other settings or other tools' hooks,
-writes only after an explicit click, and refuses if the file changed since the preview. Writes go
-to a temporary file that is renamed over the original, and a file that can't be read or parsed is
-never overwritten. Codex's and Cursor's `hooks.json` are handled the same way.
+writes only after an explicit click, and refuses if the file changed since the preview. What is
+written is exactly what the preview showed: the diff is computed on the file's own text, so any
+other reformatting would show in it too, the file keeps its key order, and a backup is announced
+only when there is a file to back up. Writes go to a temporary file that is renamed over the
+original — for a symbolic link, over the file it points to, so the link stays a link — and a file
+that can't be read or parsed is never overwritten. Codex's and Cursor's `hooks.json` are handled
+the same way. When Claude Code keeps its settings elsewhere with an absolute `CLAUDE_CONFIG_DIR`,
+Nöbetçi writes `$CLAUDE_CONFIG_DIR/settings.json` instead, provided Nöbetçi itself sees that
+variable; Settings → Claude Code shows which file it uses.
 
 `nobetci --remove-hooks` is the one path without a preview. The Windows uninstaller runs it, and on
 macOS and Linux you run it by hand before deleting the app. It removes only Nöbetçi's own hook
 commands — never another tool's hook, even one that shares a matcher group with Nöbetçi's — from
 `~/.claude/settings.json`, Codex's `hooks.json` and `~/.cursor/hooks.json`, keeps a dated backup of
-each, and exits with an error when it can't finish, in which case the Windows uninstaller keeps the
-relay in place and tells you what is left.
+each, and prints one line per file in a terminal on macOS and Linux (on Windows, where it has no
+console, `nobetci.log` notes each file it cleaned or couldn't clean). It exits with status 1 when a
+file couldn't be cleaned (0 when no entry of Nöbetçi's is left), in which case the Windows
+uninstaller keeps the relay in place and tells you what is left.
 
 **Nöbetçi guards itself.** A request from the agent to change Claude Code's permission or hook
-settings, or Codex's or Cursor's hook settings, is scored CRITICAL; one that writes hooks, agents,
-plugins or `.mcp.json` is HIGH. The same goes for Nöbetçi itself, on all three systems:
+settings (in `~/.claude`, or in the folder `CLAUDE_CONFIG_DIR` names), or Codex's or Cursor's hook
+settings (their `hooks.json`, and Codex's `config.toml`), is scored CRITICAL; one that writes hooks,
+agents, plugins or `.mcp.json` is HIGH. The same goes for Nöbetçi itself, on all three systems:
 
 - writing to its folders — `%APPDATA%\Nobetci` and `%LOCALAPPDATA%\Nobetci` on Windows;
   `~/Library/Application Support/Nobetci` and `/Applications/Nobetci.app` on macOS;
@@ -250,13 +276,16 @@ plugins or `.mcp.json` is HIGH. The same goes for Nöbetçi itself, on all three
   `$XDG_*_HOME` forms) and the installed programs on Linux — or to its relay wherever it lies, is
   CRITICAL, whatever does the writing: a redirection, `tee`, `cp`, `mv`, `install`, `ln`, `rsync`,
   `curl -o`, `wget -O`, `sed -i`, `chmod`, `rm`, `dd of=`, an editor or a one-liner in a scripting
-  language. Reading those files stays LOW;
+  language — and a program Nöbetçi doesn't know, handed one of those paths, counts as writing
+  there. Reading those files stays LOW;
 - `nobetci --remove-hooks`, by any path, is CRITICAL;
 - stopping or uninstalling it (`taskkill`, `pkill`, `launchctl bootout`, `systemctl --user stop`,
   a package manager's remove…) is HIGH.
 
 Paths are resolved against the session's folder first, so `.claude//settings.json`, `./` segments,
-`..` and relative paths meet the same rules as the plain spelling.
+`..` and relative paths meet the same rules as the plain spelling, and a `cd` earlier in the
+command is followed: `cd ~/.claude` and then `> settings.json` is a write to Claude Code's
+settings.
 
 **No telemetry; explicit provider requests only.** Nöbetçi has no analytics, crash reporting or
 update checks. Prompt drafts are not saved. Ollama receives the draft at the local Ollama service;
@@ -276,8 +305,9 @@ IDs, Google API keys, Stripe, npm, Hugging Face and more); JSON Web Tokens; `Aut
 pass:`); and passwords in URLs. A word like "token" or "password" in a sentence is left alone. The
 approval card is deliberately not redacted: you have to see exactly what you approve. The log file
 (`nobetci.log`) records what happened — request IDs, tool names, risk levels and decisions — but
-not the requests themselves. On macOS and Linux, the history's folder is readable by your account
-only (0700, files 0600).
+not the requests themselves. On macOS and Linux, Nöbetçi keeps its settings and data folders
+readable by your account only (0700) and writes the settings, the agenda, their dated copies, the
+history and the log for your account only (0600).
 
 **Formula-safe CSV.** Every exported cell is quoted, and a cell — or any line inside it — that
 starts with `=`, `+`, `-`, `@`, a tab or a carriage return gets a leading apostrophe, so a

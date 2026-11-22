@@ -51,8 +51,12 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\unregister-windows.ps1
 
 Bu komut kaydı iki tarayıcı için de kaldırır; yalnız birini kaldırmak için `-Browser Chrome` ya da
 `-Browser Edge` ekle. Ardından eklentiyi `chrome://extensions` ya da `edge://extensions`
-sayfasından kaldır. Nöbetçi'yi kaldırırken de bunu çalıştır: geride kalan kayıt, tarayıcıyı artık
-orada olmayan bir aktarıcıya yönlendirir.
+sayfasından kaldır.
+
+Nöbetçi'yi kaldırmak da kaydı iki tarayıcı için siler; sana yalnızca eklentiyi kaldırmak kalır.
+Güncelleme kaydı korur. 2.4.1 ve önceki sürümlerin kaldırıcıları ise kaydı geride bırakır ve
+tarayıcı artık orada olmayan bir aktarıcıyı gösterir: bunlardan birini kaldıracaksan önce
+yukarıdaki komutu çalıştır.
 
 ## Adada bir şey görünmüyorsa
 

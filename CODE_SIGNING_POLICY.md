@@ -99,7 +99,8 @@ browser; Nöbetçi does not send it. Details are in the [privacy policy](PRIVACY
 Nöbetçi installs for the current user only. It adds its hooks to `~/.claude/settings.json` — and, if
 you connect them, to Codex's and Cursor's hook files — only after showing you the exact change and a
 dated backup, and only when you click to apply it. The Windows uninstaller takes those entries out
-again, each file after another backup, and removes the app and the relay. On macOS and Linux the
+again, each file after another backup, and removes the app, the relay and, if you registered it,
+the ChatGPT Web bridge's browser registration. On macOS and Linux the
 [installation guide](docs/install.md) shows how to do the same.
 
 ## Checking a signature
@@ -215,8 +216,9 @@ verilir; Nöbetçi göndermez. Ayrıntılar [gizlilik politikasında](PRIVACY.md
 Nöbetçi yalnızca o anki kullanıcı için kurulur. Kancalarını `~/.claude/settings.json` dosyasına —
 bağlarsan Codex'in ve Cursor'un kanca dosyalarına da — ancak değişikliğin tamamını ve tarihli bir
 yedeği gösterdikten sonra, sen uygula dediğinde ekler. Windows'taki kaldırma aracı bu girdileri her
-dosyanın yedeğini alarak geri çıkarır, uygulamayı ve aktarıcıyı siler. macOS ve Linux'ta aynısını
-nasıl yapacağını [kurulum kılavuzu](docs/kurulum.md) anlatır.
+dosyanın yedeğini alarak geri çıkarır; uygulamayı, aktarıcıyı ve kaydettiysen ChatGPT Web
+köprüsünün tarayıcı kaydını siler. macOS ve Linux'ta aynısını nasıl yapacağını
+[kurulum kılavuzu](docs/kurulum.md) anlatır.
 
 ## İmzayı kontrol etmek
 

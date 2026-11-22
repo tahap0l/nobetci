@@ -3,8 +3,11 @@
 // docs/media/<lang>/<name>.png.
 //
 //   npm run dev                                   # terminal 1: the UI with demo data
-//   node scripts/screenshots.mjs                  # terminal 2: every image, both languages
+//   node scripts/screenshots.mjs                  # terminal 2: every README image, both languages
 //   node scripts/screenshots.mjs tr critical      # only some: languages and/or image names
+//
+// Images the README does not show (marked onRequest below) are made only when named,
+// so a full run never brings back files nothing uses.
 //
 // Environment:
 //   NOBETCI_URL    dev server to capture (default http://127.0.0.1:1420)
@@ -59,11 +62,13 @@ const SHOTS = [
   { name: "card-agenda", path: "?demo=overview&media=art&page=agenda", size: HERO },
   { name: "card-calendar", path: "?demo=overview&media=art&page=calendar", size: HERO },
   { name: "card-system", path: "?demo=overview&media=art&page=system", size: HERO },
-  { name: "compact", path: "?demo=compact", size: ISLAND },
+  // Made only when named: the README does not show the compact pill.
+  { name: "compact", path: "?demo=compact", size: ISLAND, onRequest: true },
   { name: "settings-rules", path: "settings.html?tab=kurallar", size: SETTINGS },
   { name: "settings-history", path: "settings.html?tab=gecmis", size: SETTINGS },
   { name: "settings-security", path: "settings.html?tab=guvenlik", size: SETTINGS },
-  { name: "settings-prompts", path: "settings.html?tab=prompts", size: SETTINGS },
+  // For the Microsoft Store listing (docs/microsoft-store.md), not the README: made only when named.
+  { name: "settings-prompts", path: "settings.html?tab=prompts", size: SETTINGS, onRequest: true },
   { name: "wizard", path: "settings.html?tab=hosgeldin", size: SETTINGS },
 ];
 
@@ -85,7 +90,7 @@ function fail(message) {
   process.exit(1);
 }
 
-/** `node screenshots.mjs [en|tr]… [name]…` — no arguments means everything. */
+/** `node screenshots.mjs [en|tr]… [name]…` — no names means every README image. */
 function selection(args) {
   const isLang = (a) => Object.hasOwn(LANGS, a);
   const langs = args.filter(isLang);
@@ -96,7 +101,7 @@ function selection(args) {
   }
   return {
     langs: langs.length ? langs : Object.keys(LANGS),
-    shots: names.length ? SHOTS.filter((s) => names.includes(s.name)) : SHOTS,
+    shots: names.length ? SHOTS.filter((s) => names.includes(s.name)) : SHOTS.filter((s) => !s.onRequest),
   };
 }
 

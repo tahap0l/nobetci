@@ -30,10 +30,10 @@ export default defineConfig(process.env.CF_PAGES === "1" ? {
         const source = html.replace(/\b(href|src|content)="\/(?!\/)/g, (_, attr) => `${attr}="${websiteBase}`);
         this.emitFile({ type: "asset", fileName: name, source });
       }
-      // Screenshots for the pages are WebP files in website/public/shots/.
+      // Screenshots for the pages are WebP files in website/public/shots/, and
+      // the link-preview image is website/public/social.png.
       const images = {
         "owl.png": "src-tauri/icons/128x128.png",
-        "social.png": "docs/media/social.png",
       };
       for (const [name, path] of Object.entries(images)) {
         this.emitFile({ type: "asset", fileName: `assets/${name}`, source: readFileSync(resolve(root, path)) });

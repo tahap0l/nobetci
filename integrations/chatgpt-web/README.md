@@ -50,8 +50,12 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\unregister-windows.ps1
 ```
 
 This removes the registration for both browsers; add `-Browser Chrome` or `-Browser Edge` for one.
-Then remove the extension in `chrome://extensions` or `edge://extensions`. Run it when you uninstall
-Nöbetçi too: a registration left behind points the browser at a relay that is no longer there.
+Then remove the extension in `chrome://extensions` or `edge://extensions`.
+
+Uninstalling Nöbetçi removes the registration for both browsers as well, so only the extension is
+left for you to remove; an update keeps it. The uninstallers of 2.4.1 and earlier leave the
+registration behind, pointing the browser at a relay that is no longer there: if you uninstall one
+of those, run the command above first.
 
 ## When nothing shows up
 

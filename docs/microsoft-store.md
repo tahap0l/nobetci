@@ -40,8 +40,9 @@ What the Store package shares with the regular installer:
   version with another runs the old uninstaller in update mode.)
 - The uninstaller asks about a running Nöbetçi before it removes anything, removes only
   Nöbetçi's own hook entries (with a dated backup of each file), keeps the relay and log if that
-  fails, and deletes the application data only when the user ticks **Delete the application data**.
-  It makes no network requests.
+  fails, removes the ChatGPT Web bridge's per-user browser registration if the user made one, and
+  deletes the application data only when the user ticks **Delete the application data**. It makes
+  no network requests.
 
 ## Required before submission
 

@@ -63,6 +63,18 @@ Var nobetci.HooksKept
     DeleteRegValue HKLM "Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run" "${PRODUCTNAME}"
     ClearErrors
 
+    ; The ChatGPT Web bridge, if integrations\chatgpt-web\register-windows.ps1
+    ; was run: Chrome's and Edge's per-user native-messaging keys and the two
+    ; manifests they point to, as unregister-windows.ps1 removes them. Nöbetçi
+    ; is leaving, so its bridge goes too, even when the relay stays for hooks
+    ; that could not be removed. Missing keys and files are fine.
+    SetShellVarContext current
+    DeleteRegKey HKCU "Software\Google\Chrome\NativeMessagingHosts\io.github.tahap0l.nobetci.chatgpt"
+    DeleteRegKey HKCU "Software\Microsoft\Edge\NativeMessagingHosts\io.github.tahap0l.nobetci.chatgpt"
+    Delete "$LOCALAPPDATA\Nobetci\chatgpt-native-host-Chrome.json"
+    Delete "$LOCALAPPDATA\Nobetci\chatgpt-native-host-Edge.json"
+    ClearErrors
+
     ; "Delete the application data": the template removes only the WebView's
     ; folders, named after the bundle id. Nöbetçi's settings, agenda, history
     ; and log are in %APPDATA%\Nobetci and %LOCALAPPDATA%\Nobetci.

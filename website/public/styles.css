@@ -665,6 +665,9 @@ h1 em, h2 em {
 /* Text links only: a button keeps its own colours (the 404's buttons). */
 .policy-content a:not(.button) { color: var(--cyan); }
 .policy-content code { padding: 1px 6px; border-radius: 6px; background: rgba(255, 255, 255, .06); font-size: .9em; }
+/* A command on a line of its own; it wraps rather than scrolling on a phone. */
+.policy-content pre { margin: 12px 0 0; padding: 12px 14px; border-radius: 10px; background: rgba(255, 255, 255, .06); white-space: pre-wrap; overflow-wrap: anywhere; }
+.policy-content pre code { padding: 0; background: none; }
 .policy-date { color: var(--faint) !important; }
 .policy-intro { font-size: 1.12rem; }
 .policy-status { padding: 16px 18px; border: 1px solid rgba(255, 200, 121, .35); border-radius: 14px; background: rgba(255, 200, 121, .06); }

@@ -1,6 +1,6 @@
 # Nöbetçi Privacy Policy
 
-**Last updated: November 21, 2026**
+**Last updated: November 22, 2026**
 
 Nöbetçi is a desktop application that helps you review AI coding-agent permission requests and
 prepare messages for AI agents. It runs on your computer and does not require an account.
@@ -42,9 +42,14 @@ goes from there depends on what you picked:
 
 - **ChatGPT, Claude, Perplexity, Copilot or Grok on the web:** the message travels inside the page's
   address. It reaches that service as soon as your browser opens the page, and it is written to your
-  browser history. Some of these services may start answering it right away.
-- **Desktop apps, and Gemini, DeepSeek and Mistral:** the message goes into the app's text box, or
-  you paste it from the clipboard; sending is up to you.
+  browser history. The service may answer it right away: Perplexity runs the search at once, and the
+  chat services may send what they are handed.
+- **The ChatGPT and Perplexity desktop apps:** the message travels inside the link that opens the
+  app, and the app may send it as soon as it opens.
+- **The Claude desktop app:** the message goes into the app's text box; sending is up to you.
+- **Gemini, DeepSeek, Mistral and the Copilot app:** the page or app opens without the message; you
+  paste it from the clipboard and send it yourself. The same goes for a message too long for an
+  address.
 
 **Ask here** sends the message to the provider you chose in Prompt Studio (Ollama or OpenAI). Voice
 input (Windows and macOS) is your operating system's own dictation; Nöbetçi records no audio.
@@ -77,7 +82,7 @@ open an issue at <https://github.com/tahap0l/nobetci/issues>.
 
 # Nöbetçi Gizlilik Politikası
 
-**Son güncelleme: 21 Kasım 2026**
+**Son güncelleme: 22 Kasım 2026**
 
 Nöbetçi, yapay zekâ kodlama ajanlarının izin isteklerini incelemene ve ajanlara göndereceğin
 mesajları hazırlamana yardımcı olan bir masaüstü uygulamasıdır. Bilgisayarında çalışır ve hesap
@@ -119,10 +124,15 @@ uygulamayı ya da tarayıcını açar ve mesajı panoya kopyalar. Mesajın orada
 yere bağlıdır:
 
 - **Web'de ChatGPT, Claude, Perplexity, Copilot ya da Grok:** Mesaj sayfanın adresinin içinde gider.
-  Tarayıcın sayfayı açtığı anda mesaj o servise ulaşır ve tarayıcı geçmişine de yazılır. Bu
-  servislerin bazıları mesajı hemen cevaplamaya başlayabilir.
-- **Masaüstü uygulamaları ile Gemini, DeepSeek ve Mistral:** Mesaj uygulamanın yazı kutusuna gelir ya
-  da panodan sen yapıştırırsın; göndermeye sen karar verirsin.
+  Tarayıcın sayfayı açtığı anda mesaj o servise ulaşır ve tarayıcı geçmişine de yazılır. Servis
+  mesajı hemen cevaplayabilir: Perplexity aramayı hemen yapar, sohbet servisleri de kendilerine
+  verilen mesajı gönderebilir.
+- **ChatGPT ve Perplexity masaüstü uygulamaları:** Mesaj uygulamayı açan bağlantının içinde gider;
+  uygulama mesajı açılır açılmaz gönderebilir.
+- **Claude masaüstü uygulaması:** Mesaj uygulamanın yazı kutusuna gelir; göndermeye sen karar
+  verirsin.
+- **Gemini, DeepSeek, Mistral ve Copilot uygulaması:** Sayfa ya da uygulama mesajsız açılır; mesajı
+  panodan sen yapıştırır ve gönderirsin. Bir adrese sığmayacak kadar uzun bir mesaj için de böyledir.
 
 **Burada sor** seçeneği mesajı Mesaj Atölyesi'nde seçtiğin sağlayıcıya (Ollama ya da OpenAI)
 gönderir. Sesle yazma (Windows ve macOS) işletim sisteminin kendi dikte özelliğidir; Nöbetçi ses

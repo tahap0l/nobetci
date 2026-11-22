@@ -50,7 +50,7 @@
         <article class="policy-content" lang="tr" data-lang-block="tr">
           <div class="eyebrow"><span class="eyebrow-dot"></span>Şeffaf ve yerel</div>
           <h1>Nöbetçi Gizlilik Politikası</h1>
-          <p class="policy-date">Son güncelleme: 21 Kasım 2026</p>
+          <p class="policy-date">Son güncelleme: 22 Kasım 2026</p>
           <p class="policy-intro">Nöbetçi, yapay zekâ kodlama ajanlarının izin isteklerini incelemene ve ajanlara göndereceğin mesajları hazırlamana yardımcı olan bir masaüstü uygulamasıdır. Bilgisayarında çalışır ve hesap açmanı gerektirmez.</p>
           <h2>Bilgiler ve yerel kayıtlar</h2>
           <p>Nöbetçi telemetri, analiz, çökme raporu veya güncelleme kontrolü göndermez. Ayarlar, istek geçmişi ve kayıtlar bilgisayarında tutulur. Mesaj taslakları ve düzeltilmiş metinler geçmişe kaydedilmez. İstek geçmişe yazılmadan veya bildirimde gösterilmeden önce API anahtarı, parola ve özel anahtar gibi tanınan sırlar maskelenir. Onay kartı, neye izin verdiğini inceleyebilmen için isteği eksiksiz gösterir.</p>
@@ -66,8 +66,10 @@
           <h2>Ada asistanı</h2>
           <p>Asistanda bir yapay zekâ uygulaması seçip gönderdiğinde Nöbetçi o servise kendisi bir şey göndermez: uygulamayı ya da tarayıcını açar ve mesajı panoya kopyalar. Mesajın oradan nereye gittiği seçtiğin yere bağlıdır:</p>
           <ul>
-            <li><strong>Web'de ChatGPT, Claude, Perplexity, Copilot ya da Grok:</strong> Mesaj sayfanın adresinin içinde gider. Tarayıcın sayfayı açtığı anda mesaj o servise ulaşır ve tarayıcı geçmişine de yazılır. Bu servislerin bazıları mesajı hemen cevaplamaya başlayabilir.</li>
-            <li><strong>Masaüstü uygulamaları ile Gemini, DeepSeek ve Mistral:</strong> Mesaj uygulamanın yazı kutusuna gelir ya da panodan sen yapıştırırsın; göndermeye sen karar verirsin.</li>
+            <li><strong>Web'de ChatGPT, Claude, Perplexity, Copilot ya da Grok:</strong> Mesaj sayfanın adresinin içinde gider. Tarayıcın sayfayı açtığı anda mesaj o servise ulaşır ve tarayıcı geçmişine de yazılır. Servis mesajı hemen cevaplayabilir: Perplexity aramayı hemen yapar, sohbet servisleri de kendilerine verilen mesajı gönderebilir.</li>
+            <li><strong>ChatGPT ve Perplexity masaüstü uygulamaları:</strong> Mesaj uygulamayı açan bağlantının içinde gider; uygulama mesajı açılır açılmaz gönderebilir.</li>
+            <li><strong>Claude masaüstü uygulaması:</strong> Mesaj uygulamanın yazı kutusuna gelir; göndermeye sen karar verirsin.</li>
+            <li><strong>Gemini, DeepSeek, Mistral ve Copilot uygulaması:</strong> Sayfa ya da uygulama mesajsız açılır; mesajı panodan sen yapıştırır ve gönderirsin. Bir adrese sığmayacak kadar uzun bir mesaj için de böyledir.</li>
           </ul>
           <p><strong>Burada sor</strong> seçeneği mesajı Mesaj Atölyesi'nde seçtiğin sağlayıcıya (Ollama ya da OpenAI) gönderir. Sesle yazma (Windows ve macOS) işletim sisteminin kendi dikte özelliğidir; Nöbetçi ses kaydetmez.</p>
           <h2>Kurulum dosyası ve kod imzalama</h2>
@@ -82,7 +84,7 @@
         <article class="policy-content" lang="en" data-lang-block="en">
           <div class="eyebrow"><span class="eyebrow-dot"></span>Transparent and local</div>
           <h1>Nöbetçi Privacy Policy</h1>
-          <p class="policy-date">Last updated: November 21, 2026</p>
+          <p class="policy-date">Last updated: November 22, 2026</p>
           <p class="policy-intro">Nöbetçi is a desktop application that helps you review AI coding-agent permission requests and prepare messages for AI agents. It runs on your computer and does not require an account.</p>
           <h2>Information and local storage</h2>
           <p>Nöbetçi does not send telemetry, analytics, crash reports, or update checks. Settings, request history, and logs are stored locally on your computer. Prompt drafts and rewritten messages are not saved to history. Before request text is written to history or shown in a notification, Nöbetçi masks recognized secrets such as API tokens, passwords, and private keys. The approval card shows the request in full so you can review what you are approving.</p>
@@ -98,8 +100,10 @@
           <h2>The island assistant</h2>
           <p>When you send a message to an AI app from the assistant, Nöbetçi sends nothing to that service itself: it opens the app or your browser and copies the message to the clipboard. Where the message goes from there depends on what you picked:</p>
           <ul>
-            <li><strong>ChatGPT, Claude, Perplexity, Copilot or Grok on the web:</strong> The message travels inside the page's address. It reaches that service as soon as your browser opens the page, and it is written to your browser history. Some of these services may start answering it right away.</li>
-            <li><strong>Desktop apps, and Gemini, DeepSeek and Mistral:</strong> The message goes into the app's text box, or you paste it from the clipboard; sending is up to you.</li>
+            <li><strong>ChatGPT, Claude, Perplexity, Copilot or Grok on the web:</strong> The message travels inside the page's address. It reaches that service as soon as your browser opens the page, and it is written to your browser history. The service may answer it right away: Perplexity runs the search at once, and the chat services may send what they are handed.</li>
+            <li><strong>The ChatGPT and Perplexity desktop apps:</strong> The message travels inside the link that opens the app, and the app may send it as soon as it opens.</li>
+            <li><strong>The Claude desktop app:</strong> The message goes into the app's text box; sending is up to you.</li>
+            <li><strong>Gemini, DeepSeek, Mistral and the Copilot app:</strong> The page or app opens without the message; you paste it from the clipboard and send it yourself. The same goes for a message too long for an address.</li>
           </ul>
           <p><strong>Ask here</strong> sends the message to the provider you chose in Prompt Studio (Ollama or OpenAI). Voice input (Windows and macOS) is your operating system's own dictation; Nöbetçi records no audio.</p>
           <h2>Installer and code signing</h2>
