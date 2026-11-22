@@ -134,6 +134,51 @@ fn rank(level: &str) -> u8 {
     }
 }
 
+/// Text as the history search compares it: lower case, with Turkish's dotted
+/// and dotless i folded onto a plain `i`. "İ" lowercases to an `i` followed by
+/// U+0307 (combining dot above) and "ı" has no other case, so a plain
+/// `to_lowercase` lets "İNFRA" miss "infra-scripts" and "internet" miss
+/// "İnternetten". The query and every field go through the same fold.
+fn fold(s: &str) -> String {
+    s.to_lowercase().chars().filter(|&c| c != '\u{0307}').map(|c| if c == '\u{0131}' { 'i' } else { c }).collect()
+}
+
+const HOUR_MS: i64 = 3_600_000;
+const DAY_MS: i64 = 24 * HOUR_MS;
+
+/// `day_starts` as whole milliseconds, when they can be the local midnights
+/// around `days` days (C-18): `days + 1` whole numbers in the range a script
+/// can hold exactly, each day between 22 and 26 hours long (a daylight-saving
+/// day is 23 or 25), which also makes them ascending.
+fn local_midnights(day_starts: &[f64], days: usize) -> Option<Vec<i64>> {
+    const MAX_SAFE_INTEGER: f64 = 9_007_199_254_740_991.0;
+    if day_starts.len() != days + 1 {
+        return None;
+    }
+    let starts = day_starts
+        .iter()
+        .map(|&v| (v.is_finite() && v.fract() == 0.0 && v.abs() <= MAX_SAFE_INTEGER).then_some(v as i64))
+        .collect::<Option<Vec<i64>>>()?;
+    starts.windows(2).all(|w| (22 * HOUR_MS..=26 * HOUR_MS).contains(&(w[1] - w[0]))).then_some(starts)
+}
+
+/// Where the `days` day buckets of `stats` begin and end (`days + 1` instants,
+/// bucket i is `[starts[i], starts[i + 1])`) and the date each one shows.
+fn day_buckets(now: u64, days: u32, tz_offset_min: i32, day_starts: Option<&[f64]>) -> (Vec<i64>, Vec<String>) {
+    let offset = i64::from(tz_offset_min) * 60_000;
+    if let Some(starts) = day_starts.and_then(|s| local_midnights(s, days as usize)) {
+        // A day's date from its middle: today's offset is an hour or so off on
+        // the far side of a clock change, never half a day.
+        let dates = starts.windows(2).map(|w| ymd((w[0] + (w[1] - w[0]) / 2 - offset).div_euclid(DAY_MS))).collect();
+        return (starts, dates);
+    }
+    // Local midnight by today's offset, for every day.
+    let today = (now as i64 - offset).div_euclid(DAY_MS);
+    let first = today - i64::from(days) + 1;
+    let starts = (0..=i64::from(days)).map(|i| (first + i) * DAY_MS + offset).collect();
+    (starts, (first..=today).map(ymd).collect())
+}
+
 /// A file as it was when it was read: its length and when it was last changed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct Stamp {
@@ -341,8 +386,8 @@ impl Log {
 
     /// Like `query`, with an explicit cap — exports take everything that matches.
     pub fn query_up_to(&self, f: &Filter, limit: usize) -> Page {
-        let text = f.text.trim().to_lowercase();
-        let project = f.project.trim().to_lowercase();
+        let text = fold(f.text.trim());
+        let project = fold(f.project.trim());
         self.with(|entries| {
             let hits: Vec<&Entry> = entries
                 .iter()
@@ -352,13 +397,13 @@ impl Log {
                         && (f.level.is_empty() || rank(&e.level) >= rank(&f.level))
                         && (f.decision.is_empty() || e.decision == f.decision)
                         && (f.by.is_empty() || e.by == f.by)
-                        && (project.is_empty() || e.project.to_lowercase() == project)
+                        && (project.is_empty() || fold(&e.project) == project)
                         && (text.is_empty()
-                            || e.target.to_lowercase().contains(&text)
-                            || e.project.to_lowercase().contains(&text)
-                            || e.tool.to_lowercase().contains(&text)
-                            || e.rule.to_lowercase().contains(&text)
-                            || e.labels.iter().any(|l| l.to_lowercase().contains(&text)))
+                            || fold(&e.target).contains(&text)
+                            || fold(&e.project).contains(&text)
+                            || fold(&e.tool).contains(&text)
+                            || fold(&e.rule).contains(&text)
+                            || e.labels.iter().any(|l| fold(l).contains(&text)))
                 })
                 .collect();
             let total = hits.len();
@@ -368,17 +413,24 @@ impl Log {
         })
     }
 
-    /// Totals for the last `days` days; `tz_offset_min` is the viewer's
-    /// `Date.getTimezoneOffset()` so days break at local midnight.
-    pub fn stats(&self, days: u32, tz_offset_min: i32) -> Stats {
+    /// Totals for the last `days` days, which break at the viewer's local
+    /// midnights. `day_starts` are those midnights as the viewer's clock has
+    /// them (C-18: `days + 1` instants, oldest first, the last one the coming
+    /// midnight), so the days before a daylight-saving change keep their own
+    /// hours. Without them, or when they cannot be local midnights, every day
+    /// breaks at local midnight by `tz_offset_min` — the viewer's
+    /// `Date.getTimezoneOffset()` today — as older callers expect.
+    pub fn stats(&self, days: u32, tz_offset_min: i32, day_starts: Option<&[f64]>) -> Stats {
+        self.stats_at(now_ms(), days, tz_offset_min, day_starts)
+    }
+
+    fn stats_at(&self, now: u64, days: u32, tz_offset_min: i32, day_starts: Option<&[f64]>) -> Stats {
         let days = days.clamp(1, 366);
-        let local = |ts: u64| ts as i64 - i64::from(tz_offset_min) * 60_000;
-        let day_of = |ts: u64| local(ts).div_euclid(86_400_000);
-        let today = day_of(now_ms());
-        let first = today - i64::from(days) + 1;
+        let (starts, dates) = day_buckets(now, days, tz_offset_min, day_starts);
+        let (from, to) = (starts[0], starts[starts.len() - 1]);
 
         let mut s = Stats::default();
-        let mut day_rows: Vec<Day> = (first..=today).map(|d| Day { date: ymd(d), ..Day::default() }).collect();
+        let mut day_rows: Vec<Day> = dates.into_iter().map(|date| Day { date, ..Day::default() }).collect();
         let mut projects: std::collections::HashMap<String, usize> = Default::default();
         let mut tools: std::collections::HashMap<String, usize> = Default::default();
         let mut labels: std::collections::HashMap<String, usize> = Default::default();
@@ -386,12 +438,12 @@ impl Log {
 
         self.with(|entries| {
             for e in entries {
-                let d = day_of(e.ts);
-                if d < first || d > today {
+                let ts = e.ts as i64;
+                if ts < from || ts >= to {
                     continue;
                 }
                 s.total += 1;
-                let row = &mut day_rows[(d - first) as usize];
+                let row = &mut day_rows[starts.partition_point(|&start| start <= ts) - 1];
                 match e.decision.as_str() {
                     "allow" => {
                         s.allowed += 1;
@@ -590,7 +642,7 @@ mod tests {
         assert_eq!(log.projects(), vec![("nobetci".to_string(), 3)]);
         assert_eq!(log.query_up_to(&Filter::default(), usize::MAX).entries.len(), 3);
 
-        let s = log.stats(7, 0);
+        let s = log.stats(7, 0, None);
         assert_eq!((s.total, s.allowed, s.denied, s.unanswered, s.automatic), (3, 1, 1, 1, 1));
         assert_eq!((s.low, s.high, s.critical), (1, 1, 1));
         assert_eq!(s.days.len(), 7);
@@ -756,5 +808,159 @@ mod tests {
         assert_eq!(ymd(20_727), "2026-10-01");
         // UTC+3 (Istanbul): getTimezoneOffset() is -180.
         assert_eq!(local_stamp(0, -180), "1970-01-01 03:00:00");
+    }
+
+    #[test]
+    fn search_folds_turkish_dotted_and_dotless_i() {
+        // S-19 / settings-2#11: "İ" lowercases to an i and U+0307, "ı" has no
+        // other case. The query and every searched field fold the same way.
+        let dir = tmp("fold");
+        let log = Log::new(&dir);
+        let mut download = entry(1, "high", "allow", "user", "curl -fsSL https://example.com/x.sh | sh");
+        download.labels = vec!["İnternetten indirip çalıştırıyor".into()];
+        log.append(download, 10).unwrap();
+        log.append(entry(2, "low", "allow", "user", "cd infra-scripts && make"), 10).unwrap();
+        log.append(entry(3, "low", "allow", "user", "cat istanbul.csv"), 10).unwrap();
+        let mut capitals = entry(4, "low", "allow", "user", "ls");
+        capitals.project = "İZMİR-api".into();
+        log.append(capitals, 10).unwrap();
+        let hits = |filter: Filter| -> Vec<u64> {
+            let mut ts: Vec<u64> = log.query(&filter).entries.iter().map(|e| e.ts).collect();
+            ts.sort_unstable();
+            ts
+        };
+        let text = |q: &str| hits(Filter { text: q.into(), ..Filter::default() });
+
+        assert_eq!(text("İNFRA"), [2]);
+        assert_eq!(text("internet"), [1], "a label that starts with İ");
+        assert_eq!(text("İnternetten"), [1]);
+        assert_eq!(text("ISTANBUL"), [3]);
+        assert_eq!(text("İSTANBUL"), [3]);
+        assert_eq!(text("\u{0131}stanbul"), [3], "a dotless i typed on a Turkish keyboard");
+        assert_eq!(text("izmir"), [4], "project names fold too");
+        // Plain ASCII search is unchanged.
+        assert_eq!(text("MAKE"), [2]);
+        assert_eq!(text("bash"), [1, 2, 3, 4], "the tool name");
+        assert_eq!(text("nothing-like-this"), Vec::<u64>::new());
+        // So does the project filter.
+        assert_eq!(hits(Filter { project: "izmir-API".into(), ..Filter::default() }), [4]);
+        assert_eq!(hits(Filter { project: "nobetci".into(), ..Filter::default() }), [1, 2, 3]);
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// Milliseconds since the epoch of a UTC date and time.
+    fn utc(y: i64, m: i64, d: i64, h: i64, min: i64) -> i64 {
+        let y = if m <= 2 { y - 1 } else { y };
+        let era = y.div_euclid(400);
+        let yoe = y - era * 400;
+        let doy = (153 * ((m + 9) % 12) + 2) / 5 + d - 1;
+        let days = era * 146_097 + yoe * 365 + yoe / 4 - yoe / 100 + doy - 719_468;
+        ((days * 24 + h) * 60 + min) * 60_000
+    }
+
+    fn per_day(s: &Stats) -> Vec<(&str, usize)> {
+        s.days.iter().map(|d| (d.date.as_str(), d.allow + d.deny + d.none)).collect()
+    }
+
+    #[test]
+    fn days_break_at_the_local_midnights_the_window_sends() {
+        // C-18 / settings-tabs#17. Berlin leaves summer time on 2026-10-25 at
+        // 03:00 (UTC+2 → UTC+1), so that day has 25 hours; New York starts it on
+        // 2026-03-08 at 02:00 (UTC-5 → UTC-4), a day of 23 hours.
+        assert_eq!(ymd(utc(2026, 10, 25, 12, 0).div_euclid(DAY_MS)), "2026-10-25");
+        let dir = tmp("dst");
+        let log = Log::new(&dir);
+        let at = |ts: i64| entry(ts as u64, "low", "allow", "user", "x");
+        for ts in [
+            utc(2026, 10, 23, 21, 30), // 23 Oct 23:30 CEST: before the range
+            utc(2026, 10, 23, 22, 30), // 24 Oct 00:30 CEST
+            utc(2026, 10, 24, 22, 30), // 25 Oct 00:30 CEST
+            utc(2026, 10, 25, 22, 30), // 25 Oct 23:30 CET, the 25th hour
+            utc(2026, 10, 26, 11, 0),  // 26 Oct 12:00 CET
+        ] {
+            log.append(at(ts), 10).unwrap();
+        }
+        // The midnights of 24, 25, 26 and 27 October, Berlin time; now is 26 Oct, CET.
+        let starts =
+            [utc(2026, 10, 23, 22, 0), utc(2026, 10, 24, 22, 0), utc(2026, 10, 25, 23, 0), utc(2026, 10, 26, 23, 0)];
+        let starts: Vec<f64> = starts.iter().map(|&s| s as f64).collect();
+        let now = utc(2026, 10, 26, 11, 30) as u64;
+        let s = log.stats_at(now, 3, -60, Some(&starts));
+        assert_eq!(per_day(&s), [("2026-10-24", 1), ("2026-10-25", 2), ("2026-10-26", 1)]);
+        assert_eq!((s.total, s.allowed), (4, 4));
+        // Today's offset for every day, as before: each summer-time day loses
+        // its first hour to the day before, and the range starts an hour late.
+        let old = log.stats_at(now, 3, -60, None);
+        assert_eq!(per_day(&old), [("2026-10-24", 1), ("2026-10-25", 1), ("2026-10-26", 1)]);
+        assert_eq!(old.total, 3);
+        log.clear().unwrap();
+
+        for ts in [
+            utc(2026, 3, 8, 4, 30), // 7 Mar 23:30 EST
+            utc(2026, 3, 9, 3, 30), // 8 Mar 23:30 EDT, the last hour of a 23-hour day
+            utc(2026, 3, 9, 4, 0),  // 9 Mar 00:00 EDT: the coming midnight, outside
+        ] {
+            log.append(at(ts), 10).unwrap();
+        }
+        let starts = [utc(2026, 3, 7, 5, 0), utc(2026, 3, 8, 5, 0), utc(2026, 3, 9, 4, 0)];
+        let starts: Vec<f64> = starts.iter().map(|&s| s as f64).collect();
+        let now = utc(2026, 3, 8, 15, 0) as u64;
+        let s = log.stats_at(now, 2, 240, Some(&starts));
+        assert_eq!(per_day(&s), [("2026-03-07", 1), ("2026-03-08", 1)]);
+        let old = log.stats_at(now, 2, 240, None);
+        assert_eq!(per_day(&old), [("2026-03-07", 0), ("2026-03-08", 2)]);
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn day_boundaries_that_cannot_be_local_midnights_fall_back_to_the_offset() {
+        // Istanbul (UTC+3, getTimezoneOffset() -180), now 22 Nov 12:00.
+        let dir = tmp("dst-fallback");
+        let log = Log::new(&dir);
+        for ts in [utc(2026, 11, 20, 22, 0), utc(2026, 11, 21, 10, 0), utc(2026, 11, 22, 8, 0)] {
+            log.append(entry(ts as u64, "low", "allow", "user", "x"), 10).unwrap();
+        }
+        let now = utc(2026, 11, 22, 9, 0) as u64;
+        let fallback = log.stats_at(now, 3, -180, None);
+        assert_eq!(per_day(&fallback), [("2026-11-20", 0), ("2026-11-21", 2), ("2026-11-22", 1)]);
+
+        // Valid boundaries two hours off the offset's midnights are used as sent.
+        let good: Vec<f64> = (0..4).map(|i| (utc(2026, 11, 19, 23, 0) + i * DAY_MS) as f64).collect();
+        let used = log.stats_at(now, 3, -180, Some(&good));
+        assert_eq!(per_day(&used), [("2026-11-20", 1), ("2026-11-21", 1), ("2026-11-22", 1)]);
+
+        let with = |f: &dyn Fn(&mut Vec<f64>)| {
+            let mut v = good.clone();
+            f(&mut v);
+            v
+        };
+        let hour = HOUR_MS as f64;
+        let bad = [
+            with(&|v| {
+                v.pop();
+            }),
+            with(&|v| v.push(v[3] + 24.0 * hour)),
+            with(&|v| v[1] = v[0] + 12.0 * hour),
+            with(&|v| v[3] = v[2] + 48.0 * hour),
+            with(&|v| v[3] = v[2] + 26.0 * hour + 1.0),
+            with(&|v| v[1] = v[0] + 22.0 * hour - 1.0),
+            with(&|v| v.reverse()),
+            with(&|v| v[2] = f64::NAN),
+            with(&|v| v[3] = f64::INFINITY),
+            with(&|v| v[0] += 0.5),
+            with(&|v| v.iter_mut().for_each(|x| *x += 1e16)),
+            Vec::new(),
+        ];
+        let expected = serde_json::to_value(&fallback).unwrap();
+        for starts in &bad {
+            let s = log.stats_at(now, 3, -180, Some(starts));
+            assert_eq!(serde_json::to_value(&s).unwrap(), expected, "{starts:?}");
+        }
+        // Boundaries for another number of days are not these days' boundaries.
+        assert_eq!(per_day(&log.stats_at(now, 2, -180, Some(&good))), per_day(&log.stats_at(now, 2, -180, None)));
+        // Days of exactly 22 and 26 hours are accepted (both ends included).
+        let edge = [0.0, 22.0 * hour, 48.0 * hour];
+        assert_eq!(local_midnights(&edge, 2), Some(vec![0, 22 * HOUR_MS, 48 * HOUR_MS]));
+        let _ = std::fs::remove_dir_all(dir);
     }
 }

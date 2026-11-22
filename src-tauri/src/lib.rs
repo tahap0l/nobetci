@@ -758,9 +758,17 @@ fn audit_query(log: State<'_, audit::Log>, filter: audit::Filter) -> audit::Page
     log.query(&filter)
 }
 
+/// Totals per day. `day_starts` (optional, C-18) are the viewer's local
+/// midnights, `days + 1` of them; without valid ones, days break at local
+/// midnight by today's `tz_offset_min`.
 #[tauri::command(async)]
-fn audit_stats(log: State<'_, audit::Log>, days: u32, tz_offset_min: i32) -> audit::Stats {
-    log.stats(days, tz_offset_min)
+fn audit_stats(
+    log: State<'_, audit::Log>,
+    days: u32,
+    tz_offset_min: i32,
+    day_starts: Option<Vec<f64>>,
+) -> audit::Stats {
+    log.stats(days, tz_offset_min, day_starts.as_deref())
 }
 
 /// Every project in the history, most frequent first — for filters and suggestions.
