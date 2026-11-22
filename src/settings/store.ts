@@ -3,10 +3,21 @@
 // island toggling DND, an import) land without clobbering what is being typed.
 
 import { DEFAULT_SETTINGS, type Settings } from "../core/settings-model";
-import { api } from "./api";
+import { api, errCode, errText, type ErrCode } from "./api";
 
 type Key = keyof Settings;
 export type SaveState = "idle" | "pending" | "saving" | "saved" | "error";
+
+/** Why the last save failed (cleared by the next one that lands). `text` follows the UI language. */
+export interface SaveError {
+  code: ErrCode | null;
+  text: () => string;
+}
+let lastError: SaveError | null = null;
+
+export function saveError(): SaveError | null {
+  return lastError;
+}
 
 const DEBOUNCE_MS = 300;
 
@@ -40,9 +51,18 @@ export function initSettings(s: Settings) {
   base = clone(local);
 }
 
-/** Fires when settings changed from outside (Rust sanitising, another window). */
-export function onExternalChange(fn: () => void) {
+/** Fires when settings changed from outside (Rust sanitising, another window); returns an unsubscribe. */
+export function onExternalChange(fn: () => void): () => void {
   changeListeners.add(fn);
+  return () => changeListeners.delete(fn);
+}
+
+const localListeners = new Set<() => void>();
+
+/** Fires after every local edit (`update`), before it is saved; returns an unsubscribe. */
+export function onLocalChange(fn: () => void): () => void {
+  localListeners.add(fn);
+  return () => localListeners.delete(fn);
 }
 
 export function onSaveState(fn: (s: SaveState) => void) {
@@ -62,6 +82,7 @@ function emitState(s: SaveState) {
 export function update(mut: (s: Settings) => void) {
   mut(local);
   schedule();
+  for (const fn of localListeners) fn();
 }
 
 function schedule() {
@@ -82,12 +103,25 @@ async function save(): Promise<void> {
   sent = payload;
   emitState("saving");
   const run = (async () => {
-    const result = await api.saveSettings(payload);
+    let result: Settings | null;
+    try {
+      result = await api.saveSettings(payload);
+    } catch (err) {
+      // Nothing was written (`save_failed: …`, or `settings_unreadable` when the
+      // file could not be read at start and Rust refuses to overwrite it). The
+      // edits stay here; the next change tries again.
+      const code = errCode(err)?.code ?? null;
+      const text = errText(err);
+      lastError = { code, text: () => (code ? errText(err) : text) };
+      result = null;
+    }
     sent = null;
     if (!result) {
+      lastError ??= { code: null, text: () => "" };
       emitState("error");
       return;
     }
+    lastError = null;
     // Keys edited since sending stay local (another save is already queued).
     const merged = clone(local);
     let changed = false;
@@ -142,6 +176,8 @@ export function replaceAll(s: Settings) {
     window.clearTimeout(timer);
     timer = null;
   }
+  // Rust stored these (import / reset), so whatever failed before is over.
+  lastError = null;
   local = clone(s);
   base = clone(s);
   emitState("saved");

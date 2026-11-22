@@ -9,29 +9,34 @@
 // (C:\Users\dev, acme/…).
 //
 // Dev URL switches: ?lang=tr|en (UI language), ?sys=tr|en (Windows language the
-// mock reports), ?fresh=1 (not onboarded yet: the wizard opens).
+// mock reports), ?fresh=1 (not onboarded yet: the wizard opens),
+// ?platform=macos|linux (the wording of another OS). Failure switches, to see
+// every error path without a broken machine: ?relay=missing, ?previewError=1
+// (settings.json is not valid JSON), ?noFile=1 (no settings.json yet, so no
+// backup), ?foreignStatus=1 (someone else's status line), ?loadError=1 (the app's
+// own settings file was unreadable at start), ?saveError=unreadable|failed,
+// ?autostartFail=1 (a `settings-warning` after changing autostart), ?importBad=1.
+// In the console: __mockStale() makes the next hook write fail as a stale preview.
 
 import type {
   AuditEntry,
   AuditFilter,
   AuditStats,
-  AgentHookPreview,
   AgentHookStatus,
   AgentProvider,
   CategoryInfo,
   Evaluation,
-  HealthReport,
   HookStatus,
   HotkeyStatus,
   RiskAssessment,
   RiskFinding,
   RiskLevel,
 } from "../core/bridge";
-import { ALL_EVENTS, DEFAULT_SETTINGS, type Settings, type UserRule } from "../core/settings-model";
+import { ALL_EVENTS, DEFAULT_SETTINGS, type RuleMode, type Settings, type UserRule } from "../core/settings-model";
 import { getLang, type Lang } from "../i18n/core";
 // The preview shows the version being built, so screenshots never carry a stale one.
 import { version } from "../../package.json";
-import type { Api } from "./api";
+import type { Api, CsvSeparator, HealthReport, HookPreview, StatusLineOwner } from "./api";
 
 type Group = CategoryInfo["group"];
 type Tag = "" | "secret" | "exfil";
@@ -567,6 +572,10 @@ function assessRaw(tool: string, input: Record<string, unknown>, cwd: string, of
     kind = "web";
     target = str(input, "url")!;
     scan(WEB, target);
+  } else if (lower === "websearch" && str(input, "query")?.trim()) {
+    // Claude Code's own search: a known request, never scanned like a URL.
+    kind = "web";
+    target = str(input, "query")!;
   } else if (lower.startsWith("mcp__")) {
     kind = "mcp";
     const action = lower.split("__").pop() ?? "";
@@ -601,14 +610,25 @@ function assessRaw(tool: string, input: Record<string, unknown>, cwd: string, of
   }
   if (found.some((x) => x.tag === "secret") && found.some((x) => x.tag === "exfil"))
     synth("secret_exfil", "critical", SYNTHETIC[0][2]);
+  // As in risk.rs: a request it can't place is always looked at by a person.
+  const manualReview = kind === "other" || !target.trim();
+  if (manualReview)
+    found.push({
+      f: {
+        category: "unrecognized_request",
+        level: "medium",
+        label: ["Tanınmayan veya eksik istek", "Unrecognized or incomplete request"],
+        excerpt: "",
+      },
+      tag: "",
+    });
   const findings: RawFinding[] = [];
   for (const { f } of found) if (!findings.some((x) => x.label[1] === f.label[1])) findings.push(f);
   findings.sort((a, b) => RANK[b.level] - RANK[a.level]);
-  return { level: findings[0]?.level ?? ("low" as RiskLevel), kind, target, findings };
+  return { level: findings[0]?.level ?? ("low" as RiskLevel), kind, target, findings, manualReview };
 }
 
-function assess(tool: string, input: Record<string, unknown>, cwd: string, off: Set<string>): RiskAssessment {
-  const a = assessRaw(tool, input, cwd, off);
+function assessment(a: ReturnType<typeof assessRaw>): RiskAssessment {
   return {
     level: a.level,
     kind: a.kind,
@@ -635,12 +655,25 @@ function toolMatches(spec: string, tool: string): boolean {
     );
 }
 
+/** Letters, digits and what continues a command word (rules.rs is_word). */
+function isWord(c: string): boolean {
+  return /[\p{L}\p{N}_.-]/u.test(c);
+}
+
+/** `text` starts with `prefix`, ending where a word does (rules.rs starts_with_word). */
+function startsWithWord(text: string, prefix: string): boolean {
+  if (!text.startsWith(prefix)) return false;
+  const last = prefix.slice(-1);
+  const next = text.slice(prefix.length, prefix.length + 1);
+  return !last || !next || !(isWord(last) && isWord(next));
+}
+
 function patternMatches(mode: string, pattern: string, target: string): boolean {
   const p = pattern.trim();
   if (!p) return true;
   const low = target.toLowerCase();
   const lp = p.toLowerCase();
-  if (mode === "prefix") return low.trimStart().startsWith(lp);
+  if (mode === "prefix") return startsWithWord(low.trimStart(), lp);
   if (mode === "exact") return low.trim() === lp;
   if (mode === "glob" || mode === "regex") {
     const src =
@@ -651,7 +684,8 @@ function patternMatches(mode: string, pattern: string, target: string): boolean 
             .join("")}$`
         : p;
     try {
-      return new RegExp(src, "i").test(target);
+      // Globs cross line breaks too (rules.rs compiles them with (?s)).
+      return new RegExp(src, mode === "glob" ? "is" : "i").test(target);
     } catch {
       return false;
     }
@@ -659,13 +693,130 @@ function patternMatches(mode: string, pattern: string, target: string): boolean 
   return low.includes(lp);
 }
 
-function ruleMatches(rule: UserRule, tool: string, target: string, cwd: string): boolean {
-  return (
-    rule.enabled &&
-    toolMatches(rule.tool, tool) &&
-    (!rule.project.trim() || within(cwd, rule.project)) &&
-    patternMatches(rule.mode, rule.pattern, target)
-  );
+/** How many more commands a shell would run, per kind (rules.rs separators). */
+function separators(text: string): number[] {
+  const chars = [...text.trim()];
+  const count = [0, 0, 0, 0, 0, 0, 0];
+  chars.forEach((c, i) => {
+    const prev = i > 0 ? chars[i - 1] : " ";
+    const next = chars[i + 1] ?? " ";
+    let kind = -1;
+    if ("\n\r\u0085\u2028\u2029".includes(c)) kind = 0;
+    else if (c === ";") kind = 1;
+    else if (c === "&") kind = prev === ">" || prev === "<" || next === ">" ? -1 : 2;
+    else if (c === "|") kind = prev === ">" ? -1 : 3;
+    else if (c === "`") kind = 4;
+    else if (c === "$" && next === "(") kind = 5;
+    else if ((c === "<" || c === ">") && next === "(") kind = 6;
+    if (kind >= 0) count[kind]++;
+  });
+  return count;
+}
+
+/** A loose allow (or calming) rule covers one command: no more chained commands than its pattern spells out. */
+function chainsMore(command: string, pattern: string): boolean {
+  const p = separators(pattern);
+  return separators(command).some((c, i) => c > p[i]);
+}
+
+/**
+ * A stand-in for `rule_pattern_check`: what Rust's regex crate would refuse,
+ * approximated with a Unicode-mode JS RegExp (which, like Rust, rejects unknown
+ * escapes such as `\U` and stray `{`), after translating the syntax JS lacks
+ * (inline flags, `\A`/`\z`, `(?P<name>…)`). Messages read like the crate's.
+ */
+function patternCheck(mode: RuleMode, pattern: string): { msg: string; at?: [number, number] } | null {
+  if (mode !== "regex" || !pattern.trim()) return null;
+  // An escape is real when an odd number of backslashes precede the character.
+  const escaped = (src: string, i: number) => {
+    let n = 0;
+    for (let j = i - 1; j >= 0 && src[j] === "\\"; j--) n++;
+    return n % 2 === 1;
+  };
+  for (let i = 0; i < pattern.length; i++) {
+    const c = pattern[i];
+    const look = /^\(\?<?[=!]/.exec(pattern.slice(i));
+    if (c === "(" && !escaped(pattern, i) && look) {
+      return {
+        msg: "look-around, including look-ahead and look-behind, is not supported",
+        at: [i, i + look[0].length],
+      };
+    }
+    if (!escaped(pattern, i)) continue;
+    // regex-syntax: any digit after a backslash is a backreference (no octal).
+    if (/[0-9]/.test(c)) return { msg: "backreferences are not supported", at: [i - 1, i + 1] };
+    // \x, \u and \U take 2, 4 and 8 hex digits (or {…}): C:\Users fails on the "s".
+    if (/[xuU]/.test(c) && pattern[i + 1] !== "{") {
+      const n = c === "x" ? 2 : c === "u" ? 4 : 8;
+      for (let k = 1; k <= n; k++) {
+        const d = pattern[i + k];
+        if (d === undefined) {
+          return { msg: "incomplete escape sequence, reached end of pattern prematurely", at: [i - 1, i + k] };
+        }
+        if (!/[0-9a-fA-F]/.test(d)) return { msg: "invalid hexadecimal digit", at: [i + k, i + k + 1] };
+      }
+    }
+    // Rust knows only these letters after a backslash.
+    if (/[a-zA-Z]/.test(c) && !/[dDwWsSbBAzpPxuUntrfva]/.test(c)) {
+      return { msg: "unrecognized escape sequence", at: [i - 1, i + 1] };
+    }
+  }
+  const src = pattern
+    .replace(/^\(\?[imsxU-]+\)/, "")
+    .replace(/\(\?[imsxU-]+:/g, "(?:")
+    .replace(/\(\?P</g, "(?<")
+    .replace(/(^|[^\\])\\A/g, "$1^")
+    .replace(/(^|[^\\])\\z/g, "$1$")
+    // What Rust spells differently (or JS's Unicode mode refuses): \a, \< \>, \pL.
+    .replace(/(^|[^\\])\\a/g, "$1\\x07")
+    .replace(/(^|[^\\])\\[<>]/g, "$1\\b")
+    .replace(/(^|[^\\])\\([pP])([A-Za-z])/g, "$1\\$2{$3}");
+  const word = (msg: string) => ({ msg });
+  try {
+    new RegExp(src, "iu");
+    return null;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (/\\ at end of pattern/i.test(msg))
+      return word("incomplete escape sequence, reached end of pattern prematurely");
+    if (/Unterminated group|Unmatched '\('/i.test(msg)) return word("unclosed group");
+    if (/Unmatched '\)'/i.test(msg)) return word("unopened group");
+    if (/Invalid escape|Invalid Unicode escape/i.test(msg)) return word("unrecognized escape sequence");
+    if (/Lone quantifier brackets|Incomplete quantifier/i.test(msg)) {
+      return word("repetition quantifier expects a valid decimal");
+    }
+    if (/Nothing to repeat/i.test(msg)) return word("repetition operator missing expression");
+    if (/Range out of order in character class/i.test(msg)) {
+      return word("invalid character class range, the start must be <= the end");
+    }
+    if (/out of order/i.test(msg)) return word("invalid repetition count range, the start must be <= the end");
+    if (/Unterminated character class/i.test(msg)) return word("unclosed character class");
+    return word(msg.replace(/^Invalid regular expression: \/.*\/[a-z]*: /, "").toLowerCase());
+  }
+}
+
+function ruleMatches(
+  rule: UserRule,
+  tool: string,
+  a: RiskAssessment,
+  input: Record<string, unknown>,
+  cwd: string,
+): boolean {
+  if (
+    !rule.enabled ||
+    !toolMatches(rule.tool, tool) ||
+    !(!rule.project.trim() || within(cwd, rule.project)) ||
+    !patternMatches(rule.mode, rule.pattern, a.target)
+  )
+    return false;
+  // rules.rs: a loose match that lets a command through or lowers its risk
+  // stands back when the command chains more than the pattern does.
+  const pattern = rule.pattern.trim();
+  const loose = !pattern || (rule.mode !== "exact" && rule.mode !== "regex");
+  const lowers = rule.action === "allow" || (rule.action in RANK && RANK[rule.action as RiskLevel] < RANK[a.level]);
+  const command = a.kind === "command" ? a.target : a.kind === "mcp" ? str(input, "command") : null;
+  if (loose && lowers && command != null) return !chainsMore(command, pattern);
+  return true;
 }
 
 const LEVEL_NAME: Record<RiskLevel, Pair> = {
@@ -676,7 +827,8 @@ const LEVEL_NAME: Record<RiskLevel, Pair> = {
 };
 
 function evaluate(tool: string, input: Record<string, unknown>, cwd: string, s: Settings): Evaluation {
-  const a = assess(tool, input, cwd, new Set(s.disabledCategories));
+  const raw = assessRaw(tool, input, cwd, new Set(s.disabledCategories));
+  const a = assessment(raw);
   const pol = s.projects
     .filter((p) => within(cwd, p.path))
     .sort((x, y) => norm(y.path).length - norm(x.path).length)[0];
@@ -690,7 +842,7 @@ function evaluate(tool: string, input: Record<string, unknown>, cwd: string, s: 
   // As in Rust: what the engine itself found high or critical is never
   // approved automatically, even after a rule re-scores it.
   const engineRank = RANK[a.level];
-  const mayAuto = (l: RiskLevel) => engineRank < RANK.high && cap >= 0 && RANK[l] <= cap;
+  const mayAuto = (l: RiskLevel) => !raw.manualReview && engineRank < RANK.high && cap >= 0 && RANK[l] <= cap;
   const v = (
     outcome: Evaluation["outcome"],
     by: Evaluation["by"],
@@ -707,7 +859,7 @@ function evaluate(tool: string, input: Record<string, unknown>, cwd: string, s: 
     policy: policy as Evaluation["policy"],
     grantable: RANK[a.level] <= RANK.medium && mayAuto(a.level),
   });
-  const rule = s.rules.find((x) => ruleMatches(x, tool, a.target, cwd));
+  const rule = s.rules.find((x) => ruleMatches(x, tool, a, input, cwd));
   // Rust reports a re-scoring rule with whatever outcome follows.
   let rescoredBy: string | null = null;
   if (rule) {
@@ -926,20 +1078,18 @@ function query(all: AuditEntry[], f: AuditFilter): AuditEntry[] {
     .reverse();
 }
 
-function ymd(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
 function stats(all: AuditEntry[], days: number): AuditStats {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const first = new Date(today);
-  first.setDate(first.getDate() - days + 1);
-  const rows = Array.from({ length: days }, (_, i) => {
-    const d = new Date(first);
-    d.setDate(first.getDate() + i);
-    return { date: ymd(d), allow: 0, deny: 0, none: 0 };
-  });
+  // As audit.rs: days break at local midnight by today's UTC offset.
+  const off = new Date().getTimezoneOffset() * 60_000;
+  const dayOf = (ts: number) => Math.floor((ts - off) / 86_400_000);
+  const today = dayOf(Date.now());
+  const firstDay = today - days + 1;
+  const rows = Array.from({ length: days }, (_, i) => ({
+    date: new Date((firstDay + i) * 86_400_000).toISOString().slice(0, 10),
+    allow: 0,
+    deny: 0,
+    none: 0,
+  }));
   const s: AuditStats = {
     total: 0,
     allowed: 0,
@@ -961,9 +1111,8 @@ function stats(all: AuditEntry[], days: number): AuditStats {
   const labels = new Map<string, number>();
   const waits: number[] = [];
   for (const e of all) {
-    if (e.ts < first.getTime()) continue;
-    const idx = rows.findIndex((row) => row.date === ymd(new Date(e.ts)));
-    if (idx < 0) continue;
+    const idx = dayOf(e.ts) - firstDay;
+    if (idx < 0 || idx >= days) continue;
     s.total++;
     if (e.decision === "allow") {
       s.allowed++;
@@ -1045,12 +1194,31 @@ export function createMockApi(): Api {
   const systemLang: Lang =
     sysParam === "tr" || sysParam === "en" ? sysParam : navigator.language.toLowerCase().startsWith("tr") ? "tr" : "en";
   const pref: Settings["language"] = forced === "tr" || forced === "en" ? forced : "auto";
-  // `?platform=macos` previews the Mac wording.
-  const platform: "windows" | "macos" = q.get("platform") === "macos" ? "macos" : "windows";
+  // `?platform=macos|linux` previews another OS's wording.
+  const pq = q.get("platform");
+  const platform: "windows" | "macos" | "linux" = pq === "macos" || pq === "linux" ? pq : "windows";
   // User data (rule names, notes, reasons) is written once, in the language the
   // window starts in — like a real user's would be.
   const lang0: Lang = pref === "auto" ? systemLang : pref;
   const U = (p: Pair) => (lang0 === "tr" ? p[0] : p[1]);
+  // Failure switches (see the header).
+  const relayMissing = q.get("relay") === "missing";
+  const previewError = q.get("previewError") === "1";
+  let noFile = q.get("noFile") === "1";
+  const foreignStatus = q.get("foreignStatus") === "1";
+  const saveError = q.get("saveError");
+  const autostartFail = q.get("autostartFail") === "1";
+  const importBad = q.get("importBad") === "1";
+  /** The next hook write fails as if the file changed after the preview. */
+  let staleNext = false;
+  const backupPath = (file: string) => (noFile ? null : `${file}.nobetci-2026-10-01-1432.bak`);
+  const invalidJson = () =>
+    new Error(
+      L([
+        "settings.json geçerli JSON değil (satır 3, sütun 5). Nöbetçi onun üzerine yazmaz; düzeltip ya da taşıyıp yeniden dene.",
+        "settings.json isn't valid JSON (line 3, column 5). Nöbetçi won't overwrite it; fix or move it, then try again.",
+      ]),
+    );
   let mockOpenAiKeyStored = false;
   const agentStatuses = new Map<AgentProvider, AgentHookStatus>();
   const agentStatus = (provider: AgentProvider): AgentHookStatus => {
@@ -1061,12 +1229,38 @@ export function createMockApi(): Api {
       installed: false,
       settingsPath: `${HOME}\\.${provider}\\hooks.json`,
       hookPath: `${HOME}\\AppData\\Local\\Nobetci\\bin\\nobetci-hook.exe`,
-      hookReady: true,
+      hookReady: !relayMissing,
       events: [],
       stale: false,
     };
     agentStatuses.set(provider, status);
     return status;
+  };
+  /** The events each agent connection installs (agent_hooks.rs). */
+  const AGENT_EVENTS: Record<AgentProvider, string[]> = {
+    codex: [
+      "SessionStart",
+      "SessionEnd",
+      "UserPromptSubmit",
+      "PreToolUse",
+      "PostToolUse",
+      "PreCompact",
+      "PostCompact",
+      "PermissionRequest",
+      "Stop",
+      "SubagentStart",
+      "SubagentStop",
+    ],
+    cursor: [
+      "sessionStart",
+      "sessionEnd",
+      "beforeSubmitPrompt",
+      "beforeShellExecution",
+      "beforeMCPExecution",
+      "afterShellExecution",
+      "afterMCPExecution",
+      "afterAgentResponse",
+    ],
   };
 
   let settings: Settings = sanitize({
@@ -1163,12 +1357,13 @@ export function createMockApi(): Api {
     installed: q.get("fresh") !== "1" && !lost,
     settingsPath: `${HOME}\\.claude\\settings.json`,
     hookPath: `${HOME}\\AppData\\Local\\Nobetci\\bin\\nobetci-hook.exe`,
-    hookReady: true,
+    hookReady: !relayMissing,
     events:
       q.get("fresh") === "1" || lost
         ? []
-        : ALL_EVENTS.filter((e) => !["StopFailure", "SubagentStart", "SubagentStop"].includes(e)),
-    stale: false,
+        : ALL_EVENTS.filter((e) => !["StopFailure", "SubagentStart", "SubagentStop", "StatusLine"].includes(e)),
+    stale: q.get("stale") === "1",
+    foreignStatusLine: foreignStatus,
   };
   const listeners = new Map<string, Set<(p: unknown) => void>>();
   const emit = (name: string, payload: unknown) => {
@@ -1218,23 +1413,7 @@ export function createMockApi(): Api {
 
   const api: Api = {
     mock: true,
-    toBuddy: async () => {},
-    buddyOpenIsland: async () => null,
     buddyResetPosition: async () => null,
-    assistantOpen: async () => ({ prefilled: true, app: null }),
-    assistantApps: async () => [{ target: "claude", name: "Claude" }],
-    assistantDictate: async () => undefined,
-    islandStats: async () => null,
-    buddyResizeBy: async () => null,
-    agendaList: async () => [],
-    agendaPut: async () => [],
-    agendaDelete: async () => [],
-    assistantAsk: async (text: string) => `(${text.length})`,
-    islandKeyboard: async () => null,
-    setAssistantTarget: async () => null,
-    islandMedia: async () => null,
-    islandMediaControl: async () => false,
-    islandWeather: async () => null,
     onEvent: async <T>(name: string, handler: (payload: T) => void) => {
       const set = listeners.get(name) ?? new Set();
       const fn = (p: unknown) => handler(p as T);
@@ -1251,52 +1430,72 @@ export function createMockApi(): Api {
       hookPath: hookStatus.hookPath,
       platform,
       fullscreenSupported: true,
+      settingsLoadError:
+        q.get("loadError") === "1"
+          ? L([
+              "settings.json okunamadı (satır 1, sütun 1'de beklenmeyen karakter). Bir kopyası settings.json.unreadable-20261021-0932 olarak saklandı.",
+              "settings.json couldn't be read (unexpected character at line 1, column 1). A copy was kept as settings.json.unreadable-20261021-0932.",
+            ])
+          : null,
     }),
     saveSettings: async (s: Settings) => {
       await delay(60);
+      if (saveError === "unreadable") throw new Error("settings_unreadable");
+      if (saveError === "failed") throw new Error(`save_failed: ${L(["disk dolu", "the disk is full"])}`);
+      const autostartChanged = s.autostart !== settings.autostart;
       settings = sanitize(s);
       emit("settings-changed", settings);
+      if (autostartChanged && autostartFail) {
+        emit("settings-warning", {
+          code: "autostart_failed",
+          detail: L(["kayıt defterine yazılamadı", "couldn't write the login item"]),
+        });
+      }
       return clone(settings);
     },
-    setDnd: async (on: boolean) => {
-      settings.dnd = on;
-      emit("settings-changed", settings);
-    },
     quietState: async () => (settings.dnd ? "dnd" : null),
-    setCollapsed: async () => {},
-    setIslandRect: async () => {},
-    reposition: async () => {},
-    openFolder: async () => true,
-    focusSession: async () => true,
     openLocation: async (what: string) => {
       console.info("[mock] openLocation", what);
       return true;
     },
-    quit: async () => {},
-    openSettingsWindow: async () => {},
     pickFolder: async () => {
       await delay(60);
       const picks = [`${HOME}\\src\\new-project`, `${HOME}\\src\\web-shop`, `${HOME}\\Documents\\notes`];
       return picks[Math.floor(Math.random() * picks.length)];
     },
     closeSettingsWindow: async () => {},
-    log: async () => {},
     hooksStatus: async () => clone(hookStatus),
     agentHooksStatus: async (provider: AgentProvider) => clone(agentStatus(provider)),
-    agentHooksPreview: async (provider: AgentProvider, install: boolean): Promise<AgentHookPreview> => {
-      const settingsPath = agentStatus(provider).settingsPath;
-      return {
-        diff: `--- ${settingsPath}\n+++ ${settingsPath} (Nöbetçi)\n@@ hooks @@\n${install ? "+" : "-"}    "hooks": { … ${provider} hooks … }`,
-        backup: `${settingsPath}.bak-20261020-1432`,
-        settingsPath,
-        fingerprint: "mock-agent-fp",
-      };
+    agentHooksPreview: async (provider: AgentProvider, install: boolean): Promise<HookPreview> => {
+      await delay(120);
+      const status = agentStatus(provider);
+      if (install && relayMissing) throw new Error("relay_missing");
+      if (previewError) throw invalidJson();
+      const settingsPath = status.settingsPath;
+      const lines = [`--- ${settingsPath}`, `+++ ${settingsPath} (Nöbetçi)`, "@@ hooks @@", '   "hooks": {'];
+      for (const ev of AGENT_EVENTS[provider]) {
+        const entry = `     "${ev}": [{ "command": "nobetci-hook ${provider} ${ev}" }],`;
+        const has = status.installed && !status.stale;
+        if (install && !has) lines.push(`+${entry.slice(1)}`);
+        else if (!install && status.installed) lines.push(`-${entry.slice(1)}`);
+        else lines.push(entry);
+      }
+      lines.push("   }");
+      return { diff: lines.join("\n"), backup: backupPath(settingsPath), settingsPath, fingerprint: "mock-agent-fp" };
     },
     agentHooksApply: async (provider: AgentProvider, install: boolean, _fingerprint: string) => {
+      await delay(150);
+      if (staleNext) {
+        staleNext = false;
+        throw new Error("stale_preview");
+      }
+      if (install && relayMissing) throw new Error("relay_missing");
       const status = agentStatus(provider);
+      const backup = backupPath(status.settingsPath);
       status.installed = install;
-      status.events = install ? ["SessionStart", "UserPromptSubmit", "PermissionRequest"] : [];
-      return `${status.settingsPath}.bak-20261020-1432`;
+      status.stale = false;
+      status.events = install ? [...AGENT_EVENTS[provider]] : [];
+      return backup;
     },
     rewritePrompt: async (text: string, _agent: string, provider: "ollama" | "openai") => {
       await delay(500);
@@ -1312,44 +1511,74 @@ export function createMockApi(): Api {
     deleteOpenAiKey: async () => {
       mockOpenAiKeyStored = false;
     },
-    hooksPreview: async (install: boolean) => {
+    hooksPreview: async (install: boolean): Promise<HookPreview> => {
       await delay(120);
+      if (install && relayMissing) throw new Error("relay_missing");
+      if (previewError) throw invalidJson();
       return {
         diff: diff(install),
-        backup: `${HOME}\\.claude\\settings.json.nobetci-2026-10-01-1432.bak`,
+        backup: backupPath(hookStatus.settingsPath),
         settingsPath: hookStatus.settingsPath,
         fingerprint: "mock-fp",
       };
     },
-    hooksApply: async (install: boolean) => {
+    hooksApply: async (install: boolean, _fingerprint: string) => {
       await delay(150);
-      hookStatus = { ...hookStatus, installed: install, events: install ? [...settings.hookEvents] : [], stale: false };
+      if (staleNext) {
+        staleNext = false;
+        throw new Error("stale_preview");
+      }
+      if (install && relayMissing) throw new Error("relay_missing");
+      const backup = backupPath(hookStatus.settingsPath);
+      noFile = false;
+      // A foreign status line stays theirs: ours is never written over it.
+      const events = install ? settings.hookEvents.filter((e) => !(foreignStatus && e === "StatusLine")) : [];
+      hookStatus = { ...hookStatus, installed: install, events, stale: false };
       settings.hooksInstalled = install;
       emit("settings-changed", settings);
-      return `${HOME}\\.claude\\settings.json.nobetci-2026-10-01-1432.bak`;
+      return backup;
     },
-    hooksHealth: async (): Promise<HealthReport> => {
+    hooksHealth: async (provider?: AgentProvider): Promise<HealthReport> => {
       await delay(700);
-      const missing = settings.hookEvents.filter((e) => !hookStatus.events.includes(e));
+      if (provider) {
+        const status = agentStatus(provider);
+        return {
+          installed: status.installed,
+          relayPath: status.hookPath,
+          relayExists: !relayMissing,
+          settingsPath: status.settingsPath,
+          eventsInstalled: [...status.events],
+          eventsMissing: AGENT_EVENTS[provider].filter((e) => !status.events.includes(e)),
+          stale: status.stale,
+          roundtripMs: relayMissing ? null : 23,
+          codexActivity: null,
+          inputGuard: q.get("noguard") !== "1",
+          error: null,
+        };
+      }
+      const statusLine: StatusLineOwner = foreignStatus
+        ? "foreign"
+        : hookStatus.events.includes("StatusLine")
+          ? "ours"
+          : "none";
+      const missing = settings.hookEvents.filter(
+        (e) => !hookStatus.events.includes(e) && !(e === "StatusLine" && statusLine === "foreign"),
+      );
       return {
         installed: hookStatus.installed,
         relayPath: hookStatus.hookPath,
-        relayExists: true,
+        relayExists: !relayMissing,
         settingsPath: hookStatus.settingsPath,
         eventsInstalled: [...hookStatus.events],
         eventsMissing: missing,
         stale: hookStatus.stale,
-        roundtripMs: 23,
+        roundtripMs: relayMissing ? null : 23,
         codexActivity: null,
         inputGuard: q.get("noguard") !== "1",
         error: null,
+        statusLine,
       };
     },
-    approvalDecision: async () => {},
-    approvalRespond: async () => {},
-    approvalAllowLow: async () => 0,
-    approvalAck: async () => {},
-    approvalDecline: async () => {},
     rulesTest: async (tool: string, input: Record<string, unknown>, cwd: string, draft?: Settings) => {
       await delay(30);
       return evaluate(tool, input, cwd, draft ?? settings);
@@ -1377,23 +1606,40 @@ export function createMockApi(): Api {
       history = [];
       emit("history-changed", null);
     },
-    auditExport: async (_f: AuditFilter, format: "csv" | "json") =>
-      `${HOME}\\Downloads\\nobetci-history-2026-10-01-14-32-05.${format}`,
+    auditExport: async (_f: AuditFilter, format: "csv" | "json", separator: CsvSeparator = ",") => {
+      console.info("[mock] auditExport", format, format === "csv" ? `separator ${separator}` : "");
+      return `${HOME}\\Downloads\\nobetci-history-2026-10-01-14-32-05.${format}`;
+    },
+    // Rust writes a "nobetciSettings": 1 marker into the export.
     settingsExport: async () => `${HOME}\\Desktop\\nobetci-settings.json`,
     settingsImport: async () => {
+      // Rust refuses JSON that isn't a Nöbetçi settings file (Claude's own settings.json, say).
+      if (importBad) throw new Error("not_nobetci_settings");
       emit("settings-changed", settings);
       return clone(settings);
     },
     settingsReset: async () => {
       const lang: Lang = settings.language === "auto" ? systemLang : settings.language;
+      // Like Rust: everything back to the defaults except `onboarded`, so a reset
+      // never brings the first-run wizard back.
       settings = sanitize({
         ...DEFAULT_SETTINGS,
-        onboarded: true,
+        onboarded: settings.onboarded,
         denyReasons: DENY_REASONS[lang],
         hooksInstalled: hookStatus.installed,
       });
       emit("settings-changed", settings);
       return clone(settings);
+    },
+    rulePatternCheck: async (mode: RuleMode, pattern: string) => {
+      await delay(20);
+      const p = pattern.trim();
+      const err = patternCheck(mode, p);
+      if (!err) return;
+      // The regex crate's own (English, multi-line) wording, as rules::pattern_error
+      // returns it: the pattern, carets under the spot when it is known, the error.
+      const caret = err.at ? `    ${" ".repeat(err.at[0])}${"^".repeat(err.at[1] - err.at[0])}\n` : "";
+      throw new Error(`regex parse error:\n    ${p}\n${caret}error: ${err.msg}`);
     },
     notify: async () => !settings.dnd,
     hotkeysStatus: async () => hotkeys(),
@@ -1403,11 +1649,24 @@ export function createMockApi(): Api {
   const w = window as unknown as {
     __mockDnd: (on: boolean) => void;
     __mockEmit: (name: string, payload: unknown) => void;
+    __mockStale: () => void;
+    __mockSettings: (patch: Partial<Settings>) => void;
+    __mockState: () => Settings;
   };
   w.__mockDnd = (on: boolean) => {
     settings = { ...settings, dnd: on };
     emit("settings-changed", settings);
   };
   w.__mockEmit = emit;
+  w.__mockStale = () => {
+    staleNext = true;
+  };
+  // Another window (or the island) changed something, e.g. __mockSettings({ hookEvents: [...] }).
+  w.__mockSettings = (patch: Partial<Settings>) => {
+    settings = sanitize({ ...settings, ...patch });
+    emit("settings-changed", settings);
+  };
+  // What "Rust" holds right now (for checks in the console).
+  w.__mockState = () => clone(settings);
   return api;
 }

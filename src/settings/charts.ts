@@ -33,11 +33,17 @@ function el<K extends keyof SVGElementTagNameMap>(
   return e;
 }
 
-function niceMax(v: number): { max: number; step: number } {
+/**
+ * The y axis for a peak of `v` decisions: about four gridlines at whole-number
+ * steps. Counts are integers, so a step of 2.5 (labelled "3", "8") is never used
+ * below 25.
+ */
+export function niceMax(v: number): { max: number; step: number } {
   if (v <= 4) return { max: 4, step: 1 };
   const raw = v / 4;
   const pow = 10 ** Math.floor(Math.log10(raw));
-  const step = [1, 2, 2.5, 5, 10].map((m) => m * pow).find((s) => s >= raw) ?? 10 * pow;
+  const steps = [1, 2, 2.5, 5, 10].map((m) => m * pow).filter((s) => Number.isInteger(s));
+  const step = steps.find((s) => s >= raw) ?? 10 * pow;
   const s = step < 1 ? 1 : step;
   return { max: Math.ceil(v / s) * s, step: s };
 }

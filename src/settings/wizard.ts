@@ -5,9 +5,10 @@
 // It reuses the real controls: the reviewed-diff hook install from the Claude
 // Code tab and the ceiling / hold / click-guard controls from Güvenlik.
 
-import type { HealthReport } from "../core/bridge";
+import { mountMascot, type EmbeddedMascot } from "../baykus/embed";
 import { onLangChange } from "../i18n/core";
 import { h } from "../ui/dom";
+import type { HealthReport } from "./api";
 import { cache, loadHookStatus } from "./data";
 import { t, tn, type MsgKey } from "./i18n";
 import { icon, owlMark, type IconName } from "./icons";
@@ -16,7 +17,7 @@ import { devParam, go } from "./nav";
 import { settings, update } from "./store";
 import { checkHealth, healthRunningView, healthView, hooksLost, openPreview } from "./tabs/claude";
 import { ceilingControl, guardControls, holdControls } from "./tabs/guvenlik";
-import { button, kbd, notice, pushLayer } from "./ui";
+import { button, holdKeyboard, kbd, notice, pushLayer } from "./ui";
 
 const STEPS = ["welcome", "connect", "health", "safety", "done"] as const;
 type Step = (typeof STEPS)[number];
@@ -38,9 +39,22 @@ const w = {
   health: null as HealthReport | null,
   healthRunning: false,
   healthRan: false,
+  /** Steps that have been on screen. */
+  seen: new Set<Step>(),
+  /** Why the last hook preview could not be made (shown in the Connect step). */
+  connectError: null as string | null,
   pop: null as (() => void) | null,
+  release: null as (() => void) | null,
   unlisten: null as (() => void) | null,
+  /** The user's own mascot on the welcome step, alive while the wizard is open. */
+  mascot: null as EmbeddedMascot | null,
+  mascotHost: null as HTMLElement | null,
 };
+
+/** The wizard is on screen. */
+export function wizardOpen(): boolean {
+  return !!w.overlay;
+}
 
 export function openWizard(step?: number) {
   const dev = Number(devParam("wiz"));
@@ -54,9 +68,13 @@ export function openWizard(step?: number) {
   w.painted = -1;
   w.health = null;
   w.healthRan = false;
+  w.seen = new Set();
+  w.connectError = null;
   w.panel = h("div", { class: "wz", role: "dialog", "aria-modal": "true" });
   w.overlay = h("div", { class: "wz-overlay" }, w.panel);
   document.body.append(w.overlay);
+  // The settings page behind is inert until the wizard closes; Tab stays inside.
+  w.release = holdKeyboard(w.overlay);
   w.pop = pushLayer(() => close(null));
   w.unlisten = onLangChange(() => paint());
   paint();
@@ -69,14 +87,20 @@ function close(then: "kurallar" | null) {
   update((x) => (x.onboarded = true));
   w.pop?.();
   w.unlisten?.();
+  w.mascot?.destroy();
   const overlay = w.overlay;
   w.overlay = null;
   w.panel = null;
   w.pop = null;
   w.unlisten = null;
+  w.mascot = null;
+  w.mascotHost = null;
   overlay.classList.add("leaving");
   window.setTimeout(() => overlay.remove(), 160);
   if (then) go(then);
+  // The page comes back to life, and the focus to where it was before.
+  w.release?.();
+  w.release = null;
 }
 
 function goStep(i: number) {
@@ -99,6 +123,21 @@ function bullet(ic: IconName, text: string): HTMLElement {
   return h("li", {}, h("span", { class: "wz-bullet-ic" }, icon(ic, 17)), h("span", { text }));
 }
 
+/** The user's mascot, waving hello; one canvas for the whole wizard. */
+function heroMascot(): HTMLElement {
+  if (!w.mascotHost) {
+    w.mascotHost = h("div", { class: "wz-mascot", "aria-hidden": "true" });
+    try {
+      w.mascot = mountMascot(w.mascotHost, settings().mascotTheme);
+      w.mascot.wave();
+    } catch {
+      // No canvas (very old webview): the static mark still says hello.
+      w.mascotHost.replaceChildren(owlMark(64));
+    }
+  }
+  return w.mascotHost;
+}
+
 function welcome(): HTMLElement {
   return h(
     "div",
@@ -106,7 +145,7 @@ function welcome(): HTMLElement {
     h(
       "div",
       { class: "wz-hero" },
-      owlMark(64),
+      heroMascot(),
       h(
         "div",
         {},
@@ -132,7 +171,31 @@ function welcome(): HTMLElement {
 
 function connectStatus(): HTMLElement {
   const hs = cache.hookStatus;
-  const reload = () => void loadHookStatus().then(() => paint());
+  const reload = () => {
+    w.connectError = null;
+    void loadHookStatus().then(() => paint());
+  };
+  // A preview that could not be made (settings.json is not valid JSON, the relay
+  // is missing…) is said here, in the wizard — not on a tab hidden behind it.
+  const preview = () => {
+    w.connectError = null;
+    paint();
+    void openPreview(true, {
+      onApplied: reload,
+      onError: (text) => {
+        w.connectError = text;
+        paint();
+      },
+    });
+  };
+  const error = w.connectError
+    ? notice(
+        "error",
+        h("strong", { text: t("wz.connect.previewFailed") }),
+        " ",
+        h("span", { class: "verbatim", text: w.connectError }),
+      )
+    : null;
   if (!cache.hookStatusLoaded)
     return h(
       "div",
@@ -162,17 +225,16 @@ function connectStatus(): HTMLElement {
   if (hs.stale)
     return h(
       "div",
-      {},
+      { class: "wz-connect-box" },
       notice("warn", t("wz.connect.stale")),
-      h(
-        "div",
-        { class: "btn-row" },
-        button(t("claude.btn.reinstall"), {
-          kind: "primary",
-          icon: "reset",
-          onClick: () => void openPreview(true, reload),
-        }),
-      ),
+      button(t("claude.btn.reinstall"), {
+        kind: "primary",
+        icon: "reset",
+        fk: "wz:reinstall",
+        disabled: !hs.hookReady,
+        onClick: preview,
+      }),
+      error,
       relay,
     );
   return h(
@@ -185,8 +247,10 @@ function connectStatus(): HTMLElement {
       kind: "primary",
       icon: hooksLost() ? "reset" : "download",
       fk: "wz:install",
-      onClick: () => void openPreview(true, reload),
+      disabled: !hs.hookReady,
+      onClick: preview,
     }),
+    error,
     relay,
   );
 }
@@ -308,18 +372,57 @@ function done(): HTMLElement {
 
 // ── Frame ─────────────────────────────────────────────────────────────────────
 
+/** Whether a step's job is actually done — a tick means done, not merely passed. */
+function completed(s: Step): boolean {
+  const hs = cache.hookStatus;
+  switch (s) {
+    case "welcome":
+      return w.seen.has("welcome");
+    case "connect":
+      return !!hs?.installed && !hs.stale;
+    case "health": {
+      const r = w.health;
+      return (
+        !!r &&
+        r.installed &&
+        r.relayExists &&
+        !r.stale &&
+        !r.eventsMissing.length &&
+        r.roundtripMs != null &&
+        r.inputGuard &&
+        !r.error
+      );
+    }
+    case "safety":
+      return w.seen.has("safety");
+    case "done":
+      return false;
+  }
+}
+
 function rail(): HTMLElement {
   const list = h("ol", { class: "wz-steps" });
   STEPS.forEach((s, i) => {
-    const state = i < w.step ? "past" : i === w.step ? "now" : "next";
+    const now = i === w.step;
+    const ok = !now && completed(s);
+    // Left behind without being done: a plain number, marked as skipped.
+    const skipped = !now && !ok && i < w.step;
+    const state = now ? "now" : ok ? "past" : skipped ? "skipped" : "next";
     const item = h(
       "li",
       { class: `wz-step-item ${state}` },
       h(
         "button",
-        { type: "button", class: "wz-step-btn", "aria-current": i === w.step ? "step" : undefined },
-        h("span", { class: "wz-dot" }, i < w.step ? icon("check", 13) : String(i + 1)),
+        {
+          type: "button",
+          class: "wz-step-btn",
+          "aria-current": now ? "step" : undefined,
+          "data-fk": `wz-step:${s}`,
+          title: ok ? t("wz.rail.done") : skipped ? t("wz.rail.skipped") : undefined,
+        },
+        h("span", { class: "wz-dot" }, ok ? icon("check", 13) : String(i + 1)),
         h("span", { class: "wz-step-label", text: t(STEP_LABEL[s]) }),
+        ok || skipped ? h("span", { class: "sr-only", text: ok ? t("wz.rail.done") : t("wz.rail.skipped") }) : null,
       ),
     );
     item.querySelector("button")!.addEventListener("click", () => goStep(i));
@@ -341,6 +444,13 @@ function rail(): HTMLElement {
 function paint() {
   if (!w.panel) return;
   const step = STEPS[w.step];
+  w.seen.add(step);
+  if (step !== "welcome" && w.mascot) {
+    // Off screen: no frame loop for a canvas nobody sees.
+    w.mascot.destroy();
+    w.mascot = null;
+    w.mascotHost = null;
+  }
   if (step === "health" && cache.hookStatus?.installed && !w.healthRan && !w.healthRunning) {
     // Entering the step runs the check once; "Run again" repeats it.
     void runHealth();
@@ -367,8 +477,12 @@ function paint() {
       ? null
       : button(t("wz.skip"), { kind: "subtle", title: t("wz.skipTitle"), fk: "wz:skip", onClick: () => close(null) }),
     h("span", { class: "spacer" }),
-    w.step > 0 ? button(t("wz.back"), { kind: "ghost", icon: "left", onClick: () => goStep(w.step - 1) }) : null,
-    last ? button(t("wz.done.rules"), { kind: "ghost", icon: "kurallar", onClick: () => close("kurallar") }) : null,
+    w.step > 0
+      ? button(t("wz.back"), { kind: "ghost", icon: "left", fk: "wz:back", onClick: () => goStep(w.step - 1) })
+      : null,
+    last
+      ? button(t("wz.done.rules"), { kind: "ghost", icon: "kurallar", fk: "wz:rules", onClick: () => close("kurallar") })
+      : null,
     last
       ? button(t("wz.finish"), { kind: "primary", icon: "check", fk: "wz:finish", onClick: () => close(null) })
       : button(t("wz.next"), { kind: "primary", fk: "wz:next", onClick: () => goStep(w.step + 1) }),
@@ -386,7 +500,14 @@ function paint() {
         h("span", { class: "wz-kicker", text: t("wz.step", { n: w.step + 1, total: STEPS.length }) }),
         h("span", { class: "wz-bar" }, bar),
       ),
-      button("", { kind: "subtle", small: true, icon: "close", title: t("wz.closeTitle"), onClick: () => close(null) }),
+      button("", {
+        kind: "subtle",
+        small: true,
+        icon: "close",
+        title: t("wz.closeTitle"),
+        fk: "wz:close",
+        onClick: () => close(null),
+      }),
     ),
     h("div", { class: "wz-body" }, body),
     foot,
@@ -394,10 +515,15 @@ function paint() {
 
   const scroll = w.panel.querySelector(".wz-body")?.scrollTop ?? 0;
   const sameStep = w.painted === w.step;
+  // A repaint of the same step (language, health result) keeps the focus where it was.
+  const focused = document.activeElement as HTMLElement | null;
+  const fk = sameStep && focused && w.panel.contains(focused) ? focused.getAttribute("data-fk") : null;
   w.panel.setAttribute("aria-label", t("wz.aria"));
   w.panel.replaceChildren(rail(), main);
   w.painted = w.step;
   const newBody = w.panel.querySelector<HTMLElement>(".wz-body");
   if (sameStep && newBody) newBody.scrollTop = scroll;
-  else window.setTimeout(() => w.panel?.querySelector<HTMLElement>(".wz-title")?.focus({ preventScroll: true }), 0);
+  if (fk) w.panel.querySelector<HTMLElement>(`[data-fk="${CSS.escape(fk)}"]`)?.focus({ preventScroll: true });
+  else if (!sameStep)
+    window.setTimeout(() => w.panel?.querySelector<HTMLElement>(".wz-title")?.focus({ preventScroll: true }), 0);
 }
