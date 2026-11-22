@@ -18,11 +18,29 @@
 // so the release that ends a press is seen too, and Rust measures the hold.
 //
 // Raw events carry the physical button, before the server's button maps; the
-// island's page gets the press mapped. So the press that counts is the one the
-// maps turn into button 1 — the right-hand button for a left-handed
-// `xmodmap -e 'pointer = 3 2 1'` or `xinput set-button-map`. Both maps are read
-// at every press. (libinput's own left-handed option swaps the buttons before
-// the server sees them, so it needs nothing here.)
+// island's page gets the press mapped. So the real press that counts is the one
+// the maps turn into button 1 — the right-hand button for a left-handed
+// `xmodmap -e 'pointer = 3 2 1'` or `xinput set-button-map`. (libinput's own
+// left-handed option swaps the buttons before the server sees them, so it needs
+// nothing here.) The maps that matter are the ones in force at the press, and
+// the guard can only read them afterwards. The server tells this connection of
+// every later change, in order with the presses: a core MappingNotify for its
+// master pointer's map, and XInput 1's DeviceMappingNotify for a device's own
+// map once the guard has asked for it — which it does for every pointer device,
+// keeping each open (closing one would end that). Neither notice carries the
+// new map, but one waiting in the queue behind a press means the maps just read
+// may be newer than the press. So the maps read are the press's own unless such
+// a notice waits behind it, or the press came before the guard was watching its
+// device; a press judged under maps that may have moved backs no approval.
+//
+// A press from a device that is not physical is recorded whatever its button
+// (only wheel steps are passed over): it replaces the last press, so a program
+// can neither click with a button that a map makes the primary one nor change a
+// map behind its own click, and its click never rides on an earlier real one.
+//
+// The core map read is the guard's own client pointer's, the first master
+// pointer's. A press through a second master pointer (`xinput create-master`)
+// is judged by it too: its XTEST presses are refused whatever their button.
 //
 // Under a Wayland session the island runs on XWayland, where X11 programs can
 // still use XTEST against it, so the same check applies. Input the compositor
@@ -33,12 +51,14 @@
 //
 // Coordinates are physical root-window pixels, the space window positions use.
 
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_uchar, c_uint, c_ulong};
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU32, Ordering};
 
 use tauri::{AppHandle, WebviewWindow};
-use x11_dl::xinput::XInput;
+use x11_dl::xinput::{XDevice, XInput};
 use x11_dl::xinput2::{self, XInput2};
 use x11_dl::xlib::{self, Xlib};
 
@@ -47,6 +67,30 @@ use super::Rect;
 static ARMED: AtomicBool = AtomicBool::new(false);
 /// The XInput extension's opcode, for the event-queue check.
 static XI_OPCODE: AtomicI32 = AtomicI32::new(0);
+/// The event type XInput 1's DeviceMappingNotify arrives as on the guard's
+/// connection, once a device is watched; -1 matches no event.
+static DEVICE_MAPPING_NOTIFY: AtomicI32 = AtomicI32::new(-1);
+
+/// XInput 1's class whose event base DeviceMappingNotify counts from
+/// (`OtherClass`, XI.h), and its place there (`_deviceMappingNotify`, XInput.h).
+const OTHER_CLASS: c_uchar = 6;
+const MAPPING_OFFSET: c_uchar = 1;
+
+/// XInput 1's DeviceMappingNotify as libXi hands it over (`XDeviceMappingEvent`,
+/// XInput.h); x11-dl has no binding for it.
+#[repr(C)]
+struct XDeviceMappingEvent {
+    type_: c_int,
+    serial: c_ulong,
+    send_event: xlib::Bool,
+    display: *mut xlib::Display,
+    window: xlib::Window,
+    deviceid: xlib::XID,
+    time: xlib::Time,
+    request: c_int,
+    first_keycode: c_int,
+    count: c_int,
+}
 
 pub fn start(_app: &AppHandle) {
     let started = std::thread::Builder::new().name("input-guard".into()).spawn(|| {
@@ -95,6 +139,33 @@ unsafe extern "C" fn is_hierarchy_change(_: *mut xlib::Display, event: *mut xlib
     )
 }
 
+/// Notes a change to a pointer button map waiting in the queue — the core
+/// pointer's or a device's own — and takes nothing: `XCheckIfEvent` leaves every
+/// event the predicate does not pick.
+unsafe extern "C" fn notes_pointer_mapping(
+    _: *mut xlib::Display,
+    event: *mut xlib::XEvent,
+    seen: *mut c_char,
+) -> c_int {
+    // SAFETY: Xlib hands the predicate a valid queued event; one of
+    // DeviceMappingNotify's type was laid out by libXi as XDeviceMappingEvent,
+    // which fits in an XEvent. `seen` is the flag `Server::maps_moved` passes in.
+    unsafe {
+        let kind = (*event).get_type();
+        let request = if kind == xlib::MappingNotify {
+            (*event).mapping.request
+        } else if kind == DEVICE_MAPPING_NOTIFY.load(Ordering::Relaxed) {
+            (*event.cast::<XDeviceMappingEvent>()).request
+        } else {
+            return 0;
+        };
+        if request == xlib::MappingPointer {
+            *seen.cast::<bool>() = true;
+        }
+    }
+    0
+}
+
 /// What the server says about a device, as the press is judged.
 struct Device {
     name: String,
@@ -133,17 +204,116 @@ fn identity_map() -> [c_uchar; 255] {
     std::array::from_fn(|i| i as c_uchar + 1)
 }
 
+/// What a press of physical `button` stands for, from what the server says,
+/// asked only as far as needed: None when it is no click at all (a wheel step,
+/// a real press of another button); otherwise whether it can back an approval.
+/// A program's press counts whatever its button — as one that backs nothing,
+/// so it replaces the last press — and so does a real one judged under button
+/// maps that may have moved (`primary` is None).
+fn verdict(button: u32, physical: impl FnOnce() -> bool, primary: impl FnOnce() -> Option<bool>) -> Option<bool> {
+    if is_wheel(button) {
+        return None;
+    }
+    if !physical() {
+        return Some(false);
+    }
+    match primary() {
+        Some(true) => Some(true),
+        Some(false) => None,
+        None => Some(false),
+    }
+}
+
+/// A pointer device whose button map the guard follows: opened through
+/// XInput 1, and told about from the request serial `since` on.
+struct Watched {
+    device: *mut XDevice,
+    since: c_ulong,
+}
+
 struct Server<'a> {
     x: &'a Xlib,
     xi: &'a XInput2,
     /// XInput 1, for a device's own button map; None when libXi lacks it.
     xi1: Option<&'a XInput>,
     dpy: *mut xlib::Display,
+    root: c_ulong,
     /// The "XTEST Device" property's atom; None on a server without it.
     xtest_property: Option<c_ulong>,
+    /// Every pointer device there is, by id, kept open (`watch_devices`).
+    watched: RefCell<HashMap<c_int, Watched>>,
 }
 
-impl Server<'_> {
+impl<'a> Server<'a> {
+    fn new(
+        x: &'a Xlib,
+        xi: &'a XInput2,
+        xi1: Option<&'a XInput>,
+        dpy: *mut xlib::Display,
+        xtest_property: Option<c_ulong>,
+    ) -> Self {
+        let root = unsafe { (x.XDefaultRootWindow)(dpy) };
+        let server = Server { x, xi, xi1, dpy, root, xtest_property, watched: RefCell::default() };
+        server.watch_devices();
+        server
+    }
+
+    /// Asks the server to tell this connection whenever the button map of a
+    /// pointer device changes (DeviceMappingNotify), for every such device
+    /// there is now. Run at the start and after every change of the device
+    /// hierarchy: each device is let go and opened again, so one that went away
+    /// is dropped and one that came — under an old id or a new one — is
+    /// followed from now on, and `since` says from when.
+    fn watch_devices(&self) {
+        let Some(xi1) = self.xi1 else { return };
+        let mut watched = self.watched.borrow_mut();
+        for (_, gone) in watched.drain() {
+            unsafe { (xi1.XCloseDevice)(self.dpy, gone.device) };
+        }
+        let mut count = 0;
+        let info = unsafe { (self.xi.XIQueryDevice)(self.dpy, xinput2::XIAllDevices, &mut count) };
+        if info.is_null() {
+            return;
+        }
+        // SAFETY: the server returned `count` entries, freed right after.
+        let pointers: Vec<c_int> = unsafe { std::slice::from_raw_parts(info, count.max(0) as usize) }
+            .iter()
+            .filter(|d| matches!(d._use, xinput2::XISlavePointer | xinput2::XIFloatingSlave))
+            .map(|d| d.deviceid)
+            .collect();
+        unsafe { (self.xi.XIFreeDeviceInfo)(info) };
+        for id in pointers {
+            let Ok(xid) = c_ulong::try_from(id) else { continue };
+            let device = unsafe { (xi1.XOpenDevice)(self.dpy, xid) };
+            if device.is_null() {
+                continue;
+            }
+            // The event's type and class as XInput.h's
+            // FindTypeAndClass(…, OtherClass, _deviceMappingNotify) works them out.
+            // SAFETY: libXi filled in `num_classes` entries.
+            let classes =
+                unsafe { std::slice::from_raw_parts((*device).classes, (*device).num_classes.max(0) as usize) };
+            let Some(base) = classes.iter().find(|c| c.input_class == OTHER_CLASS).map(|c| c.event_type_base) else {
+                unsafe { (xi1.XCloseDevice)(self.dpy, device) };
+                continue;
+            };
+            let kind = base.wrapping_add(MAPPING_OFFSET);
+            DEVICE_MAPPING_NOTIFY.store(c_int::from(kind), Ordering::Relaxed);
+            let mut class = (xid << 8) | c_ulong::from(kind);
+            let since = unsafe { (self.x.XNextRequest)(self.dpy) };
+            unsafe { (xi1.XSelectExtensionEvent)(self.dpy, self.root, &mut class, 1) };
+            watched.insert(id, Watched { device, since });
+        }
+    }
+
+    /// What a press of physical `button` on `source` stands for (`verdict`),
+    /// the device and the maps asked about at the moment it is judged.
+    /// `serial` is the press event's: the last request of ours the server had
+    /// dealt with when it made the event.
+    fn judge_press(&self, source: c_int, button: u32, serial: c_ulong) -> Option<bool> {
+        verdict(button, || self.physical(source), || self.primary(source, button, serial))
+    }
+
     /// Whether a press from `id` came from real hardware, asked at the moment of
     /// the press. A device the server no longer knows counts as synthetic, and so
     /// does any press judged while the device hierarchy changed: the answer may
@@ -152,6 +322,7 @@ impl Server<'_> {
         let device = self.device(id);
         if self.hierarchy_changed() {
             crate::log::line("input guard: the input devices changed while a press was judged — counted as synthetic");
+            self.watch_devices();
             return false;
         }
         let physical = is_physical(device.as_ref());
@@ -214,9 +385,29 @@ impl Server<'_> {
     }
 
     /// Whether a press of physical `button` on `source` is the primary click, by
-    /// the button maps as they are at the press.
-    fn primary(&self, source: c_int, button: u32) -> bool {
-        let logical = logical_button(button, &self.device_map(source), &self.core_map());
+    /// the button maps in force at the press; None when they cannot be known:
+    /// a map changed after the press (the maps just read may be newer), or the
+    /// press came before the server was telling us about its device's map.
+    fn primary(&self, source: c_int, button: u32, serial: c_ulong) -> Option<bool> {
+        let device_map = match self.xi1 {
+            // Never seen: XInput 1 ships in the same libXi as XInput 2. Without
+            // it a device's own map stays unread and only the core map counts.
+            None => Vec::new(),
+            Some(_) => match self.device_map(source, serial) {
+                Some(map) => map,
+                None => {
+                    crate::log::line(format!(
+                        "input guard: a press from device {source} came before its button map was followed — it backs no approval"
+                    ));
+                    return None;
+                }
+            },
+        };
+        let logical = logical_button(button, &device_map, &self.core_map());
+        if self.maps_moved() {
+            crate::log::line("input guard: a button map changed right after a press — the press backs no approval");
+            return None;
+        }
         if logical == 1 && button != 1 {
             // Once per button: a left-handed set-up is worth a line in the log.
             static NOTED: AtomicU32 = AtomicU32::new(0);
@@ -224,7 +415,19 @@ impl Server<'_> {
                 crate::log::line(format!("input guard: physical button {button} is the primary click (button map)"));
             }
         }
-        logical == 1
+        Some(logical == 1)
+    }
+
+    /// Whether a pointer button map changed after the press being judged: its
+    /// MappingNotify or DeviceMappingNotify waits in the queue, sent after the
+    /// press and before the replies to our reads of the maps, which Xlib queued
+    /// it in front of. Left in the queue for the loop, which passes over it.
+    fn maps_moved(&self) -> bool {
+        let mut seen = false;
+        let mut event: xlib::XEvent = unsafe { std::mem::zeroed() };
+        let flag = std::ptr::addr_of_mut!(seen).cast::<c_char>();
+        unsafe { (self.x.XCheckIfEvent)(self.dpy, &mut event, Some(notes_pointer_mapping), flag) };
+        seen
     }
 
     /// The core pointer's button map (what xmodmap sets).
@@ -234,18 +437,16 @@ impl Server<'_> {
         map[..n.clamp(0, map.len() as c_int) as usize].to_vec()
     }
 
-    /// A device's own button map (what `xinput set-button-map` sets); empty when
-    /// it cannot be read — a device that is gone fails `physical` anyway.
-    fn device_map(&self, id: c_int) -> Vec<u8> {
-        let (Some(xi1), Ok(id)) = (self.xi1, c_ulong::try_from(id)) else { return Vec::new() };
-        let device = unsafe { (xi1.XOpenDevice)(self.dpy, id) };
-        if device.is_null() {
-            return Vec::new();
-        }
+    /// A device's own button map (what `xinput set-button-map` sets), read
+    /// through the handle `watch_devices` keeps open; empty when it cannot be
+    /// read (a device that is gone fails `physical` anyway). None when the
+    /// device is not watched, or was not yet when the press of `serial` was made.
+    fn device_map(&self, id: c_int, serial: c_ulong) -> Option<Vec<u8>> {
+        let xi1 = self.xi1?;
+        let device = self.watched.borrow().get(&id).filter(|w| serial >= w.since)?.device;
         let mut map = identity_map();
         let n = unsafe { (xi1.XGetDeviceButtonMapping)(self.dpy, device, map.as_mut_ptr(), map.len() as c_uint) };
-        unsafe { (xi1.XCloseDevice)(self.dpy, device) };
-        map[..n.clamp(0, map.len() as c_int) as usize].to_vec()
+        Some(map[..n.clamp(0, map.len() as c_int) as usize].to_vec())
     }
 
     /// Whether a hierarchy change sits in the queue: one the server made after the
@@ -325,7 +526,10 @@ fn listen() -> Result<(), &'static str> {
     };
     // Without XInput 1 a device's own button map stays unread (the core map still counts).
     let xi1 = XInput::open().ok();
-    let server = Server { x, xi: &xi, xi1: xi1.as_ref(), dpy, xtest_property };
+    if xi1.is_none() {
+        crate::log::line("input guard: no XInput 1 — a device's own button map is not followed");
+    }
+    let server = Server::new(x, &xi, xi1.as_ref(), dpy, xtest_property);
     crate::log::line(format!("input guard: XInput {major}.{minor}, every press checked against its device"));
     super::set_available(true);
 
@@ -336,18 +540,22 @@ fn listen() -> Result<(), &'static str> {
         let mut event: xlib::XEvent = unsafe { std::mem::zeroed() };
         unsafe { (x.XNextEvent)(dpy, &mut event) };
         let cookie = unsafe { &mut event.generic_event_cookie };
-        // Hierarchy changes matter only while a press is judged (`physical`).
-        if cookie.type_ != xlib::GenericEvent
-            || cookie.extension != opcode
-            || cookie.evtype == xinput2::XI_HierarchyChanged
-        {
+        // Map notices only matter behind a press being judged (`maps_moved`).
+        if cookie.type_ != xlib::GenericEvent || cookie.extension != opcode {
+            continue;
+        }
+        // Devices came or went: follow the button maps of the ones there are now.
+        // (While a press is judged, `physical` sees such a change first.)
+        if cookie.evtype == xinput2::XI_HierarchyChanged {
+            server.watch_devices();
             continue;
         }
         if unsafe { (x.XGetEventData)(dpy, cookie) } == 0 {
             continue;
         }
         let raw = unsafe { &*(cookie.data as *const xinput2::XIRawEvent) };
-        let (evtype, source, button) = (cookie.evtype, raw.sourceid, u32::try_from(raw.detail).unwrap_or(0));
+        let (evtype, source, button, serial) =
+            (cookie.evtype, raw.sourceid, u32::try_from(raw.detail).unwrap_or(0), raw.serial);
         unsafe { (x.XFreeEventData)(dpy, cookie) };
         if !ARMED.load(Ordering::Acquire) {
             continue;
@@ -358,10 +566,7 @@ fn listen() -> Result<(), &'static str> {
             }
             continue;
         }
-        // The physical button that the button maps make the primary click.
-        if is_wheel(button) || !server.primary(source, button) {
-            continue;
-        }
+        let Some(backs) = server.judge_press(source, button, serial) else { continue };
         // Raw events carry no position; the pointer has not moved since.
         let (mut root_ret, mut child): (c_ulong, c_ulong) = (0, 0);
         let (mut rx, mut ry, mut wx, mut wy) = (0, 0, 0, 0);
@@ -371,7 +576,7 @@ fn listen() -> Result<(), &'static str> {
         };
         let (px, py) = if found != 0 { (rx as f64, ry as f64) } else { (f64::NAN, f64::NAN) };
         pressed_by = Some((source, button));
-        super::record(server.physical(source), px, py);
+        super::record(backs, px, py);
     }
 }
 
@@ -434,60 +639,262 @@ mod tests {
         assert_eq!(identity_map()[254], 255);
     }
 
+    #[test]
+    fn a_program_s_press_is_recorded_whatever_its_button() {
+        let never = || -> Option<bool> { panic!("the maps are not asked about") };
+        let not_asked = || -> bool { panic!("the device is not asked about") };
+        // A program's press replaces the last one, as one that backs nothing:
+        // even a button that is not the click, under any map.
+        for button in [1, 2, 3, 8, 9] {
+            assert_eq!(verdict(button, || false, never), Some(false), "button {button}");
+        }
+        // A real press: the primary click backs an approval, another button is no click.
+        assert_eq!(verdict(1, || true, || Some(true)), Some(true));
+        assert_eq!(verdict(3, || true, || Some(false)), None);
+        // Maps that may have moved behind it: recorded, backing nothing.
+        assert_eq!(verdict(1, || true, || None), Some(false));
+        // Wheel steps are passed over before anything is asked.
+        for button in 4..=7 {
+            assert_eq!(verdict(button, not_asked, never), None, "button {button}");
+        }
+    }
+
+    /// A connection to the X server of the live tests, its errors swallowed as
+    /// the guard's are.
+    fn live_display(x: &Xlib) -> *mut xlib::Display {
+        let dpy = unsafe { (x.XOpenDisplay)(std::ptr::null()) };
+        assert!(!dpy.is_null(), "no X display");
+        for code in 1..=255 {
+            unsafe { (x.XESetWireToError)(dpy, code, Some(swallow)) };
+        }
+        dpy
+    }
+
+    /// The id of the server's own XTEST pointer, a device of the first master.
+    fn xtest_pointer(xi: &XInput2, dpy: *mut xlib::Display) -> c_int {
+        let mut count = 0;
+        let info = unsafe { (xi.XIQueryDevice)(dpy, xinput2::XIAllDevices, &mut count) };
+        let devices = unsafe { std::slice::from_raw_parts(info, count as usize) };
+        let id = devices
+            .iter()
+            .find(|d| unsafe { CStr::from_ptr(d.name) }.to_bytes() == b"Virtual core XTEST pointer")
+            .expect("an XTEST pointer")
+            .deviceid;
+        unsafe { (xi.XIFreeDeviceInfo)(info) };
+        id
+    }
+
+    /// Everything the server has sent so far, read and dropped.
+    fn drain(x: &Xlib, dpy: *mut xlib::Display) {
+        unsafe { (x.XSync)(dpy, xlib::False) };
+        let mut event: xlib::XEvent = unsafe { std::mem::zeroed() };
+        while unsafe { (x.XPending)(dpy) } > 0 {
+            unsafe { (x.XNextEvent)(dpy, &mut event) };
+        }
+    }
+
+    /// Sets the first `map.len()` buttons of the core pointer's map (what
+    /// xmodmap sets) and of a device's own (what `xinput set-button-map` sets).
+    fn set_core(x: &Xlib, dpy: *mut xlib::Display, map: &[u8]) {
+        let mut full = identity_map();
+        let n = unsafe { (x.XGetPointerMapping)(dpy, full.as_mut_ptr(), full.len() as c_int) };
+        let mut full = identity_map()[..n as usize].to_vec();
+        full[..map.len()].copy_from_slice(map);
+        assert_eq!(unsafe { (x.XSetPointerMapping)(dpy, full.as_ptr(), full.len() as c_int) }, 0);
+    }
+
+    fn set_device(xi1: &XInput, dpy: *mut xlib::Display, id: c_int, map: &[u8]) {
+        let device = unsafe { (xi1.XOpenDevice)(dpy, id as c_ulong) };
+        assert!(!device.is_null());
+        let mut full = identity_map();
+        let n = unsafe { (xi1.XGetDeviceButtonMapping)(dpy, device, full.as_mut_ptr(), full.len() as c_uint) };
+        let mut full = identity_map()[..n as usize].to_vec();
+        full[..map.len()].copy_from_slice(map);
+        let rc = unsafe { (xi1.XSetDeviceButtonMapping)(dpy, device, full.as_mut_ptr(), full.len() as c_int) };
+        unsafe { (xi1.XCloseDevice)(dpy, device) };
+        assert_eq!(rc, 0);
+    }
+
+    /// A serial no press comes after: for judging maps outside the event stream.
+    const LATER: c_ulong = c_ulong::MAX;
+
     /// The guard's own reading of both maps on a real X server. It changes the
-    /// server's button maps, so it runs only by hand, on a throwaway Xvfb:
-    /// `DISPLAY=:87 cargo test -p nobetci --lib live_button_maps -- --ignored`.
+    /// server's button maps, so it runs only by hand, on a throwaway Xvfb
+    /// started with `-noreset`:
+    /// `DISPLAY=:87 cargo test -p nobetci --lib live_ -- --ignored --test-threads=1`.
     #[test]
     #[ignore]
     fn live_button_maps() {
         let x = crate::x11::xlib().expect("libX11");
         let xi = XInput2::open().expect("libXi");
         let xi1 = XInput::open().expect("libXi (XInput 1)");
-        let dpy = unsafe { (x.XOpenDisplay)(std::ptr::null()) };
-        assert!(!dpy.is_null(), "no X display");
-        for code in 1..=255 {
-            unsafe { (x.XESetWireToError)(dpy, code, Some(swallow)) };
-        }
-        let server = Server { x, xi: &xi, xi1: Some(&xi1), dpy, xtest_property: None };
-        let mut count = 0;
-        let info = unsafe { (xi.XIQueryDevice)(dpy, xinput2::XIAllDevices, &mut count) };
-        let devices = unsafe { std::slice::from_raw_parts(info, count as usize) };
-        let xtest = devices
-            .iter()
-            .find(|d| unsafe { CStr::from_ptr(d.name) }.to_bytes() == b"Virtual core XTEST pointer")
-            .expect("an XTEST pointer")
-            .deviceid;
-        unsafe { (xi.XIFreeDeviceInfo)(info) };
+        // The maps change from another connection, as xmodmap and xinput would:
+        // closing a device on the guard's own would end what it follows.
+        let (dpy, program) = (live_display(x), live_display(x));
+        let xtest = xtest_pointer(&xi, dpy);
+        set_device(&xi1, program, xtest, &[1, 2, 3]);
+        set_core(x, program, &[1, 2, 3]);
+        unsafe { (x.XSync)(program, xlib::False) };
+        let server = Server::new(x, &xi, Some(&xi1), dpy, None);
+        drain(x, dpy);
+        // Each change sends the guard a notice; read it before the next
+        // judgement, as the guard's loop would have.
         let set_core = |map: &[u8]| {
-            let mut full = identity_map()[..server.core_map().len()].to_vec();
-            full[..map.len()].copy_from_slice(map);
-            assert_eq!(unsafe { (x.XSetPointerMapping)(dpy, full.as_ptr(), full.len() as c_int) }, 0);
+            set_core(x, program, map);
+            unsafe { (x.XSync)(program, xlib::False) };
+            drain(x, dpy);
         };
         let set_device = |map: &[u8]| {
-            let device = unsafe { (xi1.XOpenDevice)(dpy, xtest as c_ulong) };
-            assert!(!device.is_null());
-            let mut full = identity_map()[..server.device_map(xtest).len()].to_vec();
-            full[..map.len()].copy_from_slice(map);
-            let rc = unsafe { (xi1.XSetDeviceButtonMapping)(dpy, device, full.as_mut_ptr(), full.len() as c_int) };
-            unsafe { (xi1.XCloseDevice)(dpy, device) };
-            assert_eq!(rc, 0);
+            set_device(&xi1, program, xtest, map);
+            unsafe { (x.XSync)(program, xlib::False) };
+            drain(x, dpy);
         };
-        let primary = |button| server.primary(xtest, button);
+        let primary = |button| server.primary(xtest, button, LATER);
 
-        assert!(primary(1) && !primary(3), "identity");
+        assert_eq!((primary(1), primary(3)), (Some(true), Some(false)), "identity");
         set_core(&[3, 2, 1]);
         assert_eq!(&server.core_map()[..3], &[3, 2, 1]);
-        assert!(primary(3) && !primary(1), "xmodmap pointer = 3 2 1");
+        assert_eq!((primary(3), primary(1)), (Some(true), Some(false)), "xmodmap pointer = 3 2 1");
         set_core(&[1, 2, 3]);
         set_device(&[3, 2, 1]);
-        assert_eq!(&server.device_map(xtest)[..3], &[3, 2, 1]);
-        assert!(primary(3) && !primary(1), "xinput set-button-map 3 2 1");
+        assert_eq!(&server.device_map(xtest, LATER).unwrap_or_default()[..3], &[3, 2, 1]);
+        assert_eq!((primary(3), primary(1)), (Some(true), Some(false)), "xinput set-button-map 3 2 1");
         set_core(&[3, 2, 1]);
-        assert!(primary(1) && !primary(3), "both swapped");
+        assert_eq!((primary(1), primary(3)), (Some(true), Some(false)), "both swapped");
         set_device(&[1, 2, 3]);
         set_core(&[1, 2, 3]);
-        assert!(primary(1));
-        assert!(server.device_map(9999).is_empty(), "no such device: nothing read");
-        unsafe { (x.XCloseDisplay)(dpy) };
+        assert_eq!(primary(1), Some(true));
+        assert_eq!(server.device_map(9999, LATER), None, "no such device: not followed");
+        assert_eq!(server.device_map(xtest, 0), None, "a press from before it was followed");
+        unsafe {
+            (x.XCloseDisplay)(program);
+            (x.XCloseDisplay)(dpy);
+        }
+    }
+
+    /// The verifier's case: a program presses button 1 and swaps the maps in
+    /// the same breath, so that by the time the guard reads them button 1 is no
+    /// longer the click the page got. Two connections, as in real life: the
+    /// guard's, listening to raw presses, and the program's.
+    #[test]
+    #[ignore]
+    fn live_a_map_changed_behind_a_press() {
+        let x = crate::x11::xlib().expect("libX11");
+        let xi = XInput2::open().expect("libXi");
+        let xi1 = XInput::open().expect("libXi (XInput 1)");
+        let xtst = x11_dl::xtest::Xf86vmode::open().expect("libXtst");
+        let (guard, program) = (live_display(x), live_display(x));
+        let (mut opcode, mut event_base, mut error_base) = (0, 0, 0);
+        let name = c"XInputExtension";
+        assert_ne!(
+            unsafe { (x.XQueryExtension)(guard, name.as_ptr(), &mut opcode, &mut event_base, &mut error_base) },
+            0
+        );
+        let (mut major, mut minor) = (2, 2);
+        assert_eq!(unsafe { (xi.XIQueryVersion)(guard, &mut major, &mut minor) }, xlib::Success as c_int);
+        let mut raw = mask_bits(&[xinput2::XI_RawButtonPress, xinput2::XI_RawButtonRelease]);
+        let mut mask = xinput2::XIEventMask {
+            deviceid: xinput2::XIAllMasterDevices,
+            mask_len: raw.len() as c_int,
+            mask: raw.as_mut_ptr(),
+        };
+        unsafe {
+            (xi.XISelectEvents)(guard, (x.XDefaultRootWindow)(guard), &mut mask, 1);
+        }
+        drain(x, guard);
+        let server = Server::new(x, &xi, Some(&xi1), guard, None);
+        let xtest = xtest_pointer(&xi, guard);
+        // The program clicks `button`, then runs `then`, all before the guard reads a thing.
+        let click_then = |button: c_uint, then: &dyn Fn()| {
+            unsafe {
+                (xtst.XTestFakeButtonEvent)(program, button, xlib::True, 0);
+                (xtst.XTestFakeButtonEvent)(program, button, xlib::False, 0);
+            }
+            then();
+            unsafe { (x.XSync)(program, xlib::False) };
+        };
+        // The guard's loop: events in order, up to the next raw press.
+        let next_press = || -> (c_int, u32, c_ulong) {
+            loop {
+                let mut event: xlib::XEvent = unsafe { std::mem::zeroed() };
+                unsafe { (x.XNextEvent)(guard, &mut event) };
+                let cookie = unsafe { &mut event.generic_event_cookie };
+                if cookie.type_ != xlib::GenericEvent || cookie.extension != opcode {
+                    continue;
+                }
+                if unsafe { (x.XGetEventData)(guard, cookie) } == 0 {
+                    continue;
+                }
+                let raw = unsafe { &*(cookie.data as *const xinput2::XIRawEvent) };
+                let press = (cookie.evtype == xinput2::XI_RawButtonPress).then_some((
+                    raw.sourceid,
+                    raw.detail as u32,
+                    raw.serial,
+                ));
+                unsafe { (x.XFreeEventData)(guard, cookie) };
+                if let Some(press) = press {
+                    return press;
+                }
+            }
+        };
+        let restore = || {
+            set_device(&xi1, program, xtest, &[1, 2, 3]);
+            set_core(x, program, &[1, 2, 3]);
+            unsafe { (x.XSync)(program, xlib::False) };
+            drain(x, guard);
+        };
+        restore();
+
+        // Nothing moves: the maps read are the press's own.
+        click_then(1, &|| {});
+        let (source, button, serial) = next_press();
+        assert_eq!((source, button), (xtest, 1));
+        assert_eq!(server.primary(source, button, serial), Some(true));
+        // The core map swapped right behind the press: the guard cannot know
+        // which button the page got, so the press backs nothing.
+        click_then(1, &|| set_core(x, program, &[3, 2, 1]));
+        let (source, button, serial) = next_press();
+        assert_eq!(server.primary(source, button, serial), None, "xmodmap behind the press");
+        restore();
+        // The same with the device's own map, told by DeviceMappingNotify.
+        click_then(1, &|| set_device(&xi1, program, xtest, &[3, 2, 1]));
+        let (source, button, serial) = next_press();
+        assert_eq!(server.primary(source, button, serial), None, "xinput set-button-map behind the press");
+        restore();
+        // Swapped before the press: in force at the press, and read as such.
+        set_core(x, program, &[3, 2, 1]);
+        click_then(3, &|| {});
+        let (source, button, serial) = next_press();
+        assert_eq!(server.primary(source, button, serial), Some(true), "button 3 is the click under 3 2 1");
+        restore();
+        set_device(&xi1, program, xtest, &[3, 2, 1]);
+        click_then(3, &|| {});
+        let (source, button, serial) = next_press();
+        assert_eq!(server.primary(source, button, serial), Some(true), "and under the device's 3 2 1");
+        restore();
+        // A press from before the guard (re)started following its device —
+        // as after a change of the device hierarchy — backs nothing.
+        click_then(1, &|| {});
+        let (source, button, serial) = next_press();
+        server.watch_devices();
+        assert_eq!(server.primary(source, button, serial), None, "followed only after the press");
+        restore();
+        // Whatever the maps do, a program's press is recorded, as one that backs
+        // nothing: it replaces the last press. A wheel step is no click at all.
+        click_then(3, &|| set_core(x, program, &[3, 2, 1]));
+        let (source, button, serial) = next_press();
+        assert_eq!(server.judge_press(source, button, serial), Some(false));
+        restore();
+        click_then(1, &|| {});
+        let (source, button, serial) = next_press();
+        assert_eq!(server.judge_press(source, button, serial), Some(false));
+        click_then(4, &|| {});
+        let (source, button, serial) = next_press();
+        assert_eq!(server.judge_press(source, button, serial), None);
+        restore();
+        unsafe {
+            (x.XCloseDisplay)(program);
+            (x.XCloseDisplay)(guard);
+        }
     }
 }
