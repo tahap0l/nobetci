@@ -12,6 +12,7 @@ import type { Settings } from "../../core/settings-model";
 import { h } from "../../ui/dom";
 import { api } from "../api";
 import { cache, ceilingLabel, loadHookStatus } from "../data";
+import { localDayStarts } from "../days";
 import { t, tn } from "../i18n";
 import { icon, type IconName } from "../icons";
 import { languagePicker } from "../lang";
@@ -26,7 +27,8 @@ let loading = false;
 async function load() {
   if (loading) return;
   loading = true;
-  const [, stats] = await Promise.all([loadHookStatus(), api.auditStats(7)]);
+  // The same local-midnight boundaries as History's 7-day range (C-18).
+  const [, stats] = await Promise.all([loadHookStatus(), api.auditStats(7, localDayStarts(7))]);
   week = stats;
   loading = false;
   rerender("genel");

@@ -158,14 +158,8 @@ function summary(r: UserRule): HTMLElement {
   const folder = r.project.trim();
   const pattern = r.pattern.trim();
   const long = pattern.length > LONG_PATTERN;
-  const pat = h("code", { class: "rs-pat mono", text: `“${pattern}”`, title: pattern });
-  // A long pattern gets a line of its own, cut after two.
-  if (long) {
-    pat.setAttribute(
-      "style",
-      "flex: 1 0 100%; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden",
-    );
-  }
+  // A long pattern gets a line of its own, cut after two (.rs-pat-long).
+  const pat = h("code", { class: `rs-pat mono${long ? " rs-pat-long" : ""}`, text: `“${pattern}”`, title: pattern });
   // Every separator travels with what follows it ("· starts with “…”",
   // "→ Auto-allow"), so a wrap never leaves a lone · or → at the end of a line.
   return h(
@@ -174,7 +168,7 @@ function summary(r: UserRule): HTMLElement {
     h("span", { class: "rs-tool", text: toolText(r.tool) }),
     h(
       "span",
-      { style: "min-width: 0" },
+      { class: "rs-group" },
       h("span", { class: "rs-sep", text: "·" }),
       "\u00A0",
       pattern
@@ -186,13 +180,7 @@ function summary(r: UserRule): HTMLElement {
     folder
       ? h("span", { class: "rs-proj", title: folder }, icon("folder", 12), h("span", { text: folderName(folder) }))
       : null,
-    h(
-      "span",
-      { style: "white-space: nowrap" },
-      h("span", { class: "rs-arrow", text: "→" }),
-      "\u00A0",
-      actionBadge(r.action),
-    ),
+    h("span", { class: "rs-keep" }, h("span", { class: "rs-arrow", text: "→" }), "\u00A0", actionBadge(r.action)),
   );
 }
 

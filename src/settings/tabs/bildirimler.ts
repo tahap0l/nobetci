@@ -375,7 +375,7 @@ function timePicker(value: string, label: string, fk: string, onChange: (v: stri
     { class: "time-field", role: "group", "aria-label": label },
     h("span", { text: label }),
     // One line: hour : minute [AM/PM].
-    h("span", { style: "white-space: nowrap" }, hourSel, " : ", minSel, periodSel ? " " : null, periodSel),
+    h("span", { class: "time-pick" }, hourSel, " : ", minSel, periodSel ? " " : null, periodSel),
   );
 }
 

@@ -3,8 +3,9 @@
 // first-run wizard and event sync with Rust.
 
 import "./settings.css";
-import type { QuietReason } from "../core/bridge";
+import { IS_TAURI, type QuietReason } from "../core/bridge";
 import { DEFAULT_SETTINGS, type Settings } from "../core/settings-model";
+import { guardWebview } from "../core/webview";
 import { onLangChange, setPlatform } from "../i18n/core";
 import { h } from "../ui/dom";
 import { api, initApi, type SettingsWarning } from "./api";
@@ -254,7 +255,12 @@ function paintBadges() {
 
 let saveTimer: number | null = null;
 let lastSave: SaveState = "idle";
-/** settings.json could not be read at start; Rust runs on defaults and won't save over it. */
+/**
+ * settings.json could not be used as it was at start: Rust runs on the defaults,
+ * or on every value it could read, and won't save over the file until a restart.
+ * Rust's own words (what failed, which values kept their defaults, where the
+ * copy is, what to do) are shown under the banner.
+ */
 let loadError: string | null = null;
 
 function paintSave(s: SaveState) {
@@ -416,18 +422,29 @@ window.addEventListener("keydown", (e) => {
   }
 });
 
-// The window is a page in a webview: a reload would only throw away what is on
-// screen, so the reload keys do nothing, and the right-click menu (Reload, Back…)
-// is kept for text fields, where it carries copy and paste.
-window.addEventListener("keydown", (e) => {
-  const mod = e.ctrlKey || e.metaKey;
-  if (e.key === "F5" || (mod && !e.altKey && (e.key === "r" || e.key === "R"))) e.preventDefault();
-});
-window.addEventListener("contextmenu", (e) => {
-  const el = e.target instanceof Element ? e.target : null;
-  if (el?.closest('input, textarea, [contenteditable="true"]')) return;
-  e.preventDefault();
-});
+// The window is a page in a webview (D12): a reload would only throw away what
+// is on screen, so the reload keys do nothing and the webview's own right-click
+// menu (Reload, Back…) stays shut — the island's guard, shared. Only in the app:
+// the browser preview keeps F5.
+//
+// The menu is kept where text is typed, for copy and paste. guardWebview also
+// spares every <input> and <select>; here a checkbox, a slider or a list has
+// nothing to copy or paste, so it gets no menu either.
+const TYPED_INPUTS = new Set(["text", "search", "url", "email", "password", "number", "tel"]);
+
+function typesText(target: EventTarget | null): boolean {
+  const el = target instanceof Element ? target.closest("input, textarea, [contenteditable]") : null;
+  if (el instanceof HTMLTextAreaElement) return true;
+  if (el instanceof HTMLInputElement) return TYPED_INPUTS.has(el.type);
+  return el instanceof HTMLElement && el.isContentEditable;
+}
+
+if (IS_TAURI) {
+  guardWebview();
+  document.addEventListener("contextmenu", (e) => {
+    if (!typesText(e.target)) e.preventDefault();
+  });
+}
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 

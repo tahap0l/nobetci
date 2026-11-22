@@ -1,8 +1,8 @@
 // Small shared caches for data several tabs show, and the labels for values that
 // come from Rust (outcome, who decided, policy, decision).
 
-import type { CategoryInfo, Evaluation, HookStatus } from "../core/bridge";
-import { api } from "./api";
+import type { CategoryInfo, Evaluation } from "../core/bridge";
+import { api, type HookStatus } from "./api";
 import { t, type MsgKey } from "./i18n";
 
 export const cache: {
@@ -26,7 +26,11 @@ export function outcomeLabel(o: Evaluation["outcome"]): string {
   return t(`outcome.${o}`);
 }
 
-/** Who decided: user, hotkey, rule, trusted, session, timeout, terminal, paused, busy, unseen, resolved. */
+/**
+ * Who decided (audit.rs `by`): user, hotkey, batch, rule, trusted, session,
+ * timeout, terminal, paused, busy, unseen, resolved — and undelivered, an answer
+ * given here that never reached Claude Code (the request had already ended).
+ */
 export const BY_KEYS = [
   "user",
   "hotkey",
@@ -40,6 +44,7 @@ export const BY_KEYS = [
   "busy",
   "unseen",
   "resolved",
+  "undelivered",
 ] as const;
 
 export function byLabel(by: string): string {

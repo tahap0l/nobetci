@@ -10,6 +10,7 @@ import { h } from "../../ui/dom";
 import { api, errText, type CsvSeparator } from "../api";
 import { SERIES, dailyChart, dailyTable, legend, rankList, riskBar } from "../charts";
 import { BY_KEYS, byLabel, decisionLabel } from "../data";
+import { countedFrom, localDayStarts } from "../days";
 import { t, type MsgKey } from "../i18n";
 import { icon } from "../icons";
 import { currentTab, devParam, rerender, type Tab } from "../nav";
@@ -85,14 +86,15 @@ const knownProjects = new Set<string>();
 let allProjects: [string, number][] | null = null;
 
 /**
- * Start of the range: the same instant audit_stats counts from (days break at
- * local midnight by today's UTC offset), so the entries listed are exactly the
- * ones counted, even when the range crosses a daylight-saving change.
+ * The range's day boundaries for audit_stats (C-18: the real local midnights,
+ * so a day before a daylight-saving change keeps its own hours) and where the
+ * list starts: the first instant audit_stats counts. The entries listed are
+ * then exactly the ones counted.
  */
-function since(): number {
-  const off = new Date().getTimezoneOffset() * 60_000;
-  const today = Math.floor((Date.now() - off) / 86_400_000);
-  return (today - Number(st.range) + 1) * 86_400_000 + off;
+function rangeBounds(): { starts: number[]; since: number } {
+  const days = Number(st.range);
+  const starts = localDayStarts(days);
+  return { starts, since: countedFrom(starts, days, new Date().getTimezoneOffset()) };
 }
 
 function filterActive(): boolean {
@@ -100,9 +102,9 @@ function filterActive(): boolean {
   return !!(f.text.trim() || f.level || f.decision || f.by || f.project);
 }
 
-function currentFilter(): AuditFilter {
+function currentFilter(since = rangeBounds().since): AuditFilter {
   const f = st.filter;
-  return { text: f.text.trim(), level: f.level, decision: f.decision, by: f.by, project: f.project, since: since() };
+  return { text: f.text.trim(), level: f.level, decision: f.decision, by: f.by, project: f.project, since };
 }
 
 /** An empty page with no filter: is the history empty, or only this range? */
@@ -118,9 +120,11 @@ async function loadAll(withProjects = true) {
   const myPage = ++st.pageSeq;
   st.loading = true;
   paintLoading();
+  // One set of boundaries for both, so the list and the totals agree.
+  const { starts, since } = rangeBounds();
   const [stats, page, projects] = await Promise.all([
-    api.auditStats(Number(st.range)),
-    api.auditQuery({ ...currentFilter(), limit: PAGE, offset: st.offset }),
+    api.auditStats(Number(st.range), starts),
+    api.auditQuery({ ...currentFilter(since), limit: PAGE, offset: st.offset }),
     withProjects || !allProjects ? api.auditProjects() : Promise.resolve(allProjects),
   ]);
   if (my !== st.statsSeq) return;
@@ -231,6 +235,8 @@ function openDetail(index: number) {
     kind: "subtle",
     small: true,
     icon: "copy",
+    // A request too large to read has no target to copy.
+    disabled: !e.target,
     onClick: async () => {
       try {
         await navigator.clipboard.writeText(e.target);
@@ -256,7 +262,9 @@ function openDetail(index: number) {
   fact(t("hist.f.kind"), kindLabel(e.kind));
   fact(t("hist.f.by"), byLabel(e.by));
   fact(t("hist.f.rule"), e.rule, true);
-  fact(t("hist.f.message"), e.message);
+  // With no answer delivered (timed out, handed to the terminal, too large,
+  // undelivered…) Claude was told nothing: the text is Nöbetçi's note on why.
+  fact(e.decision === "none" ? t("hist.f.note") : t("hist.f.message"), e.message);
   fact(t("hist.f.duration"), e.ms ? fmtDuration(e.ms) : null);
   fact(t("hist.f.session"), e.session, true);
   fact(t("hist.f.id"), e.id, true);
@@ -302,8 +310,8 @@ function openDetail(index: number) {
       ),
       h("div", { class: "target-head" }, h("span", { class: "field-label", text: t("hist.targetFull") }), copyBtn),
       // The drawer body scrolls; the full target, the point of the drawer, is
-      // never the part that gives way (a flex item would shrink to its padding).
-      h("pre", { class: "target-full mono", tabindex: "0", style: "flex-shrink: 0", text: e.target || "—" }),
+      // never the part that gives way (.target-full does not shrink).
+      h("pre", { class: "target-full mono", tabindex: "0", text: e.target || "—" }),
       h("div", { class: "field-label", text: t("hist.findings") }),
       labels,
       facts,
@@ -526,11 +534,14 @@ function table(): HTMLElement {
       h("td", {}, levelChip(asLevel(e.level), true)),
       h("td", {}, decisionChip(e.decision)),
       h("td", { class: "t-by", text: byLabel(e.by) }),
+      // A request too large to read has no target: Rust's note says what happened.
       h(
         "td",
-        { class: "t-target", title: e.target.slice(0, 400) },
-        h("span", { class: "t-tool", text: e.tool }),
-        h("span", { class: "mono", text: e.target }),
+        { class: "t-target", title: (e.target || e.message).slice(0, 400) },
+        e.tool ? h("span", { class: "t-tool", text: e.tool }) : null,
+        e.target
+          ? h("span", { class: "mono", text: e.target })
+          : h("span", { class: "t-note", text: e.message || "—" }),
       ),
     );
     tr.addEventListener("click", () => openDetail(i));
@@ -623,11 +634,10 @@ function entriesCard(): HTMLElement {
         /* storage unavailable: the choice lasts until the window closes */
       }
     },
-    { fk: "csvSep", label: t("hist.sepAria") },
+    // Sized like the small export buttons next to it.
+    { fk: "csvSep", label: t("hist.sepAria"), cls: "select-sm" },
   );
   sep.title = t("hist.sepTitle");
-  // Sized like the small export buttons next to it.
-  sep.setAttribute("style", "height: 28px; border-radius: 8px; font-size: 12.5px");
   const entries = card(
     {
       title: t("hist.entries"),

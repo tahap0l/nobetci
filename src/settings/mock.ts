@@ -14,8 +14,10 @@
 // every error path without a broken machine: ?relay=missing, ?previewError=1
 // (settings.json is not valid JSON), ?noFile=1 (no settings.json yet, so no
 // backup), ?foreignStatus=1 (someone else's status line), ?loadError=1 (the app's
-// own settings file was unreadable at start), ?saveError=unreadable|failed,
-// ?autostartFail=1 (a `settings-warning` after changing autostart), ?importBad=1.
+// own settings file was unreadable at start) or =partial (only some values
+// were), ?saveError=unreadable|failed, ?autostartFail=1 (a `settings-warning`
+// after changing autostart), ?importBad=1, ?gitBash=1 (Windows: hooks written
+// for Git Bash only).
 // In the console: __mockStale() makes the next hook write fail as a stale preview.
 
 import type {
@@ -26,7 +28,6 @@ import type {
   AgentProvider,
   CategoryInfo,
   Evaluation,
-  HookStatus,
   HotkeyStatus,
   RiskAssessment,
   RiskFinding,
@@ -36,7 +37,8 @@ import { ALL_EVENTS, DEFAULT_SETTINGS, type RuleMode, type Settings, type UserRu
 import { getLang, type Lang } from "../i18n/core";
 // The preview shows the version being built, so screenshots never carry a stale one.
 import { version } from "../../package.json";
-import type { Api, CsvSeparator, HealthReport, HookPreview, StatusLineOwner } from "./api";
+import type { Api, CsvSeparator, HealthReport, HookPreview, HookStatus, StatusLineOwner } from "./api";
+import { validDayStarts } from "./days";
 
 type Group = CategoryInfo["group"];
 type Tag = "" | "secret" | "exfil";
@@ -64,8 +66,36 @@ const r = (id: string, level: RiskLevel, tr: string, en: string, re: RegExp, tag
 const RANK: Record<RiskLevel, number> = { low: 0, medium: 1, high: 2, critical: 3 };
 const byRank = (n: number): RiskLevel => (["low", "medium", "high", "critical"] as const)[Math.max(0, Math.min(3, n))];
 
-// Labels mirror risk.rs; patterns are simplified.
+/** Where Nöbetçi keeps its settings, relay and history (risk.rs SELF_DIRS, simplified). */
+const SELF_DIRS = String.raw`(appdata[\\/]+(local|roaming)|%(local)?appdata%|\$env:(local)?appdata|application support|\.config|\.local[\\/]+(share|state))[\\/]+nobetci`;
+
+// Labels, levels and the order of the tables mirror risk.rs (a category's group
+// is the first table it appears in, as categories() does); patterns are simplified.
 const COMMAND: MockRule[] = [
+  r(
+    "nobetci_self",
+    "critical",
+    "Nöbetçi'nin kendi dosyalarını değiştiriyor",
+    "Changes Nöbetçi's own files",
+    new RegExp(
+      String.raw`(>|\btee\b|set-content|out-file|add-content|\bcp\b|\bcopy\b|\bmv\b|\bmove\b|copy-item|move-item|\brm\b|\bdel\b|remove-item|sed\s+-i|\bchmod\b)[^\n;&|]*${SELF_DIRS}`,
+      "i",
+    ),
+  ),
+  r(
+    "nobetci_unhook",
+    "critical",
+    "Nöbetçi'nin hook'larını kaldırıyor (ajanlar ona sormayı bırakır)",
+    "Removes Nöbetçi's hooks (agents stop asking it)",
+    /nobetci[\s\S]*--remove-hooks|--remove-hooks[\s\S]*nobetci/i,
+  ),
+  r(
+    "nobetci_kill",
+    "high",
+    "Nöbetçi'yi kapatmaya veya kaldırmaya çalışıyor",
+    "Tries to stop or uninstall Nöbetçi",
+    /(taskkill\b|stop-process\b|\bkill(all)?\b|\bpkill\b|\bsystemctl\s+(--user\s+)?(stop|kill|disable|mask|restart)\b|\blaunchctl\s+(bootout|unload|remove|kill|stop|disable)\b)[^\n]*nobetci|nobetci[\\/]+uninstall(\.exe)?\b/i,
+  ),
   r(
     "download_exec",
     "critical",
@@ -115,6 +145,13 @@ const COMMAND: MockRule[] = [
     "Changes Claude Code permission/hook settings",
     /(>|>>|\btee\b|set-content|out-file|add-content|\bcp\b|\bcopy\b|\bmv\b|\bmove\b|sed\s+-i)[^\n]*\.claude[\\/]+(settings(\.local)?|managed-settings)\.json/i,
   ),
+  r(
+    "agent_hooks",
+    "critical",
+    "Codex veya Cursor hook/onay ayarlarını değiştiriyor",
+    "Changes Codex or Cursor hook or approval settings",
+    /(>|\btee\b|set-content|out-file|add-content|\bcp\b|\bcopy\b|\bmv\b|\bmove\b|sed\s+-i)[^\n;&|]*\.(codex|cursor)[\\/]+(hooks\.json|config\.toml)/i,
+  ),
   r("ssh", "critical", "SSH erişim anahtarlarına dokunuyor", "Touches SSH authorized keys", /authorized_keys/i),
   r(
     "recursive_delete",
@@ -157,6 +194,20 @@ const COMMAND: MockRule[] = [
     "Kalıcılık: açılışta otomatik çalışacak bir şey kuruyor",
     "Persistence: installs something that runs at startup",
     /schtasks(\.exe)?\s+\/create|register-scheduledtask|\\currentversion\\run(once)?\b|\bnew-service\b|systemctl\s+enable/i,
+  ),
+  r(
+    "git_hooks",
+    "high",
+    "Git hook veya git ayarı (otomatik çalışan kod)",
+    "Git hook or git config (code that runs automatically)",
+    /core\.(hookspath|fsmonitor|sshcommand|askpass)(\s*=\s*|\s+)[^\s-]|\balias\.\S+(\s*=\s*|\s+)["']?!/i,
+  ),
+  r(
+    "gatekeeper",
+    "high",
+    "macOS karantina/Gatekeeper işaretini kaldırıyor",
+    "Removes the macOS quarantine (Gatekeeper) flag",
+    /\bxattr\s+(-\w+\s+)*-\w*[dc]/i,
   ),
   r(
     "lolbin",
@@ -238,6 +289,14 @@ const COMMAND: MockRule[] = [
     /[\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]/,
   ),
   r(
+    "ws_obfuscation",
+    "high",
+    "Boş satır veya uzun boşlukla gizlenmiş içerik",
+    "Content hidden behind blank lines or long whitespace",
+    // A dozen blank lines, or a long run of blanks (no-break and wide spaces too), before more text.
+    /((\r\n|[\n\r\v\f\u0085\u2028\u2029])[ \t\u00a0\u3000]*){12,}\S|[ \t\u00a0\u3000]{120,}\S/,
+  ),
+  r(
     "exfil",
     "medium",
     "Dışarıya veri gönderiyor",
@@ -293,9 +352,9 @@ const COMMAND: MockRule[] = [
   r(
     "claude_settings_touch",
     "medium",
-    "Claude Code ayarlarına dokunuyor",
-    "Touches Claude Code settings",
-    /\.claude[\\/]/i,
+    "Ajanın izin/hook ayarlarına dokunuyor",
+    "Touches an agent's permission or hook settings",
+    /\.claude[\\/]+(\.[\\/]+)*(settings(\.local)?|managed-settings)\.json|\.mcp\.json|\.(codex|cursor)[\\/]+(\.[\\/]+)*hooks\.json|\.codex[\\/]+config\.toml/i,
   ),
   r(
     "network",
@@ -322,11 +381,25 @@ const COMMAND: MockRule[] = [
 
 const WRITE_PATH: MockRule[] = [
   r(
+    "nobetci_self",
+    "critical",
+    "Nöbetçi'nin kendi dosyalarını değiştiriyor",
+    "Changes Nöbetçi's own files",
+    new RegExp(String.raw`${SELF_DIRS}([\\/]|$)|(^|[\\/])nobetci-hook(\.exe)?$`, "i"),
+  ),
+  r(
     "claude_settings",
     "critical",
     "Claude Code izin/hook ayarlarını değiştiriyor",
     "Changes Claude Code permission/hook settings",
     /\.claude[\\/]+(settings(\.local)?|managed-settings)\.json$/i,
+  ),
+  r(
+    "agent_hooks",
+    "critical",
+    "Codex veya Cursor hook/onay ayarlarını değiştiriyor",
+    "Changes Codex or Cursor hook or approval settings",
+    /(^|[\\/])\.(codex|cursor)[\\/]hooks\.json$|(^|[\\/])\.codex[\\/]config\.toml$/i,
   ),
   r("ssh", "critical", "SSH anahtarı / erişim dosyası", "SSH key or access file", /[\\/]\.ssh[\\/]|authorized_keys/i),
   r(
@@ -466,7 +539,18 @@ const SYNTHETIC: [string, RiskLevel, Pair][] = [
   ["mcp", "medium", ["Harici MCP aracı (silme/değişiklik)", "External MCP tool (delete/change)"]],
   ["long_command", "medium", ["Çok uzun komut — tamamını dikkatle oku", "Very long command — read all of it"]],
   ["outside_project", "medium", ["Proje klasörü dışında çalışıyor", "Works outside the project folder"]],
+  [
+    "sandbox_off",
+    "medium",
+    ["Claude Code'un korumalı alanı (sandbox) dışında çalışmak istiyor", "Asks to run outside Claude Code's sandbox"],
+  ],
+  ["replace_all", "low", ["Dosyadaki her geçişi değiştiriyor", "Replaces every occurrence in the file"]],
 ];
+
+/** The label of a finding that comes from the shape of a request. */
+function synthLabel(id: string): Pair {
+  return SYNTHETIC.find((s) => s[0] === id)?.[2] ?? [id, id];
+}
 
 const LOCKED = ["truncated", "secret_exfil"];
 
@@ -541,7 +625,8 @@ function assessRaw(tool: string, input: Record<string, unknown>, cwd: string, of
     kind = "command";
     target = cmd;
     scan(COMMAND, cmd);
-    if (cmd.length > 2000) synth("long_command", "medium", SYNTHETIC[3][2]);
+    if (cmd.length > 2000) synth("long_command", "medium", synthLabel("long_command"));
+    if (input.dangerouslyDisableSandbox === true) synth("sandbox_off", "medium", synthLabel("sandbox_off"));
   } else if (["write", "edit", "multiedit", "notebookedit"].includes(lower)) {
     kind = "write";
     target = str(input, "file_path") ?? str(input, "notebook_path") ?? "";
@@ -554,6 +639,10 @@ function assessRaw(tool: string, input: Record<string, unknown>, cwd: string, of
         target.slice(0, 80),
       );
     scan(CONTENT, `${str(input, "content") ?? ""}${str(input, "new_string") ?? ""}`);
+    const replacesAll = (v: unknown) =>
+      !!v && typeof v === "object" && (v as { replace_all?: unknown }).replace_all === true;
+    if (replacesAll(input) || (Array.isArray(input.edits) && input.edits.some(replacesAll)))
+      synth("replace_all", "low", synthLabel("replace_all"));
   } else if (["read", "glob", "grep", "ls", "notebookread"].includes(lower)) {
     kind = "read";
     target = str(input, "file_path") ?? str(input, "path") ?? str(input, "pattern") ?? "";
@@ -609,7 +698,7 @@ function assessRaw(tool: string, input: Record<string, unknown>, cwd: string, of
     target = JSON.stringify(input).slice(0, 600);
   }
   if (found.some((x) => x.tag === "secret") && found.some((x) => x.tag === "exfil"))
-    synth("secret_exfil", "critical", SYNTHETIC[0][2]);
+    synth("secret_exfil", "critical", synthLabel("secret_exfil"));
   // As in risk.rs: a request it can't place is always looked at by a person.
   const manualReview = kind === "other" || !target.trim();
   if (manualReview)
@@ -969,7 +1058,8 @@ const SAMPLES: [string, string, Record<string, unknown>, number][] = [
 /** History as stored by the mock: finding labels stay bilingual until read. */
 type MockEntry = Omit<AuditEntry, "labels" | "message"> & { labels: Pair[]; message: Pair | string };
 
-function makeHistory(s: Settings): MockEntry[] {
+/** `lang`: the language Claude wrote its question in (user data, like a real history's). */
+function makeHistory(s: Settings, lang: Lang): MockEntry[] {
   const rnd = prng(20261001);
   const pick = <T>(xs: T[]) => xs[Math.floor(rnd() * xs.length)];
   const weighted = () => {
@@ -1046,6 +1136,84 @@ function makeHistory(s: Settings): MockEntry[] {
       ms,
     });
   }
+  // What pipe.rs records when no answer reaches Claude Code: an answer given
+  // after the request had already ended (undelivered), a request too large to
+  // read (no target, no findings, HIGH), and a question handed straight back to
+  // the terminal because questions on the island are off.
+  const ago = (hours: number, minutes: number) => now - hours * 3_600_000 - minutes * 60_000;
+  const question: Pair = ["Testler hangi veritabanını kullansın?", "Which database should the tests use?"];
+  out.push(
+    {
+      ts: ago(2, 17),
+      id: "req-0125",
+      session: sessions[0],
+      project: "nobetci",
+      cwd: P.nobetci,
+      tool: "Bash",
+      kind: "command",
+      target: "npm run build",
+      level: "low",
+      labels: [],
+      decision: "none",
+      by: "undelivered",
+      rule: "",
+      message: [
+        "Nöbetçi üzerinden izin verildi, ama istek çoktan bitmişti: cevap Claude Code'a ulaşmadı.",
+        "Allowed through Nöbetçi, but the request had already ended: Claude Code never got the answer.",
+      ],
+      ms: 131_400,
+    },
+    {
+      ts: ago(26, 41),
+      id: "req-0126",
+      session: sessions[1],
+      project: "web-shop",
+      cwd: P.shop,
+      tool: "Write",
+      kind: "",
+      target: "",
+      level: "high",
+      labels: [],
+      decision: "none",
+      by: "terminal",
+      rule: "",
+      message: [
+        "1 MiB'tan büyük: Nöbetçi tamamını gösteremeyeceği için Claude Code terminalde sordu.",
+        "Over 1 MiB: too large for Nöbetçi to show whole, so Claude Code asked in the terminal.",
+      ],
+      ms: 0,
+    },
+    {
+      ts: ago(51, 8),
+      id: "req-0127",
+      session: sessions[2],
+      project: "ml-pipeline",
+      cwd: P.ml,
+      tool: "AskUserQuestion",
+      kind: "other",
+      // Like Rust's target for a tool it does not score: the arguments as JSON, keys sorted.
+      target: JSON.stringify({
+        questions: [
+          {
+            header: "DB",
+            multiSelect: false,
+            options: [{ label: "SQLite" }, { label: "Postgres" }],
+            question: question[lang === "tr" ? 0 : 1],
+          },
+        ],
+      }),
+      level: "low",
+      labels: [],
+      decision: "none",
+      by: "terminal",
+      rule: "",
+      message: [
+        "Adada soru ve plan kapalı, Claude Code terminalde sordu.",
+        "Questions and plans on the island are off, so Claude Code asked in the terminal.",
+      ],
+      ms: 0,
+    },
+  );
   out.sort((x, y) => x.ts - y.ts);
   return out;
 }
@@ -1056,8 +1224,20 @@ function localise(e: MockEntry): AuditEntry {
 
 const RANK_STR: Record<string, number> = { low: 0, medium: 1, high: 2, critical: 3 };
 
+/**
+ * As audit.rs folds the search and every field it looks in: lower case, the dot
+ * a capital İ leaves behind dropped, a dotless ı read as i. "İNFRA" then finds
+ * "infra-scripts" and "internet" finds "İnternetten".
+ */
+function fold(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/\u0307/g, "")
+    .replace(/\u0131/g, "i");
+}
+
 function query(all: AuditEntry[], f: AuditFilter): AuditEntry[] {
-  const text = (f.text ?? "").trim().toLowerCase();
+  const text = fold((f.text ?? "").trim());
   const project = (f.project ?? "").trim().toLowerCase();
   return all
     .filter(
@@ -1069,21 +1249,31 @@ function query(all: AuditEntry[], f: AuditFilter): AuditEntry[] {
         (!f.by || e.by === f.by) &&
         (!project || e.project.toLowerCase() === project) &&
         (!text ||
-          e.target.toLowerCase().includes(text) ||
-          e.project.toLowerCase().includes(text) ||
-          e.tool.toLowerCase().includes(text) ||
-          e.rule.toLowerCase().includes(text) ||
-          e.labels.some((l) => l.toLowerCase().includes(text))),
+          fold(e.target).includes(text) ||
+          fold(e.project).includes(text) ||
+          fold(e.tool).includes(text) ||
+          fold(e.rule).includes(text) ||
+          e.labels.some((l) => fold(l).includes(text))),
     )
     .reverse();
 }
 
-function stats(all: AuditEntry[], days: number): AuditStats {
-  // As audit.rs: days break at local midnight by today's UTC offset.
+function stats(all: AuditEntry[], days: number, dayStarts?: number[]): AuditStats {
+  // As audit.rs (C-18): the buckets are the local midnights the window sent,
+  // when they are valid; otherwise days break at local midnight by today's UTC
+  // offset. The labels are the last `days` calendar dates either way.
   const off = new Date().getTimezoneOffset() * 60_000;
   const dayOf = (ts: number) => Math.floor((ts - off) / 86_400_000);
   const today = dayOf(Date.now());
   const firstDay = today - days + 1;
+  const starts = dayStarts && validDayStarts(dayStarts, days) ? dayStarts : null;
+  const bucket = (ts: number): number => {
+    if (!starts) return dayOf(ts) - firstDay;
+    if (ts < starts[0] || ts >= starts[days]) return -1;
+    let i = 0;
+    while (ts >= starts[i + 1]) i++;
+    return i;
+  };
   const rows = Array.from({ length: days }, (_, i) => ({
     date: new Date((firstDay + i) * 86_400_000).toISOString().slice(0, 10),
     allow: 0,
@@ -1111,7 +1301,7 @@ function stats(all: AuditEntry[], days: number): AuditStats {
   const labels = new Map<string, number>();
   const waits: number[] = [];
   for (const e of all) {
-    const idx = dayOf(e.ts) - firstDay;
+    const idx = bucket(e.ts);
     if (idx < 0 || idx >= days) continue;
     s.total++;
     if (e.decision === "allow") {
@@ -1219,6 +1409,36 @@ export function createMockApi(): Api {
         "settings.json isn't valid JSON (line 3, column 5). Nöbetçi won't overwrite it; fix or move it, then try again.",
       ]),
     );
+  /**
+   * What Rust's LoadProblem::message says at start, in the language the window
+   * opens in: ?loadError=1 (not JSON: defaults), ?loadError=partial (a few values
+   * of the wrong type: every other value was read).
+   */
+  const loadProblem = (): string | null => {
+    const kind = q.get("loadError");
+    if (kind !== "1" && kind !== "partial") return null;
+    const partial = kind === "partial";
+    const file = `${HOME}\\AppData\\Roaming\\Nobetci\\settings.json`;
+    const kept = `${file}.unreadable-20261021-0932`;
+    // The reader's own words stay as serde wrote them.
+    const error = partial ? 'invalid type: string "yes", expected a boolean' : "expected value at line 1 column 1";
+    return [
+      `${file}: ${error}.`,
+      partial
+        ? U([
+            "Şunlar okunamadı ve varsayılan değerlerinde kaldı: soundEnabled, rules[2]. Geri kalan her şey okundu.",
+            "These couldn't be read and kept their default values: soundEnabled, rules[2]. Everything else was read.",
+          ])
+        : null,
+      U([`Dosyanın bir kopyası: ${kept}.`, `A copy of the file is at ${kept}.`]),
+      U([
+        "Dosyayı düzelt ya da sıfırdan başlamak için başka bir yere taşı, sonra Nöbetçi'yi yeniden başlat.",
+        "Fix the file, or move it elsewhere to start over, then restart Nöbetçi.",
+      ]),
+    ]
+      .filter(Boolean)
+      .join(" ");
+  };
   let mockOpenAiKeyStored = false;
   const agentStatuses = new Map<AgentProvider, AgentHookStatus>();
   const agentStatus = (provider: AgentProvider): AgentHookStatus => {
@@ -1350,7 +1570,7 @@ export function createMockApi(): Api {
     hotkeys: { toggle: "Ctrl+Alt+N", deny: "Ctrl+Alt+D", allow: "", dnd: "Ctrl+Alt+M", assistant: "Ctrl+Alt+Space" },
     disabledCategories: ["network", "file_delete"],
   });
-  let history = makeHistory(settings);
+  let history = makeHistory(settings, lang0);
   // ?lost=1: hooks were installed once, then something rewrote settings.json.
   const lost = q.get("lost") === "1";
   let hookStatus: HookStatus = {
@@ -1364,6 +1584,8 @@ export function createMockApi(): Api {
         : ALL_EVENTS.filter((e) => !["StopFailure", "SubagentStart", "SubagentStop", "StatusLine"].includes(e)),
     stale: q.get("stale") === "1",
     foreignStatusLine: foreignStatus,
+    // ?gitBash=1: a Windows profile path no hook command runs in both shells.
+    gitBashOnly: q.get("gitBash") === "1" && platform === "windows",
   };
   const listeners = new Map<string, Set<(p: unknown) => void>>();
   const emit = (name: string, payload: unknown) => {
@@ -1430,13 +1652,7 @@ export function createMockApi(): Api {
       hookPath: hookStatus.hookPath,
       platform,
       fullscreenSupported: true,
-      settingsLoadError:
-        q.get("loadError") === "1"
-          ? L([
-              "settings.json okunamadı (satır 1, sütun 1'de beklenmeyen karakter). Bir kopyası settings.json.unreadable-20261021-0932 olarak saklandı.",
-              "settings.json couldn't be read (unexpected character at line 1, column 1). A copy was kept as settings.json.unreadable-20261021-0932.",
-            ])
-          : null,
+      settingsLoadError: loadProblem(),
     }),
     saveSettings: async (s: Settings) => {
       await delay(60);
@@ -1591,9 +1807,9 @@ export function createMockApi(): Api {
       const offset = f.offset ?? 0;
       return { entries: clone(hits.slice(offset, offset + limit)), total: hits.length };
     },
-    auditStats: async (days: number) => {
+    auditStats: async (days: number, dayStarts?: number[]) => {
       await delay(50);
-      return stats(history.map(localise), Math.max(1, Math.min(366, days)));
+      return stats(history.map(localise), Math.max(1, Math.min(366, days)), dayStarts);
     },
     auditProjects: async () => {
       await delay(30);
