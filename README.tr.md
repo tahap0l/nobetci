@@ -25,11 +25,11 @@
 
 Nöbetçi ekranın üstünde küçük bir ada olarak durur. Adaya tıklayarak ajan oturumlarını ve kartları açabilirsin. İzin isteği geldiğinde onay kartı öne çıkar.
 
-- **Ajan takibi.** Claude Code, Codex ve Cursor oturumlarını ve desteklenen izin isteklerini izle. Windows’ta Chrome veya Edge’deki ChatGPT yanıt durumunu da görebilirsin (köprü yalnız Windows'ta kurulabiliyor). [ChatGPT Web kurulumu](integrations/chatgpt-web/README.md)
+- **Ajan takibi.** Claude Code, Codex ve Cursor oturumlarını ve desteklenen izin isteklerini izle. Windows’ta Chrome veya Edge’deki ChatGPT yanıt durumunu da görebilirsin (köprü yalnız Windows'ta kurulabiliyor). [ChatGPT Web kurulumu](integrations/chatgpt-web/README.tr.md)
 - **Beş ada sekmesi.** **Medya** (odak sayacıyla), **Ajanda**, **Takvim**, **Hava** ve **Sistem**: bir sekmeye tıkla ya da kartlar arasında kaydır. Takvimde oklarla haftalar arasında gez, hava durumu tablosunda seçtiğin şehrin sıcaklığını ve güncel koşullarını gör.
 - **Medya ve odak.** Oynatıcı çalan parçayı kartın arkasında bulanık kapak görseliyle, tıklayıp ileri sarabileceğin canlı bir süre çubuğuyla ve oynat, duraklat, sonraki, önceki düğmeleriyle gösterir. Windows'ta sistem medya kontrollerini (Spotify, tarayıcılar…), macOS'ta Spotify ve Müzik'i, Linux'ta MPRIS destekleyen her oynatıcıyı (Spotify, VLC, tarayıcılar…) izler. 25 dakikalık odak sayacı duraklatılabilir ve sıfırlanabilir. **Ayarlar → Genel → Ada bileşenleri** bölümünden hava durumu için şehir seçebilir ve medya kartını açabilirsin.
-- **Adada bir asistan.** `Ctrl+Alt+Space`'e (ya da ✦ düğmesine) bas, ne istediğini yaz ve ChatGPT, Claude, Gemini, Perplexity, Copilot, Grok, DeepSeek ya da Mistral'e gönder — uygulama ya da web sitesi mesajınla açılır, mesaj panoya da kopyalanır. Web'de ChatGPT, Claude, Perplexity, Copilot ve Grok mesajı sayfa adresinde alır; yani mesaj sayfa açılır açılmaz onlara ulaşır ve bazıları hemen cevaplamaya başlayabilir. Diğerlerinde göndere sen basarsın. **Burada** seçeneği Mesaj Atölyesi modelinle yanıtı adanın üstünde verir. Aynı kutudan eğik çizgi komutlarıyla Nöbetçi'yi yönetirsin: `/duraklat`, `/sessiz`, `/odak 25`, `/müzik`, `/sonraki`, `/önceki`, `/ayarlar`; ↑ ve ↓ önceki mesajları geri getirir. Esc, ✕ ya da kısayol asistanı yeniden kapatır.
-- **Ses ve hazır promptlar.** 🎙 düğmesi sistemin dikte özelliğini başlatır (Windows'ta sesle yazma, macOS'ta Dikte; Linux'ta sistem dikte özelliği olmadığı için orada düğme yok); **Hazır promptlar** yapay zekâyı yeni kullananlara yirmiye yakın doldur-gönder kalıbı sunar. Claude, ChatGPT, Perplexity ya da Copilot uygulaması yüklüyse mesaj tarayıcı yerine orada açılır.
+- **Adada bir asistan.** `Ctrl+Alt+Space`'e (ya da ✦ düğmesine) bas, ne istediğini yaz ve ChatGPT, Claude, Gemini, Perplexity, Copilot, Grok, DeepSeek ya da Mistral'e gönder — uygulama ya da web sitesi açılır, mesajın panoya da kopyalanır. Web'de ChatGPT, Claude, Perplexity, Copilot ve Grok ile ChatGPT ve Perplexity uygulamaları mesajı açılırken alır ve hemen cevaplamaya başlayabilir (web'de mesaj sayfa adresinin içinde gider, bu yüzden tarayıcı geçmişin de onu saklar); Claude uygulaması mesajı yalnızca yazı kutusuna koyar, göndermek sana kalır; Gemini, DeepSeek, Mistral ve Copilot uygulaması mesajsız açılır, mesajı sen yapıştırırsın — bir adrese sığmayacak kadar uzun bir mesajı da. **Burada** seçeneği Mesaj Atölyesi modelinle yanıtı adanın üstünde verir. Aynı kutudan eğik çizgi komutlarıyla Nöbetçi'yi yönetirsin: `/duraklat`, `/sessiz`, `/odak 25`, `/müzik`, `/sonraki`, `/önceki`, `/ayarlar` (medya komutları medya kartı kapalıyken de, zaten çalışan bir oynatıcıda çalışır); ↑ ve ↓ önceki mesajları geri getirir. Esc, ✕ ya da kısayol asistanı yeniden kapatır.
+- **Ses ve hazır promptlar.** 🎙 düğmesi sistemin dikte özelliğini başlatır (Windows'ta sesle yazma, macOS'ta Dikte; Linux'ta sistem dikte özelliği olmadığı için orada düğme yok); **Hazır promptlar** yapay zekâyı yeni kullananlara yirmiye yakın doldur-gönder kalıbı sunar. Claude, ChatGPT, Perplexity ya da Copilot uygulaması yüklüyse asistan tarayıcı yerine onu açar (**Ayarlar → Genel → Asistan → Yüklü uygulamaları kullan**).
 - **Ajanda, takvim, hava ve sistem.** Bir güne yapılacak not al, istersen saat ver hatırlatsın; takvimde dolu günleri gör; önümüzdeki 12 saatin animasyonlu tahmini; canlı CPU, RAM ve GPU kullanımı.
 
 <p align="center">
@@ -131,7 +131,9 @@ butonu bilerek basılı tutman gerekir. Sana ihtiyaç olmadığında ekranın ü
   inceleyip kendin kopyala — hiçbir ajana otomatik gönderilmez.
 - **Ve dahası.** Genel kısayollar, gerçek relay üzerinden hook sağlık testi, hangi hook
   olaylarının dinleneceğini seçme, risk kategorilerini tek tek kapatma, adanın konumu, ayarları
-  içe ve dışa aktarma; sistem diline göre kendiliğinden Türkçe ya da İngilizce arayüz.
+  içe ve dışa aktarma (içe aktarma yalnızca Nöbetçi'nin kendi ayar dosyalarını kabul eder; içe
+  aktarma da sıfırlama da yerini aldıkları ayarların tarihli bir kopyasını saklar); sistem diline
+  göre kendiliğinden Türkçe ya da İngilizce arayüz.
 
 ### 🔒 Gizlilik
 
@@ -267,7 +269,9 @@ Nöbetçi X11'de ve XWayland üzerinden Wayland masaüstlerinde (GNOME, KDE Plas
 bileşikleştirici (compositor) gerekir, çünkü ada saydam bir penceredir. GNOME, KDE Plasma ve
 Cinnamon bunu kendileri yapar; Xfce'de pencere yöneticisinin ince ayarlarındaki (**Window Manager
 Tweaks**) **Compositor** sekmesinden bileşikleştirmeyi aç, yalın bir pencere yöneticisinde `picom`
-gibi bir bileşikleştirici çalıştır. Yoksa ada ekranın üstünde siyah bir kutu olarak görünebilir.
+gibi bir bileşikleştirici çalıştır. Yoksa Nöbetçi penceresini adanın kendisine kırpar (köşeler kare,
+gölge yok; 2.4.1'e kadar ekranın üstünde siyah bir kutu görünüyordu) ve masaüstü maskotu siyah bir
+karenin üstünde durur; bu yüzden bir bileşikleştirici başlat ya da maskotu kapat.
 
 1. [Son sürümden](https://github.com/tahap0l/nobetci/releases/latest)
    `Nobetci-x.y.z-linux-amd64.deb` (Debian, Ubuntu, Mint…) ya da
@@ -289,7 +293,8 @@ Bir **Wayland** oturumunda (güncel Ubuntu, Fedora ve KDE Plasma'nın varsayıla
 penceresi XWayland'de çalışır ve üç özellik yalnız X11 pencerelerini görür: genel kısayollar yalnız
 bir X11 penceresi odaktayken çalışır, **Pencereye git** doğrudan Wayland'de çalışan terminalleri
 bulamaz (onun yerine oturumun klasörünü açar) ve tam ekranda sessizlik yerel Wayland uygulamalarını
-fark etmez. Ayrıntılar [kurulum kılavuzunda](docs/kurulum.md#linux).
+fark etmez. Nöbetçi'nin senin için açtığı programlar — bağlantılar, VS Code, dosya yöneticisi — yine
+doğrudan Wayland'de açılır. Ayrıntılar [kurulum kılavuzunda](docs/kurulum.md#linux).
 
 ### Kaynaktan derleme
 
@@ -325,8 +330,10 @@ geldin sihirbazı açılır: dilini seç, Claude Code'a bağlan, sağlık testin
 temellerini ayarla, bitti. İstersen atlayabilirsin — sihirbazdaki her şey Ayarlar'da da var.
 
 Nöbetçi'nin Claude Code'u görebilmesi için hook'larının `~/.claude/settings.json` dosyasında
-olması gerekir. Sihirbazın **Claude Code'a bağlan** adımı — ya da istediğin zaman **Ayarlar →
-Claude Code → Hook'ları kur…** — bunu dikkatle yapar:
+olması gerekir (Claude Code'un ayarlarını kendi seçtiğin bir klasörde tutuyorsan ve Nöbetçi de o
+değişkeni görüyorsa `$CLAUDE_CONFIG_DIR/settings.json` dosyasında; hangi dosyanın kullanıldığını
+**Ayarlar → Claude Code** gösterir). Sihirbazın **Claude Code'a bağlan** adımı — ya da istediğin
+zaman **Ayarlar → Claude Code → Hook'ları kur…** — bunu dikkatle yapar:
 
 - yapılacak değişikliği, dosyaya dokunulmadan önce fark (diff) olarak görürsün;
 - dosyanın yanına önce tarihli bir yedek alınır (`settings.json.bak-YYYYMMDD-HHMMSS`);
@@ -380,6 +387,10 @@ görünür; ajan hook'ları gönderilen metni alıcıya ulaşmadan değiştireme
 Bir oturumun satırına tıklayınca detayı açılır: son adımların zaman çizelgesi, farklarıyla
 değiştirdiği dosyalar, sayaçlar ve **Pencereye git**. Asistan `Ctrl+Alt+Space` ya da ✦ düğmesiyle
 açılır; Esc, ✕ ya da kısayol onu yeniden kapatır.
+
+Ada klavyeyi almaz: ona ya da masaüstü maskotuna tıklamak terminalini ya da editörünü etkin bırakır;
+Windows'ta ikisi de Alt-Tab'da görünmez. Klavyeyi yalnızca adanın yazı kutuları — asistan, oturum
+araması, ajanda — sen içlerine yazarken alır.
 
 Tepsi simgesinde (Mac'te menü çubuğu simgesinde) **Nöbetçi'yi aç**, **Ayarlar…**, **Duraklat /
 devam et**, **Rahatsız etme aç / kapat**, **Masaüstü maskotu aç / kapat** ve **Çıkış** var.
@@ -472,7 +483,8 @@ Gizli bir ada neredeyse hiç kaynak harcamaz: animasyon döngüsü durur, imleç
   (`xattr -d`); macOS anahtar zincirini okumak (`security find-generic-password`,
   `dump-keychain`); `mshta`, `regsvr32 /i:`, `certutil -urlcache`
   ya da `bitsadmin /transfer` gibi şüpheli yerleşik Windows araçları; PowerShell betik
-  politikasını devre dışı bırakmak; kimlik ve sır dosyaları; bilinen veri sızdırma servisleri
+  politikasını devre dışı bırakmak; kimlik ve sır dosyaları — bir programa `--env-file` ile
+  yüklenen `.env` dahil (program yüklediğini ekrana yazdırabilir); bilinen veri sızdırma servisleri
   (paste siteleri, istek yakalayıcılar, tüneller, sohbet webhook'ları); aşırı geniş izinler
   (`chmod 777`, `icacls … Everyone:F`, `takeown`); bilgisayarı kapatmak ya da yeniden başlatmak; veritabanında veri
   silen komutlar; ayrıcalıklı ya da ana makineyi bağlayan Docker çalıştırmaları ve Docker
@@ -556,6 +568,10 @@ Desenler nasıl eşleşir:
   söyler; yasaklayan, her zaman sorduran ve seviyeyi yükselten kurallar her yerde eşleşir.
 - **Boş desen** o aracın her isteğiyle eşleşir ("MCP araçları için her seferinde sor" şablonu buna
   dayanır); her araç için boş desenli bir kuralı kaydetmeden önce düzenleyici seni uyarır.
+- **Bir yol, vardığı yer sayılır.** Bir dosya için izin veren ya da seviyeyi düşüren bir kural (ve
+  bir "tekrar sorma" izni) yalnızca yolun çözülmüş hâliyle eşleşir; böylece `..` bir kuralın
+  gösterdiği klasörden dışarı tırmanamaz. Yasaklayan, her zaman sorduran ve seviyeyi yükselten
+  kurallar her iki yazılışla da eşleşir.
 
 Şablonlar iyi bir başlangıç: `npm test`'e ve salt okuyan git komutlarına izin ver, `git push --force`
 ve paket yayınlamayı yasakla, Claude'u `.env` dosyalarından uzak tut, `rm -rf`'yi her zaman
@@ -717,7 +733,8 @@ kaldırılana kadar her kabuk ve MCP komutunu engeller.
 
 `nobetci --remove-hooks` üç dosyadan da yalnızca Nöbetçi'nin kendi girdilerini kaldırır; diğer
 ayarlara ve başka araçların hook'larına dokunmaz, her dosyanın yanına tarihli bir yedek bırakır
-(`settings.json.bak-…`, `hooks.json.bak-…`). Fark göstermez — kaldırma programının komutudur. (Bir
+(`settings.json.bak-…`, `hooks.json.bak-…`). Fark göstermez — kaldırma programının komutudur — ama
+her dosya için bir satır yazar ve temizleyemediği bir dosya olursa 1 koduyla çıkar. (Bir
 ajan onu çalıştırmak isterse Nöbetçi bunu KRİTİK sayar: onu yalnız sen çalıştırmalısın.) Her
 değişikliği incelemek istersen **Ayarlar → Claude Code → Kaldır…**, **Ayarlar → ChatGPT →
 Bağlantıyı kaldır…** ve **Ayarlar → Diğer ajanlar → Bağlantıyı kaldır…** düğmelerini kullan.
@@ -729,8 +746,9 @@ aç, **Nobetci**'yi bul ve **Kaldır**'ı seç. Kaldırma programı:
 
 1. Nöbetçi açıksa kapatmanı ister — orada **İptal** her şeyi olduğu gibi bırakır;
 2. Claude Code, Codex ve Cursor dosyalarında `nobetci.exe --remove-hooks` (yukarıda) çalıştırır;
-3. uygulamayı, relay'i (`%LOCALAPPDATA%\Nobetci\bin`), kayıt dosyasını ve **Windows açılınca
-   başlat**'ı kaldırır.
+3. uygulamayı, relay'i (`%LOCALAPPDATA%\Nobetci\bin`), kayıt dosyasını, **Windows açılınca
+   başlat**'ı ve [ChatGPT Web köprüsünü](integrations/chatgpt-web/README.tr.md) kurduysan onun
+   Chrome ve Edge'deki kaydını kaldırır (eklentinin kendisini tarayıcıdan sen kaldırırsın).
 
 Hook'lar kaldırılamazsa relay ve kayıt dosyası yerinde kalır; böylece Claude Code, Codex ve Cursor
 çalışmaya devam eder ve bir mesaj hangi girdileri elle sileceğini söyler.

@@ -86,15 +86,20 @@ Every step has **Skip for now**; everything in it is also in **Settings**. To op
 
 Nöbetçi sees Claude Code through **hooks**, added to `~/.claude/settings.json`
 (`C:\Users\<you>\.claude\settings.json`) — or to `settings.json` in the folder `CLAUDE_CONFIG_DIR`
-names, if you keep Claude Code's settings there.
+names, if you keep Claude Code's settings there. Nöbetçi follows that variable only when it holds
+an absolute path and Nöbetçi itself sees it: an app started from the Start menu doesn't see a
+variable set only in a terminal's profile, so set it for your Windows account (**Edit environment
+variables for your account**). **Settings → Claude Code** shows the file Nöbetçi uses.
 
 1. Start from the wizard's **Connect** step, or **Settings → Claude Code → Install hooks…**.
 2. Nöbetçi shows the change to the file as a **diff**: added lines in green. Your other settings and
-   other tools' hooks stay as they are. While the preview is open, nothing else on the page can
-   change what will be written.
+   other tools' hooks stay as they are. The diff is worked out on the file's own text, so if the
+   write would reformat anything else, you see that too. While the preview is open, nothing else on
+   the page can change what will be written.
 3. Look it over and click **Approve and write**. A dated backup is saved next to the file first
-   (`settings.json.bak-YYYYMMDD-HHMMSS`). If the file changed after the preview, Nöbetçi refuses and
-   offers a fresh preview.
+   (`settings.json.bak-YYYYMMDD-HHMMSS`; none when there is no file yet). Exactly the previewed
+   change is written; if the file changed after the preview, Nöbetçi refuses and offers a fresh
+   preview.
 4. Press **Settings → Claude Code → Health check**. Every line should be ✓:
    - the hooks are in `settings.json`, `PermissionRequest` and `PreToolUse` among them,
    - the relay (`nobetci-hook.exe`) is in place,
@@ -151,6 +156,12 @@ yourself; Nöbetçi does not read or send messages in other apps automatically.
 | Shortcuts | Settings → Notifications | Ctrl+Alt+N opens the island, Ctrl+Alt+D denies the request on the card. |
 | Do not disturb | The button in the island's header, or the tray menu | During a presentation or a game. Full screen goes quiet by itself. |
 
+**Settings → About** exports your settings to a file and imports them again, on this computer or
+another. An import takes only Nöbetçi's own settings (an exported file carries
+`"nobetciSettings": 1`) and refuses any other JSON, Claude Code's `settings.json` included. An
+import and **Reset to defaults** both keep the settings they replace as `settings.json.bak-<date>`
+next to the file; a reset leaves your hooks alone and doesn't bring the setup wizard back.
+
 ## 8. Update
 
 Download the new installer (check its fingerprint) and run it. Nöbetçi closes during the update;
@@ -174,11 +185,14 @@ choose **Uninstall**. The uninstaller:
    `~/.claude/settings.json`, from Codex's `hooks.json` and from `~/.cursor/hooks.json`, after
    saving a dated backup next to each one (`settings.json.bak-…`, `hooks.json.bak-…`). Nothing
    else in those files changes. This is the one write to them without a diff on screen;
-3. removes the app, the relay, the log and the **Start with Windows** entries.
+3. removes the app, the relay, the log, the **Start with Windows** entries and, if you set up the
+   [ChatGPT Web bridge](../integrations/chatgpt-web/README.md), its registration with Chrome and
+   Edge.
 
 If the hooks can't be removed (a read-only or locked file, for example), the uninstaller keeps the
 relay and the log, so Claude Code, Codex and Cursor go on working, and shows which entries to delete
-by hand; the log says what went wrong.
+by hand; the log says what went wrong. `nobetci.exe --remove-hooks` prints one line per file and
+exits with status 1 when a file couldn't be cleaned (0 when no entry of Nöbetçi's is left).
 
 Your preferences and agenda (`%APPDATA%\Nobetci`) and history (`%LOCALAPPDATA%\Nobetci\audit.jsonl`)
 stay, so a reinstall picks up where you left off. Tick **Delete the application data** in the
@@ -189,12 +203,14 @@ To review each change instead, remove the connections first in **Settings → Cl
 Remove…**, **Settings → ChatGPT → Remove connection…** and **Settings → Other agents → Remove
 connection…**.
 
-If you set up the [ChatGPT Web bridge](../integrations/chatgpt-web/README.md), remove its browser
-extension too, and its registration in PowerShell (use `Microsoft\Edge` in place of `Google\Chrome`
-for Edge):
+If you set up the ChatGPT Web bridge, remove its extension in `chrome://extensions` or
+`edge://extensions` too. The uninstallers of 2.4.1 and earlier leave the bridge's registration
+behind: before uninstalling one of those, run the unregister script in PowerShell, from the
+`integrations\chatgpt-web` folder. It removes the registration for Chrome and Edge and deletes its
+manifests:
 
 ```powershell
-Remove-Item 'HKCU:\Software\Google\Chrome\NativeMessagingHosts\io.github.tahap0l.nobetci.chatgpt'
+powershell -NoProfile -ExecutionPolicy Bypass -File .\unregister-windows.ps1
 ```
 
 ## 10. Where things live
@@ -301,12 +317,43 @@ trusted project or rules.
 
 ### My settings were reset, and a `.unreadable-…` file appeared
 
-If Nöbetçi can't read `settings.json` (a hand edit that broke the JSON, a disk error), it starts
-with the defaults, copies the file to `settings.json.unreadable-<date>` next to it and says so in
-Settings. Until you restart, it doesn't save over the original. Fix or restore the file, then
-restart Nöbetçi. `agenda.json` is treated with the same care: an entry it can't read is skipped
-and the rest are kept, and a file it can't read at all is copied to
-`agenda.json.unreadable-<date>` before anything is saved.
+If Nöbetçi can't use `settings.json` as it is (a hand edit that broke the JSON or gave a value the
+wrong type, a disk error), it starts with the defaults — or, when only some values are unreadable,
+with every value it could read — copies the file to `settings.json.unreadable-<date>` next to it,
+and opens Settings to say what happened. Until you restart, it doesn't save over the original. Fix
+or restore the file, then restart Nöbetçi.
+
+`agenda.json` gets the same care. A byte-order mark or one bad entry costs only that entry; when
+the file can't be kept exactly as it was, it is copied to `agenda.json.unreadable-<date>` before
+anything is saved; and a file that exists but can't be read (locked, or no permission) is never
+written over: adding or changing items is refused with a message until it can be read again. The
+agenda holds up to 300 items; when it is full, the oldest finished item makes room for a new one,
+and with none finished the new one is refused with a message.
+
+### Start with Windows turned itself off
+
+Nöbetçi checks Windows' own entry at every start. If you switched Nöbetçi off in Task Manager's
+**Startup apps** (**Startup** on Windows 10), or something else removed the entry, **Settings →
+General → Start with Windows** turns off to match instead of overriding your choice. Switch it on
+again there if you want it back.
+
+### "Hooks run only where Claude Code uses Git Bash"
+
+Claude Code runs hooks in Git Bash, or in PowerShell when it can't find Git Bash (the Claude desktop
+app often can't). Nöbetçi writes its hook command so that it runs in both — unless the relay's path
+in your user folder has characters no command can carry through both shells: a `$`, a backtick, an
+apostrophe, brackets and other punctuation, or spaces on a drive that keeps no short (8.3) names.
+Then the hooks are written for Git Bash only, **Settings → Claude Code** says so, and
+`nobetci.log` notes it at every start. Claude Code in a terminal or VS Code with Git for Windows
+installed still reaches Nöbetçi; where hooks run in PowerShell, such as in the desktop app, its
+requests don't.
+
+### The island takes the focus or shows up in Alt-Tab
+
+It shouldn't: on Windows the island and the desktop mascot stay out of Alt-Tab and Task View, and
+clicking them leaves your terminal or editor active. Only the island's text boxes — the assistant,
+the session search, the agenda — take the keyboard, while you type in them. If you see otherwise,
+please open an issue with your Windows version.
 
 ### Windows Defender flags the installer
 
@@ -411,7 +458,8 @@ The owl says hello just below the menu bar, and the setup wizard opens — carry
 
 ### What's different on a Mac
 
-- **A menu bar app.** No Dock icon and not in ⌘-Tab; Nöbetçi's menu sits in the menu bar.
+- **A menu bar app.** No Dock icon and not in ⌘-Tab; Nöbetçi's menu sits in the menu bar, under an
+  owl that follows the menu bar's light or dark look.
 - **The island sits below the menu bar.** On a MacBook with a notch nothing hides behind the
   camera housing.
 - **Shortcuts.** Ctrl is ⌃ Control and Alt is ⌥ Option, so the defaults are ⌃⌥N (open the
@@ -436,7 +484,9 @@ The owl says hello just below the menu bar, and the setup wizard opens — carry
 
 Download the new disk image and check it, quit Nöbetçi from the menu bar, drag the new app into
 Applications and choose **Replace**. You may have to confirm **Open Anyway** once more. Your
-settings, agenda, history and hooks stay.
+settings, agenda, history and hooks stay. Coming from 2.4.1 or earlier, the desktop mascot may move,
+or go back to its corner, once: its position is now kept in points, which stay right on displays
+with different scaling.
 
 ### Uninstall
 
@@ -494,6 +544,9 @@ buttons on **Settings → About**.
 - **Shortcuts don't work.** **Settings → Notifications → Shortcuts** shows whether another app
   already owns a combination.
 - **The island is on the wrong display.** Change **Display** in **Settings → General**.
+- **Start at login turned itself off.** Nöbetçi checks its login entry at every start; if
+  something outside Nöbetçi removed it, the switch in **Settings → General** turns off to match.
+  Switch it on again there.
 
 ## Linux
 
@@ -506,7 +559,7 @@ troubleshooting (sections 4–7 and 11) work the same way on Linux.
 | --- | --- |
 | Distribution | x86-64 with WebKitGTK 4.1: Ubuntu 22.04+, Debian 12+, Fedora 38+, Arch… |
 | Desktop | X11, or Wayland through XWayland (GNOME, KDE Plasma, Xfce, Cinnamon…) — see [Wayland](#wayland) |
-| Compositor | On X11, a compositing window manager: the island is a transparent window. GNOME, KDE Plasma and Cinnamon have one built in; on Xfce turn on **Window Manager Tweaks → Compositor**; on a bare window manager run one such as `picom` |
+| Compositor | On X11, a compositing window manager: the island is a transparent window. GNOME, KDE Plasma and Cinnamon have one built in; on Xfce turn on **Window Manager Tweaks → Compositor**; on a bare window manager run one such as `picom`. Without one, Nöbetçi cuts its window down to the island (square corners, no shadow), but the desktop mascot sits on a black square |
 | Tray | GNOME needs the AppIndicator extension (Ubuntu has it already); most other desktops have a tray |
 
 ### Install
@@ -535,15 +588,20 @@ chmod +x Nobetci-x.y.z-linux-amd64.AppImage
 ### What's different on Linux
 
 - **The window runs through X11.** Under Wayland, Nöbetçi starts itself on XWayland so the island
-  can sit at the top of the screen and stay above other windows.
+  can sit at the top of the screen and stay above other windows. Programs it opens for you — a link
+  in your browser, VS Code, the file manager — start the way they always do, natively on Wayland.
+- **The island doesn't take the keyboard.** Clicking it leaves your terminal focused; only its text
+  boxes (the assistant, the session search, the agenda) take the keyboard, while you type in them.
 - **The click guard** reads XInput2 raw events and asks the X server about the device behind every
   press: clicks from an XTEST device — what `xdotool` and similar tools use, including one a
   program adds later — are refused.
 - **Go to window** asks the window manager to raise the window that belongs to the session's
   process chain.
 - **The media card** works with every MPRIS player — Spotify, VLC, Firefox, Chromium, mpv with
-  its MPRIS plugin.
+  its MPRIS plugin. It only talks to a player that is already running; it never starts one.
 - **No voice input.** Linux has no system dictation, so the assistant has no 🎙 button there.
+- **Notifications** show a command as plain text, even where the notification server reads
+  markup: nothing in it can turn into a link.
 - **Secrets** (an optional OpenAI key) go to the Secret Service (GNOME Keyring, KWallet).
 
 ### Wayland
@@ -568,8 +626,9 @@ Logging in to an X11 session (where your desktop offers one) avoids all four.
 
 Download the new files and check them as above. Quit Nöbetçi from the tray, then install the new
 `.deb` with `sudo apt install ./Nobetci-x.y.z-linux-amd64.deb`, or replace the AppImage. If
-**Start at login** is on and the new AppImage has a different file name, switch **Start at login**
-off and on again so it points at the new file. Settings, agenda, history and hooks stay.
+**Start at login** is on and the new AppImage has a different file name, start the new one once by
+hand: Nöbetçi points its login entry at the AppImage it was started from. Settings, agenda, history
+and hooks stay.
 
 ### Uninstall
 
@@ -609,14 +668,21 @@ command.
 
 ### Troubleshooting on Linux
 
-- **A black box at the top of the screen.** There is no compositor, so the island can't be
-  transparent. Turn on your desktop's compositor or start one (`picom`), then restart Nöbetçi.
+- **A black box at the top of the screen, or square corners.** There is no compositor, so the
+  island can't be transparent. Versions after 2.4.1 cut the window down to the island instead
+  (square corners, no shadow) and say so once in the log; the desktop mascot still shows on a
+  black square. Turn on your desktop's compositor or start one (`picom`, `xcompmgr`), and Nöbetçi
+  switches to the full look by itself; or switch the desktop mascot off.
 - **No tray icon on GNOME.** Install and enable the AppIndicator extension.
 - **No sounds from the AppImage.** AppImages up to 2.4.1 carry no GStreamer audio plugins; later
   ones do. Use the `.deb`, or a newer AppImage.
 - **Shortcuts, Go to window or full-screen quiet don't work.** You are probably on Wayland: see
   [Wayland](#wayland).
+- **Start at login turned itself off.** Nöbetçi checks `~/.config/autostart/Nobetci.desktop` at
+  every start; if your desktop's autostart settings removed it, the switch in **Settings →
+  General** turns off to match. Switch it on again there.
 - **Approval refused: not a physical click.** Remote-desktop tools and `xdotool` send XTEST
   clicks, which the guard refuses. Use the real mouse, or switch off **Settings → Safety →
-  Physical click guard** (LOW and MEDIUM only).
+  Physical click guard** (LOW and MEDIUM only). If you swapped the mouse buttons (left-handed,
+  with `xmodmap` or `xinput`), the guard follows the button that acts as the primary click.
 - **The log** is `~/.local/share/nobetci/nobetci.log`.

@@ -88,14 +88,20 @@ yeniden açmak için: **Ayarlar → Hakkında → Kurulum sihirbazını yeniden 
 
 Nöbetçi, Claude Code'u **hook**'lar üzerinden görür. Hook'lar `~/.claude/settings.json`
 (`C:\Users\<sen>\.claude\settings.json`) dosyasına — Claude Code'un ayarlarını `CLAUDE_CONFIG_DIR`
-ile başka bir klasörde tutuyorsan oradaki `settings.json`'a — eklenir.
+ile başka bir klasörde tutuyorsan oradaki `settings.json`'a — eklenir. Nöbetçi bu değişkeni yalnızca
+mutlak bir yol taşıyorsa ve Nöbetçi'nin kendisi de onu görüyorsa izler: Başlat menüsünden açılan
+bir uygulama, yalnızca bir terminalin profilinde tanımlanmış bir değişkeni görmez. Bu yüzden onu
+Windows hesabın için tanımla (Başlat menüsünde "ortam değişkenleri" diye arat). Nöbetçi'nin
+kullandığı dosyayı **Ayarlar → Claude Code** gösterir.
 
 1. Sihirbazın **Bağlantı** adımında ya da **Ayarlar → Claude Code → Hook'ları kur…** ile başlat.
 2. Nöbetçi dosyada yapılacak değişikliği **fark (diff)** olarak gösterir: eklenen satırlar yeşil.
-   Diğer ayarların ve başka araçların hook'ları olduğu gibi kalır. Önizleme açıkken sayfadaki başka
-   hiçbir şey yazılacak olanı değiştiremez.
+   Diğer ayarların ve başka araçların hook'ları olduğu gibi kalır. Fark dosyanın kendi metni
+   üzerinden çıkarılır; yazma işlemi başka bir şeyin biçimini değiştirecekse onu da görürsün.
+   Önizleme açıkken sayfadaki başka hiçbir şey yazılacak olanı değiştiremez.
 3. Değişikliğe göz at ve **Onayla ve yaz**'a tıkla. Yazmadan önce aynı klasöre tarihli bir yedek
-   alınır (`settings.json.bak-YYYYMMDD-HHMMSS`). Dosya önizlemeden sonra değiştiyse Nöbetçi yazmayı
+   alınır (`settings.json.bak-YYYYMMDD-HHMMSS`; henüz dosya yoksa yedek de olmaz). Yalnızca
+   önizlemede gördüğün değişiklik yazılır; dosya önizlemeden sonra değiştiyse Nöbetçi yazmayı
    reddeder ve yeni bir önizleme sunar.
 4. **Ayarlar → Claude Code → Sağlık testi**'ne bas. Tüm satırlar ✓ olmalı:
    - hook'lar `settings.json`'da, `PermissionRequest` ve `PreToolUse` da aralarında,
@@ -153,6 +159,13 @@ mesajlarını otomatik okumaz ya da göndermez.
 | Kısayollar | Ayarlar → Bildirimler | Ctrl+Alt+N adayı açar, Ctrl+Alt+D karttaki isteği reddeder. |
 | Rahatsız etme | Adanın başlığındaki buton ya da tepsi menüsü | Sunum ya da oyun sırasında. Tam ekranda zaten kendiliğinden sessizleşir. |
 
+**Ayarlar → Hakkında** ayarlarını bir dosyaya dışa aktarır ve bu bilgisayarda ya da başka birinde
+yeniden içe aktarır. İçe aktarma yalnızca Nöbetçi'nin kendi ayarlarını kabul eder (dışa aktarılan
+dosyada `"nobetciSettings": 1` bulunur); Claude Code'un `settings.json` dosyası dahil başka hiçbir
+JSON'u almaz. İçe aktarma da **Varsayılanlara dön** de yerini aldıkları ayarları dosyanın yanında
+`settings.json.bak-<tarih>` adıyla saklar; sıfırlama hook'larına dokunmaz ve kurulum sihirbazını
+geri getirmez.
+
 ## 8. Güncelleme
 
 Yeni sürümün kurulum programını indirip (parmak izini doğrulayarak) çalıştırman yeterli. Güncelleme
@@ -177,11 +190,15 @@ Yeni bir sürüm hook'ların ihtiyacını değiştirirse **Ayarlar → Claude Co
    her birinin yanına tarihli bir yedek aldıktan sonra (`settings.json.bak-…`, `hooks.json.bak-…`)
    siler. Bu dosyalarda başka hiçbir şey değişmez. Onlara ekranda fark göstermeden yapılan tek yazma
    budur;
-3. uygulamayı, relay'i, kayıt dosyasını ve **Windows açılınca başlat** girdilerini siler.
+3. uygulamayı, relay'i, kayıt dosyasını, **Windows açılınca başlat** girdilerini ve
+   [ChatGPT Web köprüsünü](../integrations/chatgpt-web/README.tr.md) kurduysan onun Chrome ve
+   Edge'deki kaydını siler.
 
 Hook'lar kaldırılamazsa (örneğin salt okunur ya da kilitli bir dosya yüzünden) kaldırıcı relay'i ve
 kayıt dosyasını yerinde bırakır; böylece Claude Code, Codex ve Cursor çalışmaya devam eder. Hangi
 girdileri elle sileceğini de gösterir; neyin ters gittiğini kayıt dosyası söyler.
+`nobetci.exe --remove-hooks` her dosya için bir satır yazar; temizleyemediği bir dosya olursa 1
+koduyla, Nöbetçi'ye ait hiçbir girdi kalmadıysa 0 koduyla çıkar.
 
 Ayarların ve ajandan (`%APPDATA%\Nobetci`) ve geçmişin (`%LOCALAPPDATA%\Nobetci\audit.jsonl`)
 kalır; yeniden kurarsan kaldığın yerden devam eder. `%APPDATA%\Nobetci`, `%LOCALAPPDATA%\Nobetci`
@@ -192,11 +209,13 @@ Her değişikliği incelemek istersen önce bağlantıları **Ayarlar → Claude
 **Ayarlar → ChatGPT → Bağlantıyı kaldır…** ve **Ayarlar → Diğer ajanlar → Bağlantıyı kaldır…** ile
 kaldır.
 
-[ChatGPT Web köprüsünü](../integrations/chatgpt-web/README.md) kurduysan tarayıcı eklentisini de,
-PowerShell'de kaydını da kaldır (Edge için `Google\Chrome` yerine `Microsoft\Edge` yaz):
+ChatGPT Web köprüsünü kurduysan eklentisini de `chrome://extensions` ya da `edge://extensions`
+sayfasından kaldır. 2.4.1 ve önceki sürümlerin kaldırıcıları köprünün kaydını geride bırakır: bu
+sürümlerden birini kaldırmadan önce `integrations\chatgpt-web` klasöründe PowerShell'de kayıt
+silme betiğini çalıştır. Betik kaydı Chrome ve Edge için kaldırır ve manifest dosyalarını siler:
 
 ```powershell
-Remove-Item 'HKCU:\Software\Google\Chrome\NativeMessagingHosts\io.github.tahap0l.nobetci.chatgpt'
+powershell -NoProfile -ExecutionPolicy Bypass -File .\unregister-windows.ps1
 ```
 
 ## 10. Dosyalar nerede?
@@ -305,12 +324,43 @@ zaman doğrudan geri döner) ya da DÜŞÜK istekleri güvenilir bir proje veya 
 
 ### Ayarlarım sıfırlandı ve bir `.unreadable-…` dosyası belirdi
 
-Nöbetçi `settings.json`'ı okuyamazsa (JSON'u bozan bir elle düzenleme, bir disk hatası) varsayılan
-ayarlarla açılır, dosyayı yanına `settings.json.unreadable-<tarih>` adıyla kopyalar ve bunu
-Ayarlar'da söyler. Yeniden başlatana kadar asıl dosyanın üzerine kaydetmez. Dosyayı düzelt ya da
-geri yükle, sonra Nöbetçi'yi yeniden başlat. `agenda.json` için de aynı özen gösterilir: okunamayan
-bir öğe atlanır ve diğerleri korunur; hiç okunamayan bir dosya ise herhangi bir kayıttan önce
-`agenda.json.unreadable-<tarih>` adıyla kopyalanır.
+Nöbetçi `settings.json`'ı olduğu gibi kullanamazsa (JSON'u bozan ya da bir ayara yanlış türde değer
+yazan bir elle düzenleme, bir disk hatası) varsayılan ayarlarla — yalnızca bazı değerler
+okunamıyorsa okuyabildiği her değerle — açılır, dosyayı yanına `settings.json.unreadable-<tarih>`
+adıyla kopyalar ve ne olduğunu söylemek için Ayarlar'ı açar. Yeniden başlatana kadar asıl dosyanın
+üzerine kaydetmez. Dosyayı düzelt ya da geri yükle, sonra Nöbetçi'yi yeniden başlat.
+
+`agenda.json` için de aynı özen gösterilir. Bir bayt sırası işareti (BOM) ya da bozuk bir öğe
+yalnızca o öğeyi kaybettirir; dosya olduğu gibi korunamıyorsa herhangi bir kayıttan önce
+`agenda.json.unreadable-<tarih>` adıyla kopyalanır; var olan ama okunamayan (kilitli ya da izni
+olmayan) bir dosyanın üzerine asla yazılmaz: dosya yeniden okunabilene kadar öğe eklemek ya da
+değiştirmek bir mesajla reddedilir. Ajanda en çok 300 öğe tutar; dolunca yeni öğeye en eski
+tamamlanmış öğe yer açar, tamamlanmış öğe yoksa yeni öğe bir mesajla reddedilir.
+
+### Windows açılınca başlat kendiliğinden kapandı
+
+Nöbetçi her açılışta Windows'un kendi kaydına bakar. Nöbetçi'yi Görev Yöneticisi'nin **Başlangıç
+uygulamaları** sekmesinden (Windows 10'da **Başlangıç**) kapattıysan ya da başka bir şey kaydı
+sildiyse **Ayarlar → Genel → Windows açılınca başlat** senin seçimini ezmek yerine ona uyar ve
+kapanır. İstersen oradan yeniden aç.
+
+### "Hook'lar yalnızca Claude Code'un Git Bash kullandığı yerde çalışır"
+
+Claude Code hook'ları Git Bash'te, Git Bash'i bulamazsa PowerShell'de çalıştırır (Claude masaüstü
+uygulaması çoğu zaman bulamaz). Nöbetçi hook komutunu ikisinde de çalışacak şekilde yazar; ama
+relay'in kullanıcı klasörünün altındaki yolunda iki kabuktan da geçemeyen karakterler varsa — `$`,
+ters tırnak, kesme işareti, parantez gibi işaretler ya da kısa (8.3) adlar tutmayan bir sürücüde
+boşluk — hook'lar yalnızca Git Bash için yazılır, **Ayarlar → Claude Code** bunu söyler ve
+`nobetci.log` her açılışta not eder. Git for Windows kuruluyken terminalde ya da VS Code'da çalışan
+Claude Code yine Nöbetçi'ye ulaşır; hook'ların PowerShell'de çalıştığı yerde, örneğin masaüstü
+uygulamasında, istekler ulaşmaz.
+
+### Ada odağı alıyor ya da Alt-Tab'da görünüyor
+
+Bunu yapmamalı: Windows'ta ada ve masaüstü maskotu Alt-Tab'da ve Görev Görünümü'nde yer almaz,
+onlara tıklamak terminalini ya da editörünü etkin bırakır. Klavyeyi yalnızca adanın yazı kutuları —
+asistan, oturum araması, ajanda — sen içlerine yazarken alır. Başka türlü görüyorsan lütfen Windows
+sürümünle bir issue aç.
 
 ### Windows Defender kurulum programını işaretledi
 
@@ -415,7 +465,7 @@ Baykuş menü çubuğunun hemen altında selam verir ve kurulum sihirbazı açı
 ### Mac'te neler farklı
 
 - **Menü çubuğu uygulaması.** Dock'ta simgesi yok, ⌘-Sekme'de görünmez; Nöbetçi'nin menüsü menü
-  çubuğunda.
+  çubuğunda, menü çubuğunun açık ya da koyu görünümüne uyan bir baykuşun altında.
 - **Ada menü çubuğunun altında durur.** Çentikli MacBook'larda kamera çıkıntısının arkasında
   hiçbir şey kaybolmaz.
 - **Kısayollar.** Ctrl, ⌃ Control; Alt, ⌥ Option tuşudur. Varsayılanlar ⌃⌥N (adayı aç) ve ⌃⌥D
@@ -440,7 +490,9 @@ Baykuş menü çubuğunun hemen altında selam verir ve kurulum sihirbazı açı
 
 Yeni disk görüntüsünü indirip doğrula, Nöbetçi'den menü çubuğundan çık, yeni uygulamayı
 Uygulamalar'a sürükle ve **Değiştir**'i seç. **Yine de Aç**'ı bir kez daha onaylaman gerekebilir.
-Ayarların, ajandan, geçmişin ve hook'ların korunur.
+Ayarların, ajandan, geçmişin ve hook'ların korunur. 2.4.1 ya da daha eski bir sürümden geliyorsan
+masaüstü maskotu bir kereliğine yer değiştirebilir ya da köşesine dönebilir: konumu artık nokta
+(point) cinsinden tutuluyor; bu, ölçeklemesi farklı ekranlarda da doğru kalır.
 
 ### Kaldırma
 
@@ -499,6 +551,9 @@ Finder `~/Library` klasörünü gizler: **Git → Klasöre Git…** (⇧⌘G) il
 - **Kısayollar çalışmıyor.** **Ayarlar → Bildirimler → Kısayollar**, bir kombinasyonu başka bir
   uygulamanın kullanıp kullanmadığını gösterir.
 - **Ada istediğim ekranda değil.** **Ayarlar → Genel**'den **Ekran**'ı değiştir.
+- **Oturum açınca başlat kendiliğinden kapandı.** Nöbetçi her açılışta oturum açılış kaydına bakar;
+  Nöbetçi dışında bir şey onu kaldırdıysa **Ayarlar → Genel**'deki anahtar da buna uyup kapanır.
+  Oradan yeniden aç.
 
 ## Linux
 
@@ -511,7 +566,7 @@ Kurulum sihirbazı, Claude Code'a bağlama, deneme, önerilen ayarlar ve sorun g
 | --- | --- |
 | Dağıtım | WebKitGTK 4.1 olan x86-64: Ubuntu 22.04+, Debian 12+, Fedora 38+, Arch… |
 | Masaüstü | X11 ya da XWayland üzerinden Wayland (GNOME, KDE Plasma, Xfce, Cinnamon…) — bkz. [Wayland](#wayland) |
-| Bileşikleştirici | X11'de bileşikleştirme yapan bir pencere yöneticisi: ada saydam bir penceredir. GNOME, KDE Plasma ve Cinnamon'da hazır gelir; Xfce'de pencere yöneticisinin ince ayarlarındaki (**Window Manager Tweaks**) **Compositor** sekmesinden aç; yalın bir pencere yöneticisinde `picom` gibi birini çalıştır |
+| Bileşikleştirici | X11'de bileşikleştirme yapan bir pencere yöneticisi: ada saydam bir penceredir. GNOME, KDE Plasma ve Cinnamon'da hazır gelir; Xfce'de pencere yöneticisinin ince ayarlarındaki (**Window Manager Tweaks**) **Compositor** sekmesinden aç; yalın bir pencere yöneticisinde `picom` gibi birini çalıştır. Yoksa Nöbetçi penceresini adanın kendisine kırpar (köşeler kare, gölge yok), ama masaüstü maskotu siyah bir karenin üstünde durur |
 | Tepsi | GNOME'da AppIndicator eklentisi gerekir (Ubuntu'da zaten var); diğer masaüstlerinin çoğunda tepsi var |
 
 ### Kurulum
@@ -539,15 +594,20 @@ chmod +x Nobetci-x.y.z-linux-amd64.AppImage
 ### Linux'ta neler farklı
 
 - **Pencere X11 üzerinden çalışır.** Wayland'de Nöbetçi kendini XWayland'de başlatır; böylece ada
-  ekranın üstüne yerleşip diğer pencerelerin üstünde kalabilir.
+  ekranın üstüne yerleşip diğer pencerelerin üstünde kalabilir. Senin için açtığı programlar —
+  tarayıcıda bir bağlantı, VS Code, dosya yöneticisi — her zamanki gibi, doğrudan Wayland'de açılır.
+- **Ada klavyeyi almaz.** Ona tıklamak terminalini odakta bırakır; klavyeyi yalnızca yazı kutuları
+  (asistan, oturum araması, ajanda), sen içlerine yazarken alır.
 - **Tıklama koruması** XInput2 ham olaylarını okur ve her basışta arkasındaki aygıtı X sunucusuna
   sorar: XTEST aygıtından gelen tıklamalar — `xdotool` gibi araçların kullandığı, bir programın
   sonradan eklediği dahil — reddedilir.
 - **Pencereye git**, pencere yöneticisinden oturumun süreç zincirine ait pencereyi öne getirmesini
   ister.
 - **Medya kartı** MPRIS destekleyen her oynatıcıyla çalışır — Spotify, VLC, Firefox, Chromium,
-  MPRIS eklentili mpv.
+  MPRIS eklentili mpv. Yalnızca zaten çalışan bir oynatıcıyla konuşur; hiçbirini kendisi başlatmaz.
 - **Sesle yazma yok.** Linux'ta sistem dikte özelliği olmadığı için asistanda 🎙 düğmesi yok.
+- **Bildirimler** bir komutu, bildirim sunucusu biçimlendirme okusa bile düz metin olarak gösterir:
+  içindeki hiçbir şey bağlantıya dönüşemez.
 - **Gizli bilgiler** (isteğe bağlı OpenAI anahtarı) Secret Service'e (GNOME Keyring, KWallet) gider.
 
 ### Wayland
@@ -573,8 +633,9 @@ Masaüstün sunuyorsa bir X11 oturumuyla giriş yapmak bu dördünü de ortadan 
 
 Yeni dosyaları indirip yukarıdaki gibi doğrula. Nöbetçi'den tepsiden çık, sonra yeni `.deb`'i
 `sudo apt install ./Nobetci-x.y.z-linux-amd64.deb` ile kur ya da AppImage'ı değiştir. **Oturum
-açınca başlat** açıksa ve yeni AppImage'ın dosya adı farklıysa, yeni dosyayı göstersin diye **Oturum
-açınca başlat**'ı kapatıp yeniden aç. Ayarlar, ajanda, geçmiş ve hook'lar korunur.
+açınca başlat** açıksa ve yeni AppImage'ın dosya adı farklıysa yenisini bir kez elle aç: Nöbetçi
+oturum açılış kaydını başlatıldığı AppImage'a yönlendirir. Ayarlar, ajanda, geçmiş ve hook'lar
+korunur.
 
 ### Kaldırma
 
@@ -614,15 +675,22 @@ hook hatası bildirir, Cursor da her kabuk ve MCP komutunu engeller.
 
 ### Linux'ta sorun giderme
 
-- **Ekranın üstünde siyah bir kutu.** Bileşikleştirici yok, bu yüzden ada saydam olamıyor.
-  Masaüstünün bileşikleştiricisini aç ya da bir tane başlat (`picom`), sonra Nöbetçi'yi yeniden
-  başlat.
+- **Ekranın üstünde siyah bir kutu ya da kare köşeler.** Bileşikleştirici yok, bu yüzden ada
+  saydam olamıyor. 2.4.1'den sonraki sürümler pencereyi adanın kendisine kırpar (köşeler kare,
+  gölge yok) ve bunu kayıt dosyasına bir kez yazar; masaüstü maskotu yine siyah bir karenin
+  üstünde görünür. Masaüstünün bileşikleştiricisini aç ya da bir tane başlat (`picom`,
+  `xcompmgr`); Nöbetçi tam görünüme kendiliğinden geçer. Ya da masaüstü maskotunu kapat.
 - **GNOME'da tepsi simgesi yok.** AppIndicator eklentisini kur ve etkinleştir.
 - **AppImage'dan ses gelmiyor.** 2.4.1'e kadarki AppImage'lar GStreamer ses eklentilerini taşımaz;
   sonrakiler taşır. `.deb`'i ya da daha yeni bir AppImage'ı kullan.
 - **Kısayollar, Pencereye git ya da tam ekran sessizliği çalışmıyor.** Büyük olasılıkla
   Wayland'desin: bkz. [Wayland](#wayland).
+- **Oturum açınca başlat kendiliğinden kapandı.** Nöbetçi her açılışta
+  `~/.config/autostart/Nobetci.desktop` dosyasına bakar; masaüstünün otomatik başlatma ayarları onu
+  kaldırdıysa **Ayarlar → Genel**'deki anahtar da buna uyup kapanır. Oradan yeniden aç.
 - **Onay reddedildi: fiziksel tıklama değil.** Uzak masaüstü araçları ve `xdotool` XTEST
   tıklamaları gönderir; koruma bunları reddeder. Gerçek fareyi kullan ya da **Ayarlar → Güvenlik →
-  Fiziksel tıklama koruması**'nı kapat (yalnızca DÜŞÜK ve ORTA için).
+  Fiziksel tıklama koruması**'nı kapat (yalnızca DÜŞÜK ve ORTA için). Fare düğmelerini yer
+  değiştirdiysen (solak kullanım, `xmodmap` ya da `xinput` ile) koruma birincil tıklama işini gören
+  düğmeyi izler.
 - **Kayıt dosyası** `~/.local/share/nobetci/nobetci.log`.

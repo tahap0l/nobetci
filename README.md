@@ -31,8 +31,8 @@ Nöbetçi sits at the top of the screen. Click the compact island to open your a
 - **Agent monitoring.** Track Claude Code, Codex, and Cursor sessions and supported permission requests. On Windows, you can also see ChatGPT response status from Chrome or Edge (the bridge registers on Windows only). [ChatGPT Web setup](integrations/chatgpt-web/README.md)
 - **Five island tabs.** **Media** (with the focus timer), **Agenda**, **Calendar**, **Weather** and **System**: click a tab, or scroll or swipe through the cards. Browse weeks with the calendar arrows and see the selected city's conditions and temperature in a table.
 - **Media and focus.** The player shows what is playing, with the artwork blurred behind the card, a live time bar you can click to seek, and play, pause, next and previous. It follows the system media controls on Windows (Spotify, browsers…), Spotify and Music on macOS, and every MPRIS player on Linux (Spotify, VLC, browsers…). The 25-minute focus timer can be paused or reset. Choose a weather city and enable media under **Settings → General → Island widgets**.
-- **An assistant on the island.** Press `Ctrl+Alt+Space` (or the ✦ button), write what you want and send it to ChatGPT, Claude, Gemini, Perplexity, Copilot, Grok, DeepSeek or Mistral — the app or website opens with your message, and it is on the clipboard too. On the web, ChatGPT, Claude, Perplexity, Copilot and Grok get the message in the page address, so it reaches them as soon as the page opens and some may answer right away; elsewhere you press send. **Here** answers on the island itself with your Prompt Studio model. Slash commands control Nöbetçi from the same box: `/pause`, `/dnd`, `/focus 25`, `/play`, `/next`, `/prev`, `/settings`; ↑ and ↓ bring back earlier messages. Esc, ✕ or the shortcut close it again.
-- **Voice and ready-made prompts.** The 🎙 button starts your system's dictation (Windows voice typing, macOS Dictation; Linux has none, so there is no button there); **Prompt ideas** gives beginners about twenty fill-in-the-blanks prompts. If the Claude, ChatGPT, Perplexity or Copilot app is installed, the message opens there instead of the browser.
+- **An assistant on the island.** Press `Ctrl+Alt+Space` (or the ✦ button), write what you want and send it to ChatGPT, Claude, Gemini, Perplexity, Copilot, Grok, DeepSeek or Mistral — the app or website opens, and your message is on the clipboard too. ChatGPT, Claude, Perplexity, Copilot and Grok on the web, and the ChatGPT and Perplexity apps, get the message as they open and may answer right away (on the web it travels in the page address, so your browser history keeps it); the Claude app only puts it in its text box for you to send; Gemini, DeepSeek, Mistral and the Copilot app open without it, so you paste it, as you do with a message too long for an address. **Here** answers on the island itself with your Prompt Studio model. Slash commands control Nöbetçi from the same box: `/pause`, `/dnd`, `/focus 25`, `/play`, `/next`, `/prev`, `/settings` (the media commands work even with the media card off, on a player that is already running); ↑ and ↓ bring back earlier messages. Esc, ✕ or the shortcut close it again.
+- **Voice and ready-made prompts.** The 🎙 button starts your system's dictation (Windows voice typing, macOS Dictation; Linux has none, so there is no button there); **Prompt ideas** gives beginners about twenty fill-in-the-blanks prompts. If the Claude, ChatGPT, Perplexity or Copilot app is installed, the assistant opens it instead of the browser (**Settings → General → Assistant → Use installed apps**).
 - **Agenda, calendar, weather and system.** Note what to do on a day, with an optional reminder time; see busy days on the calendar; an animated forecast for the next twelve hours; and live CPU, RAM and GPU load.
 
 <p align="center">
@@ -132,7 +132,9 @@ edge of the screen.
   the OpenAI API. Review and copy the result yourself — it is never sent to an agent automatically.
 - **And the rest.** Global hotkeys, a hook health check through the real relay, a choice of which
   hook events to listen to, per-category risk switches, island placement, settings import and
-  export, and an English or Turkish UI that follows your system language.
+  export (an import takes only Nöbetçi's own settings files, and both an import and a reset keep a
+  dated copy of the settings they replace), and an English or Turkish UI that follows your system
+  language.
 
 ### 🔒 Privacy
 
@@ -265,8 +267,10 @@ Nöbetçi runs on X11 and, through XWayland, on Wayland desktops (GNOME, KDE Pla
 Cinnamon…). It needs WebKitGTK 4.1, which current Ubuntu, Debian, Fedora and Arch ship, and — on
 X11 — a compositing window manager, because the island is a transparent window. GNOME, KDE Plasma
 and Cinnamon composite by themselves; on Xfce turn on **Window Manager Tweaks → Compositor**, and
-on a bare window manager run a compositor such as `picom`. Without one the island can show up as a
-black box at the top of the screen.
+on a bare window manager run a compositor such as `picom`. Without one, Nöbetçi cuts its window
+down to the island (square corners, no shadow; up to 2.4.1 it showed as a black box at the top of
+the screen), and the desktop mascot sits on a black square, so start a compositor or switch the
+mascot off.
 
 1. Download `Nobetci-x.y.z-linux-amd64.deb` (Debian, Ubuntu, Mint…) or
    `Nobetci-x.y.z-linux-amd64.AppImage` (any distribution) and `SHA256SUMS.txt` from the
@@ -287,8 +291,9 @@ it already). The relay's socket is `~/.local/state/nobetci/nobetci.sock`, settin
 On a **Wayland** session (the default on current Ubuntu, Fedora and KDE Plasma) Nöbetçi's window
 runs on XWayland, and three things only see X11 windows: global shortcuts work only while an X11
 window has the focus, **Go to window** can't find terminals that run natively on Wayland (it opens
-the session's folder instead), and quiet in full screen doesn't notice native Wayland apps. The
-[installation guide](docs/install.md#linux) has the details.
+the session's folder instead), and quiet in full screen doesn't notice native Wayland apps.
+Programs Nöbetçi opens for you — links, VS Code, the file manager — still start natively on
+Wayland. The [installation guide](docs/install.md#linux) has the details.
 
 ### Build from source
 
@@ -323,7 +328,9 @@ from the notification area (the menu bar on a Mac). On the very first launch a s
 welcome wizard opens as well: pick a language, connect Claude Code, run a health check, set the
 safety basics, done. You can skip it — everything in it is also in Settings.
 
-Nöbetçi can only see Claude Code once its hooks are in `~/.claude/settings.json`. The wizard's
+Nöbetçi can only see Claude Code once its hooks are in `~/.claude/settings.json` (or in
+`$CLAUDE_CONFIG_DIR/settings.json`, if you keep Claude Code's settings in a folder of your own and
+Nöbetçi sees that variable too; **Settings → Claude Code** shows which file it uses). The wizard's
 **Connect** step — or **Settings → Claude Code → Install hooks…** at any time — adds them the
 careful way:
 
@@ -378,6 +385,10 @@ rewrite it before the agent receives it.
 Click a session's row for its detail: a timeline of recent steps, the files it changed with their
 diffs, counters, and **Go to window**. The assistant opens with `Ctrl+Alt+Space` or the ✦ button;
 Esc, ✕ or the shortcut close it again.
+
+The island doesn't take the keyboard: clicking it, or the desktop mascot, leaves your terminal or
+editor active, and on Windows neither shows up in Alt-Tab. Only the island's text boxes — the
+assistant, the session search, the agenda — take the keyboard, while you type in them.
 
 The tray icon (the menu bar icon on a Mac) has **Open Nöbetçi**, **Settings…**, **Pause / resume**,
 **Do not disturb on / off**, **Desktop mascot on / off** and **Quit**. Pausing hands every waiting request
@@ -466,7 +477,8 @@ The Turkish UI calls the levels DÜŞÜK, ORTA, YÜKSEK and KRİTİK.
   reading the macOS keychain (`security find-generic-password`, `dump-keychain`); suspicious
   built-in Windows tools such as `mshta`,
   `regsvr32 /i:`, `certutil -urlcache` or `bitsadmin /transfer`; bypassing the PowerShell
-  execution policy; credential and secret files; known exfiltration services (paste sites,
+  execution policy; credential and secret files, including a `.env` loaded into a program with
+  `--env-file` (the program can print what it loads); known exfiltration services (paste sites,
   request catchers, tunnels, chat webhooks); overly broad permissions (`chmod 777`,
   `icacls … Everyone:F`, `takeown`); shutting down or rebooting; destructive database commands;
   privileged or host-mounting Docker runs and Docker prunes; cloud deletions
@@ -549,6 +561,9 @@ How patterns match:
   always-ask and raising rules match anywhere.
 - **An empty pattern matches everything** for its tool (the "ask every time for MCP tools"
   template relies on it); the editor warns you before you save one for every tool.
+- **A path counts where it leads.** For a file, an allow rule or one that lowers the level (and a
+  "don't ask again" grant) matches only the path as it resolves, so `..` can't climb out of the
+  folder a rule names; deny, always-ask and raising rules match it either way.
 
 The templates are a good start: allow `npm test` and read-only git commands, forbid
 `git push --force` and package publishing, keep Claude away from `.env` files, make `rm -rf`
@@ -710,7 +725,8 @@ command until its entries are removed.
 
 `nobetci --remove-hooks` removes only Nöbetçi's own entries from all three files, leaves every
 other setting and every other tool's hooks alone, and saves a dated backup next to each file
-(`settings.json.bak-…`, `hooks.json.bak-…`). It shows no diff — it is the uninstaller's command.
+(`settings.json.bak-…`, `hooks.json.bak-…`). It shows no diff — it is the uninstaller's command —
+but prints one line per file, and exits with status 1 if a file couldn't be cleaned.
 (If an agent asks to run it, Nöbetçi scores it CRITICAL: only you should.) To review each change
 instead, use **Settings → Claude Code → Remove…**, **Settings → ChatGPT → Remove connection…**
 and **Settings → Other agents → Remove connection…**.
@@ -722,7 +738,9 @@ and choose **Uninstall**. The uninstaller:
 
 1. asks you to close Nöbetçi if it is running — **Cancel** there leaves everything as it was;
 2. runs `nobetci.exe --remove-hooks` (above) on the Claude Code, Codex and Cursor files;
-3. removes the app, the relay (`%LOCALAPPDATA%\Nobetci\bin`), the log and **Start with Windows**.
+3. removes the app, the relay (`%LOCALAPPDATA%\Nobetci\bin`), the log, **Start with Windows** and,
+   if you set up the [ChatGPT Web bridge](integrations/chatgpt-web/README.md), its registration with
+   Chrome and Edge (the extension itself you remove in the browser).
 
 If removing the hooks fails, the relay and the log stay where they are, so Claude Code, Codex and
 Cursor keep working, and a message says which entries to delete by hand.
