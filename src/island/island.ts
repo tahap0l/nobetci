@@ -8,7 +8,7 @@ import { OwlGreeting } from "../baykus/greeting";
 import { Spring, Tracked, clamp } from "../core/anim";
 import { Bridge, IS_TAURI, IslandBridge, onEvent, type Anchor, type DecisionOptions, type InteractiveResponse } from "../core/bridge";
 import { Sound } from "../core/sound";
-import { State, isPlainLow, type FlashTone, type IslandMode, type IslandView } from "../core/state";
+import { State, handBackTo, isPlainLow, type FlashTone, type IslandMode, type IslandView } from "../core/state";
 import { t } from "../i18n/island";
 import { h } from "../ui/dom";
 import { buildCompact, buildViews, drawMinis, type ViewActions, type ViewHost } from "../ui/views";
@@ -665,9 +665,12 @@ export class Island {
   }
 
   private handToTerminal(requestId: string) {
+    // The note names the place the card's button named: Cursor, the Claude app or the terminal.
+    const a = State.approvals.find((x) => x.requestId === requestId);
+    const place = handBackTo(a && State.session(a.sessionId));
     void Bridge.approvalDecline(requestId);
     Sound.play("blip");
-    this.finishApproval(requestId, t("out.toTerminal"));
+    this.finishApproval(requestId, t(place === "cursor" ? "out.toCursor" : place === "app" ? "out.toApp" : "out.toTerminal"));
   }
 
   private finishApproval(requestId: string, note: string) {

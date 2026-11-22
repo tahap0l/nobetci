@@ -244,6 +244,8 @@ const tr = {
   "out.allowedRemember": "İzin verildi (bu oturumda tekrar sorulmayacak)",
   "out.allowed": "İzin verildi",
   "out.toTerminal": "Terminale bırakıldı",
+  "out.toCursor": "Cursor'a bırakıldı",
+  "out.toApp": "Claude uygulamasına bırakıldı",
   "out.fellBack": "Terminale düştü",
 
   // Greeting
@@ -523,6 +525,8 @@ const en: { [K in keyof typeof tr]: string } = {
   "out.allowedRemember": "Allowed (won't ask again this session)",
   "out.allowed": "Allowed",
   "out.toTerminal": "Handed to the terminal",
+  "out.toCursor": "Handed to Cursor",
+  "out.toApp": "Handed to the Claude app",
   "out.fellBack": "Fell back to the terminal",
 
   "greet.text": "On watch!",

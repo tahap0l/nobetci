@@ -12,7 +12,7 @@ import {
 } from "../core/bridge";
 import { Sound } from "../core/sound";
 import {
-  LEVEL_ORDER, SESSION_QUIET_MS, State, isPlainLow, needsHold,
+  LEVEL_ORDER, SESSION_QUIET_MS, State, handBackTo, isPlainLow, needsHold,
   type Approval, type FlashTone, type IslandView, type Session, type SessionState,
 } from "../core/state";
 import { t } from "../i18n/island";
@@ -1644,12 +1644,12 @@ function buildApproval(actions: ViewActions): ViewHost {
     // A session from the Claude desktop app asks in its own window, not a
     // terminal: its button says so, with the app's icon rather than a prompt.
     // So does Cursor, which shows its own prompt when Nöbetçi hands a request
-    // back (the relay answers "ask", D3).
-    const inApp = session?.terminal === "Claude";
-    const inCursor = session?.agent === "Cursor";
-    termIcon.replaceChildren(icon(inApp || inCursor ? ICON.window : ICON.terminal, 13));
-    termLabel.textContent = t(inCursor ? "ap.toCursor" : inApp ? "ap.toApp" : "ap.toTerminal");
-    termBtn.title = t(inCursor ? "ap.toCursorTitle" : inApp ? "ap.toAppTitle" : "ap.toTerminalTitle");
+    // back (the relay answers "ask", D3). The note left after the hand-off
+    // names the same place (`handBackTo`, island.ts).
+    const place = handBackTo(session);
+    termIcon.replaceChildren(icon(place === "terminal" ? ICON.terminal : ICON.window, 13));
+    termLabel.textContent = t(place === "cursor" ? "ap.toCursor" : place === "app" ? "ap.toApp" : "ap.toTerminal");
+    termBtn.title = t(place === "cursor" ? "ap.toCursorTitle" : place === "app" ? "ap.toAppTitle" : "ap.toTerminalTitle");
     // The next request comes in with a short fade, so the hand-over is seen (approvals#12).
     if (handOver) {
       el.classList.remove("card-in");

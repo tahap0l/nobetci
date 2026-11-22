@@ -4,7 +4,7 @@
 // behind import.meta.env.DEV or VITE_WEB_DEMO, so the app's build drops this file.
 // The data is made up — neutral paths and project names, fit for screenshots.
 
-import { OwlEngine, prefersReducedMotion, type OwlEmote, type OwlMood } from "./baykus/owl";
+import { OwlEngine, type OwlEmote, type OwlMood } from "./baykus/owl";
 import { Bridge, type RiskAssessment, type RiskFinding } from "./core/bridge";
 import { applyMascotPalette, MASCOT_THEMES, type MascotTheme } from "./core/mascot-theme";
 import { State } from "./core/state";
@@ -462,9 +462,12 @@ function showCard(page: string) {
 
 /**
  * The website's hero: a loop through what the island does — sessions, a
- * critical request, the cards, the assistant — a few seconds each. With the
- * system's "reduce motion" setting it is one still scene instead: the sessions
- * with the music and weather cards (website#20).
+ * critical request, the cards, the assistant — a few seconds each.
+ *
+ * It plays whenever it is loaded, "reduce motion" or not: the page decides.
+ * With reduce motion the website shows a still scene and loads the tour only
+ * when the visitor asks for it (Play, or the lab's Tour), so refusing here
+ * would break exactly that request (website#20, live-demo.js).
  */
 function tour(island: Island) {
   // Nobody hovers a frame on a web page: keep the island open.
@@ -474,7 +477,6 @@ function tour(island: Island) {
     if (island.fsm.state !== "home") island.fsm.forceHome();
   };
   keepOpen();
-  if (prefersReducedMotion()) return;
   const back = () => {
     State.approvals = [];
     const s = State.session("b");
@@ -506,9 +508,8 @@ function tour(island: Island) {
   const next = () => {
     const [wait, step] = steps[i];
     window.setTimeout(() => {
-      // A visitor clicking inside the frame takes over: the tour stops. So does
-      // "reduce motion" switched on meanwhile: the scene on screen stays.
-      if (document.body.dataset.tourStopped || prefersReducedMotion()) return;
+      // A visitor clicking inside the frame takes over: the tour stops.
+      if (document.body.dataset.tourStopped) return;
       step();
       keepOpen();
       i = (i + 1) % steps.length;

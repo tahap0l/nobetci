@@ -161,6 +161,18 @@ export function isPlainLow(a: Approval): boolean {
   return a.kind === "permission" && a.risk.level === "low" && (a.risk.engineLevel ?? a.risk.level) === "low";
 }
 
+/**
+ * Where a request goes when the island hands it back: Cursor shows its own
+ * prompt (the relay answers "ask", D3), a session of the Claude desktop app
+ * asks in the app's window, anything else in its terminal. The card's button
+ * and the note the hand-off leaves on the session both follow this.
+ */
+export function handBackTo(s: Session | undefined): "cursor" | "app" | "terminal" {
+  if (s?.agent === "Cursor") return "cursor";
+  if (s?.terminal === "Claude") return "app";
+  return "terminal";
+}
+
 type Listener = () => void;
 
 class AppState {
