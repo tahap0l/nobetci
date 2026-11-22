@@ -10,8 +10,11 @@ import { flush, replaceAll } from "../store";
 import { button, card, inlineConfirm, notice } from "../ui";
 import { openWizard } from "../wizard";
 
-/** Ours are re-translated on render; Rust's error text is kept as is. */
-let message: { kind: "ok" | "error" | "info"; key?: MsgKey; path?: string; raw?: string } | null = null;
+/**
+ * Ours are re-translated on render, and so are Rust's coded errors (a file that
+ * isn't Nöbetçi's settings, say); Rust's own wording is shown as it came.
+ */
+let message: { kind: "ok" | "error" | "info"; key?: MsgKey; path?: string; err?: unknown } | null = null;
 
 function promise(ic: IconName, title: string, text: string): HTMLElement {
   return h(
@@ -24,7 +27,7 @@ function promise(ic: IconName, title: string, text: string): HTMLElement {
 
 function messageView(): HTMLElement | null {
   if (!message) return null;
-  const text = message.key ? t(message.key, { path: message.path ?? "" }) : (message.raw ?? "");
+  const text = message.key ? t(message.key, { path: message.path ?? "" }) : errText(message.err);
   return notice(message.kind, h("span", { class: "verbatim", text }));
 }
 
@@ -101,7 +104,7 @@ function render(): HTMLElement {
                 ? { kind: "ok", key: "common.savedPath", path }
                 : { kind: "info", key: "about.exportCancelled" };
             } catch (err) {
-              message = { kind: "error", raw: errText(err) };
+              message = { kind: "error", err };
             }
             rerender("hakkinda");
           },
@@ -119,7 +122,7 @@ function render(): HTMLElement {
                 message = { kind: "ok", key: "about.imported" };
               } else message = { kind: "info", key: "about.importCancelled" };
             } catch (err) {
-              message = { kind: "error", raw: errText(err) };
+              message = { kind: "error", err };
             }
             rerender("hakkinda");
           },

@@ -1,7 +1,8 @@
 # Builds the Windows installer, runs it on a GitHub Windows machine and takes a
-# screenshot of each page (and opens the macOS disk image on a Mac runner), so the installer's look can be checked without a
-# Windows PC. Runs on pull requests that touch the installer, or by hand; the
-# pictures come back as the "installer-preview" artifact.
+# screenshot of each page (and opens the macOS disk image on a Mac runner), so
+# the installer's look can be checked without a Windows PC. Runs on pull
+# requests that touch the installer, or by hand; the pictures come back as the
+# "installer-preview" and "installer-preview-mac" artifacts.
 
 name: Installer preview
 
@@ -12,9 +13,14 @@ on:
       - src-tauri/nsis/**
       - src-tauri/dmg/**
       - src-tauri/tauri.macos.conf.json
+      - src-tauri/tauri.windows.conf.json
       - src/baykus/installer-art.ts
+      - scripts/installer-art.mjs
+      - scripts/dmg-background.mjs
       - .github/workflows/installer-preview.yml
 
+# The build jobs run npm and cargo code, so their token can only read. The
+# small job at the end, which runs nothing from the repository, may write.
 permissions:
   contents: read
 
@@ -23,8 +29,6 @@ jobs:
     name: Installer screenshots (Windows)
     runs-on: windows-latest
     timeout-minutes: 60
-    permissions:
-      contents: write
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -82,33 +86,10 @@ jobs:
           path: shots/*.png
           retention-days: 7
 
-      # Also on a draft release named "installer-preview" (never published), whose
-      # files can be fetched where Actions artifacts cannot.
-      - name: Put the screenshots on the draft release
-        if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
-        continue-on-error: true
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          $tag = "installer-preview"
-          $id = gh api "repos/${{ github.repository }}/releases" --jq ".[] | select(.draft and .name == \"$tag\") | .id" | Select-Object -First 1
-          if (-not $id) {
-            $id = gh api -X POST "repos/${{ github.repository }}/releases" -f tag_name=$tag -f name=$tag -F draft=true -f body="Installer screenshots from the Installer preview workflow. Never published." --jq .id
-          }
-          foreach ($a in (gh api "repos/${{ github.repository }}/releases/$id/assets" --jq '.[] | select(.name | startswith("mac-") | not) | .id')) {
-            gh api -X DELETE "repos/${{ github.repository }}/releases/assets/$a" | Out-Null
-          }
-          foreach ($f in Get-ChildItem shots -Filter *.png) {
-            gh api -X POST "https://uploads.github.com/repos/${{ github.repository }}/releases/$id/assets?name=$($f.Name)" -H "Content-Type: image/png" --input $f.FullName | Out-Null
-          }
-
   preview-mac:
     name: Disk image screenshot (macOS)
     runs-on: macos-latest
     timeout-minutes: 60
-    permissions:
-      contents: write
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -137,7 +118,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p shots
-          dmg=$(ls release/*.dmg | head -1)
+          dmg=$(find release -maxdepth 1 -name '*.dmg' | head -1)
           hdiutil attach "$dmg" -nobrowse -noautoopen | tee attach.txt
           vol=$(grep -o '/Volumes/.*' attach.txt | head -1)
           open "$vol"
@@ -152,8 +133,33 @@ jobs:
           path: shots/*.png
           retention-days: 7
 
-      - name: Put the screenshot on the draft release
-        if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+  # Also on a draft release named "installer-preview" (never published), whose
+  # files can be fetched where Actions artifacts cannot. The only job with a
+  # token that can write, and it runs nothing from the repository.
+  draft-release:
+    name: Put the screenshots on the draft release
+    needs: [preview, preview-mac]
+    if: ${{ !cancelled() && (github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Take the Windows screenshots
+        continue-on-error: true
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: installer-preview
+          path: shots/windows
+
+      - name: Take the macOS screenshot
+        continue-on-error: true
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: installer-preview-mac
+          path: shots/mac
+
+      - name: Replace them on the draft release
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
@@ -161,9 +167,26 @@ jobs:
         run: |
           set -euo pipefail
           id=$(gh api "repos/$REPO/releases" --jq '.[] | select(.draft and .name == "installer-preview") | .id' | head -1)
-          [ -n "$id" ] || id=$(gh api -X POST "repos/$REPO/releases" -f tag_name=installer-preview -f name=installer-preview -F draft=true -f body="Installer screenshots from the Installer preview workflow. Never published." --jq .id)
-          for a in $(gh api "repos/$REPO/releases/$id/assets" --jq '.[] | select(.name | startswith("mac-")) | .id'); do
-            gh api -X DELETE "repos/$REPO/releases/assets/$a" > /dev/null
-          done
-          gh api -X POST "https://uploads.github.com/repos/$REPO/releases/$id/assets?name=mac-dmg.png" \
-            -H "Content-Type: image/png" --input shots/mac-dmg.png > /dev/null
+          if [[ -z "$id" ]]; then
+            id=$(gh api -X POST "repos/$REPO/releases" -f tag_name=installer-preview -f name=installer-preview -F draft=true \
+              -f body="Installer screenshots from the Installer preview workflow. Never published." --jq .id)
+          fi
+          # replace <jq test for the old assets to delete> <new pictures…>
+          replace() {
+            local test=$1
+            shift
+            [[ $# -gt 0 ]] || return 0
+            for asset in $(gh api "repos/$REPO/releases/$id/assets" --jq ".[] | select($test) | .id"); do
+              gh api -X DELETE "repos/$REPO/releases/assets/$asset" > /dev/null
+            done
+            for file in "$@"; do
+              gh api -X POST "https://uploads.github.com/repos/$REPO/releases/$id/assets?name=$(basename "$file")" \
+                -H "Content-Type: image/png" --input "$file" > /dev/null
+              echo "uploaded $(basename "$file")"
+            done
+          }
+          shopt -s nullglob
+          windows=(shots/windows/*.png)
+          mac=(shots/mac/*.png)
+          replace '.name | startswith("mac-") | not' "${windows[@]}"
+          replace '.name | startswith("mac-")' "${mac[@]}"

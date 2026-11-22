@@ -1,9 +1,11 @@
 ; Nöbetçi's copy of Tauri's NSIS template (tauri-cli 2.12.4,
-; crates/tauri-bundler/src/bundle/windows/nsis/installer.nsi). Three changes,
+; crates/tauri-bundler/src/bundle/windows/nsis/installer.nsi). Five changes,
 ; each marked "Nöbetçi:": the welcome and finish pages get a SHOW / LEAVE
-; function that animates the owl, and installer-ui.nsh is included after the
-; languages. When updating Tauri, take its new template and make the same three
-; changes again.
+; function that animates the owl; installer-ui.nsh is included after the
+; languages; replacing one version with another runs the old uninstaller with
+; /UPDATE, so the hooks, autostart and data stay; and the uninstaller asks
+; about a running Nöbetçi before its hook removes anything. When updating
+; Tauri, take its new template and make the same five changes again.
 
 Unicode true
 ManifestDPIAware true
@@ -381,7 +383,14 @@ Function PageLeaveReinstall
     ${Else}
       ReadRegStr $4 SHCTX "${MANUPRODUCTKEY}" ""
       ReadRegStr $R1 SHCTX "${UNINSTKEY}" "UninstallString"
-      ${IfThen} $UpdateMode = 1 ${|} StrCpy $R1 "$R1 /UPDATE" ${|} ; append /UPDATE
+      ; Nöbetçi: an upgrade or a downgrade ($R0 = 1 or -1) is an update, not the
+      ; user leaving: with /UPDATE the old uninstaller keeps the hooks, autostart
+      ; and data (every version since 0.2.0 honours it). Only "Uninstall" on the
+      ; same-version page removes everything.
+      ${If} $UpdateMode = 1
+      ${OrIf} $R0 <> 0
+        StrCpy $R1 "$R1 /UPDATE" ; append /UPDATE
+      ${EndIf}
       ${IfThen} $PassiveMode = 1 ${|} StrCpy $R1 "$R1 /P" ${|} ; append /P
       StrCpy $R1 "$R1 _?=$4" ; append uninstall directory
       ExecWait '$R1' $0
@@ -836,11 +845,13 @@ FunctionEnd
 
 Section Uninstall
 
+  ; Nöbetçi: ask about a running Nöbetçi before the hook takes anything away,
+  ; so that Cancel leaves the installation, its hooks and its relay as they were.
+  !insertmacro CheckIfAppIsRunning "$INSTDIR\${MAINBINARYNAME}.exe" "${PRODUCTNAME}"
+
   !ifmacrodef NSIS_HOOK_PREUNINSTALL
     !insertmacro NSIS_HOOK_PREUNINSTALL
   !endif
-
-  !insertmacro CheckIfAppIsRunning "$INSTDIR\${MAINBINARYNAME}.exe" "${PRODUCTNAME}"
 
   ; Delete the app directory and its content from disk
   ; Copy main executable

@@ -138,7 +138,7 @@ function dmgBackground(ctx: CanvasRenderingContext2D) {
   // Stars.
   const stars: [number, number, number][] = [
     [40, 40, 0.9], [120, 92, 0.6], [598, 58, 0.8], [520, 30, 0.6], [628, 140, 0.5], [70, 300, 0.6],
-    [610, 320, 0.7], [330, 120, 0.5], [262, 46, 0.6], [400, 332, 0.5],
+    [610, 320, 0.7], [330, 120, 0.5], [262, 46, 0.6],
   ];
   for (const [x, y, r] of stars) {
     ctx.beginPath();
@@ -200,11 +200,11 @@ function dmgBackground(ctx: CanvasRenderingContext2D) {
   ctx.fill();
 
   // Plates under Finder's icon labels: Finder writes them black in Light Mode
-  // and white in Dark Mode, and this grey keeps both readable.
+  // and white in Dark Mode, and this grey gives both at least 4.5:1.
   for (const x of [app.x, folder.x]) {
     ctx.beginPath();
     ctx.roundRect(x - 62, app.y + 71, 124, 22, 11);
-    ctx.fillStyle = "#8f8f9a";
+    ctx.fillStyle = "#75757e";
     ctx.fill();
     ctx.strokeStyle = "rgba(255, 255, 255, 0.18)";
     ctx.lineWidth = 1;
@@ -232,20 +232,34 @@ function tile(engine: OwlEngine): CanvasRenderingContext2D {
   return ctx;
 }
 
-/**
- * Frames of one animation: the owl settles, then `act` starts it, and frames
- * are taken every `every` steps (60 steps a second) until it is calm again.
- */
-function frames(act: (e: OwlEngine) => void, count: number, every: number): CanvasRenderingContext2D[] {
+/** An owl for still pictures: the whole animation, and no life of its own. */
+function stillOwl(): OwlEngine {
   const engine = new OwlEngine(7);
+  // The installer shows the full reaction whatever the build machine's motion
+  // setting is, and nothing moves on its own (no breathing, random blinks or
+  // idle glances): every sequence starts and ends on the very same resting pose.
+  engine.reducedMotion = false;
+  engine.ambient = false;
   engine.setSkin("owl");
   engine.setMood("idle");
   for (let i = 0; i < 240; i++) engine.update(1 / 60);
+  return engine;
+}
+
+/**
+ * Frames of one animation: the owl rests, then `act` starts it, and frames are
+ * taken every `every` steps (60 steps a second) until it is calm again. The
+ * installer holds the last frame for a few seconds before it starts over, so
+ * that frame is the resting pose the first one shows.
+ */
+function frames(act: (e: OwlEngine) => void, every: number, max: number): CanvasRenderingContext2D[] {
+  const engine = stillOwl();
   const out = [tile(engine)];
   act(engine);
-  for (let f = 1; f < count; f++) {
+  for (let f = 1; f < max; f++) {
     for (let i = 0; i < every; i++) engine.update(1 / 60);
     out.push(tile(engine));
+    if (engine.calm) break;
   }
   return out;
 }
@@ -292,10 +306,7 @@ export async function renderInstallerArt(): Promise<void> {
   const side = canvas(SIDEBAR.w, SIDEBAR.h);
   sidebarBackground(side);
   // The still sidebar carries a resting owl too, for the moment before the frames start.
-  const still = new OwlEngine(7);
-  still.setSkin("owl");
-  still.setMood("idle");
-  for (let i = 0; i < 240; i++) still.update(1 / 60);
+  const still = stillOwl();
   drawOwl(side, still, TILE.x, TILE.y);
   art["sidebar.bmp"] = bmp(side);
 
@@ -318,7 +329,7 @@ export async function renderInstallerArt(): Promise<void> {
     ["cheer", "approve"],
   ];
   for (const [name, act] of sequences) {
-    const list = frames((e) => (act === "wave" ? e.wave() : e.triggerEmote(act)), 22, 5);
+    const list = frames((e) => (act === "wave" ? e.wave() : e.triggerEmote(act)), 5, 48);
     list.forEach((f, i) => (art[`${name}-${String(i).padStart(2, "0")}.bmp`] = bmp(f)));
   }
 

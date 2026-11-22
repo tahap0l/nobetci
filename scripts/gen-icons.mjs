@@ -8,6 +8,10 @@
 // 100 × 100 centred on the origin, y down). Each size is rendered on its own so
 // small icons get their own detail level and a crisp outline.
 //
+// Windows and Linux get the free-standing owl. macOS gets the owl on a plate
+// that follows the Big Sur icon grid (see MAC below), as every Mac app icon
+// does since macOS 11.
+//
 //   node scripts/gen-icons.mjs
 
 import { deflateSync } from "node:zlib";
@@ -332,13 +336,157 @@ function distance2(mask, M) {
   return f;
 }
 
-function render(size) {
+// ── macOS plate ─────────────────────────────────────────────────────────────
+// Apple's grid for macOS 11 and later: on a 1024 canvas the icon's body is an
+// 824 × 824 rounded square ("squircle"), 100 in from each edge, with a soft
+// shadow below it. The plate is the installer's and the disk image's night
+// (src/baykus/installer-art.ts): near-black to violet, a violet haze low on
+// the left and the amber glow behind the owl. A faint light rim keeps it apart
+// from a dark Dock.
+
+const MAC = {
+  body: 824 / 1024, // the squircle's side, as a share of the canvas
+  // The owl's height, as a share of the squircle: in the small Finder and menu
+  // sizes it fills more of it, or it would be a few pixels of brown.
+  owl: (size) => (size >= 64 ? 0.74 : size >= 32 ? 0.82 : 0.92),
+  rim: 4 / 1024, // width of the light rim
+  shadowY: 10 / 1024, // the shadow's drop, and its blur (Gaussian sigma)
+  shadowBlur: 6 / 1024,
+  shadowAlpha: 0.32,
+};
+const PLATE = {
+  top: hex("#0B0B0E"),
+  bottom: hex("#16131F"),
+  glow: [245, 165, 36],
+  haze: [139, 92, 246],
+  rim: hex("#FFFFFF"),
+};
+
+/** A superellipse |x|ⁿ + |y|ⁿ = 1: with n = 5, very close to Apple's continuous-corner square. */
+function squircle(cx, cy, half, n = 5, steps = 720) {
+  const p = [];
+  for (let i = 0; i < steps; i++) {
+    const t = (i / steps) * TAU;
+    const c = Math.cos(t);
+    const s = Math.sin(t);
+    p.push(cx + half * Math.sign(c) * Math.abs(c) ** (2 / n), cy + half * Math.sign(s) * Math.abs(s) ** (2 / n));
+  }
+  return p;
+}
+
+/** A radial glow's strength at distance d from its centre (the installer's stops). */
+function glowAt(d, radius, peak) {
+  const t = d / radius;
+  if (t >= 1) return 0;
+  return t < 0.55 ? peak + (peak * 0.32 - peak) * (t / 0.55) : peak * 0.32 * (1 - (t - 0.55) / 0.45);
+}
+
+/** The plate's colour at (u, v): −1..1 across the squircle, y down. */
+function plateColor(u, v, rim) {
+  let c = mix(PLATE.top, PLATE.bottom, (v + 1) / 2);
+  c = mix(c, PLATE.haze, glowAt(Math.hypot(u + 0.7, v - 1.15), 1.25, 0.2));
+  c = mix(c, PLATE.glow, glowAt(Math.hypot(u, v - 0.1), 0.95, 0.22));
+  return rim ? mix(c, PLATE.rim, 0.09) : c;
+}
+
+/** The squircle's side in output px: an even number, so its straight edges fall on whole pixels. */
+const plateSide = (size) => Math.ceil((size * MAC.body) / 2) * 2;
+
+/**
+ * Paints the plate into the supersampled buffer (premultiplied) and returns
+ * its coverage mask, from which the shadow is made.
+ */
+function paintPlate(rgba, size, ss) {
+  const M = size * ss;
+  const mask = new Uint8Array(M * M);
+  const half = (plateSide(size) * ss) / 2;
+  const c = M / 2;
+  const paint = (poly, rim) =>
+    fillPoly(poly, M, (i) => {
+      mask[i] = 1;
+      const u = ((i % M) + 0.5 - c) / half;
+      const v = (Math.floor(i / M) + 0.5 - c) / half;
+      const [r, g, b] = plateColor(u, v, rim);
+      const j = 4 * i;
+      rgba[j] = r / 255;
+      rgba[j + 1] = g / 255;
+      rgba[j + 2] = b / 255;
+      rgba[j + 3] = 1;
+    });
+  paint(squircle(c, c, half), true);
+  paint(squircle(c, c, half - MAC.rim * M), false);
+  return mask;
+}
+
+/** Separable Gaussian blur of a size × size field, in place. */
+function blur(field, size, sigma) {
+  if (sigma < 0.3) return;
+  const r = Math.ceil(sigma * 3);
+  const kernel = [];
+  let sum = 0;
+  for (let i = -r; i <= r; i++) {
+    const w = Math.exp(-(i * i) / (2 * sigma * sigma));
+    kernel.push(w);
+    sum += w;
+  }
+  for (let i = 0; i < kernel.length; i++) kernel[i] /= sum;
+  const tmp = new Float32Array(field.length);
+  for (const [stride, step] of [
+    [size, 1],
+    [1, size],
+  ]) {
+    tmp.set(field);
+    for (let line = 0; line < size; line++) {
+      for (let x = 0; x < size; x++) {
+        let acc = 0;
+        for (let k = -r; k <= r; k++) {
+          const xx = Math.min(size - 1, Math.max(0, x + k));
+          acc += tmp[line * stride + xx * step] * kernel[k + r];
+        }
+        field[line * stride + x * step] = acc;
+      }
+    }
+  }
+}
+
+/** Lays the plate's soft shadow under the finished picture (8-bit RGBA). */
+function addShadow(out, size, mask, ss) {
+  const shadow = new Float32Array(size * size);
+  const M = size * ss;
+  const drop = Math.round(MAC.shadowY * size * ss);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      let n = 0;
+      for (let sy = 0; sy < ss; sy++) {
+        const row = y * ss + sy - drop;
+        if (row < 0 || row >= M) continue;
+        for (let sx = 0; sx < ss; sx++) n += mask[row * M + x * ss + sx];
+      }
+      shadow[y * size + x] = n / (ss * ss);
+    }
+  }
+  blur(shadow, size, MAC.shadowBlur * size);
+  for (let i = 0; i < size * size; i++) {
+    const o = 4 * i;
+    const a = out[o + 3] / 255;
+    const s = shadow[i] * MAC.shadowAlpha;
+    const all = a + s * (1 - a);
+    if (all <= 0) continue;
+    for (let ch = 0; ch < 3; ch++) out[o + ch] = Math.round((out[o + ch] * a) / all);
+    out[o + 3] = Math.round(all * 255);
+  }
+}
+
+function render(size, mac = false) {
   const ss = size <= 32 ? 8 : size <= 128 ? 6 : size <= 256 ? 4 : 3;
   const M = size * ss;
-  const outline = size <= 16 ? 1 : 0.85 + size / 64; // output px
-  const margin = Math.max(0.5, size * 0.02);
+  // The owl's own height in output px: the whole icon, or its share of the
+  // plate on macOS. Its detail level and outline follow from that.
+  const owl = mac ? plateSide(size) * MAC.owl(size) : size;
+  const outline = owl <= 16 ? 1 : 0.85 + owl / 64; // output px
+  const margin = Math.max(0.5, owl * 0.02);
   // Owl spans roughly y −52..50 and x −38..38 units.
-  const k = ((size - 2 * (outline + margin)) / 103) * ss;
+  const k = ((owl - 2 * (outline + margin)) / 103) * ss;
   const cx = M / 2;
   const cy = M / 2 + 1 * k;
   const toPx = (poly) => {
@@ -350,8 +498,9 @@ function render(size) {
     return out;
   };
 
-  const layers = scene(size);
+  const layers = scene(owl);
   const rgba = new Float32Array(M * M * 4); // premultiplied, 0..1
+  const plate = mac ? paintPlate(rgba, size, ss) : null;
 
   // Outline: every pixel within `outline` of the silhouette.
   const sil = new Uint8Array(M * M);
@@ -417,6 +566,7 @@ function render(size) {
       out[o + 3] = Math.round((al / n) * 255);
     }
   }
+  if (plate) addShadow(out, size, plate, ss);
   return out;
 }
 
@@ -499,9 +649,10 @@ function icns(entries) {
 
 mkdirSync(OUT, { recursive: true });
 const cache = new Map();
-const pngOf = (size) => {
-  if (!cache.has(size)) cache.set(size, png(size, render(size)));
-  return cache.get(size);
+const pngOf = (size, mac = false) => {
+  const key = `${size}${mac ? "-mac" : ""}`;
+  if (!cache.has(key)) cache.set(key, png(size, render(size, mac)));
+  return cache.get(key);
 };
 
 const files = [
@@ -518,7 +669,7 @@ const icoSizes = [16, 24, 32, 48, 64, 128, 256];
 writeFileSync(join(OUT, "icon.ico"), ico(icoSizes.map((size) => ({ size, data: pngOf(size) }))));
 console.log(`icon.ico         ${icoSizes.join("/")}`);
 
-// Every slot macOS looks for, plain and @2x.
+// Every slot macOS looks for, plain and @2x: the owl on its plate.
 const icnsEntries = [
   ["icp4", 16],
   ["icp5", 32],
@@ -532,5 +683,5 @@ const icnsEntries = [
   ["ic13", 256],
   ["ic14", 512],
 ];
-writeFileSync(join(OUT, "icon.icns"), icns(icnsEntries.map(([type, size]) => ({ type, data: pngOf(size) }))));
+writeFileSync(join(OUT, "icon.icns"), icns(icnsEntries.map(([type, size]) => ({ type, data: pngOf(size, true) }))));
 console.log(`icon.icns        ${[...new Set(icnsEntries.map(([, size]) => size))].sort((x, y) => x - y).join("/")}`);

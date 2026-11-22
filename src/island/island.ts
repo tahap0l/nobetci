@@ -5,20 +5,23 @@
 import { OwlEngine, type OwlEmote, type OwlMood } from "../baykus/owl";
 import { applyMascotPalette } from "../core/mascot-theme";
 import { OwlGreeting } from "../baykus/greeting";
-import { Spring, Tracked } from "../core/anim";
-import { Bridge, IS_TAURI, onEvent, type Anchor, type DecisionOptions, type InteractiveResponse } from "../core/bridge";
+import { Spring, Tracked, clamp } from "../core/anim";
+import { Bridge, IS_TAURI, IslandBridge, onEvent, type Anchor, type DecisionOptions, type InteractiveResponse } from "../core/bridge";
 import { Sound } from "../core/sound";
-import { State, type FlashTone, type IslandMode, type IslandView } from "../core/state";
+import { State, isPlainLow, type FlashTone, type IslandMode, type IslandView } from "../core/state";
 import { t } from "../i18n/island";
 import { h } from "../ui/dom";
 import { buildCompact, buildViews, drawMinis, type ViewActions, type ViewHost } from "../ui/views";
 import { IslandStateMachine } from "./fsm";
 import {
-  COMPACT_CORNER, EXPANDED_CORNER, EXPANDED_W, GREETING_H, HIDDEN_W, HIT_MARGIN,
+  COMPACT_CORNER, COMPACT_H, EXPANDED_CORNER, EXPANDED_W, GREETING_H, HIDDEN_W, HIT_MARGIN,
   OWL_OVERHANG, PANEL_W, islandSize, owlPlacement, setMascotScale,
 } from "./layout";
 
 const modeOrder = (m: IslandMode) => (m === "hidden" ? 0 : m === "compact" ? 1 : 2);
+
+/** How often the island asks Rust whether it is quiet (quiet hours start and end on their own). */
+const QUIET_POLL_MS = 60_000;
 
 export class Island {
   readonly fsm = new IslandStateMachine();
@@ -68,6 +71,21 @@ export class Island {
   /** A text field on a card (the agenda) has the keyboard. */
   private typing = false;
 
+  /** A view asked for while the island was not open: opening it shows that one. */
+  private requestedView: IslandView | null = null;
+  /** The assistant was opened from the pill (its hotkey): closing it folds back there. */
+  private assistantFromPill = false;
+  /** A card interrupted the assistant: it comes back once nothing waits. */
+  private resumeAssistant = false;
+  /** Wakes the loop when the mood can change with nothing happening (a finish fading, sleep). */
+  private moodTimer: number | null = null;
+  /** Clocks on an open island whose mascot sleeps (the frame loop is stopped). */
+  private slowTimer: number | null = null;
+  private quietTimer: number | null = null;
+  private quietAt = -Infinity;
+  /** A dead view (an answered card, a gone session) is being replaced. */
+  private settleQueued = false;
+
   constructor(root: HTMLElement) {
     this.root = root;
     this.build();
@@ -80,12 +98,14 @@ export class Island {
       this.dirty = true;
       this.ensureRunning();
     });
-    // The desktop mascot asks where things stand when it (re)loads.
-    // An agenda item's time has come: a nudge from the owl (Rust shows the notification).
+    // An agenda item's time has come: a nudge from the owl (Rust shows the
+    // notification). Quiet hours may have begun since the last hook event, so ask
+    // Rust before making a sound.
     void onEvent<unknown>("agenda-due", () => {
       this.react("surprised");
-      Sound.play("blip");
+      void this.refreshQuiet().then(() => Sound.play("blip"));
     });
+    // The desktop mascot asks where things stand when it (re)loads.
     void onEvent<null>("buddy-ready", () => {
       void Bridge.toBuddy("buddy-mood", this.lastMood || State.mood);
       void Bridge.toBuddy("buddy-accent", this.lastAccent);
@@ -106,7 +126,7 @@ export class Island {
       decide: (id, d, opts) => this.decide(id, d, opts),
       handToTerminal: (id) => this.handToTerminal(id),
       respond: (id, r, anchor) => this.respond(id, r, anchor),
-      allowLow: (anchor) => this.allowLow(anchor),
+      allowLow: (anchor: Anchor, ids?: string[]) => this.allowLow(anchor, ids),
       openFolder: (cwd) => void Bridge.openFolder(cwd),
       focusSession: (id) => this.focusSession(id),
       showSession: (id) => this.showSession(id),
@@ -143,6 +163,10 @@ export class Island {
     this.viewsEl = h("div", { id: "views" });
     for (const v of this.views.values()) this.viewsEl.append(v.el);
     this.contentEl = h("div", { id: "content" }, this.header.el, this.viewsEl);
+    // Hidden from the start: the launch greeting opens an empty island, not a
+    // header that fades out over it.
+    this.contentEl.style.opacity = "0";
+    this.owlCanvas.style.opacity = "0";
 
     this.islandEl = h(
       "div",
@@ -169,18 +193,25 @@ export class Island {
     this.fsm.onTransition = (from, to) => {
       switch (to) {
         case "hidden":
+          this.requestedView = null;
           this.setMode("hidden");
           break;
         case "petit":
           if (from === "selam") this.greeting.interrupt();
           else if (from === "hidden") Sound.play("peek");
+          this.requestedView = null;
           this.setMode("compact");
           if (!this.wasInIsland) this.fsm.mouseLeft();
           break;
-        case "home":
-          this.expand(State.defaultView());
+        case "home": {
+          // A card or a view asked for during the greeting ends it.
+          if (from === "selam") this.greeting.interrupt();
+          const view = this.requestedView ?? State.defaultView();
+          this.requestedView = null;
+          this.expand(view);
           if (!this.wasInIsland) this.fsm.mouseLeft();
           break;
+        }
         case "selam":
           this.expand("greeting");
           this.greeting.start();
@@ -200,14 +231,19 @@ export class Island {
     if (mode === prev) return;
     State.mode = mode;
     if (mode === "expanded" && prev !== "expanded") Sound.play("open");
-    if (prev === "expanded" && mode !== "expanded") Sound.play("close");
+    if (prev === "expanded" && mode !== "expanded") {
+      Sound.play("close");
+      this.resumeAssistant = false;
+    }
     this.updateWindowCollapsed();
     this.animateGeometry(modeOrder(mode) < modeOrder(prev));
     this.syncKeyboard();
+    this.syncQuietPoll();
     State.notify();
   }
 
   private expand(view: IslandView) {
+    if (view !== State.view) this.endTypingOutside(view);
     State.view = view;
     if (State.mode !== "expanded") this.setMode("expanded");
     else this.animateGeometry(false);
@@ -216,12 +252,14 @@ export class Island {
   }
 
   setView(view: IslandView) {
-    if (State.mode !== "expanded") {
-      State.view = view;
+    if (this.fsm.state !== "home") {
+      // Folded, hidden or still greeting: open through the state machine, so the
+      // pin and the fold timer apply to what is on screen from now on.
+      this.requestedView = view;
       this.fsm.forceHome();
-      this.syncKeyboard();
       return;
     }
+    if (view !== State.view) this.endTypingOutside(view);
     State.view = view;
     this.dirty = true;
     this.ensureRunning();
@@ -230,20 +268,30 @@ export class Island {
 
   /** Opens the assistant and hands it the keyboard. */
   openAssistant() {
-    // A request waiting for an answer comes first.
+    if (!(State.mode === "expanded" && State.view === "assistant")) {
+      // From the pill (its hotkey), closing the assistant folds back to the pill;
+      // from the open island, it goes back to the overview.
+      this.assistantFromPill = this.fsm.state !== "home";
+    }
+    // A request waiting for an answer comes first; the assistant follows it.
     if (State.approvals.length) {
+      this.resumeAssistant = true;
       this.showApprovals();
       return;
     }
     this.fsm.pinned = true;
-    this.expand("assistant");
+    this.setView("assistant");
     this.syncKeyboard();
+    this.focusAssistant();
+  }
+
+  private focusAssistant() {
     (this.views.get("assistant") as (ViewHost & { focus?(): void }) | undefined)?.focus?.();
   }
 
   /**
-   * The island takes the keyboard only while the assistant is up, and stays
-   * open meanwhile; anything else gives both back.
+   * The island takes the keyboard only while the assistant or a text field is
+   * in use, and stays open meanwhile; anything else gives both back.
    */
   private syncKeyboard() {
     if (State.mode !== "expanded") this.typing = false;
@@ -253,8 +301,29 @@ export class Island {
     void Bridge.islandKeyboard(on);
     if (!on) {
       this.moodOverride = null;
-      if (!State.approvals.length) this.fsm.pinned = false;
+      this.dirty = true;
+      if (!State.approvals.length) {
+        this.fsm.pinned = false;
+        // The pin held the island open; with the mouse already elsewhere, the
+        // usual fold timer starts now rather than at the next hover.
+        if (this.fsm.state === "home" && !this.wasInIsland) this.fsm.mouseLeft();
+      }
     }
+  }
+
+  /** A text field the new view does not show cannot be typed into any more. */
+  private endTypingOutside(view: IslandView) {
+    if (!this.typing) return;
+    const field = document.activeElement?.closest?.("[data-typing]");
+    if (field && this.views.get(view)?.el.contains(field)) return;
+    this.typing = false;
+  }
+
+  /** Typing is over (the field lost the focus, another app took it). */
+  private endTyping() {
+    if (!this.typing) return;
+    this.typing = false;
+    this.syncKeyboard();
   }
 
   collapse() {
@@ -262,7 +331,12 @@ export class Island {
     // Claude Code waits on it. Hand it to the terminal instead if that is meant.
     if (State.approvals.length) return;
     this.fsm.pinned = false;
+    this.assistantFromPill = false;
+    this.resumeAssistant = false;
     this.fsm.forcePetit();
+    // The state machine already counts the island as folded (it was opened some
+    // other way): fold the island itself rather than leave it stuck open.
+    if (this.fsm.state === "petit" && State.mode === "expanded") this.setMode("compact");
   }
 
   reveal() {
@@ -281,13 +355,13 @@ export class Island {
    */
   showApprovals() {
     this.fsm.pinned = true;
+    if (State.mode === "expanded" && State.view === "assistant") this.resumeAssistant = true;
     if (State.mode === "expanded") this.setView("approval");
     else if (State.isQuiet) {
       State.view = "approval";
       this.reveal();
     } else {
-      State.view = "approval";
-      this.fsm.forceHome();
+      this.setView("approval");
     }
     State.notify();
   }
@@ -300,10 +374,41 @@ export class Island {
     State.notify();
   }
 
+  /** Back from the session view or the assistant (its ← button, Esc, its hotkey). */
   backToOverview() {
+    const fromAssistant = State.view === "assistant";
     State.detailId = null;
+    if (fromAssistant && this.assistantFromPill && !State.approvals.length) {
+      // Opened from the pill: closing it puts the island back the way it was.
+      this.collapse();
+      return;
+    }
     this.setView(State.defaultView());
     State.notify();
+  }
+
+  /**
+   * Replaces a view that has nothing left to show: an approval card answered
+   * elsewhere, a session that ended, "waiting for a session" once one started
+   * (or the session list once the last one ended).
+   */
+  settleView() {
+    if (State.mode !== "expanded" || this.fsm.state !== "home") return;
+    const view = State.view;
+    if (view === "approval") {
+      if (!State.currentApproval) this.afterApprovalChange();
+      return;
+    }
+    // A waiting card comes first; showing it is afterApprovalChange's job.
+    if (State.approvals.length) return;
+    const gone = view === "session" && !(State.detailId && State.session(State.detailId));
+    if (view === "session" && !gone) return;
+    if (view !== "session" && view !== "overview" && view !== "empty") return;
+    // Text being typed on the empty view's cards (the agenda) is not taken away.
+    if (view !== "session" && this.typing) return;
+    const next: IslandView = State.sessions.length ? "overview" : "empty";
+    if (gone) State.detailId = null;
+    if (next !== view) this.setView(next);
   }
 
   private focusSession(id: string) {
@@ -346,9 +451,10 @@ export class Island {
           // A question or a plan needs its answer, not a keystroke.
           this.showApprovals();
           this.flash(t("fl.answerOnCard"), "warn");
-        } else if (a.risk.level !== "low") {
-          // Keystrokes can be synthesised, so the hotkey only covers low risk. Rust
-          // would refuse it anyway; say so rather than failing silently.
+        } else if (!isPlainLow(a)) {
+          // Keystrokes can be synthesised, so the hotkey only covers low risk, as
+          // the engine scored it too (a rule re-scoring a request down does not
+          // count). Rust would refuse it anyway; say so rather than fail silently.
           this.showApprovals();
           this.flash(t("fl.hotkeyLowOnly"), "error");
           Sound.play("error");
@@ -365,9 +471,17 @@ export class Island {
       if (State.view !== "approval") this.showApprovals();
       return;
     }
-    this.fsm.pinned = false;
+    // A text box on the answered card (a plan note) is gone with it.
+    if (this.typing && !document.activeElement?.closest?.("[data-typing]")) this.endTyping();
+    // The assistant or a text field may still hold the keyboard: that pin stays.
+    this.fsm.pinned = this.keyboardOn;
     if (State.mode === "expanded" && State.view === "approval") {
-      this.setView(State.defaultView());
+      // Back to what the card interrupted: the assistant, or the default view.
+      const resume = this.resumeAssistant;
+      this.resumeAssistant = false;
+      if (resume) this.fsm.pinned = true;
+      this.setView(resume ? "assistant" : State.defaultView());
+      if (resume) this.focusAssistant();
       // Nothing left to decide: fold back unless the mouse is on the island.
       if (!this.wasInIsland) this.fsm.mouseLeft();
     }
@@ -391,14 +505,20 @@ export class Island {
       // Paused means nobody is watching: every waiting request goes back to the
       // terminal now rather than timing out on a card nobody reads.
       for (const a of State.approvals) {
-        void Bridge.approvalDecline(a.requestId);
-        // The terminal has the question now; the row must not keep saying
-        // "waiting for approval" for as long as the pause lasts.
+        void Bridge.approvalDecline(a.requestId, "paused");
         const s = State.session(a.sessionId);
-        if (s?.state === "approval") State.setState(s, "working");
+        if (s) {
+          // Said on the session's timeline, so a request does not just vanish.
+          State.step(s, `${t("step.paused")} · ${a.tool}`);
+          // The terminal has the question now; the row must not keep saying
+          // "waiting for approval" for as long as the pause lasts.
+          if (s.state === "approval") State.setState(s, "working");
+        }
       }
       State.approvals = [];
-      this.fsm.pinned = false;
+      if (State.cardWarning) State.cardWarning = null;
+      this.fsm.pinned = this.keyboardOn;
+      this.resumeAssistant = false;
       if (State.view === "approval") State.view = State.defaultView();
     }
     Sound.play("blip");
@@ -458,22 +578,36 @@ export class Island {
       .catch((err: unknown) => this.decisionFailed(requestId, err));
   }
 
-  /** One click for every waiting low-risk request. */
-  private allowLow(anchor: Anchor) {
-    const lows = State.lowApprovals;
-    if (!lows.length) return;
-    void Bridge.log(`allow-low n=${lows.length}`);
-    Bridge.approvalAllowLow(anchor)
-      .then(() => {
+  /**
+   * One click for the waiting low-risk requests the batch row listed (`ids`; the
+   * ones low right now when it does not say). Rust allows only those still
+   * pending and low by both levels (C-2).
+   */
+  private allowLow(anchor: Anchor, ids?: string[]) {
+    const listed = (ids ? State.approvals.filter((a) => ids.includes(a.requestId)) : State.lowApprovals).filter(isPlainLow);
+    if (!listed.length) return;
+    const listedIds = listed.map((a) => a.requestId);
+    void Bridge.log(`allow-low n=${listed.length}`);
+    Bridge.approvalAllowLow(anchor, listedIds)
+      .then(async (count) => {
+        // Fewer allowed than listed: one was answered or handed over meanwhile.
+        // Keep the card of any request Rust still has waiting.
+        let waiting = new Set<string>();
+        if (IS_TAURI && typeof count === "number" && count < listedIds.length) {
+          const pending = await IslandBridge.approvalPending();
+          waiting = new Set((pending ?? []).map((p) => String(p.request_id ?? "")));
+        }
+        const done = listed.filter((a) => !waiting.has(a.requestId));
+        if (!done.length) return;
         Sound.play("allow");
         this.react("approve");
-        for (const a of lows) {
+        for (const a of done) {
           const s = State.session(a.sessionId);
           if (s) s.approved++;
           this.finishApproval(a.requestId, t("out.allowedBatch"));
         }
       })
-      .catch((err: unknown) => this.decisionFailed(lows[0].requestId, err));
+      .catch((err: unknown) => this.decisionFailed(listedIds[0], err));
   }
 
   private decisionFailed(requestId: string, err: unknown) {
@@ -482,6 +616,10 @@ export class Island {
       case "not_pending":
         // The relay already gave up; the terminal is asking instead.
         this.finishApproval(requestId, t("out.fellBack"));
+        return;
+      case "too_soon":
+        // The card had only just appeared: the click was meant for what was there
+        // before (C-1). Nothing to say; the card stays.
         return;
       case "input_not_physical":
         // Something tried to approve without a real click. Keep the card, say
@@ -502,6 +640,11 @@ export class Island {
         break;
       case "hotkey_low_only":
         this.flash(t("fl.hotkeyLowOnly"), "error");
+        break;
+      case "no_hotkey":
+        // A "hotkey" decision with no real key press behind it (C-12).
+        this.react("surprised");
+        this.flash(t("fl.noHotkey"), "error");
         break;
       case "needs_answer":
       case "unanswered":
@@ -636,6 +779,39 @@ export class Island {
     }
   }
 
+  // ── Quiet ───────────────────────────────────────────────────────────────────
+
+  /**
+   * Asks Rust whether it is quiet right now. Hook events carry the answer too,
+   * but quiet hours begin and end with no event at all (C-14).
+   */
+  async refreshQuiet(): Promise<void> {
+    if (!IS_TAURI) return;
+    this.quietAt = performance.now();
+    let quiet: typeof State.quiet;
+    try {
+      quiet = await IslandBridge.quietNow();
+    } catch {
+      return; // Unknown is not "not quiet": keep what the last event said.
+    }
+    if (quiet === State.quiet) return;
+    State.quiet = quiet;
+    Sound.quiet = State.isQuiet;
+    State.notify();
+  }
+
+  /** The quiet check runs every minute while the island shows, never while hidden. */
+  private syncQuietPoll() {
+    const want = IS_TAURI && State.mode !== "hidden";
+    if (want && this.quietTimer == null) {
+      if (performance.now() - this.quietAt > 5_000) void this.refreshQuiet();
+      this.quietTimer = window.setInterval(() => void this.refreshQuiet(), QUIET_POLL_MS);
+    } else if (!want && this.quietTimer != null) {
+      window.clearInterval(this.quietTimer);
+      this.quietTimer = null;
+    }
+  }
+
   // ── Input ───────────────────────────────────────────────────────────────────
 
   private wireInput() {
@@ -654,10 +830,28 @@ export class Island {
       const next = e.relatedTarget as Element | null;
       if (next?.closest?.("[data-typing]")) return;
       window.setTimeout(() => {
-        if (document.activeElement?.closest?.("[data-typing]")) return;
-        this.typing = false;
-        this.syncKeyboard();
+        // A click in another application leaves the field focused inside this
+        // page, but the page itself has lost the focus: typing is over then too.
+        if (document.hasFocus() && document.activeElement?.closest?.("[data-typing]")) return;
+        this.endTyping();
       }, 120);
+    });
+    // The user went to another application.
+    window.addEventListener("blur", () => {
+      this.endTyping();
+      // The assistant keeps its draft but no longer holds the island open: it
+      // folds like any other view once the mouse is away.
+      if (State.mode === "expanded" && State.view === "assistant" && !State.approvals.length) {
+        this.fsm.pinned = false;
+        if (this.fsm.state === "home" && !this.wasInIsland) this.fsm.mouseLeft();
+      }
+    });
+    window.addEventListener("focus", () => {
+      if (State.mode === "expanded" && State.view === "assistant") this.fsm.pinned = true;
+      if (performance.now() - this.quietAt > 5_000) void this.refreshQuiet();
+    });
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible" && State.mode !== "hidden") void this.refreshQuiet();
     });
 
     this.wakeStrip.addEventListener("mouseenter", () => {
@@ -667,7 +861,7 @@ export class Island {
 
     this.islandEl.addEventListener("mousedown", (e) => {
       Sound.resume();
-      State.lastActivity = performance.now();
+      this.noteActivity();
       if (State.mode !== "expanded") {
         this.fsm.click();
         return;
@@ -677,9 +871,20 @@ export class Island {
         Sound.play("poke");
       }
     });
+    // Typing on the island is being around too.
+    this.islandEl.addEventListener("keydown", () => this.noteActivity());
 
     if (!IS_TAURI) {
       window.addEventListener("mousemove", (e) => this.onCursor(e.clientX, e.clientY));
+    }
+  }
+
+  /** Someone is at the island: the mascot stays awake, or wakes up. */
+  private noteActivity() {
+    State.lastActivity = performance.now();
+    if (this.lastMood === "sleeping" && State.mood !== "sleeping") {
+      this.dirty = true;
+      this.ensureRunning();
     }
   }
 
@@ -691,14 +896,16 @@ export class Island {
       x >= rect.x - HIT_MARGIN && x <= rect.x + rect.w + HIT_MARGIN &&
       y >= rect.y - HIT_MARGIN && y <= rect.y + rect.h + HIT_MARGIN;
 
+    if (inIsland) this.noteActivity();
     if (inIsland && !this.wasInIsland) {
       if (this.fsm.state === "selam") this.greeting.hover();
       this.fsm.mouseEntered();
-      State.lastActivity = performance.now();
     }
     if (!inIsland && this.wasInIsland) this.fsm.mouseLeft();
     this.wasInIsland = inIsland;
-    this.ensureRunning();
+    // Awake, the mascot follows the cursor. Asleep its eyes are shut, so a cursor
+    // moving elsewhere on the screen changes nothing: no frame for it.
+    if (inIsland || this.lastMood !== "sleeping") this.ensureRunning();
   }
 
   private isOwlHit(x: number, y: number): boolean {
@@ -714,6 +921,10 @@ export class Island {
   ensureRunning() {
     if (this.running) return;
     this.running = true;
+    if (this.slowTimer != null) {
+      window.clearTimeout(this.slowTimer);
+      this.slowTimer = null;
+    }
     this.lastFrame = performance.now();
     requestAnimationFrame(this.frame);
   }
@@ -750,49 +961,97 @@ export class Island {
         this.greeting.draw(g);
       }
     }
-    this.owlCanvas.style.opacity = place.visible && !greetingOn ? "1" : "0";
-    if (place.visible && State.mode !== "hidden") this.drawOwl(dt);
+    // The mascot comes and goes with the island's height at the top edge: it
+    // fades in and out with it, and while the island is thinner than the pill
+    // it is cut at the island's lower edge, so it never hangs below a pill that
+    // has not grown yet (a closing island is never thinner than the pill).
+    const shown = greetingOn ? 0 : clamp((this.height.value - 14) / 16, 0, 1);
+    const opacity = shown >= 1 ? "1" : shown.toFixed(3);
+    if (this.owlCanvas.style.opacity !== opacity) this.owlCanvas.style.opacity = opacity;
+    if (shown > 0) {
+      this.drawOwl(dt);
+      this.clipOwlToIsland();
+    }
     this.updateGlow(place.visible && State.mode === "expanded" && !greetingOn);
 
-    // Once a second is plenty for clocks and mini owls.
+    // The small mascots move at the frame rate while anything does; never while hidden.
+    if (State.mode !== "hidden") drawMinis(nowMs / 1000);
+
+    // Clocks and countdowns: four times a second is plenty.
     if (nowMs - this.lastTick > 250) {
       this.lastTick = nowMs;
       if (State.mode === "expanded") this.views.get(State.view)?.tick?.(nowMs);
       if (State.mode === "compact") this.compact.sync();
-      if (State.mode !== "hidden") drawMinis(nowMs / 1000);
+      // A deadline passed with no event (a finish fading, calm turning into sleep).
+      if ((this.moodOverride ?? State.mood) !== this.lastMood) this.dirty = true;
     }
 
     const settling = this.width.animating || this.height.animating || this.radius.animating;
     const busy =
-      State.mode === "hidden"
+      this.dirty ||
+      (State.mode === "hidden"
         ? settling
         : settling ||
           !this.owlX.settled || !this.owlY.settled || !this.owlSize.settled ||
           greetingOn || this.owl.busy ||
           // Countdown and hold progress need the clock while a card is up.
-          State.approvals.length > 0;
+          State.approvals.length > 0);
 
     if (busy) {
       requestAnimationFrame(this.frame);
     } else {
       this.running = false;
       Sound.idle();
+      this.scheduleSlowTick();
     }
   };
+
+  /**
+   * The loop has stopped (the mascot sleeps) but the island is open: its clocks
+   * ("12 s ago") still tick, once a second, without drawing frames.
+   */
+  private scheduleSlowTick() {
+    if (this.slowTimer != null || State.mode !== "expanded") return;
+    this.slowTimer = window.setTimeout(() => {
+      this.slowTimer = null;
+      if (this.running || State.mode !== "expanded") return;
+      this.views.get(State.view)?.tick?.(performance.now());
+      this.scheduleSlowTick();
+    }, 1000);
+  }
+
+  /** Wakes the loop when the mood can change with nothing happening (Y-4). */
+  private scheduleMoodCheck() {
+    if (this.moodTimer != null) window.clearTimeout(this.moodTimer);
+    this.moodTimer = null;
+    const wait = State.moodChangeIn();
+    if (wait == null) return;
+    this.moodTimer = window.setTimeout(() => {
+      this.moodTimer = null;
+      this.dirty = true;
+      this.ensureRunning();
+    }, Math.ceil(wait) + 40);
+  }
 
   private drawOwl(dt: number) {
     const size = this.owlSize.value;
     const w = Math.max(1, Math.round(size));
-    const hCss = w + OWL_OVERHANG;
+    // The canvas is wider than the mascot (D15) so spread wings, tails, manes and
+    // the deny huffs are not cut by its edges, and it has headroom in proportion
+    // to the mascot for the badges and sparkles. It stays centred on the mascot,
+    // which therefore sits exactly where it did; the canvas takes no clicks.
+    const margin = Math.round(w * 0.2);
+    const cw = w + 2 * margin;
+    const hCss = w + Math.max(OWL_OVERHANG, Math.round(w * 0.7));
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     if (this.canvasPx !== w) {
       this.canvasPx = w;
-      this.owlCanvas.width = Math.round(w * dpr);
+      this.owlCanvas.width = Math.round(cw * dpr);
       this.owlCanvas.height = Math.round(hCss * dpr);
-      this.owlCanvas.style.width = `${w}px`;
+      this.owlCanvas.style.width = `${cw}px`;
       this.owlCanvas.style.height = `${hCss}px`;
     }
-    this.owlCanvas.style.left = `${this.owlX.value - w / 2}px`;
+    this.owlCanvas.style.left = `${this.owlX.value - cw / 2}px`;
     this.owlCanvas.style.top = `${this.owlY.value - hCss / 2}px`;
 
     const ctx = this.owlCanvas.getContext("2d");
@@ -802,14 +1061,37 @@ export class Island {
     this.owl.lookY = -Math.tanh((State.mouse.y - this.owlY.value) / 200);
     this.owl.update(dt);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.clearRect(0, 0, w, hCss);
+    ctx.clearRect(0, 0, cw, hCss);
+    ctx.translate(margin, 0);
     this.owl.setSkin(State.settings.mascotTheme);
     this.owl.draw(ctx, w, hCss);
   }
 
+  /** Cuts the mascot's canvas at the island's lower edge while the island is thinner than the pill. */
+  private clipOwlToIsland() {
+    const c = this.owlCanvas.style;
+    let clip = "";
+    if (State.mode !== "expanded" && this.height.value < COMPACT_H) {
+      // Read back from the canvas's own placement, whatever size drawOwl gave it.
+      const bottom = parseFloat(c.top) + parseFloat(c.height);
+      const cut = bottom - this.height.value;
+      if (cut > 0) clip = `inset(0 0 ${cut.toFixed(1)}px 0)`;
+    }
+    if (c.clipPath !== clip) c.clipPath = clip;
+  }
+
   private updateGlow(on: boolean) {
+    // It follows the mascot even while fading out, so closing shrinks it into the
+    // pill instead of leaving it floating where the open island used to be.
+    const d = this.owlSize.value * 2.1;
+    const g = this.owlGlow.style;
+    g.width = `${d}px`;
+    g.height = `${d}px`;
+    g.left = `${this.owlX.value - d / 2}px`;
+    g.top = `${this.owlY.value - d / 2}px`;
     if (!on) {
-      this.owlGlow.style.opacity = "0";
+      g.transitionDuration = "0.14s";
+      g.opacity = "0";
       return;
     }
     const mood = this.moodOverride ?? State.mood;
@@ -820,13 +1102,9 @@ export class Island {
       : mood === "thinking" ? "#A78BFA"
       : mood === "finished" ? "#34D399"
       : "#FFFFFF";
-    const d = this.owlSize.value * 2.1;
-    this.owlGlow.style.width = `${d}px`;
-    this.owlGlow.style.height = `${d}px`;
-    this.owlGlow.style.left = `${this.owlX.value - d / 2}px`;
-    this.owlGlow.style.top = `${this.owlY.value - d / 2}px`;
-    this.owlGlow.style.background = `radial-gradient(circle, ${color} 0%, transparent 62%)`;
-    this.owlGlow.style.opacity = mood === "idle" || mood === "sleeping" ? "0.12" : "0.5";
+    g.transitionDuration = "";
+    g.background = `radial-gradient(circle, ${color} 0%, transparent 62%)`;
+    g.opacity = mood === "idle" || mood === "sleeping" ? "0.12" : "0.5";
   }
 
   // ── DOM sync ────────────────────────────────────────────────────────────────
@@ -850,7 +1128,7 @@ export class Island {
       if (on) view.sync();
     }
     this.compact.sync();
-    drawMinis(performance.now() / 1000);
+    if (State.mode !== "hidden") drawMinis(performance.now() / 1000);
 
     const mood = this.moodOverride ?? State.mood;
     if (mood !== this.lastMood) {
@@ -858,12 +1136,38 @@ export class Island {
       this.owl.setMood(mood);
       void Bridge.toBuddy("buddy-mood", mood);
     }
+    this.scheduleMoodCheck();
     const a = State.currentApproval;
     const accent = a ? State.session(a.sessionId)?.accent ?? null : null;
     this.owl.accent = accent;
     if (accent !== this.lastAccent) {
       this.lastAccent = accent;
       void Bridge.toBuddy("buddy-accent", accent);
+    }
+
+    // Never leave a dead view up: a card answered elsewhere (its buttons would do
+    // nothing), a session that ended, "waiting for a session" once one started.
+    if (expanded && this.fsm.state === "home" && !this.settleQueued && this.viewIsStale()) {
+      this.settleQueued = true;
+      queueMicrotask(() => {
+        this.settleQueued = false;
+        this.settleView();
+      });
+    }
+  }
+
+  private viewIsStale(): boolean {
+    switch (State.view) {
+      case "approval":
+        return !State.currentApproval;
+      case "session":
+        return !State.approvals.length && !(State.detailId && State.session(State.detailId));
+      case "overview":
+        return !State.approvals.length && !this.typing && State.sessions.length === 0;
+      case "empty":
+        return !State.approvals.length && !this.typing && State.sessions.length > 0;
+      default:
+        return false;
     }
   }
 
