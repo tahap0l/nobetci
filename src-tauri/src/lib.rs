@@ -1247,8 +1247,15 @@ pub fn run() {
             }
             Ok(())
         })
-        .run(tauri::generate_context!())
+        .run(context())
         .expect("error while running Nöbetçi");
+}
+
+/// The app's configuration, assets and ACL. Expanded in this one place: on
+/// macOS the macro embeds Info.plist under a fixed symbol, so a second
+/// expansion (the ACL test) would not link.
+fn context() -> tauri::Context<tauri::Wry> {
+    tauri::generate_context!()
 }
 
 #[cfg(test)]
@@ -1357,7 +1364,7 @@ mod tests {
     #[test]
     fn each_window_reaches_only_its_own_commands() {
         // The ACL exactly as it is built into the app from capabilities/ and permissions/.
-        let mut context: tauri::Context<tauri::Wry> = tauri::generate_context!();
+        let mut context = context();
         let acl = context.runtime_authority_mut();
         let can = |window: &str, command: &str| {
             acl.resolve_access(command, window, window, &tauri::ipc::Origin::Local).is_some()
