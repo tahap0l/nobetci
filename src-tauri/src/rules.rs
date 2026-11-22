@@ -11,7 +11,11 @@
 // rule that lets a command through, or calms its risk down, covers that command
 // alone — "npm test" → allow says nothing about `npm test && curl … | sh` — and
 // a path only where it really leads: `Write /p/*` says nothing about
-// `/p/../etc/hosts`, while `Write /etc/*` does catch it.
+// `/p/../etc/hosts` or `~/../../etc/hosts`, while `Write /etc/*` catches both.
+//
+// The first rule that matches decides. One that caught a path only where it
+// leads, and does not deny, leaves a deny rule further down its say
+// (`deciding_rule`): resolving paths must never turn a user's deny into a prompt.
 
 use std::collections::HashSet;
 use std::sync::Mutex;
@@ -211,18 +215,27 @@ fn matches_any<'t>(mode: &str, pattern: &str, targets: impl IntoIterator<Item = 
 /// Whether the rule's pattern covers the request's target. A path counts as
 /// written and as it resolves (`Assessment::resolved`): a rule that lets the
 /// request through or calms it down must cover both, one that denies, asks or
-/// raises the risk either.
+/// raises the risk either. A name that still climbs with `..` (above a root
+/// the engine cannot place) says nothing about where the path leads, so it
+/// never lets a request through.
 fn covers(rule: &UserRule, a: &Assessment, loosens: bool) -> bool {
     let written = pattern_matches(&rule.mode, &rule.pattern, &a.target);
     if a.resolved.is_empty() {
         return written;
     }
-    let resolved = || matches_any(&rule.mode, &rule.pattern, a.resolved.iter().map(String::as_str));
+    let names = a.resolved.iter().map(String::as_str);
     if loosens {
-        written && resolved()
+        written && matches_any(&rule.mode, &rule.pattern, names.filter(|n| !risk::climbs(n)))
     } else {
-        written || resolved()
+        written || matches_any(&rule.mode, &rule.pattern, names)
     }
+}
+
+/// A rule that matched a path only where it leads, not as written: before
+/// paths were resolved it did not match at all, so it must not hide a deny
+/// rule further down that did (`evaluate`).
+fn matched_where_it_leads(rule: &UserRule, a: &Assessment) -> bool {
+    !a.resolved.is_empty() && !pattern_matches(&rule.mode, &rule.pattern, &a.target)
 }
 
 /// What makes a shell run one more command, counted by kind: line breaks, `;`,
@@ -314,9 +327,56 @@ pub struct Request<'a> {
     pub truncated: bool,
 }
 
+/// The rule that decides a request: the first one that matches — except that
+/// one which matched a path only where it leads (`matched_where_it_leads`),
+/// and does not deny, does not hide a deny rule further down. The search for
+/// that deny stops at the first rule that matches the path as written, where
+/// the first match always stopped it. Returns the deciding rule and, when a
+/// deny further down won, the rule it was found past.
+fn deciding_rule<'s>(
+    rules: &'s [UserRule],
+    req: &Request,
+    a: &Assessment,
+) -> Option<(&'s UserRule, Option<&'s UserRule>)> {
+    let mut matching = rules.iter().filter(|r| rule_matches(r, req, a));
+    let first = matching.next()?;
+    if first.action != "deny" && matched_where_it_leads(first, a) {
+        for r in matching {
+            if r.action == "deny" {
+                return Some((r, Some(first)));
+            }
+            if !matched_where_it_leads(r, a) {
+                break;
+            }
+        }
+    }
+    Some((first, None))
+}
+
+/// What a rule is called on the card and in the history: its name, or its pattern.
+fn rule_name(rule: &UserRule) -> String {
+    if rule.name.trim().is_empty() {
+        rule.pattern.clone()
+    } else {
+        rule.name.clone()
+    }
+}
+
 pub fn evaluate(req: &Request, settings: &Settings, grants: &SessionGrants) -> Evaluation {
+    let (home, claude) = risk::user_folders();
+    evaluate_at(req, settings, grants, (&home, claude.as_deref()))
+}
+
+/// `evaluate` for a user whose home folder and Claude Code configuration
+/// folder are `folders` (`risk::user_folders`; tests hand in their own).
+fn evaluate_at(
+    req: &Request,
+    settings: &Settings,
+    grants: &SessionGrants,
+    folders: (&str, Option<&str>),
+) -> Evaluation {
     let off: risk::Disabled = settings.disabled_categories.iter().cloned().collect();
-    let mut a = risk::assess_with(req.tool, req.input, req.cwd, req.truncated, &off);
+    let mut a = risk::assess_at(req.tool, req.input, req.cwd, req.truncated, &off, folders);
     let policy = policy_for(&settings.projects, req.cwd).map(|p| p.mode.clone()).unwrap_or_else(|| "normal".into());
     let mut note: Option<String> = None;
 
@@ -345,8 +405,8 @@ pub fn evaluate(req: &Request, settings: &Settings, grants: &SessionGrants) -> E
         Evaluation { assessment: a, outcome, by, rule, note, message, policy: policy.clone(), grantable, engine_level }
     };
 
-    if let Some(rule) = settings.rules.iter().find(|r| rule_matches(r, req, &a)) {
-        let name = if rule.name.trim().is_empty() { rule.pattern.clone() } else { rule.name.clone() };
+    if let Some((rule, passed)) = deciding_rule(&settings.rules, req, &a) {
+        let name = rule_name(rule);
         match rule.action.as_str() {
             "deny" => {
                 let message = if rule.message.trim().is_empty() {
@@ -354,6 +414,21 @@ pub fn evaluate(req: &Request, settings: &Settings, grants: &SessionGrants) -> E
                 } else {
                     rule.message.clone()
                 };
+                if let Some(earlier) = passed.map(rule_name) {
+                    let why = if is_tr() {
+                        format!(
+                            "\"{earlier}\" kuralı yalnızca yolun gittiği yerle eşleşti; aşağıdaki \"{name}\" reddetme kuralı geçerli."
+                        )
+                    } else {
+                        format!(
+                            "Rule \"{earlier}\" matched only where the path leads, so the deny rule \"{name}\" further down applies."
+                        )
+                    };
+                    note = Some(match note {
+                        Some(strict) => format!("{strict} {why}"),
+                        None => why,
+                    });
+                }
                 return verdict(Outcome::Deny, Some("rule"), Some(name), note, Some(message), a);
             }
             "allow" => {
@@ -922,6 +997,177 @@ mod tests {
         let e = evaluate(&req(APP), &s, &grants);
         grants.grant("s1", "Write", &e.assessment.target, e.assessment.resolved_path());
         assert_eq!(evaluate(&req(APP), &s, &grants).by, Some("session"));
+    }
+
+    /// A request from a user whose home folder is /home/dev, whatever this
+    /// machine's is: `~/../..` must land in the same place on every OS.
+    fn at_home(settings: &Settings, tool: &str, input: Value, cwd: &str) -> Evaluation {
+        let req = Request { tool, input: &input, cwd, session: "s1", truncated: false };
+        evaluate_at(&req, settings, &SessionGrants::default(), ("/home/dev", None))
+    }
+
+    fn write_at_home(settings: &Settings, path: &str) -> Evaluation {
+        at_home(settings, "Write", json!({ "file_path": path, "content": "* * * * * root sh /tmp/x" }), APP)
+    }
+
+    #[test]
+    fn rules_meet_a_path_that_climbs_out_of_the_home_folder_where_it_lands() {
+        // `~/../../etc/passwd` is /etc/passwd, not ~/etc/passwd.
+        let deny = with_rule(for_writes(rule("/etc/*", "glob", "deny")));
+        for path in ["~/../../etc/passwd", "$HOME/../../etc/passwd", "${HOME}/../../../../etc/passwd"] {
+            let e = write_at_home(&deny, path);
+            assert_eq!((e.outcome, e.by), (Outcome::Deny, Some("rule")), "{path}");
+        }
+        // A rule that lets writes in the home folder through says nothing about
+        // a path that only starts there.
+        for (pattern, mode) in [("~/*", "glob"), ("~/", "prefix"), ("~", "prefix"), ("$HOME/*", "glob")] {
+            let s = Settings {
+                auto_allow_max: "medium".into(),
+                rules: vec![for_writes(rule(pattern, mode, "allow"))],
+                ..Settings::default()
+            };
+            let home_file = if pattern.starts_with('$') { "$HOME/notes.txt" } else { "~/notes.txt" };
+            let e = write_at_home(&s, home_file);
+            assert_eq!((e.outcome, e.by), (Outcome::Allow, Some("rule")), "{pattern} allows {home_file}");
+            for path in [
+                "~/../../etc/cron.d/evil",
+                "~/../../tmp/x.sh",
+                "~/../otheruser/.bashrc",
+                "$HOME/../../tmp/x.sh",
+                "~/notes/../../../usr/local/bin/x",
+            ] {
+                let e = write_at_home(&s, path);
+                assert_ne!(e.outcome, Outcome::Allow, "{pattern} must not allow {path}");
+                assert!(e.rule.is_none(), "{pattern} stands back entirely for {path}");
+            }
+        }
+        // Nothing to place `~` by: the climb leads nowhere known, so nothing lets it through.
+        let s = Settings {
+            auto_allow_max: "medium".into(),
+            rules: vec![for_writes(rule("~/*", "glob", "allow"))],
+            ..Settings::default()
+        };
+        let input = json!({ "file_path": "~/../../tmp/x.sh", "content": "x" });
+        let req = Request { tool: "Write", input: &input, cwd: APP, session: "s1", truncated: false };
+        let e = evaluate_at(&req, &s, &SessionGrants::default(), ("", None));
+        assert_eq!((e.outcome, e.rule.as_deref()), (Outcome::Ask, None));
+        // The audit's case: a trusted project, the default ceiling and a rule that
+        // calms writes in the home folder down. The cron file keeps its high.
+        let calm = Settings {
+            projects: vec![ProjectPolicy { path: APP.into(), mode: "trusted".into(), ..ProjectPolicy::default() }],
+            rules: vec![for_writes(rule("~/*", "glob", "low"))],
+            ..Settings::default()
+        };
+        for path in ["~/../../etc/cron.d/evil", "/etc/cron.d/evil"] {
+            let e = write_at_home(&calm, path);
+            assert_eq!((e.outcome, e.assessment.level, e.rule.as_deref()), (Outcome::Ask, Level::High, None), "{path}");
+        }
+        let e = write_at_home(&calm, "~/notes.txt");
+        assert_eq!((e.outcome, e.by), (Outcome::Allow, Some("trusted")), "the everyday case still goes through");
+    }
+
+    #[test]
+    fn a_rule_that_matched_only_where_the_path_leads_never_hides_a_later_deny() {
+        let climb = "/work/app/../../etc/passwd";
+        // The verifier's pair: before paths were resolved the deny decided.
+        for first in ["ask", "high", "critical"] {
+            let s = Settings {
+                rules: vec![for_writes(rule("/etc/*", "glob", first)), for_writes(rule("*..*", "glob", "deny"))],
+                ..Settings::default()
+            };
+            let e = write_to(&s, climb, APP);
+            assert_eq!((e.outcome, e.rule.as_deref()), (Outcome::Deny, Some("*..*")), "{first} then deny");
+            let note = e.note.unwrap_or_default();
+            assert!(note.contains("/etc/*") && note.contains("*..*"), "says which rule it went past: {note}");
+            // Spelled plainly, the first rule matches as written: first match wins, as documented.
+            let e = write_to(&s, "/etc/passwd", APP);
+            assert_ne!(e.outcome, Outcome::Deny, "{first}: /etc/passwd as written");
+            assert_eq!(e.rule.as_deref(), Some("/etc/*"));
+        }
+        // A deny that matches only where the path leads wins over an earlier
+        // ask that did no more than that either.
+        let s = Settings {
+            rules: vec![for_writes(rule("/etc/*", "glob", "ask")), for_writes(rule("/etc/passwd", "exact", "deny"))],
+            ..Settings::default()
+        };
+        assert_eq!(write_to(&s, climb, APP).outcome, Outcome::Deny);
+        // The search stops at a rule that matches as written, where it always stopped.
+        let s = Settings {
+            rules: vec![
+                for_writes(rule("/etc/*", "glob", "ask")),
+                for_writes(rule("*..*", "glob", "critical")),
+                for_writes(rule("*", "glob", "deny")),
+            ],
+            ..Settings::default()
+        };
+        let e = write_to(&s, climb, APP);
+        assert_eq!((e.outcome, e.rule.as_deref()), (Outcome::Ask, Some("/etc/*")));
+        // Nothing but a deny is looked for: a later allow never takes over.
+        let s = Settings {
+            auto_allow_max: "medium".into(),
+            rules: vec![for_writes(rule("/etc/*", "glob", "ask")), for_writes(rule("*", "glob", "allow"))],
+            ..Settings::default()
+        };
+        assert_eq!(write_to(&s, climb, APP).rule.as_deref(), Some("/etc/*"));
+    }
+
+    #[test]
+    fn a_rule_written_from_the_project_folder_still_matches_there() {
+        let allow = |pattern: &str, mode: &str, tool: &str| Settings {
+            auto_allow_max: "medium".into(),
+            rules: vec![UserRule { tool: tool.into(), ..rule(pattern, mode, "allow") }],
+            ..Settings::default()
+        };
+        let glob = |s: &Settings, pattern: &str| path_request(s, "Glob", json!({ "pattern": pattern }), APP);
+        for s in [allow("src/", "prefix", "Glob"), allow("src/**", "glob", "Glob"), allow("./src/", "prefix", "Glob")] {
+            let pattern = if s.rules[0].pattern.starts_with("./") { "./src/**/*.rs" } else { "src/**/*.rs" };
+            let e = glob(&s, pattern);
+            assert_eq!((e.outcome, e.by), (Outcome::Allow, Some("rule")), "{} allows {pattern}", s.rules[0].pattern);
+            let e = glob(&s, "src/../../../etc/**");
+            assert_eq!((e.outcome, e.rule.as_deref()), (Outcome::Ask, None), "{}", s.rules[0].pattern);
+        }
+        let s = allow("src/*", "glob", "Write");
+        let e = write_to(&s, "src/main.rs", APP);
+        assert_eq!((e.outcome, e.by), (Outcome::Allow, Some("rule")));
+        for path in ["src/../README.md", "src/../../etc/hosts", "src/../../app2/src/x.rs"] {
+            assert_ne!(write_to(&s, path, APP).outcome, Outcome::Allow, "{path} is not in src/");
+        }
+        // A deny written from the project catches the file however it is spelled.
+        let s = with_rule(for_writes(rule("src/secrets/*", "glob", "deny")));
+        for path in ["src/secrets/a.txt", "/work/app/src/secrets/a.txt", "/work/app/lib/../src/secrets/a.txt"] {
+            assert_eq!(write_to(&s, path, APP).outcome, Outcome::Deny, "{path}");
+        }
+        assert_ne!(write_to(&s, "/work/other/src/secrets/a.txt", APP).outcome, Outcome::Deny);
+    }
+
+    #[test]
+    fn a_glob_with_a_folder_and_a_pattern_is_judged_by_both() {
+        let s = Settings {
+            auto_allow_max: "medium".into(),
+            rules: vec![UserRule { tool: "Glob".into(), ..rule("/work/app", "prefix", "allow") }],
+            ..Settings::default()
+        };
+        let glob = |input: Value| path_request(&s, "Glob", input, APP);
+        let e = glob(json!({ "path": "/work/app", "pattern": "src/**/*.rs" }));
+        assert_eq!((e.outcome, e.by), (Outcome::Allow, Some("rule")));
+        for input in [
+            json!({ "path": "/work/app", "pattern": "../../etc/**" }),
+            json!({ "path": "/work/app", "pattern": "/etc/**" }),
+            json!({ "pattern": "/work/app/../../etc/**" }),
+        ] {
+            let e = glob(input.clone());
+            assert_eq!((e.outcome, e.rule.as_deref()), (Outcome::Ask, None), "{input}");
+            assert!(e.assessment.findings.iter().any(|f| f.category == "outside_project"), "{input}");
+        }
+        // A grant is for what was listed, not for everything under the folder.
+        let grants = SessionGrants::default();
+        let listed = json!({ "path": "/work/app", "pattern": "src/**/*.rs" });
+        let req = |input| Request { tool: "Glob", input, cwd: APP, session: "s1", truncated: false };
+        let first = evaluate(&req(&listed), &Settings::default(), &grants);
+        grants.grant("s1", "Glob", &first.assessment.target, first.assessment.resolved_path());
+        assert_eq!(evaluate(&req(&listed), &Settings::default(), &grants).by, Some("session"));
+        let other = json!({ "path": "/work/app", "pattern": "../../etc/**" });
+        assert_ne!(evaluate(&req(&other), &Settings::default(), &grants).by, Some("session"));
     }
 
     #[test]

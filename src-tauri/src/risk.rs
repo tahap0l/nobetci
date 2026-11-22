@@ -1142,12 +1142,19 @@ fn split_root(path: &str) -> (&str, &str) {
     path.split_at(end)
 }
 
+/// A root nothing climbs above: `/`, a network share's `//`, a drive's `C:`.
+/// `~` and an environment variable stand for a folder somewhere below one.
+fn fixed_root(root: &str) -> bool {
+    matches!(root, "/" | "\\" | "//" | "\\\\") || (root.len() == 2 && root.ends_with(':'))
+}
+
 /// `path` made absolute against `base` and cleaned up the way it reads: `.`
 /// and `..` applied, repeated separators collapsed, forward slashes. A path
-/// that starts at `~` or an environment variable keeps that start as its root;
-/// a trailing separator (a folder) is kept. Links are not followed — the
-/// rules care about how a path is spelled out, and every spelling of the same
-/// file must meet the same rule.
+/// that starts at `~` or an environment variable keeps that start as its root,
+/// and a `..` that climbs above it stays: `~/../../etc` leads out of the home
+/// folder, not into `~/etc` (`leads_to` places it). A trailing separator (a
+/// folder) is kept. Links are not followed — the rules care about how a path is
+/// spelled out, and every spelling of the same file must meet the same rule.
 pub(crate) fn resolve(base: &str, path: &str) -> String {
     let path = path.trim();
     if path.is_empty() {
@@ -1161,9 +1168,9 @@ pub(crate) fn resolve(base: &str, path: &str) -> String {
         based = resolve("", base);
         let (broot, brest) = split_root(&based);
         root = broot;
-        push_parts(&mut parts, brest, !root.is_empty());
+        push_parts(&mut parts, brest, fixed_root(root));
     }
-    push_parts(&mut parts, rest, !root.is_empty());
+    push_parts(&mut parts, rest, fixed_root(root));
     let root = root.replace('\\', "/");
     let mut out = match root.as_str() {
         "" => String::new(),
@@ -1184,14 +1191,16 @@ pub(crate) fn resolve(base: &str, path: &str) -> String {
     out
 }
 
-fn push_parts<'a>(parts: &mut Vec<&'a str>, rest: &'a str, rooted: bool) {
+/// Appends the parts of `rest`, applying `.` and `..`. Under a fixed root a
+/// `..` at the top goes nowhere (`/..` is `/`); anywhere else it is kept.
+fn push_parts<'a>(parts: &mut Vec<&'a str>, rest: &'a str, fixed: bool) {
     for c in rest.split(['/', '\\']) {
         match c {
             "" | "." => {}
             ".." => {
                 if parts.last().is_some_and(|p| *p != "..") {
                     parts.pop();
-                } else if !rooted {
+                } else if !fixed {
                     parts.push("..");
                 }
             }
@@ -1200,16 +1209,37 @@ fn push_parts<'a>(parts: &mut Vec<&'a str>, rest: &'a str, rooted: bool) {
     }
 }
 
-/// `resolved` with its `~` or home variable replaced by `home`; None for a root
-/// that cannot be placed (another user's `~bob`, `%APPDATA%`) or an unknown home.
+/// Whether a path still has a `..` in it: one that climbs above a root the
+/// engine cannot place, or above an unknown folder.
+pub(crate) fn climbs(path: &str) -> bool {
+    path.split(['/', '\\']).any(|part| part == "..")
+}
+
+/// `resolved` with its `~` or home variable replaced by `home`, and the `..`
+/// that climbed above it applied there (`~/../../etc/passwd` is /etc/passwd);
+/// None for a root that cannot be placed (another user's `~bob`, `%APPDATA%`)
+/// or an unknown home.
 fn placed(resolved: &str, home: &str) -> Option<String> {
     let (root, rest) = split_root(resolved);
     let lower = root.to_ascii_lowercase();
     if matches!(lower.as_str(), "~" | "$home" | "${home}" | "%userprofile%" | "$env:userprofile" | "$env:home") {
         let home = home.trim_end_matches(['/', '\\']);
-        return (!home.is_empty() && is_absolute(home)).then(|| format!("{home}{rest}"));
+        return (!home.is_empty() && is_absolute(home)).then(|| resolve("", &format!("{home}{rest}")));
     }
-    (lower.is_empty() || lower == "/" || lower == "//" || lower.ends_with(':')).then(|| resolved.to_string())
+    (lower.is_empty() || fixed_root(&lower)).then(|| resolved.to_string())
+}
+
+/// Where a resolved path really leads: placed in the home folder when it
+/// starts there (`placed`), as resolved when its root cannot be placed. This is
+/// the spelling every path rule, the project check and Claude Code's
+/// configuration folder are checked against.
+fn leads_to(resolved: &str, home: &str) -> String {
+    placed(resolved, home).unwrap_or_else(|| resolved.to_string())
+}
+
+/// The folder a session works in, the way `leads_to` spells paths, for comparing.
+fn work_folder(cwd: &str, home: &str) -> String {
+    norm(&leads_to(&resolve("", cwd), home))
 }
 
 /// `resolved` written from `~` when it lies in `home`; None otherwise.
@@ -1224,23 +1254,59 @@ fn home_relative(resolved: &str, home: &str) -> Option<String> {
         .then(|| format!("~{rest}"))
 }
 
-/// The names a path goes by once resolved against `cwd` (`resolve`): the
-/// resolved path first, then with the home folder written out and written as
-/// `~`, Git Bash's `/c/…` as `c:/…`, and each of those in backslashes. Every
-/// one names the same file; none of them can climb out with `..`.
+/// Forward slashes, no trailing slash, Git Bash's `/c/…` as `c:/…`: a path the
+/// way `norm` compares it, in its own letter case.
+fn plain(path: &str) -> String {
+    let p = path.replace('\\', "/");
+    let p = p.trim_end_matches('/');
+    match p.as_bytes() {
+        [b'/', d, b'/', ..] | [b'/', d] if d.is_ascii_alphabetic() => format!("{}:{}", *d as char, &p[2..]),
+        _ => p.to_string(),
+    }
+}
+
+/// `real` written from the session's folder when it lies inside it — `src/x.rs`
+/// and `./src/x.rs`, `.` for the folder itself — so a rule written relative to
+/// the project meets the file where it really is. Nothing for a path outside
+/// the folder or one that still climbs.
+fn from_folder(real: &str, cwd: &str, home: &str) -> Vec<String> {
+    if cwd.trim().is_empty() || climbs(real) {
+        return Vec::new();
+    }
+    let (folder, path) = (plain(&leads_to(&resolve("", cwd), home)), plain(real));
+    let (f, p) = (folder.to_lowercase(), path.to_lowercase());
+    if p == f {
+        return vec![".".into()];
+    }
+    if !p.starts_with(&format!("{f}/")) {
+        return Vec::new();
+    }
+    // Lower case moves no separator: the folder's parts are the path's first ones.
+    let mut rel = path.split('/').skip(f.split('/').count()).collect::<Vec<_>>().join("/");
+    if real.ends_with(['/', '\\']) {
+        rel.push('/');
+    }
+    vec![format!("./{rel}"), rel]
+}
+
+/// The names a path goes by once resolved against `cwd`: where it really leads
+/// first (`leads_to`), then as resolved (`~/…` kept), written from `~` and from
+/// the session's folder, Git Bash's `/c/…` as `c:/…`, and each of those in
+/// backslashes. Every one names the same file. A name can only keep a `..` when
+/// it climbs above a root the engine cannot place (`~bob/..`, `%APPDATA%\..`),
+/// and such a name never lets a rule through (`rules::covers`).
 fn resolved_names(cwd: &str, path: &str, home: &str) -> Vec<String> {
     let resolved = resolve(cwd, path);
-    let mut names = vec![resolved.clone()];
-    if let Some(placed) = placed(&resolved, home) {
-        names.push(placed.replace('\\', "/"));
-    }
-    if let Some(short) = home_relative(&resolved, home) {
+    let real = leads_to(&resolved, home);
+    let mut names = vec![real.clone(), resolved];
+    if let Some(short) = home_relative(&real, home) {
         names.push(short);
     }
-    let b = resolved.as_bytes();
+    let b = real.as_bytes();
     if b.len() > 2 && b[0] == b'/' && b[1].is_ascii_alphabetic() && b[2] == b'/' {
-        names.push(format!("{}:{}", b[1] as char, &resolved[2..]));
+        names.push(format!("{}:{}", b[1] as char, &real[2..]));
     }
+    names.extend(from_folder(&real, cwd, home));
     let backslashed: Vec<String> = names.iter().map(|n| n.replace('/', "\\")).collect();
     names.extend(backslashed);
     let mut seen = HashSet::new();
@@ -1317,14 +1383,14 @@ fn outside(resolved: &str, cwd: &str, home: &str) -> bool {
     if !is_absolute(&path) {
         return false;
     }
-    let (p, c) = (norm(&path), norm(&resolve("", cwd)));
+    let (p, c) = (norm(&path), work_folder(cwd, home));
     !(p == c || p.starts_with(&format!("{c}/")))
 }
 
 /// Whether a resolved path lies inside a project folder at least two levels
 /// deep — `/usr/src/app`, `/opt/app`, not `/usr` or `/`.
 fn in_project(resolved: &str, cwd: &str, home: &str) -> bool {
-    let project = norm(&resolve("", cwd));
+    let project = work_folder(cwd, home);
     let depth = project.split('/').filter(|p| !p.is_empty() && !p.ends_with(':')).count();
     depth >= 2 && !outside(resolved, cwd, home)
 }
@@ -1384,14 +1450,16 @@ fn command_findings(
         }
     }
     // Where it writes meets the same rules as the Write tool: `cd ~/.claude`
-    // then `> settings.json` is a write to Claude Code's settings. A change of
-    // permissions only matters for Nöbetçi's own files (`chmod -x` on its relay).
+    // then `> settings.json` is a write to Claude Code's settings, and the
+    // shell's `~/../../etc` is /etc. A change of permissions only matters for
+    // Nöbetçi's own files (`chmod -x` on its relay).
     for w in shell::writes(&pipes, cwd) {
+        let path = leads_to(&w.path, home);
         if w.content {
-            scan_path(write_rules(&w.path, cwd, home), &w.raw, &w.path, off, found);
-            config_dir_writes(&w.path, home, claude, off, found);
+            scan_path(write_rules(&path, cwd, home), &w.raw, &path, off, found);
+            config_dir_writes(&path, home, claude, off, found);
         } else {
-            scan_path(WRITE_PATH_RULES.iter().filter(|r| r.category == "nobetci_self"), &w.raw, &w.path, off, found);
+            scan_path(WRITE_PATH_RULES.iter().filter(|r| r.category == "nobetci_self"), &w.raw, &path, off, found);
         }
     }
     // A program that is neither a known reader nor a known writer, handed one
@@ -1714,7 +1782,7 @@ fn mcp_arguments(value: &Value, key: &str, cx: &McpContext, off: &Disabled, foun
                 scan(&*WEB_RULES, s, off, found);
             }
             if MCP_PATH_KEYS.contains(&key) {
-                let resolved = resolve(cx.cwd, s);
+                let resolved = leads_to(&resolve(cx.cwd, s), cx.home);
                 if cx.changes {
                     scan_path(write_rules(&resolved, cx.cwd, cx.home), s, &resolved, off, found);
                     config_dir_writes(&resolved, cx.home, cx.claude, off, found);
@@ -1792,6 +1860,19 @@ fn previews(input: &Value) -> (Option<String>, Option<String>, Vec<EditPreview>)
     (after, before, Vec::new())
 }
 
+/// A Glob pattern written out under the folder it searches: `/work/app` and
+/// `src/**/*.rs` list `/work/app/src/**/*.rs`. A pattern with a root of its
+/// own (`/etc/**`, `~/…`, `C:\…`) lists there, whatever the folder.
+fn glob_under(folder: &str, pattern: &str) -> String {
+    let pattern = pattern.trim();
+    if !split_root(pattern).0.is_empty() {
+        return pattern.to_string();
+    }
+    let folder = folder.trim();
+    let sep = if folder.contains('\\') && !folder.contains('/') { '\\' } else { '/' };
+    format!("{}{sep}{pattern}", folder.trim_end_matches(['/', '\\']))
+}
+
 /// Everything a Write/Edit would put in the file, for the content rules.
 fn written_text(input: &Value) -> String {
     let mut parts: Vec<&str> = Vec::new();
@@ -1822,10 +1903,19 @@ fn home_dir() -> String {
     }
 }
 
+/// The folders a request is scored against: this user's home ("" when
+/// unknown) and Claude Code's configuration folder when $CLAUDE_CONFIG_DIR
+/// moves it out of ~/.claude. Read here, then handed in (`assess_at`), so
+/// tests never depend on the environment they run in.
+pub(crate) fn user_folders() -> (String, Option<String>) {
+    (home_dir(), claude_config_dir())
+}
+
 /// Scores one permission request, skipping the categories in `off`.
+#[cfg(test)]
 pub fn assess_with(tool: &str, input: &Value, cwd: &str, truncated: bool, off: &Disabled) -> Assessment {
-    let claude = claude_config_dir();
-    assess_at(tool, input, cwd, truncated, off, (&home_dir(), claude.as_deref()))
+    let (home, claude) = user_folders();
+    assess_at(tool, input, cwd, truncated, off, (&home, claude.as_deref()))
 }
 
 /// `assess_at` with no $CLAUDE_CONFIG_DIR, whatever this process's environment says.
@@ -1836,8 +1926,8 @@ fn assess_in(tool: &str, input: &Value, cwd: &str, truncated: bool, off: &Disabl
 
 /// Scores one request for a user whose home folder is `home` ("" when unknown)
 /// and whose Claude Code keeps its configuration in `claude` when
-/// $CLAUDE_CONFIG_DIR moves it out of ~/.claude.
-fn assess_at(
+/// $CLAUDE_CONFIG_DIR moves it out of ~/.claude (`user_folders`).
+pub(crate) fn assess_at(
     tool: &str,
     input: &Value,
     cwd: &str,
@@ -1892,7 +1982,7 @@ fn assess_at(
         (Kind::Command, cmd.to_string(), None)
     } else if matches!(lower.as_str(), "write" | "edit" | "multiedit" | "notebookedit") {
         let path = str_field(input, "file_path").or_else(|| str_field(input, "notebook_path")).unwrap_or("");
-        let resolved = resolve(cwd, path);
+        let resolved = leads_to(&resolve(cwd, path), home);
         if !path.is_empty() {
             names = resolved_names(cwd, path, home);
             scan_path(write_rules(&resolved, cwd, home), path, &resolved, off, &mut found);
@@ -1916,21 +2006,27 @@ fn assess_at(
         (Kind::Write, path.to_string(), after)
     } else if matches!(lower.as_str(), "read" | "glob" | "grep" | "ls" | "notebookread") {
         let named = str_field(input, "file_path").or_else(|| str_field(input, "path"));
-        let path = named.or_else(|| str_field(input, "pattern")).unwrap_or("");
-        let resolved = resolve(cwd, path);
+        let pattern = str_field(input, "pattern");
+        // Glob's pattern is a path with wildcards, under its `path` when it has
+        // one: both are what it lists, so both are the target. Grep's pattern
+        // is a regular expression; only its `path` is a path.
+        let path = match (named, pattern) {
+            (Some(folder), Some(pattern)) if lower == "glob" => glob_under(folder, pattern),
+            (named, pattern) => named.or(pattern).unwrap_or("").to_string(),
+        };
+        let resolved = leads_to(&resolve(cwd, &path), home);
         if !path.is_empty() {
-            // Glob's pattern is a path with wildcards; Grep's is a regular expression.
             if named.is_some() || lower != "grep" {
-                names = resolved_names(cwd, path, home);
+                names = resolved_names(cwd, &path, home);
             }
-            scan_path(&*READ_PATH_RULES, path, &resolved, off, &mut found);
+            scan_path(&*READ_PATH_RULES, &path, &resolved, off, &mut found);
             if outside(&resolved, cwd, home) {
                 let label = i18n::pick("Reads outside the project folder", "Proje klasörü dışını okuyor");
                 let f = Finding { category: "outside_project", level: Low, label, excerpt: excerpt(&resolved) };
                 found.add(f, Tag::None, off);
             }
         }
-        (Kind::Read, path.to_string(), None)
+        (Kind::Read, path, None)
     } else if let Some(url) = str_field(input, "url") {
         scan(&*WEB_RULES, url, off, &mut found);
         (Kind::Web, url.to_string(), None)
@@ -2491,8 +2587,8 @@ mod tests {
         assert_eq!(names[0], "/home/dev/app/src/x.rs");
         assert!(has(&names, "~/app/src/x.rs") && has(&names, r"\home\dev\app\src\x.rs"), "{names:?}");
         let names = resolved_names("/home/dev/app", "~/notes/../.ssh/id", "/home/dev");
-        assert_eq!(names[0], "~/.ssh/id");
-        assert!(has(&names, "/home/dev/.ssh/id"), "{names:?}");
+        assert_eq!(names[0], "/home/dev/.ssh/id", "where it really leads comes first");
+        assert!(has(&names, "~/.ssh/id") && has(&names, r"~\.ssh\id"), "{names:?}");
         let names = resolved_names(r"C:\Users\dev\app", r"..\..\..\Windows\x.dll", r"C:\Users\dev");
         assert_eq!(names[0], "C:/Windows/x.dll");
         assert!(has(&names, r"C:\Windows\x.dll"), "{names:?}");
@@ -2517,6 +2613,157 @@ mod tests {
     }
 
     #[test]
+    fn a_path_that_climbs_out_of_the_home_folder_is_where_it_lands() {
+        // `..` above `~` or a home variable leaves the home folder: it is applied
+        // once the folder is known, never dropped at `~` as if it were `/`.
+        assert_eq!(resolve("/w", "~/../../etc/passwd"), "~/../../etc/passwd");
+        assert_eq!(resolve("~", ".."), "~/..");
+        assert_eq!(resolve("~/..", "../etc/x"), "~/../../etc/x");
+        assert_eq!(resolve("", "$HOME/a/../../b"), "$HOME/../b");
+        assert_eq!(resolve("", "%APPDATA%\\..\\Local\\x"), "%APPDATA%/../Local/x");
+        // A fixed root still stops a climb, as the system does.
+        assert_eq!(resolve("/", "../../etc/x"), "/etc/x");
+        assert_eq!(resolve(r"C:\", r"..\..\Windows\x"), "C:/Windows/x");
+        assert_eq!(leads_to("~/../../etc/passwd", "/home/dev"), "/etc/passwd");
+        assert_eq!(leads_to("~/../../../../etc/passwd", "/home/dev"), "/etc/passwd");
+        assert_eq!(leads_to("$HOME/../dev/.ssh/id", "/home/dev"), "/home/dev/.ssh/id");
+        assert_eq!(leads_to("${HOME}/../bob/x", "/home/dev"), "/home/bob/x");
+        assert_eq!(leads_to("%USERPROFILE%/../../Windows/x.dll", r"C:\Users\dev"), "C:/Windows/x.dll");
+        assert_eq!(leads_to("$env:USERPROFILE/../x", r"C:\Users\dev"), "C:/Users/x");
+        // A root that cannot be placed keeps its climb, and says so.
+        assert_eq!(leads_to("~/../../etc/passwd", ""), "~/../../etc/passwd");
+        assert_eq!(leads_to("~bob/../dev/x", "/home/dev"), "~bob/../dev/x");
+        assert!(climbs("~bob/../dev/x") && climbs(r"%APPDATA%\..\x") && !climbs("/etc/x..y/..z"));
+
+        let names = resolved_names("/work/app", "~/../../etc/passwd", "/home/dev");
+        assert_eq!(names[0], "/etc/passwd");
+        assert!(has_name(&names, r"\etc\passwd") && !has_name(&names, "~/etc/passwd"), "{names:?}");
+        let names = resolved_names("/work/app", "$HOME/../../etc/passwd", "/home/dev");
+        assert_eq!(names[0], "/etc/passwd");
+        // Nothing to place it by: every name still climbs (rules::covers lets none through).
+        let names = resolved_names("/work/app", "~/../../etc/passwd", "");
+        assert!(names.iter().all(|n| climbs(n)), "{names:?}");
+        let names = resolved_names("/work/app", "~bob/../../etc/passwd", "/home/dev");
+        assert!(names.iter().all(|n| climbs(n)), "{names:?}");
+    }
+
+    fn has_name(names: &[String], name: &str) -> bool {
+        names.iter().any(|n| n == name)
+    }
+
+    #[test]
+    fn a_path_in_the_session_folder_is_also_known_from_there() {
+        // A rule written relative to the project (`src/*`) meets the file where
+        // it really is, however the request spells it.
+        let names = resolved_names("/work/app", "src/main.rs", "/home/dev");
+        for name in ["/work/app/src/main.rs", "src/main.rs", "./src/main.rs", r"src\main.rs", r".\src\main.rs"] {
+            assert!(has_name(&names, name), "{name}: {names:?}");
+        }
+        let names = resolved_names("/work/app", "/work/app/./docs//guide.md", "/home/dev");
+        assert!(has_name(&names, "docs/guide.md"), "{names:?}");
+        assert!(has_name(&resolved_names("/work/app", "src/**/*.rs", ""), "src/**/*.rs"));
+        assert!(has_name(&resolved_names("/work/app", "dist/", ""), "dist/"));
+        assert!(has_name(&resolved_names("/work/app", "/work/app", ""), "."));
+        // Case and separators as Windows and Git Bash write them.
+        let names = resolved_names(r"C:\Work\App", r"C:\work\app\src\x.rs", r"C:\Users\dev");
+        assert!(has_name(&names, "src/x.rs") && has_name(&names, r"src\x.rs"), "{names:?}");
+        assert!(has_name(&resolved_names("/c/work/app", r"C:\work\app\x.rs", ""), "x.rs"));
+        // Only inside the folder: a path that leaves it is not "from there".
+        for path in ["src/../../other/x", "/work/application/x", "~/x", "../app2/x"] {
+            let names = resolved_names("/work/app", path, "/home/dev");
+            assert!(names.iter().all(|n| n.starts_with(['/', '\\', '~'])), "{path}: {names:?}");
+        }
+        assert!(resolved_names("", "src/x.rs", "").iter().all(|n| !n.starts_with("./")));
+    }
+
+    #[test]
+    fn writes_that_climb_out_of_the_home_folder_score_where_they_land() {
+        let off = Disabled::new();
+        let at = |tool: &str, input: Value| assess_in(tool, &input, "/work/app", false, &off, "/home/dev");
+        let write = |path: &str| at("Write", json!({ "file_path": path, "content": "* * * * * root sh x" })).level;
+        let bash = |command: &str| at("Bash", json!({ "command": command })).level;
+        for path in [
+            "/etc/cron.d/x",
+            "~/../../etc/cron.d/x",
+            "$HOME/../../etc/cron.d/x",
+            "${HOME}/../../../usr/local/bin/ls",
+            "~/.cache/../../../../etc/cron.d/x",
+        ] {
+            assert_eq!(write(path), High, "{path}");
+        }
+        for command in [
+            "cp /tmp/x /etc/cron.d/x",
+            "cp /tmp/x ~/../../etc/cron.d/x",
+            "cp /tmp/x $HOME/../../etc/cron.d/x",
+            "tee ~/../../usr/local/bin/ls < /tmp/x",
+            "cd ~/.. && cd .. && cp /tmp/x etc/cron.d/x",
+            "cd && echo x > ../../etc/cron.d/x",
+        ] {
+            assert_eq!(bash(command), High, "{command}");
+        }
+        let mcp = at("mcp__fs__write_file", json!({ "path": "~/../../etc/cron.d/x", "content": "x" }));
+        assert_eq!(mcp.level, High);
+        // Windows: the profile folder climbs to the system's.
+        let windows = assess_in(
+            "Write",
+            &json!({ "file_path": r"%USERPROFILE%\..\..\Windows\System32\drivers\etc\hosts", "content": "x" }),
+            r"C:\work\app",
+            false,
+            &off,
+            r"C:\Users\dev",
+        );
+        assert_eq!(windows.level, High);
+        // Climbing into another file of the home folder scores as that file.
+        assert_eq!(write("~/../dev/.bashrc"), High);
+        assert_eq!(bash("echo x >> ~/../dev/.ssh/authorized_keys"), Critical);
+        // Unplaceable: never low, never "inside the project".
+        let unknown = assess_in(
+            "Write",
+            &json!({ "file_path": "~/../../etc/cron.d/x", "content": "x" }),
+            "/work/app",
+            false,
+            &off,
+            "",
+        );
+        assert_eq!(unknown.level, Medium);
+        assert_eq!(write("~bob/../../etc/cron.d/x"), Medium);
+        // Stays as it was: the project reached through the home folder, an
+        // everyday write in it, and a note in the home folder.
+        let project = |tool: &str, input: Value| assess_in(tool, &input, "/home/dev/app", false, &off, "/home/dev");
+        let level = |path: &str| project("Write", json!({ "file_path": path, "content": "x" })).level;
+        assert_eq!(level("~/app/src/main.rs"), Low);
+        assert_eq!(level("~/../dev/app/src/main.rs"), Low);
+        assert_eq!(level("$HOME/app/README.md"), Low);
+        assert_eq!(level("~/notes/../todo.md"), Medium, "outside the project, as before");
+        assert_eq!(project("Bash", json!({ "command": "cp a.txt ~/app/b.txt" })).level, Low);
+        assert_eq!(project("Bash", json!({ "command": "cd ~ && ls .. && cat ~/app/x" })).level, Low);
+        assert_eq!(project("Read", json!({ "file_path": "~/../dev/app/src/lib.rs" })).level, Low);
+    }
+
+    #[test]
+    fn a_glob_lists_its_pattern_under_its_folder() {
+        let off = Disabled::new();
+        let glob = |input: Value| assess_in("Glob", &input, "/work/app", false, &off, "/home/dev");
+        let a = glob(json!({ "path": "/work/app", "pattern": "../../etc/**" }));
+        assert_eq!(a.target, "/work/app/../../etc/**", "the card and the rules see what it lists");
+        assert_eq!(a.resolved_path(), "/etc/**");
+        assert!(a.findings.iter().any(|f| f.category == "outside_project"));
+        let a = glob(json!({ "path": "/work/app/src", "pattern": "**/*.rs" }));
+        assert_eq!((a.target.as_str(), a.level), ("/work/app/src/**/*.rs", Low));
+        assert!(a.resolved.iter().any(|n| n == "src/**/*.rs"), "{:?}", a.resolved);
+        let a = glob(json!({ "path": "/home/dev/app", "pattern": "../.ssh/*" }));
+        assert_eq!(a.level, High, "secret files listed from next door");
+        // A pattern with a root of its own lists there.
+        assert_eq!(glob(json!({ "path": "/work/app", "pattern": "/etc/*" })).target, "/etc/*");
+        assert_eq!(glob(json!({ "path": r"C:\work\app", "pattern": "*.md" })).target, r"C:\work\app\*.md");
+        assert_eq!(glob(json!({ "path": "src/", "pattern": "*.rs" })).resolved_path(), "/work/app/src/*.rs");
+        // Grep's pattern is a regular expression: only its folder is a path.
+        let grep =
+            assess_in("Grep", &json!({ "path": "/work/app", "pattern": "../../etc" }), "/work/app", false, &off, "");
+        assert_eq!((grep.target.as_str(), grep.resolved_path()), ("/work/app", "/work/app"));
+    }
+
+    #[test]
     fn claude_code_settings_where_claude_config_dir_keeps_them() {
         // The folder is handed in (`assess_at`), as assess_with hands in what
         // $CLAUDE_CONFIG_DIR says: this test never sets the variable.
@@ -2535,13 +2782,28 @@ mod tests {
             "~/.config/claude/settings.json",
             "/home/dev/.config/claude/plugins/../settings.json",
             "/HOME/dev/.config/Claude/Settings.json",
+            // Out of the home folder and back in: still the same file.
+            "~/../dev/.config/claude/settings.json",
+            "$HOME/../dev/.config/claude/settings.local.json",
+            "${HOME}/../../home/dev/.config/claude/settings.json",
         ] {
             assert_eq!(write(path, dir), Critical, "{path}");
         }
         assert_eq!(write("/home/dev/.config/claude/agents/reviewer.md", dir), High);
         assert_eq!(write("/home/dev/.config/claude/commands/deploy.md", dir), High);
+        assert_eq!(write("~/../dev/.config/claude/hooks/stop.sh", dir), High);
         assert_eq!(bash("echo '{}' > /home/dev/.config/claude/settings.json", dir), Critical);
         assert_eq!(bash("cd ~/.config/claude && cp /tmp/x.json settings.local.json", dir), Critical);
+        for command in [
+            "echo x > ~/../dev/.config/claude/settings.json",
+            "cp /tmp/x ~/../dev/.config/claude/settings.json",
+            "cp /tmp/x $HOME/../dev/.config/claude/settings.local.json",
+            "cd ~/.. && cp /tmp/x dev/.config/claude/settings.json",
+        ] {
+            assert_eq!(bash(command, dir), Critical, "{command}");
+        }
+        let mcp = at("mcp__fs__write_file", json!({ "path": "~/../dev/.config/claude/settings.json" }), dir);
+        assert_eq!(mcp.level, Critical);
         assert_eq!(bash("cat /home/dev/.config/claude/settings.json", dir), Medium, "like cat ~/.claude/settings.json");
         let mcp = at("mcp__fs__write_file", json!({ "path": "/home/dev/.config/claude/settings.json" }), dir);
         assert_eq!(mcp.level, Critical);
