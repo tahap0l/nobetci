@@ -6,6 +6,13 @@
 // the clipboard to paste. The table below is the whole list of places a prompt
 // can go: the front end only names a target, it never supplies a URL.
 //
+// A prompt in an address may be sent as soon as the page opens: a search runs
+// at once, and some chat apps send what they are handed. That is up to each
+// service and changes without notice, so every target that receives the prompt
+// counts as one that may send it (`may_send_on_open`), unless its maker
+// documents that the link only fills the text box. The island words its
+// "it's open" message by that flag.
+//
 // "Ask here" answers in the island itself through the Prompt Studio provider
 // (Ollama on this computer, or OpenAI once the user chose it and saved a key).
 // Neither the prompt nor the answer is stored.
@@ -21,25 +28,47 @@ struct Target {
     home: &'static str,
     /// Address with `{}` for the URL-encoded prompt, when the app reads one.
     with_prompt: Option<&'static str>,
+    /// The page may send the prompt as soon as it opens, before the user can
+    /// look at it (see the top of this file).
+    may_send_on_open: bool,
 }
 
 const TARGETS: &[Target] = &[
-    Target { id: "chatgpt", home: "https://chatgpt.com/", with_prompt: Some("https://chatgpt.com/?q={}") },
-    Target { id: "claude", home: "https://claude.ai/new", with_prompt: Some("https://claude.ai/new?q={}") },
-    Target { id: "gemini", home: "https://gemini.google.com/app", with_prompt: None },
+    Target {
+        id: "chatgpt",
+        home: "https://chatgpt.com/",
+        with_prompt: Some("https://chatgpt.com/?q={}"),
+        may_send_on_open: true,
+    },
+    // Documented for the desktop app's link only (below), not for the web.
+    Target {
+        id: "claude",
+        home: "https://claude.ai/new",
+        with_prompt: Some("https://claude.ai/new?q={}"),
+        may_send_on_open: true,
+    },
+    Target { id: "gemini", home: "https://gemini.google.com/app", with_prompt: None, may_send_on_open: false },
+    // A search address: the search runs when the page loads.
     Target {
         id: "perplexity",
         home: "https://www.perplexity.ai/",
         with_prompt: Some("https://www.perplexity.ai/search?q={}"),
+        may_send_on_open: true,
     },
     Target {
         id: "copilot",
         home: "https://copilot.microsoft.com/",
         with_prompt: Some("https://copilot.microsoft.com/?q={}"),
+        may_send_on_open: true,
     },
-    Target { id: "grok", home: "https://grok.com/", with_prompt: Some("https://grok.com/?q={}") },
-    Target { id: "deepseek", home: "https://chat.deepseek.com/", with_prompt: None },
-    Target { id: "mistral", home: "https://chat.mistral.ai/chat", with_prompt: None },
+    Target {
+        id: "grok",
+        home: "https://grok.com/",
+        with_prompt: Some("https://grok.com/?q={}"),
+        may_send_on_open: true,
+    },
+    Target { id: "deepseek", home: "https://chat.deepseek.com/", with_prompt: None, may_send_on_open: false },
+    Target { id: "mistral", home: "https://chat.mistral.ai/chat", with_prompt: None, may_send_on_open: false },
 ];
 
 /// A desktop app that can take the prompt instead of the browser.
@@ -54,12 +83,16 @@ struct AppLink {
     launch: &'static str,
     /// Longest encoded prompt the app takes in the link.
     max: usize,
+    /// The app may send the prompt as soon as it opens (see the top of this file).
+    may_send_on_open: bool,
 }
 
 /// Desktop apps, best first for each target. Links are documented by the apps:
 /// Claude Desktop (`claude://claude.ai/new?q=`), the ChatGPT desktop app
 /// (`codex://threads/new?prompt=`), Perplexity (`perplexity-app://search?q=`).
-/// A link only fills the app's text box; the user still presses send.
+/// Claude documents that its link only fills the text box for the user to
+/// review and send; Perplexity's is a search, which runs at once; for the
+/// ChatGPT app nothing is documented either way.
 const APPS: &[(&str, AppLink)] = &[
     (
         "claude",
@@ -69,6 +102,7 @@ const APPS: &[(&str, AppLink)] = &[
             with_prompt: Some("claude://claude.ai/new?q={}"),
             launch: "claude://claude.ai/new",
             max: 13_000,
+            may_send_on_open: false,
         },
     ),
     (
@@ -79,9 +113,20 @@ const APPS: &[(&str, AppLink)] = &[
             with_prompt: Some("codex://threads/new?prompt={}"),
             launch: "codex://threads/new",
             max: MAX_URL_PROMPT,
+            may_send_on_open: true,
         },
     ),
-    ("chatgpt", AppLink { scheme: "chatgpt", handler: "chatgpt", with_prompt: None, launch: "chatgpt://", max: 0 }),
+    (
+        "chatgpt",
+        AppLink {
+            scheme: "chatgpt",
+            handler: "chatgpt",
+            with_prompt: None,
+            launch: "chatgpt://",
+            max: 0,
+            may_send_on_open: false,
+        },
+    ),
     (
         "perplexity",
         AppLink {
@@ -90,9 +135,20 @@ const APPS: &[(&str, AppLink)] = &[
             with_prompt: Some("perplexity-app://search?q={}"),
             launch: "perplexity-app://",
             max: MAX_URL_PROMPT,
+            may_send_on_open: true,
         },
     ),
-    ("copilot", AppLink { scheme: "ms-copilot", handler: "copilot", with_prompt: None, launch: "ms-copilot:", max: 0 }),
+    (
+        "copilot",
+        AppLink {
+            scheme: "ms-copilot",
+            handler: "copilot",
+            with_prompt: None,
+            launch: "ms-copilot:",
+            max: 0,
+            may_send_on_open: false,
+        },
+    ),
 ];
 
 /// The installed desktop app for `target`, with its display name.
@@ -103,12 +159,24 @@ fn installed_app(target: &str) -> Option<(&'static AppLink, String)> {
     })
 }
 
-/// The app link for `prompt`, and whether the prompt travels in it.
-fn app_address(link: &AppLink, prompt: &str) -> (String, bool) {
+/// Where a prompt goes, and how it gets there.
+#[derive(Debug, PartialEq)]
+struct Address {
+    url: String,
+    /// The prompt travels in the address; otherwise the user pastes it.
+    prefilled: bool,
+    /// The prompt travels in the address and may be sent as soon as it opens.
+    may_send_on_open: bool,
+}
+
+/// The app link for `prompt`.
+fn app_address(link: &AppLink, prompt: &str) -> Address {
     let encoded = encode(prompt.trim());
     match link.with_prompt {
-        Some(template) if !encoded.is_empty() && encoded.len() <= link.max => (template.replace("{}", &encoded), true),
-        _ => (link.launch.to_string(), false),
+        Some(template) if !encoded.is_empty() && encoded.len() <= link.max => {
+            Address { url: template.replace("{}", &encoded), prefilled: true, may_send_on_open: link.may_send_on_open }
+        }
+        _ => Address { url: link.launch.to_string(), prefilled: false, may_send_on_open: false },
     }
 }
 
@@ -174,23 +242,26 @@ fn encode(text: &str) -> String {
     out
 }
 
-/// Where a prompt for `target` goes, and whether it travels in the address.
-fn address(target: &str, prompt: &str) -> Option<(String, bool)> {
+/// Where a prompt for `target` goes in the browser.
+fn address(target: &str, prompt: &str) -> Option<Address> {
     let t = TARGETS.iter().find(|t| t.id == target)?;
     let encoded = encode(prompt.trim());
-    match t.with_prompt {
+    Some(match t.with_prompt {
         Some(template) if !encoded.is_empty() && encoded.len() <= MAX_URL_PROMPT => {
-            Some((template.replace("{}", &encoded), true))
+            Address { url: template.replace("{}", &encoded), prefilled: true, may_send_on_open: t.may_send_on_open }
         }
-        _ => Some((t.home.to_string(), false)),
-    }
+        _ => Address { url: t.home.to_string(), prefilled: false, may_send_on_open: false },
+    })
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Opened {
     /// The app received the prompt in its address; otherwise paste it.
     prefilled: bool,
+    /// The app received the prompt and may have sent it already, as it opened:
+    /// the island must not tell the user to press send.
+    may_send_on_open: bool,
     /// The desktop app that opened, or None for the browser.
     app: Option<String>,
 }
@@ -202,23 +273,27 @@ pub async fn assistant_open(app: AppHandle, target: String, prompt: String) -> R
     if prompt.chars().count() > MAX_PROMPT_CHARS {
         return Err(pick("The prompt is too long.", "Mesaj çok uzun.").to_string());
     }
-    let Some((url, prefilled)) = address(&target, &prompt) else {
+    let Some(web) = address(&target, &prompt) else {
         return Err(pick("Unknown AI app.", "Bilinmeyen yapay zekâ uygulaması.").to_string());
     };
     let use_apps = crate::current(&app).assistant_use_apps;
     tauri::async_runtime::spawn_blocking(move || {
         if use_apps {
             if let Some((link, name)) = installed_app(&target) {
-                let (link_url, in_link) = app_address(link, &prompt);
-                if crate::sys::open_app_link(&link_url) {
-                    crate::log::line(format!("assistant: opened the {target} app (prefilled: {in_link})"));
-                    return Ok(Opened { prefilled: in_link, app: Some(name) });
+                let to_app = app_address(link, &prompt);
+                if crate::sys::open_app_link(&to_app.url) {
+                    crate::log::line(format!("assistant: opened the {target} app (prefilled: {})", to_app.prefilled));
+                    return Ok(Opened {
+                        prefilled: to_app.prefilled,
+                        may_send_on_open: to_app.may_send_on_open,
+                        app: Some(name),
+                    });
                 }
             }
         }
-        if crate::sys::open_url(&url) {
-            crate::log::line(format!("assistant: opened {target} (prefilled: {prefilled})"));
-            Ok(Opened { prefilled, app: None })
+        if crate::sys::open_url(&web.url) {
+            crate::log::line(format!("assistant: opened {target} (prefilled: {})", web.prefilled));
+            Ok(Opened { prefilled: web.prefilled, may_send_on_open: web.may_send_on_open, app: None })
         } else {
             Err(pick("Couldn't open the browser.", "Tarayıcı açılamadı.").to_string())
         }
@@ -320,11 +395,11 @@ mod tests {
 
     #[test]
     fn prompts_travel_encoded_to_known_apps_only() {
-        let (url, prefilled) = address("chatgpt", "Merhaba dünya & ?").unwrap();
-        assert!(prefilled);
-        assert_eq!(url, "https://chatgpt.com/?q=Merhaba%20d%C3%BCnya%20%26%20%3F");
-        let (url, prefilled) = address("gemini", "hello").unwrap();
-        assert_eq!((url.as_str(), prefilled), ("https://gemini.google.com/app", false));
+        let web = address("chatgpt", "Merhaba dünya & ?").unwrap();
+        assert!(web.prefilled);
+        assert_eq!(web.url, "https://chatgpt.com/?q=Merhaba%20d%C3%BCnya%20%26%20%3F");
+        let web = address("gemini", "hello").unwrap();
+        assert_eq!((web.url.as_str(), web.prefilled), ("https://gemini.google.com/app", false));
         assert!(address("https://evil.test/?q={}", "x").is_none());
         assert!(address("unknown", "x").is_none());
     }
@@ -332,20 +407,61 @@ mod tests {
     #[test]
     fn a_prompt_too_long_for_an_address_goes_by_clipboard() {
         let long = "ş".repeat(2_000); // 2 bytes each, 6 encoded characters each
-        let (url, prefilled) = address("claude", &long).unwrap();
-        assert_eq!((url.as_str(), prefilled), ("https://claude.ai/new", false));
+        let web = address("claude", &long).unwrap();
+        assert_eq!(
+            web,
+            Address { url: "https://claude.ai/new".into(), prefilled: false, may_send_on_open: false },
+            "nothing can be sent when the prompt did not travel"
+        );
     }
 
     #[test]
     fn app_links_carry_the_prompt_only_when_it_fits() {
         let claude = &APPS.iter().find(|(id, _)| *id == "claude").unwrap().1;
-        let (url, prefilled) = app_address(claude, "Merhaba & ?");
-        assert!(prefilled);
-        assert_eq!(url, "claude://claude.ai/new?q=Merhaba%20%26%20%3F");
-        let (url, prefilled) = app_address(claude, &"ş".repeat(5_000));
-        assert_eq!((url.as_str(), prefilled), ("claude://claude.ai/new", false));
+        let to_app = app_address(claude, "Merhaba & ?");
+        assert!(to_app.prefilled);
+        assert_eq!(to_app.url, "claude://claude.ai/new?q=Merhaba%20%26%20%3F");
+        let to_app = app_address(claude, &"ş".repeat(5_000));
+        assert_eq!((to_app.url.as_str(), to_app.prefilled), ("claude://claude.ai/new", false));
         let copilot = &APPS.iter().find(|(id, _)| *id == "copilot").unwrap().1;
-        assert_eq!(app_address(copilot, "hi"), ("ms-copilot:".to_string(), false));
+        assert_eq!(
+            app_address(copilot, "hi"),
+            Address { url: "ms-copilot:".into(), prefilled: false, may_send_on_open: false }
+        );
+    }
+
+    #[test]
+    fn only_a_link_documented_to_wait_for_send_is_said_to_wait() {
+        // Every web address that carries the prompt may send it as it opens…
+        for t in TARGETS {
+            let web = address(t.id, "hello").unwrap();
+            assert_eq!(web.may_send_on_open, web.prefilled, "{}", t.id);
+            assert_eq!(t.may_send_on_open, t.with_prompt.is_some(), "{}", t.id);
+        }
+        // …searches above all.
+        let perplexity = address("perplexity", "hello").unwrap();
+        assert!(perplexity.url.contains("/search?q=") && perplexity.may_send_on_open);
+        // Claude documents that its desktop link only fills the text box.
+        let claude = &APPS.iter().find(|(id, _)| *id == "claude").unwrap().1;
+        let to_app = app_address(claude, "hello");
+        assert!(to_app.prefilled && !to_app.may_send_on_open);
+        let perplexity_app = &APPS.iter().find(|(id, _)| *id == "perplexity").unwrap().1;
+        assert!(app_address(perplexity_app, "hello").may_send_on_open);
+        // A link without the prompt never sends anything.
+        for (id, link) in APPS {
+            if link.with_prompt.is_none() {
+                assert!(!link.may_send_on_open, "{id}");
+            }
+        }
+    }
+
+    #[test]
+    fn the_island_learns_whether_the_prompt_may_be_on_its_way() {
+        let opened = Opened { prefilled: true, may_send_on_open: true, app: None };
+        assert_eq!(
+            serde_json::to_value(&opened).unwrap(),
+            serde_json::json!({ "prefilled": true, "maySendOnOpen": true, "app": null })
+        );
     }
 
     #[test]
