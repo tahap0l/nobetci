@@ -1,9 +1,12 @@
-// Tiny owl head for session pills (13–18 px): ear tufts, two eyes, a beak and
-// a mood-tinted ring. Stateless; `t` (seconds) only drives small pulses.
+// Mascot heads in a mood-tinted ring, for session rows, the pill and the
+// settings gallery. Every mascot's head comes from mascot.ts; below 30 px the
+// owl uses the tiny head below instead (ear tufts, two eyes, a beak), drawn for
+// that size. Stateless; `t` (seconds) only drives small pulses, which hold still
+// with the system's "reduce motion" setting.
 
 import { State } from "../core/state";
 import { drawMascot } from "./mascot";
-import { OWL_COLORS, type OwlMood } from "./owl";
+import { OWL_COLORS, prefersReducedMotion, type OwlMood } from "./owl";
 
 const TAU = Math.PI * 2;
 
@@ -45,6 +48,7 @@ export function drawOwlMini(
   theme = State.settings.mascotTheme,
 ): void {
   const C = OWL_COLORS;
+  if (prefersReducedMotion()) t = 0;
   const R = size / 2;
   const lw = Math.max(1, size * 0.075);
   const rr = R - lw / 2;
@@ -53,8 +57,9 @@ export function drawOwlMini(
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
 
-  // Mood ring, with the session accent as a short base arc.
-  const rate = PULSE[mood] ?? 0;
+  // Mood ring, with the session accent as a short base arc. It pulses for the
+  // moods that ask for attention (steady with reduced motion: t is held at 0).
+  const rate = t === 0 ? 0 : PULSE[mood] ?? 0;
   ctx.globalAlpha = rate > 0 ? 0.55 + 0.45 * (0.5 + 0.5 * Math.sin(t * rate)) : 0.9;
   ctx.strokeStyle = RING[mood] ?? RING.idle;
   ctx.lineWidth = lw;

@@ -1036,16 +1036,22 @@ export class Island {
   private drawOwl(dt: number) {
     const size = this.owlSize.value;
     const w = Math.max(1, Math.round(size));
-    const hCss = w + OWL_OVERHANG;
+    // The canvas is wider than the mascot (D15) so spread wings, tails, manes and
+    // the deny huffs are not cut by its edges, and it has headroom in proportion
+    // to the mascot for the badges and sparkles. It stays centred on the mascot,
+    // which therefore sits exactly where it did; the canvas takes no clicks.
+    const margin = Math.round(w * 0.2);
+    const cw = w + 2 * margin;
+    const hCss = w + Math.max(OWL_OVERHANG, Math.round(w * 0.7));
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     if (this.canvasPx !== w) {
       this.canvasPx = w;
-      this.owlCanvas.width = Math.round(w * dpr);
+      this.owlCanvas.width = Math.round(cw * dpr);
       this.owlCanvas.height = Math.round(hCss * dpr);
-      this.owlCanvas.style.width = `${w}px`;
+      this.owlCanvas.style.width = `${cw}px`;
       this.owlCanvas.style.height = `${hCss}px`;
     }
-    this.owlCanvas.style.left = `${this.owlX.value - w / 2}px`;
+    this.owlCanvas.style.left = `${this.owlX.value - cw / 2}px`;
     this.owlCanvas.style.top = `${this.owlY.value - hCss / 2}px`;
 
     const ctx = this.owlCanvas.getContext("2d");
@@ -1055,7 +1061,8 @@ export class Island {
     this.owl.lookY = -Math.tanh((State.mouse.y - this.owlY.value) / 200);
     this.owl.update(dt);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.clearRect(0, 0, w, hCss);
+    ctx.clearRect(0, 0, cw, hCss);
+    ctx.translate(margin, 0);
     this.owl.setSkin(State.settings.mascotTheme);
     this.owl.draw(ctx, w, hCss);
   }

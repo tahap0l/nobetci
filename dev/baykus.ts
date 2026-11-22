@@ -1,24 +1,30 @@
-// Dev preview for the owl: every mood at three sizes, a native-pixel 20 px
-// strip, emote/blink/poke controls, mini heads, the launch greeting and the
-// generated app icons.
+// Dev preview for the mascots: every mood at three sizes, a native-pixel strip
+// at the compact island's 24 px, emote/blink/poke controls, mini heads, the
+// launch greeting and the generated app icons — for any of the seven mascots.
 //
 // Snapshot params make headless screenshots reproducible, e.g.
-//   ?t=1.2&look=0.6,0.2&emote=hoot&accent=%233B9EFF&poke3
-// pre-simulates t seconds at 60 Hz, then pauses.
+//   ?skin=wolf&t=1.2&look=0.6,0.2&emote=hoot&accent=%233B9EFF&poke3
+// pre-simulates t seconds at 60 Hz, then pauses. `?theme=` works like `?skin=`,
+// and `&still` turns reduced motion on.
 
 import { OwlEngine, type OwlEmote, type OwlMood } from "../src/baykus/owl";
 import { drawOwlMini } from "../src/baykus/mini";
 import { OwlGreeting } from "../src/baykus/greeting";
+import { MASCOT_THEMES, type MascotTheme } from "../src/core/mascot-theme";
+import { State } from "../src/core/state";
 
 const MOODS: OwlMood[] = [
   "idle", "working", "thinking", "approval", "danger",
   "question", "error", "finished", "sleeping", "dizzy",
 ];
 const EMOTES: OwlEmote[] = ["happy", "love", "annoyed", "surprised", "hoot", "approve", "deny"];
-const SIZES = [20, 56, 140];
+/** The compact island's size, a card-sized one and a big one. */
+const SIZES = [24, 56, 140];
 const OVERHANG = 40;
-const STRIP_CELL = 30;
-const STRIP_ZOOM = 5;
+const STRIP_SIZE = 24;
+const STRIP_CELL = 32;
+const STRIP_ZOOM = 3;
+const SKINS = Object.keys(MASCOT_THEMES) as MascotTheme[];
 const ACCENTS: (string | null)[] = [null, "#F5A524", "#3B9EFF", "#34D399", "#F472B6"];
 
 interface Slot {
@@ -32,6 +38,11 @@ interface Slot {
 const dpr = Math.max(1, window.devicePixelRatio || 1);
 const app = document.getElementById("app") as HTMLDivElement;
 const q = new URLSearchParams(location.search);
+const asked = q.get("skin") ?? q.get("theme");
+let skin: MascotTheme = asked && (SKINS as string[]).includes(asked) ? (asked as MascotTheme) : "owl";
+let still = q.has("still");
+// The mini heads and the greeting draw whatever mascot the settings name.
+State.settings.mascotTheme = skin;
 
 function el<K extends keyof HTMLElementTagNameMap>(
   tag: K,
@@ -68,14 +79,37 @@ let accentIdx = 0;
 
 function addOwl(mood: OwlMood): OwlEngine {
   const owl = new OwlEngine();
+  owl.setSkin(skin);
+  owl.reducedMotion = still ? true : null;
   owl.setMood(mood);
   allOwls.push(owl);
   return owl;
 }
 
+/** Every engine on the page, the mini heads and the greeting switch to `next`. */
+function setSkin(next: MascotTheme) {
+  skin = next;
+  State.settings.mascotTheme = next;
+  for (const o of allOwls) o.setSkin(next);
+  for (const b of skinButtons) b.classList.toggle("on", b.dataset.skin === next);
+  const url = new URL(location.href);
+  url.searchParams.set("skin", next);
+  url.searchParams.delete("theme");
+  history.replaceState(null, "", url);
+}
+
 // ── Controls ────────────────────────────────────────────────────────────────
 
-const emoteBar = el("div", { className: "bar" }, el("span", { className: "lbl", textContent: "all owls" }));
+const skinBar = el("div", { className: "bar" }, el("span", { className: "lbl", textContent: "mascot" }));
+const skinButtons: HTMLButtonElement[] = [];
+for (const name of SKINS) {
+  const b = button(MASCOT_THEMES[name].en, () => setSkin(name));
+  b.dataset.skin = name;
+  b.classList.toggle("on", name === skin);
+  skinButtons.push(b);
+  skinBar.append(b);
+}
+const emoteBar = el("div", { className: "bar" }, el("span", { className: "lbl", textContent: "all" }));
 for (const e of EMOTES) emoteBar.append(button(e, () => allOwls.forEach((o) => o.triggerEmote(e))));
 emoteBar.append(
   button("blink", () => allOwls.forEach((o) => o.blink())),
@@ -98,16 +132,25 @@ const slowBtn = button("slow-mo", () => {
   speed = speed === 1 ? 0.25 : 1;
   slowBtn.classList.toggle("on", speed !== 1);
 });
+const stillBtn = button("reduce motion", () => {
+  still = !still;
+  stillBtn.classList.toggle("on", still);
+  for (const o of allOwls) o.reducedMotion = still ? true : null;
+});
+stillBtn.classList.toggle("on", still);
 app.append(
+  skinBar,
   emoteBar,
-  el("div", { className: "bar" }, el("span", { className: "lbl", textContent: "view" }), accentBtn, pauseBtn, slowBtn),
+  el("div", { className: "bar" }, el("span", { className: "lbl", textContent: "view" }), accentBtn, pauseBtn, slowBtn, stillBtn),
 );
 
-// ── 20 px strip at native pixels (no DPR), zoomed ───────────────────────────
+// ── Compact-size strip at native pixels (no DPR), zoomed ────────────────────
 
-app.append(el("h2", { textContent: `Compact island: every mood at 20 px, native pixels, zoomed ×${STRIP_ZOOM}` }));
+app.append(
+  el("h2", { textContent: `Compact island: every mood at ${STRIP_SIZE} px, native pixels, zoomed ×${STRIP_ZOOM}` }),
+);
 const stripW = STRIP_CELL * MOODS.length;
-const stripH = 20 + OVERHANG;
+const stripH = STRIP_SIZE + OVERHANG;
 const [stripCanvas, stripCtx] = makeCanvas(stripW, stripH, 1);
 const [stripZoomCanvas, stripZoom] = makeCanvas(stripW * STRIP_ZOOM, stripH * STRIP_ZOOM, 1);
 stripZoomCanvas.className = "zoom";
@@ -120,7 +163,7 @@ app.append(el("div", { className: "island strip" }, stripCanvas), stripZoomCanva
 
 // ── Mood cards ──────────────────────────────────────────────────────────────
 
-app.append(el("h2", { textContent: "Moods at 20 / 56 / 140 px (click to poke)" }));
+app.append(el("h2", { textContent: `Moods at ${SIZES.join(" / ")} px (click to poke)` }));
 const grid = el("div", { className: "cards" });
 for (const mood of MOODS) {
   const badge = el("span", { className: "badge" });
@@ -269,9 +312,10 @@ if (q.has("bench")) {
   // ?bench: time update+draw per frame at each size, printed into the page.
   const out = el("pre", { id: "bench" });
   const lines: string[] = [];
-  for (const [w, mood] of [[20, "idle"], [56, "idle"], [140, "idle"], [140, "danger"], [140, "dizzy"]] as const) {
+  for (const [w, mood] of [[24, "idle"], [56, "idle"], [140, "idle"], [140, "danger"], [140, "dizzy"]] as const) {
     const [, ctx] = makeCanvas(w, w + OVERHANG);
     const owl = new OwlEngine(7);
+    owl.setSkin(skin);
     owl.setMood(mood);
     owl.accent = "#3B9EFF";
     const n = 3000;
@@ -306,8 +350,8 @@ function frame(now: number): void {
   stripCtx.setTransform(1, 0, 0, 1, 0, 0);
   stripCtx.clearRect(0, 0, stripW, stripH);
   stripOwls.forEach((o, i) => {
-    stripCtx.setTransform(1, 0, 0, 1, i * STRIP_CELL + (STRIP_CELL - 20) / 2, 0);
-    o.draw(stripCtx, 20, stripH);
+    stripCtx.setTransform(1, 0, 0, 1, i * STRIP_CELL + (STRIP_CELL - STRIP_SIZE) / 2, 0);
+    o.draw(stripCtx, STRIP_SIZE, stripH);
   });
   stripZoom.clearRect(0, 0, stripZoom.canvas.width, stripZoom.canvas.height);
   stripZoom.drawImage(stripCanvas, 0, 0, stripZoom.canvas.width, stripZoom.canvas.height);

@@ -1,17 +1,18 @@
-// Mascot heads for small places (session rows, the settings gallery), where the
-// owl is a head too (mini.ts). The full characters are skins on the owl's engine
-// (skins.ts, owl.ts). They are drawn in the owl's own
-// language (see owl.ts / mini.ts): flat fills, one dark outline around the whole
+// Mascot heads for small places (session rows, the pill, the settings gallery).
+// The full characters are skins on the owl's engine (skins.ts, owl.ts); these
+// heads share one language: flat fills, one dark outline around the whole
 // silhouette, big round eyes with a rimmed iris and a highlight, and the same
-// mood expressions. Original artwork; nothing is imported.
+// mood expressions. Below 30 px, where an outline only blurs the shape, the owl
+// keeps its own hand-tuned little head (mini.ts). Original artwork; nothing is
+// imported. (website/public/mascot-themes.js keeps a copy of these designs.)
 //
 // Every mascot lives in a 100 × 100 box (y down). Shapes are plain path strings
 // turned into Path2D once.
 
 import type { MascotTheme } from "../core/mascot-theme";
-import { OWL_COLORS, type OwlMood } from "./owl";
+import { OWL_COLORS, prefersReducedMotion, type OwlMood } from "./owl";
 
-type Theme = Exclude<MascotTheme, "owl">;
+type Theme = MascotTheme;
 type Layer = readonly [fill: string, path: string];
 
 interface Design {
@@ -40,6 +41,19 @@ const mirror = (points: (side: 1 | -1) => string) => points(-1) + points(1);
 const at = (side: number, dx: number) => 50 + side * dx;
 
 const DESIGNS: Record<Theme, Design> = {
+  owl: {
+    outline: "#1B110A",
+    body: [
+      [OWL_COLORS.headBottom, mirror((s) => `M${at(s, 12)} 34L${at(s, 33)} 9L${at(s, 40)} 50Z`)],
+      [OWL_COLORS.headBottom, "M10 57a40 31 0 1 0 80 0a40 31 0 1 0 -80 0Z"],
+    ],
+    marks: [
+      [OWL_COLORS.tuftInner, mirror((s) => `M${at(s, 19)} 33L${at(s, 31)} 18L${at(s, 34)} 38Z`)],
+      [OWL_COLORS.disc, dot(31, 54, 19.5) + dot(69, 54, 19.5)],
+    ],
+    face: [[OWL_COLORS.beak, "M43.5 63H56.5L50 78Z"]],
+    eye: { x: 19, y: 54, r: 14, white: OWL_COLORS.disc, iris: OWL_COLORS.iris, lid: OWL_COLORS.lid },
+  },
   wolf: {
     outline: "#1A1E27",
     body: [
@@ -185,10 +199,13 @@ function build(theme: Theme): Built {
 }
 
 function isTheme(theme: MascotTheme): theme is Theme {
-  return theme !== "owl" && Object.prototype.hasOwnProperty.call(DESIGNS, theme);
+  return Object.prototype.hasOwnProperty.call(DESIGNS, theme);
 }
 
-/** Draws a mascot other than the owl; returns false when the owl should be drawn instead. */
+/**
+ * Draws a mascot's head; returns false when mini.ts should draw it instead
+ * (the owl below 30 px, which has a head of its own made for that size).
+ */
 export function drawMascot(
   ctx: CanvasRenderingContext2D,
   theme: MascotTheme,
@@ -200,10 +217,10 @@ export function drawMascot(
   lookX = 0,
   lookY = 0,
 ): boolean {
-  if (!isTheme(theme)) return false;
+  if (!isTheme(theme) || (theme === "owl" && size < 30)) return false;
   const { design, silhouette, body, marks, face, lines, strokes } = build(theme);
   const alert = mood === "approval" || mood === "danger" || mood === "question";
-  const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const still = prefersReducedMotion();
   const bounce = alert && !still ? Math.sin(time * 6) * size * 0.035 : 0;
   const scale = size / 100;
   // Below this the outline, rims and highlights are thinner than a pixel and only blur the shape.
@@ -245,7 +262,8 @@ export function drawMascot(
     ctx.globalAlpha = 1;
   }
 
-  drawEyes(ctx, design, mood, time, detailed, alert ? 1 : lookX, alert ? 0 : lookY);
+  // With reduced motion the eyes hold still too (no working glance, no dizzy whirl).
+  drawEyes(ctx, design, mood, still ? 0 : time, detailed, alert ? 1 : lookX, alert ? 0 : lookY);
 
   for (const [fill, path] of face) {
     ctx.fillStyle = fill;
