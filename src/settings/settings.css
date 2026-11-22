@@ -17,6 +17,11 @@
   --medium: #f5a524;
   --high: #fb923c;
   --critical: #f4505e;
+  /* Risk levels, as on the island's card (src/style.css): MEDIUM leans yellow and
+     HIGH red-orange, so the two cannot be mistaken (HIGH needs a hold, MEDIUM does
+     not; A-19). --medium and --high stay the window's warning colours. */
+  --risk-medium: #f2c94c;
+  --risk-high: #f97a3c;
   --ok-text: #7ee2b8;
   --bad-text: #ff8a93;
   --warn-text: #f7bd57;
@@ -830,6 +835,12 @@ textarea.input {
 .select option {
   background: #1b1b21;
 }
+/* Sized like the small buttons beside it (History's CSV separator). */
+.select.select-sm {
+  height: 28px;
+  border-radius: 8px;
+  font-size: 12.5px;
+}
 .time-input {
   width: 120px;
   font-variant-numeric: tabular-nums;
@@ -999,14 +1010,14 @@ textarea.input {
   border-color: rgba(52, 211, 153, 0.3);
 }
 .chip.lvl-medium {
-  color: var(--medium);
-  background: rgba(245, 165, 36, 0.1);
-  border-color: rgba(245, 165, 36, 0.3);
+  color: var(--risk-medium);
+  background: rgba(242, 201, 76, 0.1);
+  border-color: rgba(242, 201, 76, 0.3);
 }
 .chip.lvl-high {
-  color: var(--high);
-  background: rgba(251, 146, 60, 0.12);
-  border-color: rgba(251, 146, 60, 0.36);
+  color: var(--risk-high);
+  background: rgba(249, 122, 60, 0.12);
+  border-color: rgba(249, 122, 60, 0.36);
 }
 .chip.lvl-critical {
   color: #ff7a86;
@@ -1017,10 +1028,10 @@ textarea.input {
   background: var(--low);
 }
 .lvl-bg-medium {
-  background: var(--medium);
+  background: var(--risk-medium);
 }
 .lvl-bg-high {
-  background: var(--high);
+  background: var(--risk-high);
 }
 .lvl-bg-critical {
   background: var(--critical);
@@ -1464,6 +1475,9 @@ code.path,
   gap: 8px;
 }
 .target-full {
+  /* The drawer body scrolls; the full target, the point of the drawer, never
+     shrinks to a sliver (a flex item would give way down to its padding). */
+  flex-shrink: 0;
   margin: 0;
   max-height: 42vh;
   overflow: auto;
@@ -1861,7 +1875,7 @@ code.path,
   opacity: 0.32;
 }
 .hold-demo.lvl-high .hold-fill {
-  background: var(--high);
+  background: var(--risk-high);
 }
 .hold-demo.lvl-critical .hold-fill {
   background: var(--critical);
@@ -2172,6 +2186,21 @@ code.path,
   color: var(--text);
   font-size: 11.5px;
   word-break: break-all;
+}
+/* A long pattern takes a line of its own, cut after two (the tooltip has all of it). */
+.rs-pat-long {
+  flex: 1 0 100%;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+/* A separator travels with what follows it, so no line ends on a lone · or →. */
+.rs-group {
+  min-width: 0;
+}
+.rs-keep {
+  white-space: nowrap;
 }
 .rs-proj {
   display: inline-flex;
@@ -2500,6 +2529,10 @@ code.path,
 .qt-arrow {
   padding-bottom: 7px;
   color: var(--faint);
+}
+/* hour : minute [AM/PM] on one line. */
+.time-pick {
+  white-space: nowrap;
 }
 .quiet-vis {
   margin-top: 12px;
@@ -2972,7 +3005,8 @@ code.path,
   width: 104px;
 }
 .hist-table th:nth-child(4) {
-  width: 92px;
+  /* Wide enough for "No answer" with its dot. */
+  width: 106px;
 }
 .hist-table th:nth-child(5) {
   width: 118px;
@@ -3015,6 +3049,11 @@ code.path,
 }
 .t-target {
   font-size: 11.5px;
+}
+/* A request with no target (too large to read): what Rust noted instead. */
+.t-note {
+  color: var(--muted);
+  font-style: italic;
 }
 .dec {
   display: inline-flex;

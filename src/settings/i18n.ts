@@ -103,8 +103,8 @@ const M = {
     "The relay (nobetci-hook) isn't in place, and the hooks would point at it, so nothing was installed. Restarting Nöbetçi puts it back.",
   ],
   "err.settingsUnreadable": [
-    "Nöbetçi'nin ayar dosyası açılışta okunamadı. Üzerine yazılmasın diye Nöbetçi yeniden başlatılana kadar değişiklikler kaydedilmiyor.",
-    "Nöbetçi's settings file couldn't be read at start. So that it isn't overwritten, changes aren't saved until Nöbetçi restarts.",
+    "Nöbetçi açılışta ayar dosyasını olduğu gibi kullanamadı. Üzerine yazılmasın diye Nöbetçi yeniden başlatılana kadar değişiklikler kaydedilmiyor.",
+    "Nöbetçi couldn't use its settings file as it was at start. So that it isn't overwritten, changes aren't saved until Nöbetçi restarts.",
   ],
   "err.saveFailed": ["Ayarlar diske yazılamadı.", "The settings couldn't be written to disk."],
   "err.saveFailedDetail": ["Ayarlar diske yazılamadı: {detail}", "The settings couldn't be written to disk: {detail}"],
@@ -145,6 +145,8 @@ const M = {
   "by.busy": ["Meşgul", "Busy"],
   "by.unseen": ["Görülmedi", "Not seen"],
   "by.resolved": ["Başka yerde yanıtlandı", "Answered elsewhere"],
+  // Answered in Nöbetçi, but the request had already ended: Claude Code never got it.
+  "by.undelivered": ["Ulaşmadı", "Not delivered"],
   "policy.trusted": ["Güvenilir", "Trusted"],
   "policy.normal": ["Normal", "Normal"],
   "policy.strict": ["Sıkı", "Strict"],
@@ -172,10 +174,14 @@ const M = {
   "shell.quiet.hours": ["Sessiz saatlerdesin", "Quiet hours"],
   "shell.quiet.fullscreen": ["Tam ekran: sessiz", "Full screen: quiet"],
   "shell.hookWarn": ["Bağlantı ilgi bekliyor", "Connection needs attention"],
-  "shell.loadErrorTitle": ["Ayarlar okunamadı.", "Settings couldn't be read."],
+  // Rust's detail follows the text: what failed, which values kept their defaults, where the copy is.
+  "shell.loadErrorTitle": [
+    "Nöbetçi ayar dosyasını olduğu gibi kullanamadı.",
+    "Nöbetçi couldn't use its settings file as it is.",
+  ],
   "shell.loadErrorText": [
-    "Nöbetçi varsayılanlarla açıldı ve bozuk dosyanın bir kopyasını sakladı. Asıl dosyanın üzerine yazmamak için yeniden başlatana kadar değişiklikler kaydedilmez.",
-    "Nöbetçi started with the defaults and kept a copy of the broken file. To leave the original alone, changes aren't saved until you restart.",
+    "Varsayılanlarla ya da dosyadan okuyabildiği her değerle açıldı (ayrıntılar aşağıda). Dosyanın üzerine yazmamak için Nöbetçi yeniden başlayana kadar değişiklikler kaydedilmez.",
+    "It started with the defaults, or with every value it could read (details below). To leave the file alone, changes aren't saved until Nöbetçi restarts.",
   ],
   "shell.saveErrorTitle": ["Son değişiklik kaydedilemedi.", "The last change wasn't saved."],
   "shell.warn.autostart": [
@@ -545,6 +551,15 @@ const M = {
     "A hook setting is out of date. Reinstall it.",
   ],
   "claude.noEntries": ["settings.json'da Nöbetçi girdisi yok.", "No Nöbetçi entries in settings.json."],
+  // Windows only (hooks_status.gitBashOnly): the relay's path has $, a backtick, or spaces with no short name.
+  "claude.gitBashOnly": [
+    "Hook'lar yalnızca Claude Code'un Git Bash kullandığı yerde çalışır.",
+    "Hooks run only where Claude Code uses Git Bash.",
+  ],
+  "claude.gitBashOnlyText": [
+    "Relay'in yolunda hem Git Bash'te hem PowerShell'de çalışan bir komutla yazılamayan karakterler var, bu yüzden hook'lar Git Bash için yazıldı. Claude masaüstü uygulaması hook'ları PowerShell'de çalıştırabilir; o zaman oradaki istekler Nöbetçi'ye ulaşmaz.",
+    "The relay's path has characters that no hook command can run in both Git Bash and PowerShell, so the hooks are written for Git Bash. The Claude desktop app may run hooks in PowerShell, and then its requests don't reach Nöbetçi.",
+  ],
   "claude.kv.settings": ["Claude ayarları", "Claude settings"],
   "claude.kv.relay": ["Relay", "Relay"],
   "claude.kv.events": ["Kurulu olaylar", "Installed events"],
@@ -1289,6 +1304,8 @@ const M = {
   "hist.f.by": ["Karar veren", "Decided by"],
   "hist.f.rule": ["Kural", "Rule"],
   "hist.f.message": ["Claude'a mesaj", "Message to Claude"],
+  // No answer reached Claude Code (decision "none"): the message is Nöbetçi's note on why.
+  "hist.f.note": ["Not", "Note"],
   "hist.f.duration": ["Süre", "Took"],
   "hist.f.session": ["Oturum", "Session"],
   "hist.f.id": ["Kimlik", "ID"],

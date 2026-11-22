@@ -14,11 +14,14 @@ import {
   onEvent,
   type AgentProvider,
   type AuditFilter,
+  type AuditStats,
   type BootInfo as CoreBootInfo,
   type HealthReport as CoreHealthReport,
   type HookPreview as CoreHookPreview,
+  type HookStatus as CoreHookStatus,
 } from "../core/bridge";
 import type { RuleMode, Settings } from "../core/settings-model";
+import { localDayStarts } from "./days";
 import { t } from "./i18n";
 
 /**
@@ -34,8 +37,19 @@ export type StatusLineOwner = "ours" | "foreign" | "none";
 /** `statusLine` is set by Rust for Claude Code; a foreign one is never "missing". */
 export type HealthReport = Omit<CoreHealthReport, "statusLine"> & { statusLine?: StatusLineOwner };
 
-/** `settingsLoadError`: settings.json could not be read at start (defaults are in use). */
+/**
+ * `settingsLoadError`: settings.json could not be used as it was at start —
+ * Rust's own words (localised): what failed, which values kept their defaults
+ * when only some could be read, where a copy of the file is, what to do.
+ */
 export type BootInfo = Omit<CoreBootInfo, "settingsLoadError"> & { settingsLoadError?: string | null };
+
+/**
+ * `gitBashOnly` (Windows only): no spelling of the relay's path runs in both
+ * Git Bash and PowerShell, so the hooks are written for Git Bash and run only
+ * where Claude Code uses it (hooks.rs `git_bash_only`).
+ */
+export type HookStatus = Omit<CoreHookStatus, "gitBashOnly"> & { gitBashOnly?: boolean };
 
 /** Payload of the `settings-warning` event: something that did not apply (e.g. autostart). */
 export interface SettingsWarning {
@@ -50,11 +64,30 @@ async function invokeOrThrow<T>(cmd: string, args?: Record<string, unknown>): Pr
   return invoke<T>(cmd, args);
 }
 
+/** Like the Bridge's own calls: null outside Nöbetçi, or when Rust fails (logged). */
+async function invokeOrNull<T>(cmd: string, args?: Record<string, unknown>): Promise<T | null> {
+  if (!IS_TAURI) return null;
+  try {
+    return await invoke<T>(cmd, args);
+  } catch (err) {
+    console.error(`[nobetci] ${cmd} failed`, err);
+    return null;
+  }
+}
+
 /** The commands whose shape differs from the Bridge, or that only this window uses. */
 const settingsCommands = {
   /** Resolves to the settings Rust kept; rejects with `save_failed: …` or `settings_unreadable`. */
   saveSettings: (settings: Settings) => invokeOrThrow<Settings>("save_settings", { settings }),
   boot: () => Bridge.boot() as Promise<BootInfo | null>,
+  hooksStatus: () => Bridge.hooksStatus() as Promise<HookStatus | null>,
+  /**
+   * Totals for the last `days` days in per-day buckets (C-18): `dayStarts` are
+   * the local midnights, days + 1 of them, oldest first (days.ts). Rust buckets
+   * by them when they are valid and by `tzOffsetMin` otherwise.
+   */
+  auditStats: (days: number, dayStarts: number[] = localDayStarts(days)) =>
+    invokeOrNull<AuditStats>("audit_stats", { days, tzOffsetMin: new Date().getTimezoneOffset(), dayStarts }),
   /** Diff to show before anything is written. Rejects with `relay_missing` when installing without a relay. */
   hooksPreview: (install: boolean) => invokeOrThrow<HookPreview>("hooks_preview", { install }),
   /** Writes exactly the previewed content; resolves to the backup path (null: there was no file). */
@@ -84,7 +117,6 @@ type BridgeUsed = Pick<
   | "rulesTest"
   | "auditQuery"
   | "pickFolder"
-  | "auditStats"
   | "auditProjects"
   | "settingsReset"
   | "settingsImport"
@@ -96,7 +128,6 @@ type BridgeUsed = Pick<
   | "openAiKeyStatus"
   | "notify"
   | "hotkeysStatus"
-  | "hooksStatus"
   | "deleteOpenAiKey"
   | "closeSettingsWindow"
   | "buddyResetPosition"

@@ -4,7 +4,7 @@
 
 import { ALL_EVENTS } from "../../core/settings-model";
 import { h } from "../../ui/dom";
-import { api, errCode, errText, type HealthReport, type HookPreview } from "../api";
+import { api, errCode, errText, type HealthReport, type HookPreview, type HookStatus } from "../api";
 import { cache, loadHookStatus } from "../data";
 import { t, type MsgKey } from "../i18n";
 import { icon } from "../icons";
@@ -187,7 +187,18 @@ function statusBlock(): HTMLElement {
       h("dd", {}, chips),
     ),
     s.hookReady ? null : notice("error", t("err.relayMissing")),
+    gitBashNote(s),
   );
+}
+
+/**
+ * Windows: no spelling of the relay's path runs in both Git Bash and PowerShell,
+ * so the hooks are quoted for Git Bash, and a hook Claude Code runs in
+ * PowerShell never reaches Nöbetçi (hooks.rs git_bash_only). Shared with the wizard.
+ */
+export function gitBashNote(s: HookStatus | null): HTMLElement | null {
+  if (!s?.gitBashOnly) return null;
+  return notice("warn", h("strong", { text: t("claude.gitBashOnly") }), " ", t("claude.gitBashOnlyText"));
 }
 
 export function healthRunningView(): HTMLElement {

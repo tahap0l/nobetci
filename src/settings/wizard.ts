@@ -15,7 +15,7 @@ import { icon, owlMark, type IconName } from "./icons";
 import { languagePicker } from "./lang";
 import { devParam, go } from "./nav";
 import { settings, update } from "./store";
-import { checkHealth, healthRunningView, healthView, hooksLost, openPreview } from "./tabs/claude";
+import { checkHealth, gitBashNote, healthRunningView, healthView, hooksLost, openPreview } from "./tabs/claude";
 import { ceilingControl, guardControls, holdControls } from "./tabs/guvenlik";
 import { button, holdKeyboard, kbd, notice, pushLayer } from "./ui";
 
@@ -205,6 +205,8 @@ function connectStatus(): HTMLElement {
     );
   if (!hs) return notice("warn", t("claude.statusFailed"));
   const relay = hs.hookReady ? null : notice("error", t("wz.connect.noRelay"));
+  // Said before the install too: on this Windows profile the hooks run in Git Bash only.
+  const gitBash = gitBashNote(hs);
   if (hs.installed && !hs.stale)
     return h(
       "div",
@@ -221,6 +223,7 @@ function connectStatus(): HTMLElement {
         ),
       ),
       relay,
+      gitBash,
     );
   if (hs.stale)
     return h(
@@ -236,6 +239,7 @@ function connectStatus(): HTMLElement {
       }),
       error,
       relay,
+      gitBash,
     );
   return h(
     "div",
@@ -252,6 +256,7 @@ function connectStatus(): HTMLElement {
     }),
     error,
     relay,
+    gitBash,
   );
 }
 
