@@ -24,8 +24,9 @@ mod win {
         SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT, KEYEVENTF_KEYUP, VK_MENU,
     };
     use windows::Win32::UI::WindowsAndMessaging::{
-        EnumWindows, GetWindow, GetWindowLongPtrW, GetWindowTextLengthW, GetWindowThreadProcessId, IsIconic,
-        IsWindowVisible, SetForegroundWindow, ShowWindow, GWL_EXSTYLE, GW_OWNER, SW_RESTORE, WS_EX_TOOLWINDOW,
+        EnumWindows, GetForegroundWindow, GetWindow, GetWindowLongPtrW, GetWindowTextLengthW, GetWindowThreadProcessId,
+        IsIconic, IsWindowVisible, SetForegroundWindow, ShowWindow, GWL_EXSTYLE, GW_OWNER, SW_RESTORE,
+        WS_EX_TOOLWINDOW,
     };
 
     /// Visible, titled, unowned, not a tool window: what Alt-Tab would show.
@@ -69,9 +70,18 @@ mod win {
             if IsIconic(hwnd).as_bool() {
                 let _ = ShowWindow(hwnd, SW_RESTORE);
             }
-            // Windows only lets the foreground process hand focus away. A tap of Alt
-            // lifts that lock for the next SetForegroundWindow — the standard, if
-            // unlovely, way for a background helper to raise another app's window.
+            if GetForegroundWindow() == hwnd {
+                return true;
+            }
+            // The click on the island was the last input event, which normally
+            // lets Nöbetçi hand the foreground over.
+            if SetForegroundWindow(hwnd).as_bool() {
+                return true;
+            }
+            // Refused: a tap of Alt lifts the foreground lock for the next try —
+            // the standard, if unlovely, way for a background helper to raise
+            // another app's window. Only as a fallback, because a bare Alt can
+            // put whichever app receives it into its menu bar.
             let key = |flags| INPUT {
                 r#type: INPUT_KEYBOARD,
                 Anonymous: INPUT_0 { ki: KEYBDINPUT { wVk: VK_MENU, dwFlags: flags, ..Default::default() } },
