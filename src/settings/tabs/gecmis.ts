@@ -221,6 +221,15 @@ function asLevel(l: string): RiskLevel {
   return l === "medium" || l === "high" || l === "critical" ? l : "low";
 }
 
+/** Rust's note that stands in for a missing target, or "". Only a request too
+ *  large to read (pipe.rs `too_long`) has one: it was never scored, so it has no
+ *  kind and no target, and with no answer (decision none) its message is
+ *  Nöbetçi's note on why. Any other message is what Claude was told, or a note
+ *  on the decision, never a target: only the drawer shows it, under its label. */
+function oversizeNote(e: AuditEntry): string {
+  return !e.target && !e.kind && e.decision === "none" ? e.message : "";
+}
+
 // ── Detail drawer ─────────────────────────────────────────────────────────────
 
 let closeDrawer: (() => void) | null = null;
@@ -235,7 +244,8 @@ function openDetail(index: number) {
     kind: "subtle",
     small: true,
     icon: "copy",
-    // A request too large to read has no target to copy.
+    // No target (a request too large to read, or one sent with no arguments):
+    // nothing to copy.
     disabled: !e.target,
     onClick: async () => {
       try {
@@ -526,6 +536,7 @@ function table(): HTMLElement {
   }
   const tbody = h("tbody", {});
   page.entries.forEach((e: AuditEntry, i) => {
+    const note = oversizeNote(e);
     const tr = h(
       "tr",
       { tabindex: "0", "data-fk": `hrow:${e.id}` },
@@ -534,14 +545,17 @@ function table(): HTMLElement {
       h("td", {}, levelChip(asLevel(e.level), true)),
       h("td", {}, decisionChip(e.decision)),
       h("td", { class: "t-by", text: byLabel(e.by) }),
-      // A request too large to read has no target: Rust's note says what happened.
+      // The target; for a request too large to read, Rust's note on why there is
+      // none. A message to Claude never shows here (see oversizeNote).
       h(
         "td",
-        { class: "t-target", title: (e.target || e.message).slice(0, 400) },
+        { class: "t-target", title: (e.target || note).slice(0, 400) || undefined },
         e.tool ? h("span", { class: "t-tool", text: e.tool }) : null,
         e.target
           ? h("span", { class: "mono", text: e.target })
-          : h("span", { class: "t-note", text: e.message || "—" }),
+          : note
+            ? h("span", { class: "t-note", text: note })
+            : h("span", { class: "muted", text: "—" }),
       ),
     );
     tr.addEventListener("click", () => openDetail(i));
