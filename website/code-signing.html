@@ -50,62 +50,98 @@
         <article class="policy-content" lang="tr" data-lang-block="tr">
           <div class="eyebrow"><span class="eyebrow-dot"></span>Kod imzalama</div>
           <h1>Kod imzalama politikası</h1>
-          <p class="policy-intro">Ücretsiz kod imzalama <a href="https://signpath.io" target="_blank" rel="noreferrer">SignPath.io</a> tarafından, sertifika <a href="https://signpath.org" target="_blank" rel="noreferrer">SignPath Foundation</a> tarafından sağlanmaktadır.</p>
-          <p class="policy-status"><strong>Durum:</strong> Nöbetçi, SignPath Foundation'ın açık kaynak kod imzalama programına başvurdu. Şimdiye kadarki sürümlerin hiçbiri (v2.4.1 dahil) kod imzalı değil; Windows'ta SmartScreen bu yüzden uyarı gösterebilir. Başvuru kabul edilip imzalama açılınca her Windows sürümü aşağıda anlatıldığı gibi imzalanır; bu not ilk imzalı sürümle güncellenir.</p>
+          <p class="policy-intro">Ücretsiz kod imzalama <a href="https://signpath.io" target="_blank" rel="noreferrer">SignPath.io</a> tarafından, sertifika <a href="https://signpath.org" target="_blank" rel="noreferrer">SignPath Foundation</a> tarafından sağlanmaktadır. (Free code signing provided by SignPath.io, certificate by SignPath Foundation.)</p>
+          <p class="policy-status"><strong>Durum:</strong> Nöbetçi, SignPath Foundation'ın açık kaynak kod imzalama programına başvurdu. Şimdiye kadarki sürümlerin hiçbiri (v2.4.1 dahil) kod imzalı değil; Windows'ta SmartScreen bu yüzden uyarı gösterebilir. Başvuru kabul edilip imzalama açılınca her Windows sürümü aşağıda anlatıldığı gibi imzalanır; bu not ilk imzalı sürümle güncellenir. O zamana kadar her indirdiğin dosyayı sürümdeki <code>SHA256SUMS.txt</code> ile doğrula (<a href="#imzayi-kontrol-etmek">İmzayı kontrol etmek</a> bölümü nasıl yapılacağını anlatır). Her sürümün notları, o sürümün dosyalarının imzalı olup olmadığını söyler.</p>
           <h2>Neler imzalanır</h2>
-          <p>Windows'ta her sürümde üç dosya imzalanır: uygulama (<code>nobetci.exe</code>), Claude Code'un her kanca olayında çalıştırdığı aktarıcı (<code>nobetci-hook.exe</code>) ve ikisini taşıyan kurulum dosyası (<code>Nobetci-&lt;sürüm&gt;-setup.exe</code>).</p>
-          <p>İmzalanan her dosyada ürün adı <strong>Nobetci</strong> ve yayımlanan sürüm yazar; yazmayan dosyayı SignPath reddeder. Yalnızca bu deponun kaynak kodundan derlenen dosyalar imzalanır. Kurulum dosyasındaki değiştirilmemiş NSIS eklentileri bu sertifikayla imzalanmaz. WebView2 pakete konmaz: eksikse kurulum dosyası Microsoft'un kendi imzalı kurulumunu indirir.</p>
-          <p>macOS sürümleri, proje Apple Developer Program'a katıldığında Apple'ın Developer ID'siyle imzalanır ve Apple onayından geçer. Linux paketleri imzalanmaz; sürümdeki <code>SHA256SUMS.txt</code> ile doğrulanır.</p>
-          <h2>Bir sürüm nasıl imzalanır</h2>
+          <p>Windows'ta her sürümde üç dosya imzalanır:</p>
           <ul>
-            <li>Sürüm, <code>main</code> dalından <a href="https://github.com/tahap0l/nobetci/blob/main/.github/workflows/release.yml" target="_blank" rel="noreferrer">Release iş akışıyla</a> elle başlatılır; yalnızca GitHub'ın kendi sunucularında çalışır.</li>
-            <li>İş akışı sürüm numaralarını denetler, testleri çalıştırır, uygulamayı ve aktarıcıyı o commit'ten derler.</li>
-            <li>İki program SignPath'e imzalama isteği olarak gider. Onaylayıcı isteğin Release iş akışından, <code>main</code> dalından ve yayımlanan commit'ten geldiğini denetleyip onaylar.</li>
-            <li>Kurulum dosyası imzalı programlardan oluşturulur ve ikinci istek olarak aynı şekilde onaylanır.</li>
-            <li>İmza denetlenir, SHA-256 değeri <code>SHA256SUMS.txt</code> dosyasına yazılır ve sürüm GitHub'da yayımlanır.</li>
+            <li><code>nobetci.exe</code>: uygulama;</li>
+            <li><code>nobetci-hook.exe</code>: Claude Code'un her kanca olayında çalıştırdığı aktarıcı;</li>
+            <li><code>Nobetci-&lt;sürüm&gt;-setup.exe</code>: ikisini taşıyan kurulum dosyası (aynı dosya <code>Nobetci-setup.exe</code> adıyla da yayımlanır).</li>
           </ul>
+          <p>İmzalanan her dosyada ürün adı <strong>Nobetci</strong> ve yayımlanan sürüm yazar; yazmayan dosyayı SignPath reddeder. Bu politika kapsamında yalnızca bu deponun kaynak kodundan derlenen dosyalar imzalanır.</p>
+          <p>Kurulum dosyası iki imzalı programı bayt bayt aynen taşır: <code>tauri bundle --no-binary-patching</code> ile oluşturulur ve iş akışı, kurulum dosyası SignPath'e gitmeden önce paketlemenin programları imzadan döndükleri hâliyle bıraktığını hash değerleriyle denetler. Şu dosyalar bu sertifikayla imzalanmaz:</p>
+          <ul>
+            <li>kurulum dosyasındaki, kurulum aracının parçası olan değiştirilmemiş NSIS eklentileri;</li>
+            <li>kurulum sırasında kurulum dosyasının senin bilgisayarına yazdığı <code>uninstall.exe</code>;</li>
+            <li>WebView2 çalışma ortamı; pakete hiç konmaz: eksikse kurulum dosyası Microsoft'un kendi imzalı kurulumunu indirir.</li>
+          </ul>
+          <p>macOS sürümleri, proje Apple Developer Program'a katıldığında Apple'ın Developer ID'siyle imzalanır ve Apple onayından (notarization) geçer; bu imza SignPath'ten gelmez. O zamana kadar uygulama yalnızca ad-hoc imzalıdır. Linux paketleri imzalanmaz; sürümdeki <code>SHA256SUMS.txt</code> ile doğrulanır.</p>
+          <h2>Bir sürüm nasıl imzalanır</h2>
+          <ol>
+            <li>Sürüm <code>main</code> dalından elle başlatılır: <strong>Actions → Release → Run workflow</strong>, oluşturulacak etiketle (<code>vX.Y.Z</code>). Bir sürüm başlatmanın tek yolu budur. <a href="https://github.com/tahap0l/nobetci/blob/main/.github/workflows/release.yml" target="_blank" rel="noreferrer">Release iş akışı</a> yalnızca GitHub'ın kendi sunucularında çalışır; başka bir daldan başlatılan çalışma her şeyi derleyip test eder ama hiçbir şey yayımlamaz.</li>
+            <li>İş akışı etiketin <code>package.json</code>, <code>tauri.conf.json</code> ve <code>Cargo.toml</code> sürümüyle aynı olduğunu denetler, testleri çalıştırır, uygulamayı ve aktarıcıyı o commit'ten derler. Bu derleme işleri üçüncü taraf kodu (npm ve cargo bağımlılıkları) çalıştırdığı için yalnızca okuma yetkili bir jeton alır, imzalama sırlarına erişemez.</li>
+            <li>İki program, kendi işlerinin ilk adımında, o makinede depodan ya da npm'den hiçbir şey çalışmadan SignPath'e imzalama isteği olarak gider. Onaylayıcı, isteğin Release iş akışından, <code>main</code> dalından ve yayımlanan commit'ten geldiğini SignPath'te denetler; ancak ondan sonra onaylar.</li>
+            <li>Kurulum dosyası imzalı programlardan (yukarıda anlatıldığı gibi değiştirilmeden) oluşturulur ve npm'den hiçbir şeyin çalışmadığı temiz bir makineden ikinci istek olarak SignPath'e gider; aynı şekilde onaylanır.</li>
+            <li>İmzalı kurulum dosyası denetlenir (<code>Get-AuthenticodeSignature</code>), SHA-256 değeri <code>SHA256SUMS.txt</code> dosyasına yazılır ve sürüm GitHub'da yayımlanır. Etiket zaten başka bir commit'i gösteriyorsa iş akışı, <strong>replace</strong> ile başlatılmadıkça yayımlamayı reddeder; <strong>replace</strong> etiketi az önce derlenen commit'e taşır, sürümün dosyalarını ve notlarını değiştirir.</li>
+          </ol>
+          <p>macOS'ta Developer ID imzası ve Apple onayı, yalnızca Apple'ın kendi araçlarının (<code>codesign</code>, <code>notarytool</code>, <code>stapler</code>) dosyalara dokunduğu temiz bir makinede, ayrı bir işte yapılır: Apple sırları erişilebilirken depodan, npm'den ya da cargo'dan hiçbir şey çalışmaz.</p>
+          <p>İş akışının beklediği SignPath ayarları <a href="https://github.com/tahap0l/nobetci/tree/main/.signpath" target="_blank" rel="noreferrer"><code>.signpath/</code></a> klasöründedir.</p>
           <h2>Ekip rolleri</h2>
           <ul>
-            <li><strong>Kod yazanlar ve gözden geçirenler:</strong> <a href="https://github.com/tahap0l" target="_blank" rel="noreferrer">tahap0l</a> (<a href="https://github.com/tahap0l/nobetci/graphs/contributors" target="_blank" rel="noreferrer">katkıda bulunanlar</a>). Dış katkılar pull request olarak gelir ve ancak incelenip CI'dan geçince birleştirilir.</li>
-            <li><strong>Onaylayıcılar:</strong> <a href="https://github.com/tahap0l" target="_blank" rel="noreferrer">tahap0l</a>. Her imzalama isteğine tek tek karar verir.</li>
+            <li><strong>Kod yazanlar ve gözden geçirenler:</strong> <a href="https://github.com/tahap0l" target="_blank" rel="noreferrer">tahap0l</a> (<a href="https://github.com/tahap0l/nobetci/graphs/contributors" target="_blank" rel="noreferrer">katkıda bulunanlar</a>)</li>
+            <li><strong>Onaylayıcılar:</strong> <a href="https://github.com/tahap0l" target="_blank" rel="noreferrer">tahap0l</a></li>
           </ul>
+          <p><strong>Kod yazanlar</strong> kaynak kodu doğrudan değiştirebilir. <strong>Gözden geçirenler</strong>, ekip dışından gelen her değişikliği inceler: dış katkılar pull request olarak gelir; yalnızca incelenip CI'dan geçtikten sonra birleştirilir. <strong>Onaylayıcılar</strong> her imzalama isteği için derlemenin imzalanıp imzalanamayacağına karar verir.</p>
           <p>Ekipteki herkes GitHub'da ve SignPath'te çok adımlı doğrulama (MFA) kullanır.</p>
           <h2>Gizlilik</h2>
-          <p>Bu program, kullanıcı ya da programı kuran veya kullanan kişi özellikle istemedikçe başka ağ sistemlerine hiçbir bilgi aktarmaz. Ağa çıkan özelliklerin hepsi (Mesaj Atölyesi, asistanın <strong>Burada sor</strong> seçeneği, hava durumu) sen açana kadar kapalıdır. Ayrıntılar <a href="/privacy.html">gizlilik politikasında</a>.</p>
+          <p>Bu program, kullanıcı ya da programı kuran veya kullanan kişi özellikle istemedikçe başka ağ sistemlerine hiçbir bilgi aktarmaz.</p>
+          <p>Ağa çıkan özelliklerin hepsi sen açana kadar kapalıdır: Mesaj Atölyesi'nin Ollama veya OpenAI incelemesi, ada asistanının <strong>Burada sor</strong> seçeneği ve hava durumu kartı (şehir seçince Open-Meteo). Asistandan bir yapay zekâ uygulaması ya da sitesi açıldığında mesajın o uygulamaya ya da tarayıcına verilir; Nöbetçi göndermez. Ayrıntılar <a href="/privacy.html">gizlilik politikasında</a>.</p>
           <h2>Sistemindeki değişiklikler</h2>
-          <p>Nöbetçi yalnızca o anki kullanıcı için kurulur. Kancalarını <code>~/.claude/settings.json</code> dosyasına (bağlarsan Codex'in ve Cursor'un kanca dosyalarına da) ancak değişikliği ve tarihli yedeği gösterdikten sonra, sen uygula dediğinde ekler. Windows'taki kaldırma aracı bu girdileri her dosyanın yedeğini alarak geri çıkarır.</p>
-          <h2>İmzayı kontrol etmek</h2>
-          <p>Windows'ta dosyaya sağ tıkla → <strong>Özellikler → Dijital İmzalar</strong>, ya da PowerShell'de <code>Get-AuthenticodeSignature .\Nobetci-&lt;sürüm&gt;-setup.exe</code> çalıştır. İmzasız bir sürümde durum <code>NotSigned</code> görünür; o zaman dosyayı <code>Get-FileHash .\Nobetci-&lt;sürüm&gt;-setup.exe</code> ile sürümdeki <code>SHA256SUMS.txt</code> değerine karşı doğrula. Bu depodan derlenmemiş imzalı bir dosya görürsen <a href="https://github.com/tahap0l/nobetci/blob/main/SECURITY.md" target="_blank" rel="noreferrer">gizli olarak bildir</a>.</p>
+          <p>Nöbetçi yalnızca o anki kullanıcı için kurulur. Kancalarını <code>~/.claude/settings.json</code> dosyasına — bağlarsan Codex'in ve Cursor'un kanca dosyalarına da — ancak değişikliğin tamamını ve tarihli bir yedeği gösterdikten sonra, sen uygula dediğinde ekler. Windows'taki kaldırma aracı bu girdileri her dosyanın yedeğini alarak geri çıkarır; uygulamayı, aktarıcıyı ve kaydettiysen ChatGPT Web köprüsünün tarayıcı kaydını siler. macOS ve Linux'ta aynısını nasıl yapacağını <a href="https://github.com/tahap0l/nobetci/blob/main/docs/kurulum.md" target="_blank" rel="noreferrer">kurulum kılavuzu</a> anlatır.</p>
+          <h2 id="imzayi-kontrol-etmek">İmzayı kontrol etmek</h2>
+          <p>Windows'ta dosyaya sağ tıkla → <strong>Özellikler → Dijital İmzalar</strong>, ya da PowerShell'de şunu çalıştır:</p>
+          <pre><code>Get-AuthenticodeSignature .\Nobetci-&lt;sürüm&gt;-setup.exe | Format-List Status, SignerCertificate</code></pre>
+          <p>İmzasız bir sürümde durum <code>NotSigned</code> görünür. O zaman dosyayı sürümdeki <code>SHA256SUMS.txt</code> ile doğrula: <code>Get-FileHash .\Nobetci-&lt;sürüm&gt;-setup.exe -Algorithm SHA256</code> komutunun verdiği değer orada yazanla aynı olmalı.</p>
+          <p>Bu politikayla imzalanmış ama bu depodan derlenmemiş bir dosya ya da başka bir tuhaflık görürsen <a href="https://github.com/tahap0l/nobetci/blob/main/SECURITY.md" target="_blank" rel="noreferrer">SECURITY.md</a>'de anlatıldığı gibi gizli olarak bildir.</p>
         </article>
         <article class="policy-content" lang="en" data-lang-block="en">
           <div class="eyebrow"><span class="eyebrow-dot"></span>Code signing</div>
           <h1>Code signing policy</h1>
           <p class="policy-intro">Free code signing provided by <a href="https://signpath.io" target="_blank" rel="noreferrer">SignPath.io</a>, certificate by <a href="https://signpath.org" target="_blank" rel="noreferrer">SignPath Foundation</a>.</p>
-          <p class="policy-status"><strong>Status:</strong> Nöbetçi has applied for SignPath Foundation's open-source code signing. No release has been code-signed so far, v2.4.1 included, which is why SmartScreen may warn about the installer. Once the application is accepted and signing is switched on, every Windows release is signed as described here, and this note is updated with the first signed version.</p>
+          <p class="policy-status"><strong>Status:</strong> Nöbetçi has applied for SignPath Foundation's open-source code signing. No release has been code-signed so far, v2.4.1 included, which is why SmartScreen may warn about the installer. Once the application is accepted and signing is switched on, every Windows release is signed as described below, and this note is updated with the first signed version. Until then, check every download against the release's <code>SHA256SUMS.txt</code> (see <a href="#checking-a-signature">Checking a signature</a>). The notes of each release say whether its files are signed.</p>
           <h2>What is signed</h2>
-          <p>On Windows, each release signs three files: the app (<code>nobetci.exe</code>), the relay Claude Code starts for each hook event (<code>nobetci-hook.exe</code>), and the installer that carries both (<code>Nobetci-&lt;version&gt;-setup.exe</code>).</p>
-          <p>Every signed file carries the product name <strong>Nobetci</strong> and the version being released, and SignPath refuses a file that doesn't. Only files built from this repository's source are signed. The unmodified NSIS plug-ins inside the installer are not signed under this certificate. WebView2 is not shipped: when it is missing, the installer downloads Microsoft's own signed setup.</p>
-          <p>macOS builds are signed with Apple's Developer ID and notarized once the project is enrolled in the Apple Developer Program. Linux packages are not signed; check them against the release's <code>SHA256SUMS.txt</code>.</p>
-          <h2>How a release is signed</h2>
+          <p>On Windows, each release signs three files:</p>
           <ul>
-            <li>A release is started by hand from <code>main</code> with the <a href="https://github.com/tahap0l/nobetci/blob/main/.github/workflows/release.yml" target="_blank" rel="noreferrer">Release workflow</a>, which runs only on GitHub-hosted runners.</li>
-            <li>The workflow checks the version numbers, runs the tests, and builds the app and the relay from that commit.</li>
-            <li>The two programs go to SignPath as a signing request. An approver checks that it comes from the Release workflow, on <code>main</code>, at the commit being released, and only then approves it.</li>
-            <li>The installer is built from the signed programs and is approved the same way, as a second request.</li>
-            <li>The signature is checked, the SHA-256 goes into <code>SHA256SUMS.txt</code>, and the release is published on GitHub.</li>
+            <li><code>nobetci.exe</code>: the app;</li>
+            <li><code>nobetci-hook.exe</code>: the relay Claude Code starts for each hook event;</li>
+            <li><code>Nobetci-&lt;version&gt;-setup.exe</code>: the installer that carries both (also published as <code>Nobetci-setup.exe</code>, the same file).</li>
           </ul>
+          <p>Every signed file carries the product name <strong>Nobetci</strong> and the version being released, and SignPath refuses a file that doesn't. Only files built from this repository's source are signed under this policy.</p>
+          <p>The installer carries the two signed programs byte for byte: it is built with <code>tauri bundle --no-binary-patching</code>, and the workflow checks by hash that bundling left the programs exactly as they came back from signing, before the installer goes to SignPath itself. Some files are not signed under this certificate:</p>
+          <ul>
+            <li>the unmodified NSIS plug-ins inside the installer (part of the installer toolkit);</li>
+            <li><code>uninstall.exe</code>, which the installer writes on your machine at install time;</li>
+            <li>the WebView2 runtime, which is not shipped at all: when it is missing, the installer downloads Microsoft's own signed setup.</li>
+          </ul>
+          <p>macOS builds are signed with Apple's Developer ID and notarized by Apple once the project is enrolled in the Apple Developer Program; that signature does not come from SignPath. Until then the app is only ad-hoc signed. Linux packages are not signed; check them against the release's <code>SHA256SUMS.txt</code>.</p>
+          <h2>How a release is signed</h2>
+          <ol>
+            <li>A release is started by hand from the <code>main</code> branch: <strong>Actions → Release → Run workflow</strong>, with the tag to create (<code>vX.Y.Z</code>). This is the only way to start one. The <a href="https://github.com/tahap0l/nobetci/blob/main/.github/workflows/release.yml" target="_blank" rel="noreferrer">Release workflow</a> runs only on GitHub-hosted runners; a run from any other branch builds and tests everything but publishes nothing.</li>
+            <li>The workflow checks that the tag matches the version in <code>package.json</code>, <code>tauri.conf.json</code> and <code>Cargo.toml</code>, runs the tests, and builds the app and the relay from that commit. These build jobs run third-party code (npm and cargo dependencies), so they get a read-only token and no signing secrets.</li>
+            <li>The two programs go to SignPath as a signing request, first thing in a job of their own, before anything from the repository or npm runs on that machine. An approver checks on SignPath that the request comes from the Release workflow, on <code>main</code>, at the commit being released, and only then approves it.</li>
+            <li>The installer is built from the signed programs (unchanged, as above) and goes to SignPath as a second request, from a fresh machine where nothing from npm has run. It is approved the same way.</li>
+            <li>The signed installer is checked (<code>Get-AuthenticodeSignature</code>), its SHA-256 is written to <code>SHA256SUMS.txt</code>, and the release is published on GitHub. If the tag already exists on another commit, the workflow refuses to publish unless it was started with <strong>replace</strong>, which moves the tag to the commit just built and replaces the release's files and notes.</li>
+          </ol>
+          <p>On macOS, Developer ID signing and notarization run in a separate job on a fresh machine where only Apple's own tools (<code>codesign</code>, <code>notarytool</code>, <code>stapler</code>) touch the files: nothing from the repository, npm or cargo runs while the Apple secrets are in reach.</p>
+          <p>The SignPath settings the workflow expects are in <a href="https://github.com/tahap0l/nobetci/tree/main/.signpath" target="_blank" rel="noreferrer"><code>.signpath/</code></a>.</p>
           <h2>Team roles</h2>
           <ul>
-            <li><strong>Committers and reviewers:</strong> <a href="https://github.com/tahap0l" target="_blank" rel="noreferrer">tahap0l</a> (<a href="https://github.com/tahap0l/nobetci/graphs/contributors" target="_blank" rel="noreferrer">all contributors</a>). Outside contributions come in as pull requests and are merged only after review and passing CI.</li>
-            <li><strong>Approvers:</strong> <a href="https://github.com/tahap0l" target="_blank" rel="noreferrer">tahap0l</a>, deciding on each signing request.</li>
+            <li><strong>Committers and reviewers:</strong> <a href="https://github.com/tahap0l" target="_blank" rel="noreferrer">tahap0l</a> (<a href="https://github.com/tahap0l/nobetci/graphs/contributors" target="_blank" rel="noreferrer">all contributors</a>)</li>
+            <li><strong>Approvers:</strong> <a href="https://github.com/tahap0l" target="_blank" rel="noreferrer">tahap0l</a></li>
           </ul>
+          <p><strong>Committers</strong> may change the source code directly. <strong>Reviewers</strong> review every change from anyone who is not a committer: outside contributions come in as pull requests and are merged only after review and passing CI. <strong>Approvers</strong> decide, for each signing request, whether the build can be signed.</p>
           <p>Every team member uses multi-factor authentication for GitHub and for SignPath.</p>
           <h2>Privacy</h2>
-          <p>This program will not transfer any information to other networked systems unless specifically requested by the user or the person installing or operating it. Every feature that reaches the network (Prompt Studio, the assistant's <strong>Ask here</strong>, the weather card) is off until you turn it on. Details are in the <a href="/privacy.html">privacy policy</a>.</p>
+          <p>This program will not transfer any information to other networked systems unless specifically requested by the user or the person installing or operating it.</p>
+          <p>The features that reach the network are all off until you turn them on: Prompt Studio's Ollama or OpenAI review, the island assistant's <strong>Ask here</strong>, and the weather card (Open-Meteo, once you pick a city). Opening an AI app or website from the assistant hands your message to that app or your browser; Nöbetçi does not send it. Details are in the <a href="/privacy.html">privacy policy</a>.</p>
           <h2>Changes to your system</h2>
-          <p>Nöbetçi installs for the current user only. It adds its hooks to <code>~/.claude/settings.json</code> (and, if you connect them, to Codex's and Cursor's hook files) only after showing you the change and a dated backup, and only when you click to apply it. The Windows uninstaller takes those entries out again, each file after another backup.</p>
-          <h2>Checking a signature</h2>
-          <p>On Windows, right-click the file → <strong>Properties → Digital Signatures</strong>, or run <code>Get-AuthenticodeSignature .\Nobetci-&lt;version&gt;-setup.exe</code> in PowerShell. An unsigned release shows <code>NotSigned</code>; check it instead with <code>Get-FileHash .\Nobetci-&lt;version&gt;-setup.exe</code> against the release's <code>SHA256SUMS.txt</code>. If you find a signed file that was not built from this repository, <a href="https://github.com/tahap0l/nobetci/blob/main/SECURITY.md" target="_blank" rel="noreferrer">report it privately</a>.</p>
+          <p>Nöbetçi installs for the current user only. It adds its hooks to <code>~/.claude/settings.json</code> — and, if you connect them, to Codex's and Cursor's hook files — only after showing you the exact change and a dated backup, and only when you click to apply it. The Windows uninstaller takes those entries out again, each file after another backup, and removes the app, the relay and, if you registered it, the ChatGPT Web bridge's browser registration. On macOS and Linux the <a href="https://github.com/tahap0l/nobetci/blob/main/docs/install.md" target="_blank" rel="noreferrer">installation guide</a> shows how to do the same.</p>
+          <h2 id="checking-a-signature">Checking a signature</h2>
+          <p>On Windows, right-click the file → <strong>Properties → Digital Signatures</strong>, or run this in PowerShell:</p>
+          <pre><code>Get-AuthenticodeSignature .\Nobetci-&lt;version&gt;-setup.exe | Format-List Status, SignerCertificate</code></pre>
+          <p>An unsigned release shows <code>NotSigned</code>. Check it against the release's <code>SHA256SUMS.txt</code> instead: the value from <code>Get-FileHash .\Nobetci-&lt;version&gt;-setup.exe -Algorithm SHA256</code> must be the one listed there.</p>
+          <p>If you find a file signed under this policy that was not built from this repository, or anything else that looks wrong, report it privately as described in <a href="https://github.com/tahap0l/nobetci/blob/main/SECURITY.md" target="_blank" rel="noreferrer">SECURITY.md</a>.</p>
         </article>
         <div class="policy-content"><a class="policy-back" href="/" data-i18n="back">← Nöbetçi ana sayfasına dön</a></div>
       </main>
