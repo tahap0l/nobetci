@@ -339,6 +339,14 @@ impl Settings {
         self.hook_events.retain(|e| ALL_EVENTS.contains(&e.as_str()));
         self.deny_reasons.retain(|r| !r.trim().is_empty());
         self.deny_reasons.truncate(12);
+        // Folders compare as written: a quoted or padded one (an import, a
+        // hand-edited file, a path pasted from a terminal) would match nothing.
+        for project in &mut self.projects {
+            project.path = clean_path(&project.path);
+        }
+        for rule in &mut self.rules {
+            rule.project = clean_path(&rule.project);
+        }
         // The settings window finds a rule by its id, so every rule needs one of
         // its own: a hand-written or imported file may have none, or repeats.
         let stamp = crate::audit::now_ms();
@@ -356,6 +364,23 @@ impl Settings {
             }
         }
         self
+    }
+}
+
+/// A folder path without the whitespace and the matching quote pairs around it
+/// ("Copy as path" in Explorer quotes, a terminal may add spaces), as the
+/// settings window cleans it (`cleanPath` in kurallar.ts): quotes are peeled
+/// one pair at a time, trimming in between. A quote inside the path stays.
+fn clean_path(raw: &str) -> String {
+    // What JavaScript's trim() removes: Unicode white space and the BOM.
+    let blank = |c: char| c.is_whitespace() || c == '\u{FEFF}';
+    let mut path = raw.trim_matches(blank);
+    loop {
+        let mut chars = path.chars();
+        match (chars.next(), chars.next_back()) {
+            (Some(open @ ('"' | '\'')), Some(close)) if open == close => path = chars.as_str().trim_matches(blank),
+            _ => return path.to_string(),
+        }
     }
 }
 
@@ -962,6 +987,56 @@ mod tests {
         assert_eq!(ids.len(), 5, "ids must be unique: {ids:?}");
         assert!(s.rules.iter().all(|r| !r.id.is_empty()));
         assert_eq!(s.rules[1].id, "keep", "an id that is already unique stays");
+    }
+
+    #[test]
+    fn folder_paths_lose_the_quotes_and_spaces_around_them() {
+        // settings-tabs#11: an import or a hand-edited file, cleaned the way the
+        // settings window cleans what is typed (kurallar.ts cleanPath).
+        let paths = [
+            "\"C:\\work\\prod\"",
+            "  \"C:\\work\\prod\"\t",
+            "'/srv/app'",
+            "\" '/home/dev/x' \"",
+            "\u{FEFF}/opt/app\n",
+            "\"/half/open",
+            "/home/dev/it's",
+            "\"",
+            "\"\"",
+            "",
+        ];
+        let s = Settings {
+            projects: paths.iter().map(|p| ProjectPolicy { path: (*p).into(), ..ProjectPolicy::default() }).collect(),
+            rules: paths.iter().map(|p| UserRule { project: (*p).into(), ..UserRule::default() }).collect(),
+            ..Settings::default()
+        }
+        .sanitized();
+        let expected = [
+            "C:\\work\\prod",
+            "C:\\work\\prod",
+            "/srv/app",
+            "/home/dev/x",
+            "/opt/app",
+            "\"/half/open",
+            "/home/dev/it's",
+            "\"",
+            "",
+            "",
+        ];
+        assert_eq!(s.projects.iter().map(|p| p.path.as_str()).collect::<Vec<_>>(), expected);
+        assert_eq!(s.rules.iter().map(|r| r.project.as_str()).collect::<Vec<_>>(), expected);
+        // Cleaned, the folder is the session's again.
+        let trusted = Settings {
+            projects: vec![ProjectPolicy {
+                path: "\"C:\\work\\prod\"".into(),
+                mode: "trusted".into(),
+                note: "".into(),
+            }],
+            ..Settings::default()
+        };
+        assert!(crate::rules::policy_for(&trusted.projects, "C:\\work\\prod\\api").is_none(), "quoted: no match");
+        let trusted = trusted.sanitized();
+        assert_eq!(crate::rules::policy_for(&trusted.projects, "C:\\work\\prod\\api").unwrap().mode, "trusted");
     }
 
     fn scratch(name: &str) -> PathBuf {
