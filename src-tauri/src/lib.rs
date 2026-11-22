@@ -200,6 +200,16 @@ fn try_store(app: &AppHandle, next: Settings) -> Result<Settings, String> {
     saved.map(|()| stored)
 }
 
+/// Writes the preferences in memory to settings.json, in turn with `store`, so
+/// an older snapshot never lands after a newer one (the mascot's moves and its
+/// reset change memory first and save here).
+fn persist(app: &AppHandle) {
+    let _in_order = STORING.lock().unwrap_or_else(PoisonError::into_inner);
+    if let Err(err) = settings::save(&current(app)) {
+        log::line(format!("could not save settings: {err}"));
+    }
+}
+
 fn set_autostart(app: &AppHandle, on: bool) -> Result<(), String> {
     let manager = app.autolaunch();
     if on { manager.enable() } else { manager.disable() }.map_err(|e| e.to_string())
@@ -271,22 +281,30 @@ fn quiet_state(app: AppHandle) -> Option<&'static str> {
 }
 
 /// Hidden island → shrink the window to the invisible wake strip and park the
-/// cursor poll; anything else → full panel and 60 Hz polling.
+/// cursor poll; anything else → full panel and the cursor poll running.
 #[tauri::command]
 fn set_collapsed(app: AppHandle, shared: State<Shared>, collapsed: bool) {
     let s = shared.settings.lock().unwrap().clone();
     shared.gate.collapsed.store(collapsed, Ordering::Relaxed);
     apply_geometry(&app, &s, collapsed);
-    // The wake strip must always take the mouse, and a resize invalidates the flag.
+    // The wake strip must always take the mouse, and a resize invalidates the
+    // flag. A last poll tick that decided otherwise checks `collapsed` again on
+    // this thread before it applies anything (`island::set_click_through`).
     island::set_ignore_cursor(&app, false);
     shared.gate.forget_ignore_state();
     shared.gate.set_active(!collapsed);
+    #[cfg(target_os = "linux")]
+    island::fit_shape(&app, &shared.gate);
 }
 
 /// The front end pushes the island shape; Rust decides click-through from it.
 #[tauri::command]
-fn set_island_rect(shared: State<Shared>, x: f64, y: f64, width: f64, height: f64) {
+fn set_island_rect(app: AppHandle, shared: State<Shared>, x: f64, y: f64, width: f64, height: f64) {
     shared.gate.set_rect(island::IslandRect { x, y, w: width, h: height });
+    #[cfg(target_os = "linux")]
+    island::fit_shape(&app, &shared.gate);
+    #[cfg(not(target_os = "linux"))]
+    let _ = app;
 }
 
 #[tauri::command]
@@ -323,10 +341,10 @@ fn open_folder_in_editor(p: &str) -> bool {
 /// Linux: VS Code when it is on PATH, the file manager otherwise.
 #[cfg(target_os = "linux")]
 fn open_folder_in_editor(p: &str) -> bool {
-    if Command::new("code").arg(p).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn().is_ok() {
+    if sys::command("code").arg(p).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn().is_ok() {
         return true;
     }
-    Command::new("xdg-open").arg(p).spawn().is_ok()
+    sys::command("xdg-open").arg(p).spawn().is_ok()
 }
 
 #[cfg(target_os = "macos")]
@@ -369,11 +387,16 @@ fn find_on_path(stem: &str) -> Option<std::path::PathBuf> {
     None
 }
 
-/// Shows a file or folder of ours in Explorer / Finder.
+/// Shows a file or folder of ours in Explorer / Finder; "chatgpt-web" opens the
+/// ChatGPT Web guide, in Turkish when the interface is.
 #[tauri::command]
 fn open_location(what: String) -> bool {
     if what == "chatgpt-web" {
-        let url = "https://github.com/tahap0l/nobetci/tree/main/integrations/chatgpt-web";
+        let url = if is_tr() {
+            "https://github.com/tahap0l/nobetci/blob/main/integrations/chatgpt-web/README.tr.md"
+        } else {
+            "https://github.com/tahap0l/nobetci/tree/main/integrations/chatgpt-web"
+        };
         return sys::open_url(url);
     }
     let (path, select) = match what.as_str() {
@@ -402,7 +425,7 @@ fn reveal(path: &std::path::Path, select: bool) -> bool {
 #[cfg(target_os = "linux")]
 fn reveal(path: &std::path::Path, select: bool) -> bool {
     let dir = if select { path.parent().unwrap_or(path) } else { path };
-    Command::new("xdg-open").arg(dir).spawn().is_ok()
+    sys::command("xdg-open").arg(dir).spawn().is_ok()
 }
 
 #[cfg(target_os = "macos")]
@@ -531,7 +554,7 @@ async fn hooks_health(app: AppHandle, provider: Option<agent_hooks::Provider>) -
     let nonce = format!("{:x}-{}", audit::now_ms(), std::process::id());
     let payload = serde_json::json!({ "hook_event_name": pipe::PING_EVENT, "nonce": nonce, "cwd": "." }).to_string();
     let started = Instant::now();
-    let mut command = Command::new(&exe);
+    let mut command = sys::command(&exe);
     if let Some(provider) = provider {
         command.arg(provider.name());
     }
@@ -726,20 +749,23 @@ fn risk_categories() -> Vec<risk::CategoryInfo> {
 }
 
 // ── History ───────────────────────────────────────────────────────────────────
+//
+// Reading the history can take a moment on a long one, so these run off the
+// main thread (`async`): the island keeps drawing meanwhile.
 
-#[tauri::command]
-fn audit_query(log: State<audit::Log>, filter: audit::Filter) -> audit::Page {
+#[tauri::command(async)]
+fn audit_query(log: State<'_, audit::Log>, filter: audit::Filter) -> audit::Page {
     log.query(&filter)
 }
 
-#[tauri::command]
-fn audit_stats(log: State<audit::Log>, days: u32, tz_offset_min: i32) -> audit::Stats {
+#[tauri::command(async)]
+fn audit_stats(log: State<'_, audit::Log>, days: u32, tz_offset_min: i32) -> audit::Stats {
     log.stats(days, tz_offset_min)
 }
 
 /// Every project in the history, most frequent first — for filters and suggestions.
-#[tauri::command]
-fn audit_projects(log: State<audit::Log>) -> Vec<(String, usize)> {
+#[tauri::command(async)]
+fn audit_projects(log: State<'_, audit::Log>) -> Vec<(String, usize)> {
     log.projects()
 }
 
@@ -869,8 +895,9 @@ fn settings_reset(app: AppHandle) -> Result<Settings, String> {
 // ── Notifications and hotkeys ─────────────────────────────────────────────────
 
 /// A desktop notification for `kind` (approval, finished, error, waiting), if the
-/// settings want one right now. Returns whether it was shown.
-#[tauri::command]
+/// settings want one right now. Returns whether it was shown. Off the main
+/// thread: on Linux the first one asks the notification server what it reads.
+#[tauri::command(async)]
 fn notify(app: AppHandle, kind: String, title: String, body: String, island_visible: bool) -> bool {
     let s = current(&app);
     if !s.toast_enabled || !s.toast_events.contains(&kind) || quiet::reason(&s).is_some() {
@@ -881,10 +908,15 @@ fn notify(app: AppHandle, kind: String, title: String, body: String, island_visi
     }
     // Notifications linger in the action centre and can show on the lock screen:
     // no live tokens in them.
+    let body: String = redact::redact(&body).chars().take(240).collect();
+    // The body carries the command, path or URL Claude asked for. Where the
+    // server reads markup, it must show that text as written, not as links.
+    #[cfg(target_os = "linux")]
+    let body = if sys::notifications_read_markup() { sys::escape_markup(&body) } else { body };
     app.notification()
         .builder()
         .title(redact::redact(&title).chars().take(80).collect::<String>())
-        .body(redact::redact(&body).chars().take(240).collect::<String>())
+        .body(body)
         .show()
         .map_err(|e| log::line(format!("notification failed: {e}")))
         .is_ok()
@@ -904,10 +936,10 @@ fn log_line(message: String) {
 // ── Settings window ───────────────────────────────────────────────────────────
 
 /// WebView2 allows exactly one browser environment per app, and its options are
-/// fixed by whichever webview is created first. Every window must therefore ask
-/// for the *same* arguments as the island (see `additionalBrowserArgs` in
-/// tauri.conf.json) — a mismatch makes the second window come up blank, with no
-/// error anywhere.
+/// fixed by whichever webview is created first — the island's, which Tauri
+/// builds from tauri.conf.json before `setup` runs. Every later window must
+/// therefore ask for the *same* arguments (see `additionalBrowserArgs` there) —
+/// a mismatch makes it come up blank, with no error anywhere.
 const BROWSER_ARGS: &str =
     "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --autoplay-policy=no-user-gesture-required";
 
@@ -924,8 +956,10 @@ fn page_url(app: &AppHandle, page: &str) -> WebviewUrl {
 }
 
 /// The settings window is created hidden at launch and only ever shown and
-/// hidden afterwards. A WebView2 window created later silently comes up blank,
-/// so the window that works is the one that exists before the island's webview.
+/// hidden afterwards. It comes after the island's webview, which Tauri creates
+/// first from tauri.conf.json; what keeps it from coming up blank on Windows
+/// is asking for the island's exact browser arguments (`BROWSER_ARGS`), not
+/// the order.
 fn create_settings_window(app: &AppHandle) {
     let url = page_url(app, "settings.html");
     match WebviewWindowBuilder::new(app, "settings", url)
@@ -1046,13 +1080,10 @@ fn remove_all_hooks(out: &mut impl Write) -> i32 {
 }
 
 pub fn run() {
-    // Linux: X11 (XWayland under Wayland). A Wayland window can neither place
-    // itself at the top of the screen nor stay above the others, and the click
-    // guard and "go to window" speak X11. Somebody who set GDK_BACKEND knows why.
+    // Linux: X11 (XWayland under Wayland) for Nöbetçi itself; the programs it
+    // starts keep the desktop's own choice (`sys::command`).
     #[cfg(target_os = "linux")]
-    if std::env::var_os("GDK_BACKEND").is_none() && std::env::var_os("DISPLAY").is_some() {
-        std::env::set_var("GDK_BACKEND", "x11");
-    }
+    sys::use_x11();
 
     // Language first: default settings (deny reasons) depend on it.
     i18n::apply("auto");
@@ -1126,6 +1157,7 @@ pub fn run() {
             close_settings_window,
             buddy::buddy_reset_position,
             buddy::buddy_resize_by,
+            buddy::buddy_ready,
             assistant::assistant_open,
             assistant::assistant_ask,
             assistant::assistant_apps,
@@ -1144,16 +1176,21 @@ pub fn run() {
 
             let handle = app.handle().clone();
             tray::build(&handle)?;
-            // Before the island: see create_settings_window.
+            // The island's webview exists already (tauri.conf.json); these two
+            // ask for its browser arguments: see create_settings_window.
             create_settings_window(&handle);
             buddy::create(&handle, page_url(&handle, "buddy.html"), BROWSER_ARGS, &loaded);
 
-            if let Some(win) = island::window(&handle) {
-                island::make_non_activating(&win);
-                apply_geometry(&handle, &loaded, false);
-                let _ = win.show();
-            }
             gate.collapsed.store(false, Ordering::Relaxed);
+            if let Some(win) = island::window(&handle) {
+                island::make_non_activating(&win, island::Floating::Island);
+                apply_geometry(&handle, &loaded, false);
+                island::show(&win);
+                // Linux without a compositor: nothing drawn until the page says
+                // where the island is, instead of a black 720 × 460 box.
+                #[cfg(target_os = "linux")]
+                island::fit_shape(&handle, &gate);
+            }
             gate.set_active(true);
             island::spawn_cursor_poll(handle.clone(), gate.clone());
 
@@ -1195,6 +1232,163 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The commands `run()` registers, read from this file.
+    fn registered_commands() -> Vec<String> {
+        let src = include_str!("lib.rs");
+        let open = "generate_handler![";
+        let start = src.find(open).expect("run() registers its commands") + open.len();
+        let end = start + src[start..].find(']').expect("the list ends");
+        src[start..end]
+            .split(',')
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(|s| s.rsplit("::").next().unwrap_or(s).to_string())
+            .collect()
+    }
+
+    const WINDOWS: [&str; 3] = ["island", "settings", "buddy"];
+
+    /// Who may call each registered command (C-13). Every command must be
+    /// listed here: a new one fails this test until it is given a window.
+    fn expected_callers(command: &str) -> Option<&'static [&'static str]> {
+        const ISLAND: &[&str] = &["island"];
+        const SETTINGS: &[&str] = &["settings"];
+        const BUDDY: &[&str] = &["buddy"];
+        const ISLAND_AND_SETTINGS: &[&str] = &["island", "settings"];
+        const ALL: &[&str] = &["island", "settings", "buddy"];
+        const NOBODY: &[&str] = &[];
+        Some(match command {
+            "boot" => ALL,
+            "save_settings" | "quiet_state" | "notify" => ISLAND_AND_SETTINGS,
+            "set_dnd"
+            | "log_line"
+            | "set_collapsed"
+            | "set_island_rect"
+            | "reposition"
+            | "open_folder"
+            | "focus_session"
+            | "open_settings_window"
+            | "approval_ack"
+            | "approval_shown"
+            | "approval_pending"
+            | "approval_decision"
+            | "approval_respond"
+            | "approval_allow_low"
+            | "approval_decline"
+            | "island_keyboard"
+            | "island_media"
+            | "island_media_control"
+            | "island_stats"
+            | "island_weather"
+            | "assistant_open"
+            | "assistant_ask"
+            | "assistant_apps"
+            | "assistant_dictate"
+            | "set_assistant_target"
+            | "agenda_list"
+            | "agenda_put"
+            | "agenda_delete" => ISLAND,
+            "hotkeys_status"
+            | "open_location"
+            | "pick_folder"
+            | "close_settings_window"
+            | "buddy_reset_position"
+            | "hooks_status"
+            | "hooks_preview"
+            | "hooks_apply"
+            | "hooks_health"
+            | "agent_hooks_status"
+            | "agent_hooks_preview"
+            | "agent_hooks_apply"
+            | "rules_test"
+            | "rule_pattern_check"
+            | "risk_categories"
+            | "audit_query"
+            | "audit_stats"
+            | "audit_projects"
+            | "audit_clear"
+            | "audit_export"
+            | "settings_export"
+            | "settings_import"
+            | "settings_reset"
+            | "rewrite_prompt"
+            | "openai_api_key_status"
+            | "set_openai_api_key"
+            | "delete_openai_api_key" => SETTINGS,
+            "buddy_resize_by" | "buddy_open_island" | "buddy_ready" => BUDDY,
+            // No page calls it; the tray quits.
+            "quit_app" => NOBODY,
+            _ => return None,
+        })
+    }
+
+    #[test]
+    fn the_command_list_is_read_from_run() {
+        let commands = registered_commands();
+        assert!(commands.len() > 50, "{commands:?}");
+        for c in ["boot", "approval_decision", "approval_pending", "buddy_ready", "rule_pattern_check"] {
+            assert!(commands.iter().any(|x| x == c), "{c} is registered");
+        }
+    }
+
+    #[test]
+    fn each_window_reaches_only_its_own_commands() {
+        // The ACL exactly as it is built into the app from capabilities/ and permissions/.
+        let mut context: tauri::Context<tauri::Wry> = tauri::generate_context!();
+        let acl = context.runtime_authority_mut();
+        let can = |window: &str, command: &str| {
+            acl.resolve_access(command, window, window, &tauri::ipc::Origin::Local).is_some()
+        };
+
+        for command in registered_commands() {
+            let expected = expected_callers(&command)
+                .unwrap_or_else(|| panic!("{command}: say which window may call it (permissions/windows.toml)"));
+            let callers: Vec<&str> = WINDOWS.into_iter().filter(|w| can(w, &command)).collect();
+            assert_eq!(callers, expected, "who may call {command}");
+        }
+        // Answering a request is the island's alone (and no page can claim a
+        // hotkey press: that is checked in Rust, C-12).
+        for command in ["approval_decision", "approval_respond", "approval_allow_low", "approval_shown"] {
+            assert!(!can("buddy", command) && !can("settings", command), "{command}");
+        }
+        // A window that is not one of ours gets nothing.
+        assert!(!can("intruder", "boot"));
+
+        // Tauri's own commands: events for all three, sending events only from
+        // the island (the mascot's mood) and the mascot (its "ready"), dragging
+        // only for the mascot, and nothing that builds windows, trays, menus or
+        // images, or changes a window behind Rust's back.
+        for w in WINDOWS {
+            assert!(can(w, "plugin:event|listen") && can(w, "plugin:event|unlisten"), "{w} listens");
+            for command in [
+                "plugin:event|emit_to",
+                "plugin:webview|create_webview_window",
+                "plugin:window|create",
+                "plugin:window|set_ignore_cursor_events",
+                "plugin:window|set_focus",
+                "plugin:window|set_position",
+                "plugin:window|close",
+                "plugin:image|from_path",
+                "plugin:tray|new",
+                "plugin:menu|new",
+                "plugin:app|app_hide",
+                "plugin:path|resolve_directory",
+            ] {
+                assert!(!can(w, command), "{w} must not call {command}");
+            }
+        }
+        assert!(can("island", "plugin:event|emit") && can("buddy", "plugin:event|emit"));
+        assert!(!can("settings", "plugin:event|emit"));
+        assert!(can("buddy", "plugin:window|start_dragging"));
+        assert!(!can("island", "plugin:window|start_dragging") && !can("settings", "plugin:window|start_dragging"));
+        // Plugins are driven from Rust only.
+        for w in WINDOWS {
+            for command in ["plugin:dialog|open", "plugin:notification|notify", "plugin:autostart|enable"] {
+                assert!(!can(w, command), "{w} must not call {command}");
+            }
+        }
+    }
 
     #[test]
     fn remove_hooks_cleans_what_it_can_and_exits_1_for_what_it_cannot() {

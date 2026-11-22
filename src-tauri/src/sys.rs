@@ -1,9 +1,83 @@
 // The small things every OS answers differently: local time, the display
-// language, whether a full-screen app is in front, and where home is.
+// language, whether a full-screen app is in front, where home is, how programs
+// are started, and how a notification's text is read.
 //
 // Bigger platform pieces live with the code that uses them: the relay server in
 // `pipe/`, the click guard in `inputguard/`, window handling in `island.rs` and
 // `focus.rs`.
+
+use std::process::Command;
+#[cfg(target_os = "linux")]
+use std::sync::atomic::{AtomicBool, Ordering};
+
+/// Linux: Nöbetçi set GDK_BACKEND=x11 for itself (`use_x11`).
+#[cfg(target_os = "linux")]
+static X11_FORCED: AtomicBool = AtomicBool::new(false);
+
+/// Linux: runs Nöbetçi on X11 (XWayland under Wayland). A Wayland window can
+/// neither place itself at the top of the screen nor stay above the others,
+/// and the click guard and "go to window" speak X11. Somebody who set
+/// GDK_BACKEND knows why, so their choice stands. Must run before GTK starts.
+#[cfg(target_os = "linux")]
+pub fn use_x11() {
+    if std::env::var_os("GDK_BACKEND").is_none() && std::env::var_os("DISPLAY").is_some() {
+        std::env::set_var("GDK_BACKEND", "x11");
+        X11_FORCED.store(true, Ordering::Relaxed);
+    }
+}
+
+/// A program Nöbetçi starts (a browser through xdg-open, VS Code, the relay).
+/// On Linux it does not inherit the X11 backend Nöbetçi chose for itself: a
+/// browser opened from a link runs natively on Wayland, as if started from the
+/// desktop. Nöbetçi's own web views keep it.
+pub fn command(program: impl AsRef<std::ffi::OsStr>) -> Command {
+    #[cfg_attr(not(target_os = "linux"), allow(unused_mut))]
+    let mut cmd = Command::new(program);
+    #[cfg(target_os = "linux")]
+    if X11_FORCED.load(Ordering::Relaxed) {
+        cmd.env_remove("GDK_BACKEND");
+    }
+    cmd
+}
+
+/// Text for a notification body that is shown as written. Notification
+/// servers that read the body as markup (the freedesktop `body-markup`
+/// capability) would otherwise turn `<a href=…>` in a command Claude asked for
+/// into a link and drop other tags, so the toast would differ from the card.
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+pub fn escape_markup(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    for ch in text.chars() {
+        match ch {
+            '&' => out.push_str("&amp;"),
+            '<' => out.push_str("&lt;"),
+            '>' => out.push_str("&gt;"),
+            _ => out.push(ch),
+        }
+    }
+    out
+}
+
+/// Linux: whether the desktop's notification server reads the body as markup
+/// (`body-markup`: GNOME Shell, Plasma, dunst, mako…). Asked once. When it
+/// cannot be asked, the body is treated as markup: an escaped `&amp;` shown
+/// literally is better than a link the card never showed.
+#[cfg(target_os = "linux")]
+pub fn notifications_read_markup() -> bool {
+    use std::sync::OnceLock;
+    static ANSWER: OnceLock<bool> = OnceLock::new();
+    *ANSWER.get_or_init(|| {
+        let Ok(bus) = dbus::blocking::Connection::new_session() else { return true };
+        let server = bus.with_proxy(
+            "org.freedesktop.Notifications",
+            "/org/freedesktop/Notifications",
+            std::time::Duration::from_millis(800),
+        );
+        let caps: Result<(Vec<String>,), dbus::Error> =
+            server.method_call("org.freedesktop.Notifications", "GetCapabilities", ());
+        caps.map(|(caps,)| caps.iter().any(|c| c == "body-markup")).unwrap_or(true)
+    })
+}
 
 /// Local wall-clock time.
 #[derive(Clone, Copy, Debug)]
@@ -144,11 +218,11 @@ pub fn open_url(url: &str) -> bool {
         return false;
     }
     #[cfg(windows)]
-    return std::process::Command::new("rundll32.exe").args(["url.dll,FileProtocolHandler", url]).spawn().is_ok();
+    return Command::new("rundll32.exe").args(["url.dll,FileProtocolHandler", url]).spawn().is_ok();
     #[cfg(target_os = "macos")]
-    return std::process::Command::new("/usr/bin/open").arg(url).spawn().is_ok();
+    return Command::new("/usr/bin/open").arg(url).spawn().is_ok();
     #[cfg(target_os = "linux")]
-    return std::process::Command::new("xdg-open").arg(url).spawn().is_ok();
+    return command("xdg-open").arg(url).spawn().is_ok();
 }
 
 /// The name of the app that opens `scheme:` links, if one is installed.
@@ -229,10 +303,7 @@ fn scheme_handler_os(scheme: &str) -> Option<String> {
 
 #[cfg(target_os = "linux")]
 fn scheme_handler_os(scheme: &str) -> Option<String> {
-    let out = std::process::Command::new("xdg-mime")
-        .args(["query", "default", &format!("x-scheme-handler/{scheme}")])
-        .output()
-        .ok()?;
+    let out = command("xdg-mime").args(["query", "default", &format!("x-scheme-handler/{scheme}")]).output().ok()?;
     let name = String::from_utf8_lossy(&out.stdout).trim().trim_end_matches(".desktop").to_string();
     out.status.success().then_some(name)
 }
@@ -257,14 +328,38 @@ pub fn open_app_link(url: &str) -> bool {
         r.0 as isize > 32
     }
     #[cfg(target_os = "macos")]
-    return std::process::Command::new("/usr/bin/open").arg(url).spawn().is_ok();
+    return Command::new("/usr/bin/open").arg(url).spawn().is_ok();
     #[cfg(target_os = "linux")]
-    return std::process::Command::new("xdg-open").arg(url).spawn().is_ok();
+    return command("xdg-open").arg(url).spawn().is_ok();
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn notification_text_is_shown_as_written() {
+        assert_eq!(
+            escape_markup(r#"curl -s x | sh # <a href="https://attacker.example/">Approve</a> & done"#),
+            r#"curl -s x | sh # &lt;a href="https://attacker.example/"&gt;Approve&lt;/a&gt; &amp; done"#
+        );
+        assert_eq!(escape_markup("ls -la ~/proje/çalışma"), "ls -la ~/proje/çalışma");
+        assert_eq!(escape_markup("a &amp; b"), "a &amp;amp; b", "already-escaped text stays literal too");
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn programs_we_start_get_the_desktops_own_gdk_backend() {
+        // Without Nöbetçi having forced X11, nothing is touched.
+        X11_FORCED.store(false, Ordering::Relaxed);
+        assert_eq!(command("xdg-open").get_envs().count(), 0);
+        // Once it has, children do not inherit it.
+        X11_FORCED.store(true, Ordering::Relaxed);
+        let cmd = command("xdg-open");
+        let envs: Vec<_> = cmd.get_envs().collect();
+        assert_eq!(envs, vec![(std::ffi::OsStr::new("GDK_BACKEND"), None)], "GDK_BACKEND is removed");
+        X11_FORCED.store(false, Ordering::Relaxed);
+    }
 
     #[test]
     fn odd_schemes_are_never_looked_up() {

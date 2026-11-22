@@ -1,24 +1,32 @@
 // Linux: the few X11 questions Nöbetçi asks of the desktop.
 //
-// Nöbetçi runs on X11, or on XWayland under a Wayland session (main.rs picks the
-// X11 backend), because only there can a window place itself at the top of the
-// screen and stay above the others. The same connection answers:
+// Nöbetçi runs on X11, or on XWayland under a Wayland session (`sys::use_x11`
+// picks the X11 backend), because only there can a window place itself at the
+// top of the screen and stay above the others. The same connection answers:
 //   * which window is in front, and is it full screen (full-screen quiet);
 //   * which top-level window belongs to a process (go to the session's window);
-//   * which device a mouse press came from (the click guard, `inputguard/x11.rs`).
+//   * which device a mouse press came from (the click guard, `inputguard/x11.rs`);
+//   * whether a compositing manager runs, and if not, cuts the island's window
+//     down to the island (`island::fit_shape`).
 //
-// libX11 and libXi are loaded at run time (x11-dl), so a desktop without them
-// simply goes without these features instead of failing to start.
+// libX11, libXi and libXfixes are loaded at run time (x11-dl), so a desktop
+// without them simply goes without these features instead of failing to start.
 
 use std::ffi::CString;
-use std::os::raw::{c_int, c_uchar, c_ulong};
+use std::os::raw::{c_int, c_uchar, c_uint, c_ulong};
 use std::sync::OnceLock;
 
+use x11_dl::xfixes;
 use x11_dl::xlib::{self, Display, Xlib};
 
 pub fn xlib() -> Option<&'static Xlib> {
     static LIB: OnceLock<Option<Xlib>> = OnceLock::new();
     LIB.get_or_init(|| Xlib::open().ok()).as_ref()
+}
+
+fn xfixes() -> Option<&'static xfixes::Xlib> {
+    static LIB: OnceLock<Option<xfixes::Xlib>> = OnceLock::new();
+    LIB.get_or_init(|| xfixes::Xlib::open().ok()).as_ref()
 }
 
 /// A short-lived connection to the X server, closed when dropped.
@@ -76,6 +84,50 @@ impl Conn {
         unsafe { (self.x.XFree)(data.cast()) };
         out
     }
+
+    /// A text property (STRING or UTF8_STRING), if the window has one.
+    pub fn text(&self, win: c_ulong, prop: &str) -> Option<String> {
+        let prop = self.atom(prop);
+        let (mut kind, mut format, mut count, mut after) = (0, 0, 0, 0);
+        let mut data: *mut c_uchar = std::ptr::null_mut();
+        let rc = unsafe {
+            (self.x.XGetWindowProperty)(
+                self.dpy,
+                win,
+                prop,
+                0,
+                1024,
+                xlib::False,
+                xlib::AnyPropertyType as c_ulong,
+                &mut kind,
+                &mut format,
+                &mut count,
+                &mut after,
+                &mut data,
+            )
+        };
+        if rc != xlib::Success as c_int || data.is_null() {
+            return None;
+        }
+        let out = (format == 8)
+            .then(|| String::from_utf8_lossy(unsafe { std::slice::from_raw_parts(data, count as usize) }).into_owned());
+        unsafe { (self.x.XFree)(data.cast()) };
+        out
+    }
+
+    /// The windows directly inside `win`.
+    pub fn children(&self, win: c_ulong) -> Vec<c_ulong> {
+        let (mut root, mut parent) = (0, 0);
+        let mut list: *mut c_ulong = std::ptr::null_mut();
+        let mut count: c_uint = 0;
+        let ok = unsafe { (self.x.XQueryTree)(self.dpy, win, &mut root, &mut parent, &mut list, &mut count) };
+        if ok == 0 || list.is_null() {
+            return Vec::new();
+        }
+        let out = unsafe { std::slice::from_raw_parts(list, count as usize) }.to_vec();
+        unsafe { (self.x.XFree)(list.cast()) };
+        out
+    }
 }
 
 impl Drop for Conn {
@@ -124,6 +176,74 @@ pub fn activate_pid(pids: &[u32]) -> bool {
             &mut event,
         );
         (c.x.XFlush)(c.dpy);
+    }
+    true
+}
+
+/// Whether a compositing manager runs on the default screen: it owns the
+/// `_NET_WM_CM_S<n>` selection. Without one, X shows a window's transparent
+/// pixels as black. None when X cannot be asked.
+pub fn compositing() -> Option<bool> {
+    let c = Conn::open()?;
+    let screen = unsafe { (c.x.XDefaultScreen)(c.dpy) };
+    let selection = c.atom(&format!("_NET_WM_CM_S{screen}"));
+    Some(unsafe { (c.x.XGetSelectionOwner)(c.dpy, selection) } != 0)
+}
+
+/// Our own top-level window titled `title` (`_NET_WM_NAME`). Found by walking
+/// the window tree, because a window manager may have put it inside a frame of
+/// its own, and with none there is no `_NET_CLIENT_LIST` to ask.
+pub fn own_window(title: &str) -> Option<c_ulong> {
+    fn find(c: &Conn, win: c_ulong, pid: c_ulong, title: &str, depth: u32) -> Option<c_ulong> {
+        if depth > 0
+            && c.longs(win, "_NET_WM_PID").first() == Some(&pid)
+            && c.text(win, "_NET_WM_NAME").as_deref() == Some(title)
+        {
+            return Some(win);
+        }
+        if depth >= 3 {
+            return None;
+        }
+        c.children(win).into_iter().find_map(|child| find(c, child, pid, title, depth + 1))
+    }
+    let c = Conn::open()?;
+    find(&c, c.root(), c_ulong::from(std::process::id()), title, 0)
+}
+
+/// ShapeBounding (X11/extensions/shape.h): the part of a window that is drawn
+/// and takes the mouse.
+const SHAPE_BOUNDING: c_int = 0;
+
+/// Cuts `win` down to `rect` (x, y, width, height, in window pixels): only that
+/// part is drawn and takes the mouse. `None` gives it its whole area back.
+/// False when it could not be done.
+pub fn set_shape(win: c_ulong, rect: Option<(i32, i32, u32, u32)>) -> bool {
+    let (Some(c), Some(xf)) = (Conn::open(), xfixes()) else { return false };
+    let clamp = |v: i32| v.clamp(i32::from(i16::MIN), i32::from(i16::MAX)) as i16;
+    let size = |v: u32| v.min(u32::from(u16::MAX)) as u16;
+    unsafe {
+        let (mut event_base, mut error_base) = (0, 0);
+        if (xf.XFixesQueryExtension)(c.dpy, &mut event_base, &mut error_base) == 0 {
+            return false;
+        }
+        // Window shapes are XFixes 2; a client must say which version it speaks.
+        let (mut major, minor) = (5, 0);
+        if (xf.XFixesQueryVersion)(c.dpy, &mut major, &minor) == 0 || major < 2 {
+            return false;
+        }
+        let region = match rect {
+            Some((x, y, w, h)) => {
+                let mut r = xlib::XRectangle { x: clamp(x), y: clamp(y), width: size(w), height: size(h) };
+                (xf.XFixesCreateRegion)(c.dpy, &mut r, 1)
+            }
+            // None: the window's own, unshaped area.
+            None => 0,
+        };
+        (xf.XFixesSetWindowShapeRegion)(c.dpy, win, SHAPE_BOUNDING, 0, 0, region);
+        if region != 0 {
+            (xf.XFixesDestroyRegion)(c.dpy, region);
+        }
+        (c.x.XSync)(c.dpy, xlib::False);
     }
     true
 }

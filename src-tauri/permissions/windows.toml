@@ -1,0 +1,100 @@
+# What each of Nöbetçi's windows may ask Rust to do (C-13).
+#
+# This folder exists, so Tauri checks every app command against the windows'
+# capabilities (capabilities/*.json): a window can call only what its
+# capability grants, and a command no window is granted cannot be called from
+# any page at all. Requests are answered only from the island; the desktop
+# mascot only shows.
+#
+# Grant by what each window's code actually calls (src/core/bridge.ts and the
+# island under src/island, src/ui; src/settings/api.ts and src/settings; and
+# src/buddy/main.ts). A new command goes into the list of the window that
+# calls it; lib.rs's tests check that every registered command is reachable
+# and that the approval commands stay with the island.
+#
+# quit_app is granted to no window: no page calls it (the tray quits).
+
+[[permission]]
+identifier = "island-commands"
+description = "The island: requests and their answers, the dashboard, its widgets and the assistant."
+commands.allow = [
+  "boot",
+  "save_settings",
+  "set_dnd",
+  "quiet_state",
+  "notify",
+  "log_line",
+  "set_collapsed",
+  "set_island_rect",
+  "reposition",
+  "open_folder",
+  "focus_session",
+  "open_settings_window",
+  "approval_ack",
+  "approval_shown",
+  "approval_pending",
+  "approval_decision",
+  "approval_respond",
+  "approval_allow_low",
+  "approval_decline",
+  "island_keyboard",
+  "island_media",
+  "island_media_control",
+  "island_stats",
+  "island_weather",
+  "assistant_open",
+  "assistant_ask",
+  "assistant_apps",
+  "assistant_dictate",
+  "set_assistant_target",
+  "agenda_list",
+  "agenda_put",
+  "agenda_delete",
+]
+
+[[permission]]
+identifier = "settings-commands"
+description = "The settings window: preferences, hooks behind a reviewed diff, rules, history and Prompt Studio."
+commands.allow = [
+  "boot",
+  "save_settings",
+  "quiet_state",
+  "notify",
+  "hotkeys_status",
+  "open_location",
+  "pick_folder",
+  "close_settings_window",
+  "buddy_reset_position",
+  "hooks_status",
+  "hooks_preview",
+  "hooks_apply",
+  "hooks_health",
+  "agent_hooks_status",
+  "agent_hooks_preview",
+  "agent_hooks_apply",
+  "rules_test",
+  "rule_pattern_check",
+  "risk_categories",
+  "audit_query",
+  "audit_stats",
+  "audit_projects",
+  "audit_clear",
+  "audit_export",
+  "settings_export",
+  "settings_import",
+  "settings_reset",
+  "rewrite_prompt",
+  "openai_api_key_status",
+  "set_openai_api_key",
+  "delete_openai_api_key",
+]
+
+[[permission]]
+identifier = "buddy-commands"
+description = "The desktop mascot: its settings, its size, opening the island, and saying it is listening."
+commands.allow = [
+  "boot",
+  "buddy_resize_by",
+  "buddy_open_island",
+  "buddy_ready",
+]
