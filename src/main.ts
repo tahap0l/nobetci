@@ -2,16 +2,22 @@
 
 import "./style.css";
 import { Bridge, IS_TAURI, onEvent } from "./core/bridge";
+import { DEFAULT_DENY_REASONS } from "./core/settings-model";
 import { Sound } from "./core/sound";
 import { State, type Settings } from "./core/state";
+import { guardWebview } from "./core/webview";
 import { getLang, resolveLang, setLang, setPlatform, setSystemLang, type Lang } from "./i18n/core";
 import { t } from "./i18n/island";
 import { Island } from "./island/island";
-import { injectHook, registerHookHandlers } from "./island/hooks";
+import { injectHook, registerHookHandlers, restorePending } from "./island/hooks";
 
 async function main() {
   const root = document.getElementById("root");
   if (!root) return;
+
+  // No "Reload" from the webview's own menu or keys: a reload would drop the
+  // cards on screen while Claude Code waits on them.
+  if (IS_TAURI) guardWebview();
 
   const island = new Island(root);
 
@@ -35,6 +41,11 @@ async function main() {
   } else {
     setLang(pickLang());
   }
+  // Without Rust (the browser preview, the website's demo) the deny reasons are
+  // the built-in ones, in the page's language as Rust would pick them.
+  if (!boot) State.settings.denyReasons = [...DEFAULT_DENY_REASONS[getLang()]];
+  // Quiet hours or a full-screen app may already be on: ask before the greeting's hoot.
+  await island.refreshQuiet();
   island.applySettings();
 
   await onEvent<{ x: number; y: number }>("cursor", ({ x, y }) => island.onCursor(x, y));
@@ -68,6 +79,8 @@ async function main() {
     }
     island.applySettings();
     if (wasDnd !== s.dnd) island.flash(s.dnd ? t("fl.dndOn") : t("fl.dndOff"), "info");
+    // Quiet hours may have been switched on or moved.
+    void island.refreshQuiet();
   });
 
   // Global shortcuts (registered in Rust).
@@ -85,7 +98,10 @@ async function main() {
     const { runDemo } = await import("./demo");
     runDemo(island, demo);
   } else {
-    island.launch();
+    // Requests still waiting when the island (re)loaded come back first, without
+    // the greeting: Claude Code is waiting on them (C-11).
+    const restored = IS_TAURI ? await restorePending(island) : 0;
+    if (!restored) island.launch();
   }
 
   if (!IS_TAURI) {

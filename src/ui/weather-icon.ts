@@ -2,12 +2,14 @@
 // in style.css under `.wi-*` and stops with prefers-reduced-motion.
 
 export type WeatherKind =
-  | "clear" | "partly" | "cloudy" | "fog" | "drizzle" | "rain" | "snow" | "storm";
+  | "clear" | "mostly" | "partly" | "cloudy" | "fog" | "drizzle" | "rain" | "snow" | "storm";
 
 /** WMO weather code (Open-Meteo) → icon kind. */
 export function weatherKind(code: number): WeatherKind {
   if (code === 0) return "clear";
-  if (code <= 2) return "partly";
+  // 1 is "mainly clear": mostly sky, not the same as partly cloudy (dashboard#23).
+  if (code === 1) return "mostly";
+  if (code === 2) return "partly";
   if (code === 3) return "cloudy";
   if (code === 45 || code === 48) return "fog";
   if (code >= 51 && code <= 57) return "drizzle";
@@ -20,6 +22,7 @@ export function weatherLabel(code: number, tr: boolean): string {
   const L = (a: string, b: string) => (tr ? a : b);
   switch (weatherKind(code)) {
     case "clear": return L("Açık", "Clear");
+    case "mostly": return L("Az bulutlu", "Mainly clear");
     case "partly": return L("Parçalı bulutlu", "Partly cloudy");
     case "cloudy": return L("Bulutlu", "Cloudy");
     case "fog": return L("Sisli", "Foggy");
@@ -76,7 +79,17 @@ export function weatherIcon(code: number, isDay: boolean, size: number): SVGSVGE
     svg.append(sky(32, 32, isDay ? 12 : 14));
     return svg;
   }
-  if (kind === "partly") svg.append(sky(24, 22, 9));
+  if (kind === "mostly") {
+    // The sky, with one small cloud passing in front of it.
+    svg.append(sky(isDay ? 28 : 27, isDay ? 27 : 26, isDay ? 11 : 13));
+    const small = el("g", { class: "wi-cloud" });
+    small.append(el("path", { d: CLOUD, transform: "translate(22 22) scale(.62)" }));
+    svg.append(small);
+    return svg;
+  }
+  // The moon sits higher and further out than the sun: a crescent has no rays
+  // to show past the cloud's edge (dashboard#23).
+  if (kind === "partly") svg.append(isDay ? sky(24, 22, 9) : sky(19, 16, 10));
   const cloud = el("g", { class: kind === "storm" || kind === "rain" ? "wi-cloud wi-cloud-dark" : "wi-cloud" });
   cloud.append(el("path", { d: CLOUD }));
   if (kind === "cloudy") {
@@ -102,7 +115,8 @@ export function weatherIcon(code: number, isDay: boolean, size: number): SVGSVGE
       fall("wi-rain", (x) => el("line", { x1: x, y1: 50, x2: x - 3, y2: 58 }));
       break;
     case "snow":
-      fall("wi-snow", (x) => el("circle", { cx: x, cy: 53, r: 2.1 }));
+      // Flakes big enough to read as snow at 24 px (style.css never fades them out).
+      fall("wi-snow", (x) => el("circle", { cx: x, cy: 53, r: 3 }));
       break;
     case "storm": {
       const bolt = el("path", { class: "wi-bolt", d: "M34 44l-7 10h6l-3 9 9-12h-6l4-7z" });

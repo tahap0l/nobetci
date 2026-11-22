@@ -4,6 +4,10 @@
 //
 // A key may have a macOS wording next to it as `key@mac` ("Start with Windows" →
 // "Start at login"); on a Mac that one wins. Linux looks for `key@linux` first.
+//
+// A key with a count may have its singular next to it as `key#one`: it is used
+// whenever `vars.n` is 1 ("{n} sessions" → "1 session"). Turkish never inflects
+// the noun after a number, so its `#one` entries just repeat the key's text.
 
 export type Lang = "tr" | "en";
 export type LangPref = "auto" | Lang;
@@ -81,8 +85,10 @@ function fill(text: string, vars?: Vars): string {
 export function defineMessages<T extends Record<string, string>>(tr: T, en: { [K in keyof T]: string }) {
   return (key: keyof T & string, vars?: Vars): string => {
     const table: Record<string, string> = current === "tr" ? tr : en;
-    const variant = platform === "macos" ? table[`${key}@mac`] : platform === "linux" ? table[`${key}@linux`] : undefined;
-    return fill(variant ?? table[key] ?? tr[key] ?? key, vars);
+    const pick = (k: string): string | undefined =>
+      (platform === "macos" ? table[`${k}@mac`] : platform === "linux" ? table[`${k}@linux`] : undefined) ?? table[k];
+    const one = vars?.n === 1 ? pick(`${key}#one`) : undefined;
+    return fill(one ?? pick(key) ?? tr[key] ?? key, vars);
   };
 }
 

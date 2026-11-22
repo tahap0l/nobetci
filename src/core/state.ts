@@ -131,12 +131,32 @@ export const MAX_QUEUE = 6;
 export const MAX_CHANGES = 12;
 const MAX_STEPS = 40;
 
+/** How long a session's "finished" or "error" shows on the mascot. */
+export const MOOD_FLASH_MS = 6_000;
+/**
+ * A working, thinking or waiting session with no event for this long no longer
+ * keeps the mascot busy (the overview calls it "no recent events"): a closed
+ * terminal must not keep the island animating until the session is pruned.
+ */
+export const SESSION_QUIET_MS = 3 * 60_000;
+/** Calm for this long and the mascot falls asleep (the frame loop then stops). */
+export const IDLE_SLEEP_MS = 180_000;
+
 const ACCENTS = ["#60A5FA", "#34D399", "#F472B6", "#FBBF24", "#A78BFA", "#22D3EE", "#FB923C", "#A3E635"];
 
 export const LEVEL_ORDER: Record<RiskLevel, number> = { low: 0, medium: 1, high: 2, critical: 3 };
 
 export function needsHold(level: RiskLevel): boolean {
   return LEVEL_ORDER[level] >= LEVEL_ORDER.high;
+}
+
+/**
+ * Whether a waiting request is low risk in every sense: as the engine scored it
+ * and as the rules left it. Only these may go through the allow hotkey or a
+ * batch click (Rust checks the same, C-2).
+ */
+export function isPlainLow(a: Approval): boolean {
+  return a.kind === "permission" && a.risk.level === "low" && (a.risk.engineLevel ?? a.risk.level) === "low";
 }
 
 type Listener = () => void;
@@ -279,9 +299,13 @@ class AppState {
     s.changes = [c, ...s.changes.filter((x) => x.file !== c.file)].slice(0, MAX_CHANGES);
   }
 
-  /** Waiting low-risk permission requests: what one batch click may allow. */
+  /**
+   * Waiting low-risk permission requests: what one batch click may allow. Low
+   * as the engine scored it too — a rule that re-scored a request down to low
+   * does not make it batchable.
+   */
   get lowApprovals(): Approval[] {
-    return this.approvals.filter((a) => a.kind === "permission" && a.risk.level === "low");
+    return this.approvals.filter(isPlainLow);
   }
 
   removeApproval(requestId: string) {
@@ -290,18 +314,48 @@ class AppState {
 
   // ── Derived ───────────────────────────────────────────────────────────────
 
-  /** The main owl's mood, from everything that is going on. */
+  /**
+   * The main owl's mood, from everything that is going on. Part of it depends on
+   * the clock (a finish shows for a few seconds, calm turns into sleep), so it
+   * can change with nothing happening: `moodChangeIn` says when to look again.
+   */
   get mood(): OwlMood {
     const a = this.currentApproval;
-    if (a) return needsHold(a.risk.level) ? "danger" : "approval";
-    const recent = (s: Session) => Date.now() - s.stateSince < 6000;
+    // Claude asking something itself (a question, a plan) is a question, not a
+    // request for leave.
+    if (a) return a.kind !== "permission" ? "question" : needsHold(a.risk.level) ? "danger" : "approval";
+    // Paused: nobody is on watch, whatever the sessions were last seen doing.
+    if (this.paused) return "sleeping";
+    const now = Date.now();
+    const recent = (s: Session) => now - s.stateSince < MOOD_FLASH_MS;
+    const live = (s: Session) => now - s.lastEventAt < SESSION_QUIET_MS;
     if (this.sessions.some((s) => s.state === "error" && recent(s))) return "error";
-    if (this.sessions.some((s) => s.state === "question" || s.state === "ratelimit")) return "question";
+    if (this.sessions.some((s) => (s.state === "question" || s.state === "ratelimit") && live(s))) return "question";
     if (this.sessions.some((s) => s.state === "finished" && recent(s))) return "finished";
-    if (this.sessions.some((s) => s.state === "working")) return "working";
-    if (this.sessions.some((s) => s.state === "thinking")) return "thinking";
-    if (this.paused || this.settings.dnd) return "sleeping";
-    return performance.now() - this.lastActivity > 180_000 ? "sleeping" : "idle";
+    if (this.sessions.some((s) => s.state === "working" && live(s))) return "working";
+    if (this.sessions.some((s) => s.state === "thinking" && live(s))) return "thinking";
+    if (this.settings.dnd) return "sleeping";
+    return performance.now() - this.lastActivity > IDLE_SLEEP_MS ? "sleeping" : "idle";
+  }
+
+  /**
+   * Milliseconds until `mood` may change on its own (a finish or an error
+   * fading, a session going quiet, calm turning into sleep); null when only an
+   * event can change it.
+   */
+  moodChangeIn(): number | null {
+    if (this.currentApproval || this.paused) return null;
+    const now = Date.now();
+    let next = Infinity;
+    const until = (left: number) => {
+      if (left > 0) next = Math.min(next, left);
+    };
+    for (const s of this.sessions) {
+      if (s.state === "error" || s.state === "finished") until(s.stateSince + MOOD_FLASH_MS - now);
+      else if (s.state !== "idle" && s.state !== "approval") until(s.lastEventAt + SESSION_QUIET_MS - now);
+    }
+    if (!this.settings.dnd) until(this.lastActivity + IDLE_SLEEP_MS - performance.now());
+    return Number.isFinite(next) ? next : null;
   }
 
   defaultView(): IslandView {

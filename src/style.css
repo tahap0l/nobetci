@@ -1,16 +1,24 @@
 /* Nöbetçi island. The window is transparent; only #island is painted. */
 
 :root {
+  /* Form controls, scrollbars and the like follow the dark island (A-17). */
+  color-scheme: dark;
   --bg: #0a0a0c;
   --panel: #141418;
   --line: rgba(255, 255, 255, 0.08);
   --text: #f2f2f4;
   --muted: rgba(242, 242, 244, 0.56);
-  --faint: rgba(242, 242, 244, 0.34);
+  /* Secondary text (ages, times, hints): at least 4.8:1 on every theme's panel
+     (0.34 was 2.8:1, dashboard#15). */
+  --faint: rgba(242, 242, 244, 0.55);
   --low: #34d399;
   --medium: #f5a524;
   --high: #fb923c;
   --critical: #f4505e;
+  /* Risk levels on the card: MEDIUM leans yellow and HIGH red-orange, so the two
+     cannot be mistaken (HIGH needs a hold, MEDIUM does not; A-19). */
+  --risk-medium: #f2c94c;
+  --risk-high: #f97a3c;
   --blue: #3b9eff;
   --violet: #a78bfa;
   --mono: "Cascadia Code", "Cascadia Mono", Consolas, ui-monospace, "SF Mono", Menlo, monospace;
@@ -102,7 +110,6 @@ button {
   width: 640px;
   height: 100%;
   transform: translateX(-50%);
-  transition: opacity 0.18s;
 }
 
 #header {
@@ -172,10 +179,12 @@ button {
   display: flex;
   flex-direction: column;
 }
-.view-overview .island-widgets, .view-overview .session-search { flex: none; }
-.view-overview .sessions { min-height: 0; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+.view-overview .island-widgets, .view-overview .session-search, .view-overview .paused-note { flex: none; }
+.view-overview .sessions { min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.18) transparent; }
 .view-overview .session, .view-overview .more { flex: none; }
 
+/* Rows are 40 px with 4 px between them and 6 px above the first: views.ts
+   sizes the island to whole rows from these (ROW_H, ROW_GAP, LIST_PAD). */
 .sessions {
   display: flex;
   flex-direction: column;
@@ -194,11 +203,59 @@ button {
   border-radius: 10px;
   background: var(--panel);
   text-align: left;
+  transition: background-color 0.15s, opacity 0.2s;
 }
 
+/* Lighter on hover in every theme: the panel colour, lifted (dashboard#13). */
 .session:hover {
-  background: #1c1c22;
+  background: color-mix(in srgb, var(--panel), white 6%);
 }
+
+/* Paused: nothing is watched, so the rows step back and say so (dashboard#26). */
+.session.paused {
+  opacity: 0.62;
+}
+
+.paused-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 6px;
+  padding: 5px 6px 5px 10px;
+  border: 1px solid rgba(245, 165, 36, 0.28);
+  border-radius: 10px;
+  background: rgba(245, 165, 36, 0.08);
+  color: #f7d9a6;
+  font-size: 11.5px;
+}
+.paused-note[hidden] { display: none; }
+.paused-note svg { flex: none; color: var(--medium); }
+.paused-text { flex: 1; min-width: 0; }
+.paused-note .btn { flex: none; }
+
+/* "+3 more ↓" on its own line under a list that scrolls (MORE_ROW_H in views.ts). */
+.sessions-more-row {
+  flex: none;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  height: 24px;
+}
+.sessions-more-row[hidden] { display: none; }
+.sessions-more {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 20px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+.sessions-more:hover { color: var(--text); background: color-mix(in srgb, var(--panel), white 6%); }
 
 .session-main {
   display: flex;
@@ -213,16 +270,48 @@ button {
   gap: 8px;
 }
 
+/* As wide as the cards and rows, with their corners; a drawn magnifier and
+   clear button instead of the engine's blue one (dashboard#29). */
 .session-search {
   display: block;
-  width: calc(100% - 20px);
-  margin: 4px 10px 8px;
-  padding: 6px 9px;
+  width: 100%;
+  margin: 4px 0 8px;
+  padding: 6px 9px 6px 30px;
   border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--panel);
+  border-radius: 10px;
+  background: var(--panel)
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239a9aa3' stroke-width='2.2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='6.5'/%3E%3Cpath d='M16 16l4.5 4.5'/%3E%3C/svg%3E")
+    no-repeat 10px 50% / 14px 14px;
   color: inherit;
   font: inherit;
+  transition: border-color 0.15s, background-color 0.15s;
+}
+
+.session-search::placeholder {
+  color: var(--faint);
+}
+
+.session-search::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  margin-right: -2px;
+  border-radius: 50%;
+  background: rgba(242, 242, 244, 0.5);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm3.5 12.1-1.4 1.4L12 13.4l-2.1 2.1-1.4-1.4 2.1-2.1-2.1-2.1 1.4-1.4 2.1 2.1 2.1-2.1 1.4 1.4-2.1 2.1z'/%3E%3C/svg%3E") center / 16px 16px no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm3.5 12.1-1.4 1.4L12 13.4l-2.1 2.1-1.4-1.4 2.1-2.1-2.1-2.1 1.4-1.4 2.1 2.1 2.1-2.1 1.4 1.4-2.1 2.1z'/%3E%3C/svg%3E") center / 16px 16px no-repeat;
+  cursor: pointer;
+}
+
+.session-search::-webkit-search-cancel-button:hover {
+  background: var(--text);
+}
+
+.session-search:focus {
+  border-color: rgba(255, 255, 255, 0.18);
+  background-color: color-mix(in srgb, var(--panel), white 3%);
+  outline: none;
 }
 
 .session-search:focus-visible, .session:focus-visible {
@@ -250,9 +339,10 @@ button {
   font-variant-numeric: tabular-nums;
 }
 
+/* What the session last did: the most useful line of a row, so not the faintest. */
 .session-step {
   font-size: 11.5px;
-  color: var(--faint);
+  color: var(--muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -265,6 +355,9 @@ button {
 .state-ratelimit .session-state { color: var(--medium); }
 .state-finished .session-state { color: var(--low); }
 .state-error .session-state { color: var(--critical); }
+/* A paused or long-silent row does not claim to be working. */
+.session.paused .session-state,
+.session.stale .session-state { color: var(--muted); }
 
 .more {
   padding: 2px 10px;
@@ -380,8 +473,23 @@ button {
 
 /* ── Approval card ────────────────────────────────────────────────────────── */
 
+/* A column the island's height caps (CARD_MAX_H in views.ts): the head, the
+   foot, the buttons and the batch tray keep their place, the body between them
+   scrolls (Y-13). Nothing in the card can push the buttons out of the island. */
 .view-approval {
   padding-right: 18px;
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+
+.view-approval.on {
+  display: flex;
+  flex-direction: column;
+  max-height: 400px;
+}
+
+/* Inside the card, `hidden` always hides, whatever display a rule gives. */
+.view-approval [hidden] {
+  display: none !important;
 }
 
 .view-approval::before {
@@ -394,18 +502,43 @@ button {
 }
 
 .view-approval[data-level="low"] { --lvl: var(--low); }
-.view-approval[data-level="medium"] { --lvl: var(--medium); }
-.view-approval[data-level="high"] { --lvl: var(--high); }
+.view-approval[data-level="medium"] { --lvl: var(--risk-medium); }
+.view-approval[data-level="high"] { --lvl: var(--risk-high); }
 .view-approval[data-level="critical"] { --lvl: var(--critical); }
+
+/* Answered: nothing on it can act while the island moves on. */
+.view-approval.over > * {
+  visibility: hidden;
+}
+
+.view-approval ::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.view-approval ::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.view-approval ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+}
 
 .appr-head {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex: none;
+  min-width: 0;
+  /* As tall with the pager as without: a second request arriving must not
+     move anything below it. */
+  min-height: 22px;
   margin: 2px 0 8px;
 }
 
 .risk-chip {
+  flex: none;
   padding: 2px 8px;
   border-radius: 6px;
   font-size: 11px;
@@ -415,11 +548,14 @@ button {
   background: var(--low);
 }
 
-.risk-chip.lvl-medium { background: var(--medium); }
-.risk-chip.lvl-high { background: var(--high); }
-.risk-chip.lvl-critical {
-  background: var(--critical);
-  color: #fff;
+.risk-chip.lvl-medium { background: var(--risk-medium); }
+.risk-chip.lvl-high { background: var(--risk-high); }
+/* Dark text on the red, as on every other chip: white was 3.4:1 (A-19). */
+.risk-chip.lvl-critical { background: var(--critical); }
+
+/* The pulse runs only on the open card, never while the island is folded and
+   never for someone who asked for less motion (A-20). */
+#island[data-mode="expanded"] .view-approval.on .risk-chip.lvl-critical {
   animation: pulse 1.4s ease-in-out infinite;
 }
 
@@ -429,28 +565,85 @@ button {
   }
 }
 
+/* Who asks and with which tool: the name gives way, the tool never does. */
 .appr-who {
+  display: flex;
+  align-items: baseline;
+  flex: 1 1 auto;
+  min-width: 0;
   font-weight: 600;
   white-space: nowrap;
+}
+
+.appr-name {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.appr-queue {
-  padding: 1px 7px;
+.appr-tool {
+  flex: none;
+  max-width: 60%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.appr-tool::before {
+  content: "·";
+  margin: 0 6px;
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.appr-pager {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  gap: 1px;
+  padding: 1px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.08);
-  font-size: 11px;
+}
+
+.pager-btn {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
   color: var(--muted);
 }
 
-.appr-queue:empty {
-  display: none;
+.pager-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--text);
+}
+
+.pager-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.pager-btn:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: -1px;
+}
+
+.pager-pos {
+  min-width: 26px;
+  font-size: 11px;
+  color: var(--muted);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
 }
 
 .appr-timer {
+  flex: none;
   font-size: 11.5px;
-  color: var(--faint);
+  color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
 
@@ -458,10 +651,42 @@ button {
   color: var(--critical);
 }
 
+/* The part that scrolls, with its "there's more" cue. */
+.appr-scroll {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.appr-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+
 .appr-kind {
   font-size: 11px;
-  color: var(--faint);
+  color: var(--muted);
   margin-bottom: 3px;
+}
+
+/* The full MCP tool: server › tool, never cut (A-1). */
+.appr-tool-id {
+  color: var(--text);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.appr-box {
+  position: relative;
+}
+
+.appr-preview-box {
+  margin-top: 6px;
 }
 
 .appr-target,
@@ -473,43 +698,59 @@ button {
   background: #050506;
   font: 12px/1.45 var(--mono);
   white-space: pre-wrap;
-  word-break: break-all;
+  /* Lines break at spaces first, inside a word only when it has to (A-21);
+     break-word says the same to WebKit before 15.4, which lacks "anywhere". */
+  word-break: break-word;
+  overflow-wrap: anywhere;
   overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
   user-select: text;
   cursor: text;
+  /* What runs is shown in the order it runs: no right-to-left run may reorder
+     it on screen (A-4). Hidden direction marks are drawn as ⟦U+…⟧ besides. */
+  direction: ltr;
+  unicode-bidi: bidi-override;
 }
 
+/* Base heights; the card grows them into whatever room the panel has (A-21). */
 .appr-target {
   max-height: 124px;
   color: #e9e9ee;
 }
 
-.appr-overflow {
-  margin-top: 3px;
-  font-size: 11px;
-  color: var(--medium);
-}
-
 .appr-preview {
-  margin-top: 6px;
-  max-height: 58px;
-  color: var(--muted);
-  font-size: 11px;
+  max-height: 150px;
+  color: #c9c9d1;
+  font-size: 11.5px;
 }
 
-.appr-target::-webkit-scrollbar,
-.appr-preview .edit-before { color: #ffabb1; }
 .appr-preview .edit-after { color: #95e7b5; }
+.appr-preview .edit-before { color: #ffabb1; }
 
-.appr-preview::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+/* The bottom of a box with more below fades out under its cue. */
+.fade-end {
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 26px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 26px), transparent);
 }
 
-.appr-target::-webkit-scrollbar-thumb,
-.appr-preview::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.18);
-  border-radius: 3px;
+.more-cue {
+  position: absolute;
+  right: 10px;
+  bottom: 5px;
+  z-index: 1;
+  padding: 1px 9px;
+  border: 1px solid rgba(245, 165, 36, 0.4);
+  border-radius: 999px;
+  background: rgba(24, 18, 6, 0.94);
+  color: var(--medium);
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1.6;
+}
+
+.more-cue:hover {
+  background: rgba(40, 30, 10, 0.96);
 }
 
 mark {
@@ -518,17 +759,31 @@ mark {
   color: #0a0a0c;
 }
 
-mark.lvl-low { background: rgba(52, 211, 153, 0.75); }
-mark.lvl-medium { background: rgba(245, 165, 36, 0.85); }
-mark.lvl-high { background: rgba(251, 146, 60, 0.9); }
-mark.lvl-critical { background: #f4505e; color: #fff; }
+mark.lvl-low { background: rgba(52, 211, 153, 0.8); }
+mark.lvl-medium { background: rgba(242, 201, 76, 0.9); }
+mark.lvl-high { background: rgba(249, 122, 60, 0.92); }
+mark.lvl-critical { background: #f4505e; }
 
+/* A hidden character, drawn: white on a deep red reads at 7:1 (A-19). */
 .hidden-char {
   padding: 0 2px;
   border-radius: 3px;
-  background: #f4505e;
+  background: #b0182c;
   color: #fff;
+  box-shadow: 0 0 0 1px rgba(255, 128, 140, 0.55);
   font-size: 10px;
+}
+
+/* Where a request that came cut short ends (A-3). */
+.cut-marker {
+  display: inline-block;
+  margin-left: 2px;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: #fb923c;
+  color: #0a0a0c;
+  font-size: 10.5px;
+  font-weight: 700;
 }
 
 .appr-findings {
@@ -552,44 +807,130 @@ mark.lvl-critical { background: #f4505e; color: #fff; }
 }
 
 .appr-findings .lvl-low { color: var(--muted); }
-.appr-findings .lvl-medium { color: var(--medium); }
-.appr-findings .lvl-high { color: var(--high); }
+.appr-findings .lvl-medium { color: var(--risk-medium); }
+.appr-findings .lvl-high { color: var(--risk-high); }
 .appr-findings .lvl-critical { color: #ff7a85; font-weight: 600; }
 
-.appr-note {
+/* The foot: hints, or why the last try did not go through (A-7). */
+.appr-foot {
+  flex: none;
+}
+
+.appr-status {
   margin-top: 8px;
   font-size: 11px;
-  color: var(--faint);
+  color: var(--muted);
 }
+
+.appr-status[data-tone="warn"] { color: var(--medium); font-weight: 600; }
+.appr-status[data-tone="error"] { color: #ff8a93; font-weight: 600; }
+.appr-status[data-tone="info"] { color: #9ccbff; font-weight: 600; }
+.appr-status[data-tone="ok"] { color: var(--low); }
 
 .appr-actions {
   display: flex;
   align-items: center;
+  flex: none;
   gap: 8px;
   margin-top: 10px;
+}
+
+.btn-icon {
+  display: inline-flex;
+}
+
+/* A card that has just come up — or a button that has just appeared or moved —
+   takes no press for a moment; the buttons come up with it (C-1, approvals#2). */
+.view-approval.arming .appr-actions .btn,
+.view-approval.arming .btn-batch,
+.view-approval.arming .appr-remember,
+.view-approval .btn.arming,
+.view-approval .appr-remember.arming {
+  pointer-events: none;
+}
+
+#island[data-mode="expanded"] .view-approval.arming .appr-actions .btn,
+#island[data-mode="expanded"] .view-approval.arming .btn-batch,
+#island[data-mode="expanded"] .view-approval .btn.arming {
+  animation: arm-in 0.4s cubic-bezier(0.3, 0.7, 0.3, 1) both;
+}
+
+@keyframes arm-in {
+  from { opacity: 0.35; }
+  to { opacity: 1; }
+}
+
+/* A decision is on its way: no second one meanwhile. */
+.view-approval.sending .appr-actions .btn,
+.view-approval.sending .btn-batch,
+.view-approval.sending .appr-remember {
+  pointer-events: none;
+}
+
+.view-approval.sending .appr-actions .btn:not(.held),
+.view-approval.sending .btn-batch {
+  opacity: 0.55;
+}
+
+/* Held all the way: the button stays full until the next card. */
+.btn-allow.held .hold-fill {
+  transform: scaleX(1) !important;
+}
+
+/* The next request comes in with a short fade, so the change is seen. */
+#island[data-mode="expanded"] .view-approval.card-in .appr-head,
+#island[data-mode="expanded"] .view-approval.card-in .appr-scroll {
+  animation: card-in 0.22s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@keyframes card-in {
+  from { opacity: 0.25; transform: translateY(3px); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #island[data-mode="expanded"] .view-approval.on .risk-chip.lvl-critical,
+  #island[data-mode="expanded"] .view-approval.card-in .appr-head,
+  #island[data-mode="expanded"] .view-approval.card-in .appr-scroll {
+    animation: none;
+  }
+
+  #island[data-mode="expanded"] .view-approval.arming .appr-actions .btn,
+  #island[data-mode="expanded"] .view-approval.arming .btn-batch,
+  #island[data-mode="expanded"] .view-approval .btn.arming {
+    animation: none;
+    opacity: 0.6;
+  }
 }
 
 /* ── Compact ──────────────────────────────────────────────────────────────── */
 
 /* Hidden unless compact: visibility flips after the fade, so it can never sit
-   half-visible over an expanded card. */
+   half-visible over an expanded card. It keeps the pill's height (COMPACT_H)
+   at the top edge, so its text does not drift down while the island grows or
+   shrinks. */
 #compact {
   position: absolute;
-  inset: 0;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 34px;
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 0 12px 0 44px;
   opacity: 0;
   visibility: hidden;
-  transition: opacity 0.12s, visibility 0s linear 0.12s;
+  transition: opacity 0.1s cubic-bezier(0.4, 0, 1, 1), visibility 0s linear 0.1s;
   pointer-events: none;
 }
 
+/* It arrives once a closing island has nearly shrunk to the pill (the cards are
+   gone by then) and once a waking one is tall enough to hold it. */
 #compact.on {
   opacity: 1;
   visibility: visible;
-  transition: opacity 0.16s;
+  transition: opacity 0.18s cubic-bezier(0.2, 0.8, 0.2, 1) 0.14s;
 }
 
 .compact-text {
@@ -612,6 +953,20 @@ mark.lvl-critical { background: #f4505e; color: #fff; }
   display: flex;
   gap: 3px;
 }
+
+/* More sessions than the pill has mascots for: how many (dashboard#27). */
+.compact-more {
+  flex: none;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--muted);
+  font-size: 10.5px;
+  font-weight: 650;
+  line-height: 16px;
+  font-variant-numeric: tabular-nums;
+}
+.compact-more[hidden] { display: none; }
 
 /* ── Session detail ───────────────────────────────────────────────────────── */
 
@@ -710,44 +1065,101 @@ mark.lvl-critical { background: #f4505e; color: #fff; }
 
 /* ── Approval extras ──────────────────────────────────────────────────────── */
 
-.appr-warning {
+.appr-warning,
+.appr-cut {
   display: flex;
-  align-items: center;
-  gap: 4px;
+  align-items: flex-start;
+  flex: none;
+  gap: 6px;
   margin: -2px 0 8px;
   padding: 6px 10px;
   border-radius: 9px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.appr-warning svg,
+.appr-cut svg {
+  flex: none;
+  margin-top: 1px;
+}
+
+.appr-warning {
   background: rgba(244, 80, 94, 0.14);
   border: 1px solid rgba(244, 80, 94, 0.45);
   color: #ffb3ba;
-  font-size: 12px;
-  font-weight: 600;
+}
+
+/* A request that reached Nöbetçi cut short (A-3). */
+.appr-cut {
+  background: rgba(251, 146, 60, 0.12);
+  border: 1px solid rgba(251, 146, 60, 0.5);
+  color: #ffc9a3;
 }
 
 .appr-rule {
   display: flex;
   align-items: center;
   gap: 4px;
-  margin: -4px 0 6px;
+  margin: 0 0 6px;
   font-size: 11.5px;
   color: var(--violet);
 }
 
 .appr-remember {
   display: flex;
-  margin-top: 8px;
+  margin-top: 6px;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
   font-size: 11.5px;
   color: var(--muted);
   cursor: pointer;
 }
 
-.appr-remember input {
-  width: 14px;
-  height: 14px;
+.appr-remember:hover {
+  color: var(--text);
+}
+
+/* The card's own checkbox, drawn like the rest of the card (A-17). */
+.check {
+  appearance: none;
+  -webkit-appearance: none;
+  display: grid;
+  place-content: center;
+  flex: none;
+  width: 15px;
+  height: 15px;
   margin: 0;
-  accent-color: var(--low);
+  border: 1.5px solid rgba(255, 255, 255, 0.38);
+  border-radius: 4px;
+  background: #101014;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+}
+
+.check::after {
+  content: "";
+  width: 7px;
+  height: 4px;
+  border-left: 2px solid #06140d;
+  border-bottom: 2px solid #06140d;
+  transform: translateY(-1px) rotate(-45deg) scale(0);
+  transition: transform 0.12s cubic-bezier(0.3, 0.7, 0.3, 1.4);
+}
+
+.check:checked {
+  background: var(--low);
+  border-color: var(--low);
+}
+
+.check:checked::after {
+  transform: translateY(-1px) rotate(-45deg) scale(1);
+}
+
+.check:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
 }
 
 .split {
@@ -767,8 +1179,15 @@ mark.lvl-critical { background: #f4505e; color: #fff; }
   border-bottom-left-radius: 0;
 }
 
+.split-more[aria-expanded="true"] {
+  background: #22222a;
+  color: #ffc9ce;
+}
+
+/* Opens upward, never past the top of the screen: its height is set to the room
+   above the button when it opens, and the reasons scroll past that (A-8). */
 .deny-menu {
-  display: none;
+  display: block;
   position: absolute;
   right: 0;
   bottom: 38px;
@@ -776,21 +1195,59 @@ mark.lvl-critical { background: #f4505e; color: #fff; }
   min-width: 300px;
   max-height: 210px;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
   padding: 6px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 12px;
   background: #16161b;
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateY(6px) scale(0.98);
+  transform-origin: bottom right;
+  transition: opacity 0.12s ease, transform 0.16s cubic-bezier(0.2, 0.8, 0.2, 1), visibility 0s linear 0.16s;
 }
 
 .deny-menu.open {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: none;
+  transition-delay: 0s;
+}
+
+/* The menu covers the card: more below is shown by an opaque fade, not by
+   letting the card show through. */
+.deny-menu.fade-end {
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
+.deny-menu.fade-end::after {
+  content: "";
+  position: sticky;
+  bottom: -6px;
   display: block;
+  height: 26px;
+  /* Takes no room of its own, so the list does not change length with it. */
+  margin: -26px -6px 0;
+  background: linear-gradient(to bottom, rgba(22, 22, 27, 0), #16161b 85%);
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .deny-menu {
+    transform: none;
+    transition: opacity 0.01s, visibility 0s linear 0.01s;
+  }
 }
 
 .menu-title {
   padding: 4px 8px 6px;
   font-size: 11px;
-  color: var(--faint);
+  color: var(--muted);
 }
 
 .menu-item {
@@ -806,8 +1263,10 @@ mark.lvl-critical { background: #f4505e; color: #fff; }
   font-size: 12.5px;
 }
 
-.menu-item:hover {
+.menu-item:hover,
+.menu-item:focus-visible {
   background: rgba(255, 255, 255, 0.07);
+  outline: none;
 }
 
 .menu-item.danger {
@@ -818,6 +1277,26 @@ mark.lvl-critical { background: #f4505e; color: #fff; }
   height: 1px;
   margin: 4px 6px;
   background: var(--line);
+}
+
+/* Header buttons while a request waits (A-13): closing waits for an answer, the
+   assistant opens once the card is answered. */
+#header .icon-btn.blocked {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+
+#header .icon-btn.blocked:hover {
+  background: transparent;
+  color: var(--muted);
+}
+
+#header .icon-btn.blocked:active {
+  transform: none;
+}
+
+#header .icon-btn.deferred {
+  opacity: 0.6;
 }
 
 /* ── Compact extras ───────────────────────────────────────────────────────── */
@@ -833,6 +1312,8 @@ mark.lvl-critical { background: #f4505e; color: #fff; }
   font-family: var(--mono);
   font-size: 11px;
   overflow-wrap: anywhere;
+  direction: ltr;
+  unicode-bidi: bidi-override;
 }
 
 .island-widgets {
@@ -1255,6 +1736,27 @@ mark.lvl-critical { background: #f4505e; color: #fff; }
 .media-toggle:active:not(:disabled) { transform: scale(.92); }
 .media-toggle:hover:not(:disabled) { background: color-mix(in srgb, var(--media-accent), white 25%); }
 .island-card-media:has(.island-media-buttons:not([hidden])) .island-card-action { display: none; }
+/* Nothing playing (or the card switched off): a note on the cover instead of
+   still equaliser bars, which looked like something loading (dashboard#20). */
+.media-note { display: none; color: color-mix(in srgb, var(--media-accent) 75%, white); opacity: 0.85; }
+.island-card-media:not(.has-track) .media-note { display: block; }
+.island-card-media:not(.has-track) .media-equalizer { display: none; }
+.island-card-media.is-off .island-card-value { color: #ffffffc8; }
+/* Off: the settings button says "Turn on". */
+.island-card-media .island-card-action.labelled {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  width: auto;
+  padding: 0 10px 0 8px;
+  border-radius: 999px;
+  color: #121917;
+  background: var(--media-accent);
+  font-size: 11px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+.island-card-action-text:empty { display: none; }
 .island-card-focus { min-width: 84px; padding: 8px; }
 .island-card-focus .island-card-label { top: 6px; left: 8px; }
 .island-card-focus .island-card-action { top: 5px; right: 5px; width: 20px; height: 20px; }
@@ -1272,19 +1774,38 @@ mark.lvl-critical { background: #f4505e; color: #fff; }
   padding-right: 18px;
 }
 
+/* As tall as what it shows, up to the panel's cap (400 px, as the session
+   view); past that it scrolls, so the end of an answer and its Copy button are
+   always reachable (dashboard#10). views.ts measures it. */
 .view-assistant.on {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  max-height: 400px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
 }
 
-.view-assistant::before {
+.view-assistant.on > * {
+  flex: none;
+}
+
+/* The assistant's coloured top edge, on the header (the view scrolls and would
+   clip a bar drawn above itself). */
+#header {
+  position: relative;
+}
+
+#header.asst-on::before {
   content: "";
   position: absolute;
-  inset: -40px 0 auto -1px;
+  inset: 0 0 auto -1px;
   height: 3px;
   background: linear-gradient(90deg, var(--violet), var(--blue), var(--low));
   opacity: 0.9;
+  pointer-events: none;
 }
 
 .asst-head {
@@ -1376,18 +1897,18 @@ mark.lvl-critical { background: #f4505e; color: #fff; }
 
 .asst-row {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 10px;
 }
 
+/* Every target in view: the chips wrap instead of hiding in a strip the
+   mouse wheel could not scroll (dashboard#9). */
 .asst-targets {
   display: flex;
   flex: 1;
+  flex-wrap: wrap;
   gap: 6px;
   min-width: 0;
-  overflow-x: auto;
-  scrollbar-width: none;
-  mask-image: linear-gradient(90deg, #000 88%, transparent);
 }
 
 .asst-chip {
@@ -1516,8 +2037,8 @@ mark.lvl-critical { background: #f4505e; color: #fff; }
   animation: asst-pop 0.24s cubic-bezier(0.2, 0.9, 0.3, 1.15) both;
 }
 .asst-lib[hidden] { display: none; }
-.asst-lib-cats { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; }
-.asst-lib-cats::-webkit-scrollbar { display: none; }
+/* The category tabs wrap rather than hide one behind the edge (dashboard#18). */
+.asst-lib-cats { display: flex; flex-wrap: wrap; gap: 4px; }
 .asst-lib-cat {
   flex: none;
   display: inline-flex;
@@ -1575,6 +2096,9 @@ mark.lvl-critical { background: #f4505e; color: #fff; }
 
 .asst-input-wrap { position: relative; }
 .asst-input-wrap .asst-input { padding-right: 42px; }
+.asst-input-wrap.no-mic .asst-input { padding-right: 12px; }
+/* `hidden` must win over .icon-btn's display: no dictation button on Linux (island-ui#13). */
+.asst-mic[hidden] { display: none; }
 .asst-mic {
   position: absolute;
   right: 7px;
@@ -1648,11 +2172,15 @@ mark.lvl-critical { background: #f4505e; color: #fff; }
   transition: transform 0.42s cubic-bezier(0.3, 1.3, 0.4, 1);
 }
 
-/* Focus: a ring that empties as the time runs. */
+/* Focus: a ring that empties as the time runs. One full-width column, so the
+   ring sits in the middle of the card and never under the play button at its
+   corner (the card's flex-end packing used to push it there, G-3). */
 .island-dashboard-media { grid-template-columns: minmax(0, 1fr) minmax(128px, 27%); }
 .island-card-focus {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: 1fr auto;
+  justify-content: stretch;
   justify-items: center;
   align-items: center;
   gap: 2px;
@@ -1663,6 +2191,7 @@ mark.lvl-critical { background: #f4505e; color: #fff; }
   position: absolute;
   top: 6px;
   right: 6px;
+  z-index: 2;
   display: grid;
   place-items: center;
   width: 22px;
@@ -1676,8 +2205,9 @@ mark.lvl-critical { background: #f4505e; color: #fff; }
   transition: transform 0.15s;
 }
 .focus-play:active { transform: scale(0.9); }
+.focus-play:focus-visible { outline: 2px solid var(--dash-accent); outline-offset: 2px; }
 .focus-play svg { width: 10px; height: 10px; fill: currentColor; }
-.focus-dial { position: relative; display: grid; place-items: center; width: 58px; height: 58px; }
+.focus-dial { position: relative; display: grid; place-items: center; width: 58px; height: 58px; pointer-events: none; }
 .focus-dial .ring { position: absolute; inset: 0; width: 100%; height: 100%; }
 .focus-time { position: relative; font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
 .focus-row { display: flex; align-items: center; justify-content: center; gap: 4px; height: 18px; }
@@ -1698,9 +2228,17 @@ mark.lvl-critical { background: #f4505e; color: #fff; }
 .focus-step:hover { background: #ffffff22; }
 .island-card-focus.running .focus-time { color: var(--dash-accent); }
 .island-card-focus.running .ring-arc { filter: drop-shadow(0 0 4px color-mix(in srgb, var(--dash-accent) 70%, transparent)); }
-.island-card-focus.done { animation: focus-done 0.6s ease-in-out 3; }
+/* A run that ended stays marked until it has been seen (dashboard#5); the glow
+   plays when the island is open to show it. */
+.island-card-focus.done { border-color: color-mix(in srgb, var(--dash-accent) 60%, transparent); }
+.island-card-focus.done .focus-time,
+.island-card-focus.done .focus-length { color: var(--dash-accent); font-weight: 650; }
+#island[data-mode="expanded"] .island-card-focus.done { animation: focus-done 0.6s ease-in-out 3; }
 @keyframes focus-done {
   50% { box-shadow: inset 0 0 0 2px var(--dash-accent), 0 0 18px color-mix(in srgb, var(--dash-accent) 50%, transparent); }
+}
+@media (prefers-reduced-motion: reduce) {
+  #island[data-mode="expanded"] .island-card-focus.done { animation: none; }
 }
 
 /* Rings, shared by focus and the system card. */
@@ -1713,10 +2251,13 @@ mark.lvl-critical { background: #f4505e; color: #fff; }
   transition: stroke-dashoffset 0.9s cubic-bezier(0.3, 0.8, 0.3, 1), stroke 0.3s;
 }
 
-/* Agenda: the day on the left with the add box, its items on the right. */
+/* Agenda: the day on the left with its Add button, its items on the right; the
+   editor (a new note, or one being changed) covers the whole card, so the text
+   and its time get the room they need (dashboard#8, #21). */
 .island-agenda {
+  position: relative;
   display: grid;
-  grid-template-columns: minmax(150px, 38%) minmax(0, 1fr);
+  grid-template-columns: minmax(132px, 32%) minmax(0, 1fr);
   gap: 8px;
   height: 100%;
 }
@@ -1730,8 +2271,84 @@ mark.lvl-critical { background: #f4505e; color: #fff; }
 .agenda-head { display: flex; align-items: center; gap: 4px; }
 .agenda-head .island-calendar-button { width: 20px; height: 20px; }
 .agenda-day { flex: 1; overflow: hidden; font-size: 12.5px; text-align: center; white-space: nowrap; text-overflow: ellipsis; }
-.agenda-count { color: #cfc8da; font-size: 10px; text-align: center; }
-.agenda-form { display: flex; align-items: end; gap: 4px; }
+.agenda-count { overflow: hidden; color: #cfc8da; font-size: 10px; text-align: center; white-space: nowrap; text-overflow: ellipsis; }
+.agenda-count.error { color: #ff9aa4; white-space: normal; line-height: 1.2; }
+.agenda-new {
+  align-self: end;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  color: #121917;
+  background: var(--dash-accent);
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 650;
+  cursor: pointer;
+  transition: filter 0.15s, transform 0.15s;
+}
+.agenda-new:hover { filter: brightness(1.08); }
+.agenda-new:active { transform: scale(0.97); }
+.agenda-new:focus-visible, .agenda-save:focus-visible, .agenda-cancel:focus-visible, .agenda-text:focus-visible, .cal-day:focus-visible {
+  outline: 2px solid var(--dash-accent);
+  outline-offset: -2px;
+}
+.agenda-editor {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: grid;
+  grid-template-rows: auto auto auto;
+  align-content: center;
+  gap: 5px;
+  padding: 6px 9px;
+  border: 1px solid color-mix(in srgb, var(--dash-accent) 45%, transparent);
+  border-radius: 12px;
+  background: var(--dash-sheen), var(--dash-surface);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+.agenda-editor[hidden] { display: none; }
+#island[data-mode="expanded"] .agenda-editor:not([hidden]) { animation: asst-pop 0.18s cubic-bezier(0.2, 0.9, 0.3, 1.1) both; }
+.agenda-editor-head { display: flex; align-items: center; gap: 6px; height: 16px; color: #cfc8da; font-size: 10.5px; }
+.agenda-editor-title { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.agenda-cancel {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  color: #ffffffb0;
+  background: transparent;
+  cursor: pointer;
+}
+.agenda-cancel:hover { color: var(--text); background: #ffffff18; }
+.agenda-editor-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.agenda-note { flex: 1; min-width: 0; overflow: hidden; color: #cfc8da; font-size: 10.5px; white-space: nowrap; text-overflow: ellipsis; }
+.agenda-note.warn { color: var(--medium); }
+.agenda-note.error { color: #ff9aa4; }
+.agenda-save {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  padding: 0 11px 0 9px;
+  border: 0;
+  border-radius: 8px;
+  color: #121917;
+  background: var(--dash-accent);
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 650;
+  cursor: pointer;
+}
+.agenda-editor[aria-busy="true"] .agenda-save { opacity: 0.6; cursor: progress; }
 .agenda-input, .agenda-time {
   min-width: 0;
   height: 26px;
@@ -1745,24 +2362,12 @@ mark.lvl-critical { background: #f4505e; color: #fff; }
   outline: none;
   transition: border-color 0.15s, box-shadow 0.15s;
 }
-.agenda-input { flex: 1; }
-.agenda-time { flex: none; width: 66px; padding: 0 4px; color-scheme: dark; }
+.agenda-input { width: 100%; }
+/* Wide enough for a whole time in every locale, its picker icon included. */
+.agenda-time { flex: none; width: 96px; padding: 0 6px; color-scheme: dark; font-variant-numeric: tabular-nums; }
 .agenda-input:focus, .agenda-time:focus {
   border-color: color-mix(in srgb, var(--dash-accent) 70%, transparent);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--dash-accent) 22%, transparent);
-}
-.agenda-add {
-  flex: none;
-  display: grid;
-  place-items: center;
-  width: 26px;
-  height: 26px;
-  padding: 0;
-  border: 0;
-  border-radius: 8px;
-  color: #121917;
-  background: var(--dash-accent);
-  cursor: pointer;
 }
 .agenda-list {
   display: flex;
@@ -1814,8 +2419,25 @@ mark.lvl-critical { background: #f4505e; color: #fff; }
 }
 @keyframes agenda-tick { from { transform: rotate(45deg) scale(0); } to { transform: rotate(45deg) scale(1); } }
 .agenda-at { flex: none; color: var(--dash-accent); font-size: 10.5px; font-weight: 650; font-variant-numeric: tabular-nums; }
-.agenda-text { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; transition: color 0.2s, opacity 0.2s; }
-.agenda-item.done .agenda-text { color: #ffffff80; text-decoration: line-through; text-decoration-color: #ffffff60; }
+/* An item's time and text: a click edits it. */
+.agenda-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 22px;
+  padding: 0 2px;
+  border: 0;
+  border-radius: 6px;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: text;
+}
+.agenda-label { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; transition: color 0.2s, opacity 0.2s; }
+.agenda-item.done .agenda-label { color: #ffffff80; text-decoration: line-through; text-decoration-color: #ffffff60; }
 .agenda-remove {
   flex: none;
   display: grid;
@@ -1897,7 +2519,7 @@ mark.lvl-critical { background: #f4505e; color: #fff; }
   transition: background 0.6s;
 }
 .island-weather { isolation: isolate; }
-.island-weather[data-kind^="clear"]::before, .island-weather[data-kind^="partly"]::before {
+.island-weather[data-kind^="clear"]::before, .island-weather[data-kind^="mainly"]::before, .island-weather[data-kind^="partly"]::before {
   background: radial-gradient(ellipse at 12% 30%, #ffb34740, transparent 60%), linear-gradient(120deg, #3a7bd51f, transparent);
 }
 .island-weather[data-kind$="night"]::before { background: radial-gradient(ellipse at 12% 30%, #8f8cff38, transparent 60%), linear-gradient(120deg, #1b2a5a55, transparent); }
@@ -1963,7 +2585,8 @@ mark.lvl-critical { background: #f4505e; color: #fff; }
 @keyframes wi-twinkle { 50% { opacity: 0.2; } }
 @keyframes wi-drift { from { transform: translateX(-1.5px); } to { transform: translateX(2px); } }
 @keyframes wi-fall { from { transform: translateY(-4px); opacity: 0; } 30% { opacity: 1; } to { transform: translateY(6px); opacity: 0; } }
-@keyframes wi-flake { 0% { transform: translate(0, -4px); opacity: 0; } 30% { opacity: 1; } 100% { transform: translate(2px, 7px); opacity: 0; } }
+/* Flakes drift and dim but never vanish, so snow always reads as snow (dashboard#23). */
+@keyframes wi-flake { 0% { transform: translate(0, -4px); opacity: 0.45; } 30% { opacity: 1; } 100% { transform: translate(2px, 7px); opacity: 0.45; } }
 @keyframes wi-flash { 0%, 72%, 100% { opacity: 0.25; } 76%, 84% { opacity: 1; } 80% { opacity: 0.4; } }
 @keyframes wi-slide { to { transform: translateX(4px); } }
 
@@ -1984,14 +2607,18 @@ mark.lvl-critical { background: #f4505e; color: #fff; }
 .sys-cpu { --ring-color: #7dd3fc; }
 .sys-ram { --ring-color: #c4b5fd; }
 .sys-gpu { --ring-color: #86efac; }
+/* 85 % and up: the ring and its number turn rose (the ring inherits the colour
+   from its gauge, dashboard#4). */
 .sys-gauge.hot { --ring-color: #fb7185; }
+.sys-gauge.hot .sys-value { color: #fecdd3; }
 .sys-gauge.off .sys-value { color: #ffffff70; }
 .sys-dial { position: relative; display: grid; place-items: center; width: 48px; height: 48px; margin-bottom: 1px; }
 .sys-dial .ring { position: absolute; inset: 0; width: 100%; height: 100%; }
 .sys-dial .ring-arc { filter: drop-shadow(0 0 3px color-mix(in srgb, var(--ring-color) 60%, transparent)); }
 .sys-value { position: relative; font-size: 11.5px; font-variant-numeric: tabular-nums; }
 .sys-name { font-size: 10px; font-weight: 700; letter-spacing: 0.05em; }
-.sys-sub { max-width: 100%; overflow: hidden; color: #cfc8da; font-size: 9px; white-space: nowrap; text-overflow: ellipsis; }
+/* An empty second line keeps its height, so the three names stay level. */
+.sys-sub { max-width: 100%; min-height: 1.15em; overflow: hidden; color: #cfc8da; font-size: 9px; white-space: nowrap; text-overflow: ellipsis; }
 .sys-history { display: grid; grid-template-rows: auto 1fr auto; gap: 2px; padding: 6px 9px; }
 .sys-spark-label { color: #cfc8da; font-size: 10px; }
 .sys-spark { width: 100%; height: 100%; min-height: 30px; overflow: visible; }
@@ -2001,32 +2628,47 @@ mark.lvl-critical { background: #f4505e; color: #fff; }
 
 @media (prefers-reduced-motion: reduce) {
   .island-widget-indicator, .ring-arc { transition: none; }
-  .agenda-item, .wx-hour, .cal-week .cal-day { animation: none !important; }
+  .agenda-item, .wx-hour, .cal-week .cal-day, .agenda-editor { animation: none !important; }
   #island[data-mode="expanded"] .view.on .wi-rays, #island[data-mode="expanded"] .view.on .wi-star, #island[data-mode="expanded"] .view.on .wi-cloud, #island[data-mode="expanded"] .view.on .wi-rain line,
   #island[data-mode="expanded"] .view.on .wi-snow circle, #island[data-mode="expanded"] .view.on .wi-bolt, #island[data-mode="expanded"] .view.on .wi-fog line { animation: none; }
 }
 .agenda-side { overflow: hidden; }
 .agenda-day { min-width: 0; }
-.agenda-form { display: grid; grid-template-columns: minmax(0, 1fr) 62px 26px; }
-.agenda-time { width: auto; }
 .wx-meta { display: grid; gap: 0; }
 .wx-meta span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .sys-gauge { padding: 5px 2px 4px; }
 .sys-dial { width: 42px; height: 42px; }
 .sys-value { font-size: 10.5px; }
+/* "100%" in the 42 px ring: a size down, so it clears the stroke (dashboard#24). */
+.sys-value.wide { font-size: 9px; letter-spacing: -0.03em; }
 .sys-name { font-size: 9.5px; }
 .island-system { grid-template-rows: minmax(0, 1fr); }
 .sys-history { min-height: 0; overflow: hidden; }
-.sys-spark { height: 46px; min-height: 0; }
+.sys-spark-box { position: relative; height: 46px; min-height: 0; }
+.sys-spark { height: 100%; min-height: 0; }
+/* The latest reading: a dot at the right end of the line. */
+.sys-spark-now {
+  position: absolute;
+  right: 0;
+  width: 6px;
+  height: 6px;
+  margin: -3px -3px 0 0;
+  border-radius: 50%;
+  background: #7dd3fc;
+  box-shadow: 0 0 6px #7dd3fcaa;
+}
+.sys-spark-now[hidden] { display: none; }
 
 /* ── 2.3.1 island motion ────────────────────────────────────────────────────
-   Content arrives a beat after the island opens: each part of the view rises
-   out of a light blur, one after the other. Infinite animations above only run
-   while the island is open, so a hidden island costs nothing. The approval card
-   is left out: it appears at once, exactly as it will run. */
+   Content arrives a beat after the island opens (#content waits for it below),
+   and each part of the view rises out of a light blur, one after the other —
+   the first at once, so changing views never leaves the island blank for a
+   moment. Infinite animations above only run while the island is open, so a
+   hidden island costs nothing. The approval card is left out: it appears at
+   once, exactly as it will run. */
 #island[data-mode="expanded"] .view.on:not(.view-approval) > * {
   animation: view-in 0.42s cubic-bezier(0.2, 0.85, 0.25, 1) both;
-  animation-delay: calc(70ms + var(--n, 0) * 40ms);
+  animation-delay: calc(var(--n, 0) * 40ms);
 }
 .view.on > :nth-child(2) { --n: 1; }
 .view.on > :nth-child(3) { --n: 2; }
@@ -2037,7 +2679,11 @@ mark.lvl-critical { background: #f4505e; color: #fff; }
   from { opacity: 0; transform: translateY(-7px) scale(0.985); filter: blur(5px); }
   to { opacity: 1; transform: none; filter: none; }
 }
-#content { transition: opacity 0.22s ease; }
+/* The open island's content fades in a beat after the island starts to grow
+   (narrower than its 640 px, it would show clipped at both sides) and out
+   quickly on the way back, before the pill's own content arrives. */
+#content { transition: opacity 0.1s cubic-bezier(0.4, 0, 1, 1); }
+#island[data-mode="expanded"] #content { transition: opacity 0.2s cubic-bezier(0.2, 0.8, 0.2, 1) 0.1s; }
 #island { transition: box-shadow 0.4s ease; }
 #island[data-mode="expanded"] {
   box-shadow:
@@ -2075,22 +2721,31 @@ mark.lvl-critical { background: #f4505e; color: #fff; }
 
 /* ── 2.4.0: questions, plans, batch approval ─────────────────────────────── */
 
-.risk-chip.kind-question { background: var(--blue); color: #fff; }
+/* Dark text on the blue: white was 2.8:1 (A-19). */
+.risk-chip.kind-question { background: var(--blue); color: #0a0a0c; }
 .risk-chip.kind-plan { background: var(--violet); color: #0a0a0c; }
 
+/* A question or a plan: it scrolls with the card's body, never on its own. */
 .appr-special {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  max-height: 300px;
-  overflow: auto;
   padding-right: 2px;
 }
 
 .q-form { display: flex; flex-direction: column; gap: 12px; }
-.q-block { display: flex; flex-direction: column; gap: 6px; }
-.q-head { display: flex; gap: 6px; align-items: center; }
+.q-block { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.q-head { display: flex; gap: 6px; align-items: center; min-width: 0; }
+/* An answered question says so; one still open does not (A-9). */
+.q-block.answered .q-head::after {
+  content: "✓";
+  margin-left: auto;
+  color: var(--low);
+  font-size: 12px;
+  font-weight: 700;
+}
 .q-tag {
+  max-width: 100%;
   padding: 1px 7px;
   border-radius: 999px;
   background: rgba(59, 158, 255, 0.16);
@@ -2098,15 +2753,18 @@ mark.lvl-critical { background: #f4505e; color: #fff; }
   font-size: 10.5px;
   font-weight: 650;
   letter-spacing: 0.3px;
+  overflow-wrap: anywhere;
 }
-.q-multi { font-size: 10.5px; color: var(--faint); }
-.q-text { font-size: 13px; font-weight: 600; line-height: 1.4; user-select: text; }
+.q-multi { font-size: 10.5px; color: var(--muted); }
+.q-text { font-size: 13px; font-weight: 600; line-height: 1.4; user-select: text; overflow-wrap: anywhere; }
+.q-text.q-empty { color: var(--muted); font-style: italic; font-weight: 500; }
 .q-opts { display: flex; flex-wrap: wrap; gap: 6px; }
 .q-opt {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   gap: 1px;
+  min-width: 0;
   max-width: 100%;
   padding: 6px 10px;
   border: 1px solid var(--line);
@@ -2118,8 +2776,10 @@ mark.lvl-critical { background: #f4505e; color: #fff; }
 .q-opt:hover { background: rgba(255, 255, 255, 0.08); }
 .q-opt:active { transform: scale(0.98); }
 .q-opt.on { border-color: var(--blue); background: rgba(59, 158, 255, 0.18); }
-.q-opt-label { font-size: 12.5px; font-weight: 600; }
-.q-opt-desc { font-size: 11px; color: var(--muted); }
+.q-opt:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
+.q-opt-label { max-width: 100%; font-size: 12.5px; font-weight: 600; overflow-wrap: anywhere; }
+.q-opt-desc { max-width: 100%; font-size: 11px; color: var(--muted); overflow-wrap: anywhere; }
+.q-note { font-size: 11px; color: #9ccbff; }
 .q-other,
 .plan-feedback {
   width: 100%;
@@ -2136,6 +2796,8 @@ mark.lvl-critical { background: #f4505e; color: #fff; }
 }
 .q-other:focus,
 .plan-feedback:focus { border-color: rgba(59, 158, 255, 0.6); }
+.q-other::placeholder,
+.plan-feedback::placeholder { color: var(--muted); }
 
 .plan-box {
   padding: 8px 12px;
@@ -2144,24 +2806,41 @@ mark.lvl-critical { background: #f4505e; color: #fff; }
   background: #050506;
   max-height: 220px;
   overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
   user-select: text;
 }
-.plan { font-size: 12.5px; line-height: 1.5; }
+.plan { font-size: 12.5px; line-height: 1.5; overflow-wrap: anywhere; }
+.plan h3 { margin: 6px 0 4px; font-size: 14.5px; }
 .plan h4 { margin: 6px 0 4px; font-size: 13.5px; }
 .plan h5 { margin: 6px 0 3px; font-size: 12.5px; color: #c9c2ff; }
+.plan h6 { margin: 6px 0 3px; font-size: 12px; color: var(--muted); }
 .plan p { margin: 3px 0; color: #e4e4ea; }
 .plan ul,
 .plan ol { margin: 3px 0; padding-left: 20px; }
 .plan li { margin: 1px 0; }
+.plan li > ul,
+.plan li > ol { margin: 1px 0; }
+.plan li > p { margin: 3px 0 0; }
 .plan li.task { list-style: "☐  "; }
 .plan li.task.done { list-style: "☑  "; color: var(--muted); }
 .plan blockquote { margin: 4px 0; padding-left: 9px; border-left: 2px solid var(--violet); color: var(--muted); }
+.plan hr { margin: 8px 0; border: 0; border-top: 1px solid rgba(255, 255, 255, 0.14); }
 .plan code {
   padding: 0 4px;
   border-radius: 4px;
   background: rgba(255, 255, 255, 0.08);
   font: 11.5px var(--mono);
 }
+.plan del { color: var(--muted); }
+/* A link is text here: what it says, and where it points. */
+.plan-link { text-decoration: underline; text-decoration-color: rgba(156, 203, 255, 0.5); text-underline-offset: 2px; }
+.plan-url { color: #9ccbff; font: 11.5px var(--mono); }
+.plan-table { margin: 4px 0; overflow-x: auto; }
+.plan-table table { border-collapse: collapse; font-size: 12px; }
+.plan-table th,
+.plan-table td { padding: 3px 8px; border: 1px solid rgba(255, 255, 255, 0.12); text-align: left; vertical-align: top; }
+.plan-table th { background: rgba(255, 255, 255, 0.05); font-weight: 650; }
 .plan-code {
   margin: 4px 0;
   padding: 6px 8px;
@@ -2169,23 +2848,65 @@ mark.lvl-critical { background: #f4505e; color: #fff; }
   background: rgba(255, 255, 255, 0.05);
   font: 11.5px/1.45 var(--mono);
   white-space: pre-wrap;
-  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 .plan-empty { color: var(--muted); }
 
+/* The batch tray: what one click would allow, request by request (A-5). */
 .appr-batch {
-  display: flex;
-  align-items: center;
-  gap: 6px;
+  flex: none;
   margin-top: 8px;
-  padding: 6px 8px;
+  padding: 6px 8px 6px 10px;
+  border: 1px solid rgba(52, 211, 153, 0.22);
   border-radius: 10px;
-  background: rgba(52, 211, 153, 0.08);
-  color: var(--low);
+  background: rgba(52, 211, 153, 0.06);
 }
-.btn-batch { color: var(--low); border-color: rgba(52, 211, 153, 0.35); }
+.batch-head { display: flex; align-items: center; gap: 7px; color: var(--low); font-size: 11.5px; font-weight: 600; }
+.batch-head svg { flex: none; }
+.batch-title { flex: 1 1 auto; min-width: 0; }
+.btn-batch { flex: none; color: var(--low); border-color: rgba(52, 211, 153, 0.35); }
+.batch-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-top: 5px;
+  max-height: 82px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+.batch-item {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  padding: 2px 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  font-size: 11.5px;
+}
+.batch-item:hover:not(.front) { background: rgba(255, 255, 255, 0.06); }
+.batch-item.front { cursor: default; }
+.batch-who { flex: none; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
+.batch-cmd {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: #dcdce2;
+  font: 11px/1.4 var(--mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  direction: ltr;
+  unicode-bidi: bidi-override;
+}
+.batch-here { flex: none; color: var(--low); font-size: 10.5px; }
+.batch-note { margin-top: 4px; font-size: 11px; color: var(--muted); }
+.batch-note:empty { display: none; }
 
-.appr-actions button:disabled { opacity: 0.45; cursor: default; }
+/* Not ready yet (no answer, no note, no plan): the button says why on a click. */
+.appr-actions button[aria-disabled="true"] { opacity: 0.45; }
 
 /* ── 2.4.0: usage meters and changed files (session view) ───────────────── */
 
@@ -2205,7 +2926,9 @@ mark.lvl-critical { background: #f4505e; color: #fff; }
 
 .detail-changes { margin: 0 0 8px 38px; }
 .detail-sub { font-size: 11px; color: var(--faint); margin-bottom: 4px; }
-.changes { display: flex; flex-direction: column; gap: 2px; max-height: 190px; overflow: auto; }
+.changes { display: flex; flex-direction: column; gap: 2px; max-height: 190px; overflow: auto; overscroll-behavior: contain; }
+/* The list scrolls; its rows and an open diff keep their own heights (dashboard#3). */
+.changes > * { flex: none; }
 .change-row {
   display: flex;
   align-items: center;
@@ -2241,10 +2964,13 @@ mark.lvl-critical { background: #f4505e; color: #fff; }
 .diff .d-ctx { color: var(--muted); }
 .diff .d-cut { color: var(--medium); }
 
-/* A long session (meters, changed files, an open diff) scrolls inside the island. */
+/* A long session (meters, changed files, an open diff) scrolls inside the island.
+   As tall as its content up to the panel's cap (PANEL_H − 8 − header − 12 =
+   400 px), never stretched to the island: views.ts measures it (G-2). */
 .view-session.on {
-  bottom: 0;
+  max-height: 400px;
   overflow-y: auto;
+  overscroll-behavior: contain;
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
 }
