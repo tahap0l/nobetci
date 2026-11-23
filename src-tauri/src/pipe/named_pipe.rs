@@ -7,20 +7,39 @@
 // process serving the pipe runs as the same user before it sends anything.
 
 use std::ffi::c_void;
+use std::os::windows::io::{AsHandle, AsRawHandle};
 use std::sync::OnceLock;
 use std::time::Duration;
 
 use tauri::AppHandle;
 use tokio::net::windows::named_pipe::{NamedPipeServer, ServerOptions};
 use windows::core::PCWSTR;
+use windows::Win32::Foundation::HANDLE;
 use windows::Win32::Security::Authorization::ConvertStringSecurityDescriptorToSecurityDescriptorW;
 use windows::Win32::Security::{PSECURITY_DESCRIPTOR, SECURITY_ATTRIBUTES};
+use windows::Win32::Storage::FileSystem::FlushFileBuffers;
 
 use super::Conn;
 use crate::log;
 
+/// How long closing waits for the relay to read what we wrote.
+const FLUSH_TIMEOUT: Duration = Duration::from_secs(2);
+
 impl Conn for NamedPipeServer {
-    fn close(&mut self) {
+    async fn close(&mut self) {
+        // DisconnectNamedPipe throws away whatever the relay has not read yet,
+        // and tokio's flush returns at once. A rule answers within microseconds
+        // of the request, possibly before the relay is back in ReadFile, so wait
+        // for it with FlushFileBuffers first: on a copy of the handle, off the
+        // async threads, and not for long — a relay that stopped reading is cut
+        // off as before. With nothing written it returns at once.
+        if let Ok(copy) = self.as_handle().try_clone_to_owned() {
+            let flush = tokio::task::spawn_blocking(move || {
+                // SAFETY: `copy` is an open handle to this pipe instance until it drops.
+                let _ = unsafe { FlushFileBuffers(HANDLE(copy.as_raw_handle())) };
+            });
+            let _ = tokio::time::timeout(FLUSH_TIMEOUT, flush).await;
+        }
         let _ = self.disconnect();
     }
 }

@@ -41,6 +41,18 @@ function low(): RiskAssessment {
   return { level: "low", kind: "command", target: "npm test -- --run src/risk", preview: null, truncated: false, findings: [] };
 }
 
+/** A push: MEDIUM, so a rule that wants to allow it still asks (see `approval`). */
+function medium(): RiskAssessment {
+  return {
+    level: "medium",
+    kind: "command",
+    target: "git push origin feature/settings-tabs",
+    preview: null,
+    truncated: false,
+    findings: [finding("git_push", "medium", "Uzak depoya gönderiyor", "Pushes to a remote repository", "git push")],
+  };
+}
+
 function write(): RiskAssessment {
   return {
     level: "critical",
@@ -71,7 +83,18 @@ function sessions(island: Island) {
   ev("c", P.ml, { hook_event_name: "Stop" });
 }
 
-function approval(island: Island, id: string, session: string, tool: string, risk: RiskAssessment) {
+/**
+ * What rules.rs says when an allow rule meets a request above the auto-allow
+ * cap (LOW by default): only a MEDIUM request carries it (website#16).
+ */
+function pushRuleNote(): string {
+  return L(
+    "\"git push\" kuralı izin vermek istedi ama risk ORTA — onayın gerekiyor.",
+    "Rule \"git push\" wanted to allow this, but the risk is MEDIUM — your approval is needed.",
+  );
+}
+
+function approval(island: Island, id: string, session: string, tool: string, risk: RiskAssessment, ruleNote: string | null = null) {
   injectHook(island, {
     hook_event_name: "PermissionRequest",
     request_id: id,
@@ -80,10 +103,7 @@ function approval(island: Island, id: string, session: string, tool: string, ris
     tool_name: tool,
     tool_input: {},
     risk,
-    rule_note:
-      risk.level === "low"
-        ? L("“npm” kuralı izin vermek istedi ama risk ORTA — onayın gerekiyor.", "Rule “npm” wanted to allow this, but the risk is MEDIUM — your approval is needed.")
-        : null,
+    rule_note: ruleNote,
     policy: session === "b" ? "strict" : "normal",
   });
 }
@@ -259,8 +279,20 @@ export function runDemo(island: Island, name: string) {
   // A dark scheme like the framing page's, so the frame stays see-through.
   if (params.get("bg") === "none") document.documentElement.style.colorScheme = "dark";
   State.settings.hooksInstalled = name !== "empty";
+  // &holdApprovals=0: the island of a platform that cannot vouch for a hold
+  // (Linux, D23) — HIGH and CRITICAL cards offer the hand-off, not Allow.
+  if (params.get("holdApprovals") === "0") State.holdApprovals = false;
   // &still=1: every CSS animation at its end state, for screenshots.
-  if (params.has("still")) document.documentElement.dataset.still = "1";
+  if (params.has("still")) {
+    document.documentElement.dataset.still = "1";
+    // The mascot holds still too: no breathing, random blinks or idle glances
+    // (ambient), and none of the loops a mood plays on its own, such as the
+    // approval pulse or the danger shake (the engine's still mode). A capture
+    // then never lands mid-blink or mid-shake, and comes out the same every
+    // time (assets#3, mascot-context#22).
+    island.owl.ambient = false;
+    island.owl.reducedMotion = true;
+  }
   // The website's tour shows everything: playing music with a cover, and weather.
   if (name === "tour") {
     if (!params.has("media")) params.set("media", "art");
@@ -388,10 +420,16 @@ export function runDemo(island: Island, name: string) {
       sessions(island);
       approval(island, "r1", "a", "Bash", low());
       break;
+    case "medium":
+      // A rule wanted to allow it, but MEDIUM is above what rules may allow on their own.
+      sessions(island);
+      approval(island, "r1", "a", "Bash", medium(), pushRuleNote());
+      break;
     case "critical":
+      // The next request in the queue is the MEDIUM one a rule could not allow.
       sessions(island);
       approval(island, "r1", "b", "Bash", critical());
-      approval(island, "r2", "a", "Bash", low());
+      approval(island, "r2", "a", "Bash", medium(), pushRuleNote());
       break;
     case "write":
       sessions(island);
@@ -428,6 +466,11 @@ function showCard(page: string) {
 /**
  * The website's hero: a loop through what the island does — sessions, a
  * critical request, the cards, the assistant — a few seconds each.
+ *
+ * It plays whenever it is loaded, "reduce motion" or not: the page decides.
+ * With reduce motion the website shows a still scene and loads the tour only
+ * when the visitor asks for it (Play, or the lab's Tour), so refusing here
+ * would break exactly that request (website#20, live-demo.js).
  */
 function tour(island: Island) {
   // Nobody hovers a frame on a web page: keep the island open.

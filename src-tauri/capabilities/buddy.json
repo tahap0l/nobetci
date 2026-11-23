@@ -1,7 +1,12 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "buddy",
-  "description": "The desktop mascot: the island's events, plus moving its own window when it is dragged.",
+  "description": "The desktop mascot: only shows. Its settings and its own commands (buddy_ready asks Rust to tell the island it is listening), the island's events, and dragging its own window. It sends no events and cannot answer a request.",
   "windows": ["buddy"],
-  "permissions": ["core:default", "core:window:allow-start-dragging"]
+  "permissions": [
+    "buddy-commands",
+    "core:event:allow-listen",
+    "core:event:allow-unlisten",
+    "core:window:allow-start-dragging"
+  ]
 }

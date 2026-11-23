@@ -1,0 +1,10 @@
+{
+  "extName": {
+    "message": "Nöbetçi · ChatGPT Web",
+    "description": "Extension name shown in the browser."
+  },
+  "extDescription": {
+    "message": "Shows on Nöbetçi's island whether ChatGPT is writing a response. Never sends the conversation.",
+    "description": "Extension description shown in the browser's extension list."
+  }
+}

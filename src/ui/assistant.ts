@@ -47,18 +47,32 @@ export const ASSISTANT_TARGETS = [
 
 export type AssistantTarget = (typeof ASSISTANT_TARGETS)[number]["id"];
 
+/** What a command says: a plain string when it did what was asked. */
+type Said = string | { text: string; failed: true };
+
 interface Command {
   /** The Turkish name first, then the English one, then other spellings. */
   names: string[];
   hint: () => string;
-  run(arg: string, a: AssistantActions): Promise<string> | string;
+  run(arg: string, a: AssistantActions): Promise<Said> | Said;
 }
 
-async function media(action: "toggle" | "next" | "previous"): Promise<string> {
-  const now = await Bridge.islandMedia();
-  if (!now) return t("as.noMedia");
-  const ok = await Bridge.islandMediaControl(now.source, action);
-  return ok ? t("as.mediaDone", { title: now.title }) : t("as.mediaFailed");
+/**
+ * /play, /next, /prev. Typed by the user, so they work with the music card off
+ * too (`explicit`, C-19): Rust still only talks to a player that is already
+ * running and never starts one, so with none open the answer says so.
+ */
+async function media(action: "toggle" | "next" | "previous"): Promise<Said> {
+  const now = await Bridge.islandMedia(false, true);
+  if (!now) return { text: t("as.noPlayer"), failed: true };
+  const ok = await Bridge.islandMediaControl(now.source, action, undefined, true);
+  return ok ? t("as.mediaDone", { title: now.title }) : { text: t("as.mediaFailed"), failed: true };
+}
+
+/** An error as a sentence: never "Error: …" (dashboard#19). */
+function errorText(err: unknown): string {
+  const text = (err instanceof Error ? err.message : String(err ?? "")).replace(/^Error:\s*/, "").trim();
+  return text || t("as.failed");
 }
 
 const COMMANDS: Command[] = [
@@ -83,9 +97,9 @@ const COMMANDS: Command[] = [
     hint: () => t("as.cmd.focus"),
     run: (arg) => {
       const minutes = Number.parseInt(arg, 10);
-      const m = Number.isFinite(minutes) && minutes > 0 ? minutes : 25;
-      startFocusTimer(m);
-      return t("as.focusStarted", { n: Math.min(240, m) });
+      // Held to the same 5–180 minutes as the card and Settings (S-22).
+      const n = startFocusTimer(Number.isFinite(minutes) && minutes > 0 ? minutes : 25);
+      return t("as.focusStarted", { n });
     },
   },
   { names: ["müzik", "play", "muzik", "oynat"], hint: () => t("as.cmd.play"), run: () => media("toggle") },
@@ -106,11 +120,20 @@ function shown(c: Command): string {
   return c.names[getLang() === "tr" ? 0 : 1];
 }
 
+/**
+ * A typed command name lower-cased both ways: by Turkish rules ("AYARLAR",
+ * "İLERİ") and by the default ones ("SETTINGS", "PREVIOUS" — Turkish rules
+ * would make their I a dotless ı). Either may match (island-ui#20).
+ */
+function nameForms(typed: string): string[] {
+  return [typed.toLocaleLowerCase("tr"), typed.toLowerCase().replace(/\u0307/g, "")];
+}
+
 function findCommand(text: string): { cmd: Command; arg: string } | null {
   const m = /^\/(\S+)\s*(.*)$/s.exec(text.trim());
   if (!m) return null;
-  const name = m[1].toLocaleLowerCase("tr");
-  const cmd = COMMANDS.find((c) => c.names.includes(name));
+  const forms = nameForms(m[1]);
+  const cmd = COMMANDS.find((c) => c.names.some((n) => forms.includes(n)));
   return cmd ? { cmd, arg: m[2] } : null;
 }
 
@@ -118,8 +141,8 @@ function findCommand(text: string): { cmd: Command; arg: string } | null {
 function suggestions(text: string): Command[] {
   const m = /^\/(\S*)$/.exec(text.trim());
   if (!m) return [];
-  const typed = m[1].toLocaleLowerCase("tr");
-  return COMMANDS.filter((c) => c.names.some((n) => n.startsWith(typed)));
+  const forms = nameForms(m[1]);
+  return COMMANDS.filter((c) => c.names.some((n) => forms.some((typed) => n.startsWith(typed))));
 }
 
 function targetLabel(id: string): string {
@@ -161,8 +184,13 @@ export function buildAssistant(actions: AssistantActions): ViewHost & {
   const mic = h("button", {
     type: "button", class: "icon-btn asst-mic", title: t("as.dictate"), "aria-label": t("as.dictate"),
   }, icon(MIC_ICON, 15));
-  // Linux has no system dictation to start.
-  mic.hidden = getPlatform() === "linux";
+  const inputWrap = h("div", { class: "asst-input-wrap" }, input, mic);
+  // Linux has no system dictation to start: no button, and no room kept for it.
+  const placeMic = () => {
+    mic.hidden = getPlatform() === "linux";
+    inputWrap.classList.toggle("no-mic", mic.hidden);
+  };
+  placeMic();
   const el = h(
     "div",
     { class: "view view-assistant" },
@@ -171,11 +199,11 @@ export function buildAssistant(actions: AssistantActions): ViewHost & {
       { class: "asst-head" },
       h("button", { class: "icon-btn", title: t("as.back"), onclick: () => actions.back() }, icon(BACK_ICON)),
       h("span", { class: "asst-title" }, icon(SPARK_ICON, 14), ` ${t("as.title")}`),
-      h("span", { class: "asst-keys grow", text: t("as.keys") }),
+      h("span", { class: "asst-keys grow", text: t("as.keys"), title: t("as.keysTitle") }),
       libraryToggle,
     ),
     library,
-    h("div", { class: "asst-input-wrap" }, input, mic),
+    inputWrap,
     hints,
     h("div", { class: "asst-row" }, chips, send),
     status,
@@ -198,6 +226,25 @@ export function buildAssistant(actions: AssistantActions): ViewHost & {
     });
   };
   const viaApp = (id: string) => State.settings.assistantUseApps !== false && apps.has(id);
+
+  /** Grows the box with its text, up to six lines. */
+  const fitInput = () => {
+    input.style.height = "auto";
+    input.style.height = `${Math.min(6 * 20 + 14, input.scrollHeight)}px`;
+  };
+
+  /**
+   * Puts `text` in the box the way typing would: the draft follows, so the next
+   * sync does not put the old text back (a completed command, a hint picked, a
+   * prompt recalled with the arrows; island-ui#5).
+   */
+  const setInput = (text: string) => {
+    input.value = draft = text;
+    fitInput();
+    paintHints();
+    paintSend();
+    input.setSelectionRange(text.length, text.length);
+  };
 
   /** Puts `text` in the box and selects its first [placeholder]. */
   const insertTemplate = (text: string) => {
@@ -243,7 +290,7 @@ export function buildAssistant(actions: AssistantActions): ViewHost & {
       window.clearTimeout(listening);
       listening = window.setTimeout(() => mic.classList.remove("listening"), 15_000);
     } catch (err) {
-      say(String(err), "error");
+      say(errorText(err), "error");
     }
   });
 
@@ -275,7 +322,12 @@ export function buildAssistant(actions: AssistantActions): ViewHost & {
 
   const paintSend = () => {
     const cmd = findCommand(input.value);
-    sendLabel.textContent = ` ${cmd ? t("as.run") : target === "here" ? t("as.ask") : t("as.sendTo", { app: targetLabel(target) })}`;
+    // Short on the button (the arrow says "send"), so all the targets fit in two
+    // rows beside it; the whole sentence for the tooltip and screen readers.
+    const full = cmd ? t("as.run") : target === "here" ? t("as.ask") : t("as.sendTo", { app: targetLabel(target) });
+    sendLabel.textContent = ` ${cmd || target === "here" ? full : targetLabel(target)}`;
+    send.title = full;
+    send.setAttribute("aria-label", full);
     send.disabled = busy || !input.value.trim();
   };
 
@@ -289,9 +341,7 @@ export function buildAssistant(actions: AssistantActions): ViewHost & {
             type: "button",
             class: "asst-hint",
             onclick: () => {
-              input.value = `/${shown(c)} `;
-              paintHints();
-              paintSend();
+              setInput(`/${shown(c)} `);
               input.focus();
             },
           },
@@ -312,9 +362,14 @@ export function buildAssistant(actions: AssistantActions): ViewHost & {
     State.notify();
   };
 
+  /** The assistant is what the open island shows: only then does it take keys and send. */
+  const onScreen = () => State.mode === "expanded" && State.view === "assistant" && el.isConnected;
+
   const submit = async () => {
     const text = input.value.trim();
-    if (!text || busy) return;
+    // A draft nobody sees is never sent (C-20): a folded island may still hold
+    // the window's focus for a moment, and Enter meant for the terminal lands here.
+    if (!text || busy || !onScreen()) return;
     if (history[history.length - 1] !== text) history.push(text);
     if (history.length > 20) history.shift();
     historyAt = -1;
@@ -322,8 +377,14 @@ export function buildAssistant(actions: AssistantActions): ViewHost & {
     const command = findCommand(text);
     if (command) {
       try {
-        say(await command.cmd.run(command.arg, actions), "ok");
-        actions.react("happy");
+        const said = await command.cmd.run(command.arg, actions);
+        if (typeof said === "string") {
+          say(said, "ok");
+          actions.react("happy");
+        } else {
+          // It ran but could not do it (no player to control): said as a failure.
+          say(said.text, "error");
+        }
       } catch {
         say(t("as.failed"), "error");
       }
@@ -352,8 +413,9 @@ export function buildAssistant(actions: AssistantActions): ViewHost & {
         say("");
         actions.react("happy");
         input.value = draft = "";
+        fitInput();
       } catch (err) {
-        say(String(err), "error");
+        say(errorText(err), "error");
         actions.react("surprised");
       } finally {
         actions.mood(null);
@@ -371,9 +433,13 @@ export function buildAssistant(actions: AssistantActions): ViewHost & {
         const opened = await Bridge.assistantOpen(target, text);
         const app = opened?.app ?? targetLabel(target);
         const paste = getPlatform() === "macos" ? "⌘V" : "Ctrl+V";
+        // A prompt in the address may be sent as soon as the page opens (B-11):
+        // "just press send" only where the link is known to wait for the user.
+        // A build that does not say counts every prefilled prompt as on its way.
+        const mayAnswer = opened?.maySendOnOpen ?? true;
         say(
           opened?.prefilled
-            ? t("as.sent", { app })
+            ? t(mayAnswer ? "as.sentMayAnswer" : "as.sent", { app })
             : copied
               ? t("as.pasteIt", { app, keys: paste })
               : t("as.openedOnly", { app }),
@@ -381,8 +447,9 @@ export function buildAssistant(actions: AssistantActions): ViewHost & {
         );
         actions.react("approve");
         input.value = draft = "";
+        fitInput();
       } catch (err) {
-        say(String(err), "error");
+        say(errorText(err), "error");
       }
     }
     busy = false;
@@ -392,41 +459,71 @@ export function buildAssistant(actions: AssistantActions): ViewHost & {
 
   input.addEventListener("input", () => {
     draft = input.value;
+    // Typing over a recalled prompt makes it a new one.
+    historyAt = -1;
     mic.classList.remove("listening");
+    // What the last send said belongs to the last prompt, not this one; the
+    // "fill in the [brackets]" hint stays while there are brackets to fill.
+    if (status.dataset.kind === "error" || status.dataset.kind === "ok") say("");
     paintSend();
     paintHints();
-    // Grows with the text, up to six lines.
-    input.style.height = "auto";
-    input.style.height = `${Math.min(6 * 20 + 14, input.scrollHeight)}px`;
+    fitInput();
     State.notify();
   });
   input.addEventListener("keydown", (e) => {
+    if (!onScreen()) {
+      // Folded or hidden: the box takes nothing, and lets go of the focus.
+      e.preventDefault();
+      input.blur();
+      return;
+    }
     if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
       e.preventDefault();
       void submit();
-    } else if (e.key === "Escape") {
-      e.preventDefault();
-      actions.back();
     } else if (e.key === "Tab" && suggestions(input.value).length === 1) {
       e.preventDefault();
-      input.value = `/${shown(suggestions(input.value)[0])} `;
-      paintHints();
-      paintSend();
+      setInput(`/${shown(suggestions(input.value)[0])} `);
     } else if (e.key === "Tab" && !e.shiftKey && firstPlaceholder(input.value.slice(input.selectionEnd))) {
       // Tab jumps to the template's next [placeholder].
       e.preventDefault();
       const from = input.selectionEnd;
       const [a, b] = firstPlaceholder(input.value.slice(from))!;
       input.setSelectionRange(from + a, from + b);
-    } else if ((e.key === "ArrowUp" || e.key === "ArrowDown") && !input.value.includes("\n") && history.length) {
+    } else if (
+      (e.key === "ArrowUp" || e.key === "ArrowDown") && !input.value.includes("\n") && history.length &&
+      // Only from an empty box or while walking the history: a prompt being
+      // written is never replaced by an arrow key.
+      (historyAt >= 0 || (e.key === "ArrowUp" && !input.value.trim()))
+    ) {
       // Earlier prompts, like a shell.
       e.preventDefault();
       if (e.key === "ArrowUp") historyAt = historyAt < 0 ? history.length - 1 : Math.max(0, historyAt - 1);
       else historyAt = historyAt < 0 ? -1 : historyAt + 1;
-      input.value = historyAt >= 0 && historyAt < history.length ? history[historyAt] : "";
       if (historyAt >= history.length) historyAt = -1;
-      paintSend();
+      setInput(historyAt >= 0 ? history[historyAt] : "");
     }
+  });
+  // Esc anywhere in the assistant: first it closes the prompt library, then the
+  // assistant itself (dashboard#18).
+  const escape = (e: KeyboardEvent) => {
+    if (e.key !== "Escape" || e.isComposing || e.defaultPrevented) return;
+    e.preventDefault();
+    if (!library.hidden) {
+      showLibrary(false);
+      input.focus();
+    } else {
+      actions.back();
+    }
+  };
+  el.addEventListener("keydown", escape);
+  // Esc while the assistant is up but nothing in it has the focus yet — just
+  // opened by its hotkey, the caret not in the box (C-20, live L-B test 11).
+  // A copy of the view built for another language has its own; this one goes
+  // quiet with its element.
+  document.addEventListener("keydown", (e) => {
+    if (!onScreen() || el.contains(e.target as Node)) return;
+    if ((e.target as Element | null)?.closest?.("input, textarea, select, [contenteditable]")) return;
+    escape(e);
   });
   send.addEventListener("click", () => void submit());
   copy.addEventListener("click", () => {
@@ -436,6 +533,8 @@ export function buildAssistant(actions: AssistantActions): ViewHost & {
     );
   });
 
+  // The draft outlives the view (a closed island, a language change).
+  input.value = draft;
   paintChips();
   paintSend();
   paintHints();
@@ -443,17 +542,17 @@ export function buildAssistant(actions: AssistantActions): ViewHost & {
 
   return {
     el,
-    height: () => {
-      const answerH = answer.hidden ? 0 : Math.min(180, answerText.scrollHeight + 44);
-      const hintsH = hints.hidden ? 0 : hints.childElementCount * 24 + 6;
-      const inputH = input.offsetHeight || 54;
-      const libraryH = library.hidden ? 0 : (library.offsetHeight || 150) + 8;
-      return HEADER_H + 40 + libraryH + inputH + hintsH + 46 + (status.textContent ? 22 : 0) + answerH + 12;
-    },
+    // Measured: the view is as tall as what it shows, up to the panel's cap
+    // (style.css), past which it scrolls — the Copy button and the end of an
+    // answer are never cut off (dashboard#10).
+    height: () => HEADER_H + (el.offsetHeight || 220) + 12,
     sync() {
       // The platform is known only after boot, so this is checked here too.
-      mic.hidden = getPlatform() === "linux";
-      if (input.value !== draft) input.value = draft;
+      placeMic();
+      if (input.value !== draft) {
+        input.value = draft;
+        fitInput();
+      }
       if ((State.settings.assistantTarget || "chatgpt") !== target && !busy) {
         target = State.settings.assistantTarget || "chatgpt";
         paintChips();

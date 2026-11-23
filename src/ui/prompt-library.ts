@@ -22,7 +22,8 @@ export interface PromptCategory {
 export const PROMPT_LIBRARY: PromptCategory[] = [
   {
     id: "start",
-    name: ["Başlangıç", "Getting started"],
+    // Short in both languages: the six category tabs share one row (dashboard#18).
+    name: ["Başlangıç", "Basics"],
     icon: "M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z",
     prompts: [
       {

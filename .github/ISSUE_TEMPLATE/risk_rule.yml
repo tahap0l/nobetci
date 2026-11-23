@@ -26,7 +26,7 @@ body:
     id: tool
     attributes:
       label: Tool
-      description: The tool Claude Code asked permission for.
+      description: The tool the agent asked permission for.
       options:
         - Bash
         - PowerShell
@@ -87,11 +87,23 @@ body:
     validations:
       required: true
 
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      description: Paths and commands differ per system, and so do some rules.
+      options:
+        - Windows
+        - macOS
+        - Linux
+    validations:
+      required: true
+
   - type: input
     id: version
     attributes:
       label: Nöbetçi version
       description: Shown in Settings → About.
-      placeholder: "0.2.0"
+      placeholder: "2.5.0"
     validations:
       required: true

@@ -1,7 +1,8 @@
 // Launch greeting on a 640 × 150 transparent canvas: the owl swoops in, lands
 // with a squash, looks left and right, hops aside to make room for
 // "Nöbetteyim!", waves a wing and hoots. After the main beat it keeps an idle
-// pose until interrupted.
+// pose until interrupted. With the system's "reduce motion" setting it fades in
+// where it would have landed and the caption fades in beside it.
 
 import { Ease, clamp, lerp, seg } from "../core/anim";
 import { State } from "../core/state";
@@ -45,6 +46,7 @@ export class OwlGreeting {
   private hooted = false;
   private done = false;
   private lastHover = -1e9;
+  private layer: HTMLCanvasElement | null = null;
 
   start(): void {
     this.textW = -1;
@@ -83,6 +85,7 @@ export class OwlGreeting {
     this.last = now;
     const t = (now - this.t0) / 1000;
     const owl = this.owl;
+    const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
     if (this.textW < 0) {
       ctx.save();
@@ -94,11 +97,20 @@ export class OwlGreeting {
     const landX = CW / 2;
     const restX = CW / 2 - groupW / 2 + OWL / 2;
 
-    // Position along the timeline.
+    // Position along the timeline. The clock is the wall clock, so a frame can
+    // arrive after a stall well past a beat: every beat's end state is applied
+    // whenever its time has passed, not only on a frame inside it (the owl never
+    // keeps flapping on its perch).
     let x = restX;
     let y = GROUND_Y;
     let bank = 0;
-    if (t < T_LAND) {
+    let fade = 1;
+    if (still) {
+      // No flight: the owl fades in on its perch, beside the caption.
+      owl.flight = 0;
+      fade = Ease.out(seg(t, 0, 0.5));
+      this.landed = this.hopped = true;
+    } else if (t < T_LAND) {
       // Swoop in from the upper right on a decelerating curve.
       const p = t / T_LAND;
       const e = 1 - (1 - p) * (1 - p);
@@ -111,22 +123,30 @@ export class OwlGreeting {
       y = m * m * y0 + 2 * m * e * cy + e * e * GROUND_Y;
       bank = -0.32 * (1 - Ease.out(p));
       owl.flight = 1 - seg(p, 0.72, 1);
-    } else if (t < T_HOP1) {
+    } else {
       owl.flight = 0;
       if (!this.landed) {
         this.landed = true;
+        // After a stall the hop aside may be over too: one landing, not two at once.
+        if (t >= T_HOP1) this.hopped = true;
         owl.land(1.2);
       }
-      const p = seg(t, T_HOP0, T_HOP1);
-      x = lerp(landX, restX, Ease.inOut(p));
-      y = GROUND_Y - Math.sin(Math.PI * p) * 11;
-    } else if (!this.hopped) {
-      this.hopped = true;
-      owl.land(0.6);
+      if (t < T_HOP1) {
+        const p = seg(t, T_HOP0, T_HOP1);
+        x = lerp(landX, restX, Ease.inOut(p));
+        y = GROUND_Y - Math.sin(Math.PI * p) * 11;
+      } else if (!this.hopped) {
+        this.hopped = true;
+        owl.land(0.6);
+      }
     }
 
-    // Look around, then settle on the text; drift gently once idle.
-    if (t >= T_LAND) {
+    // Look around, then settle on the text; drift gently once idle. With reduced
+    // motion it just looks at the caption.
+    if (still) {
+      owl.lookX = 0.15;
+      owl.lookY = 0;
+    } else if (t >= T_LAND) {
       if (t < T_LOOK_L) owl.lookX = 0;
       else if (t < T_LOOK_R) owl.lookX = -1;
       else if (t < T_LOOK_C) owl.lookX = 1;
@@ -147,7 +167,7 @@ export class OwlGreeting {
 
     // Landing dust.
     const dq = (t - T_LAND) / 0.45;
-    if (dq > 0 && dq < 1) {
+    if (dq > 0 && dq < 1 && !still) {
       ctx.fillStyle = "#FFFFFF";
       ctx.globalAlpha = 0.28 * (1 - dq);
       const fy = GROUND_Y + OWL * 0.48;
@@ -167,7 +187,8 @@ export class OwlGreeting {
     if (bank !== 0) ctx.rotate(bank);
     ctx.translate(-OWL / 2, -(OWL + OVER) / 2);
     owl.setSkin(State.settings.mascotTheme);
-    owl.draw(ctx, OWL, OWL + OVER);
+    if (fade < 1) this.drawFaded(ctx, fade);
+    else owl.draw(ctx, OWL, OWL + OVER);
     ctx.restore();
 
     // Caption.
@@ -179,7 +200,7 @@ export class OwlGreeting {
       ctx.textBaseline = "middle";
       ctx.textAlign = "left";
       ctx.font = FONT;
-      ctx.fillText(text(), restX + OWL / 2 + GAP - (1 - ta) * 8, GROUND_Y + 2);
+      ctx.fillText(text(), restX + OWL / 2 + GAP - (still ? 0 : (1 - ta) * 8), GROUND_Y + 2);
       ctx.restore();
     }
 
@@ -187,5 +208,25 @@ export class OwlGreeting {
       this.done = true;
       this.onComplete?.();
     }
+  }
+
+  /** The owl through a layer of its own, so it can fade in as one picture. */
+  private drawFaded(ctx: CanvasRenderingContext2D, alpha: number): void {
+    const scale = ctx.getTransform().a || 1;
+    const w = Math.ceil(OWL * scale);
+    const h = Math.ceil((OWL + OVER) * scale);
+    const layer = (this.layer ??= document.createElement("canvas"));
+    if (layer.width !== w || layer.height !== h) {
+      layer.width = w;
+      layer.height = h;
+    }
+    const lc = layer.getContext("2d");
+    if (!lc) return;
+    lc.setTransform(scale, 0, 0, scale, 0, 0);
+    lc.clearRect(0, 0, OWL, OWL + OVER);
+    this.owl.draw(lc, OWL, OWL + OVER);
+    ctx.globalAlpha = alpha;
+    ctx.drawImage(layer, 0, 0, OWL, OWL + OVER);
+    ctx.globalAlpha = 1;
   }
 }

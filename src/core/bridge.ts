@@ -4,10 +4,16 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import { emit, listen } from "@tauri-apps/api/event";
+import { defineMessages } from "../i18n/core";
 import type { Settings } from "./settings-model";
 
 export const IS_TAURI =
   typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+
+const msg = defineMessages(
+  { notInApp: "Bu, yalnız masaüstü uygulamasında çalışır." },
+  { notInApp: "This only works in the desktop app." },
+);
 
 async function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T | null> {
   if (!IS_TAURI) return null;
@@ -19,9 +25,13 @@ async function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T |
   }
 }
 
-/** Same as `call`, but surfaces the error so the UI can show what went wrong. */
+/**
+ * Same as `call`, but surfaces the error so the UI can show what went wrong.
+ * In a plain browser (the preview, the website's demo) it fails with a readable
+ * message in the page's language.
+ */
 async function callOrThrow<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
-  if (!IS_TAURI) throw new Error("Nöbetçi içinde çalışmıyor");
+  if (!IS_TAURI) throw new Error(msg("notInApp"));
   return invoke<T>(cmd, args);
 }
 
@@ -41,6 +51,13 @@ export interface BootInfo {
   platform: "windows" | "macos" | "linux";
   /** Whether "quiet in full screen" can work here (not on macOS yet). */
   fullscreenSupported: boolean;
+  /**
+   * Whether the island may approve a request that needs a hold (HIGH,
+   * CRITICAL): false where the click guard cannot tell a program's click from a
+   * hand's (Linux, D23). Rust then refuses any island allow for such a request
+   * with `terminal_only` (C-25). Absent from older builds.
+   */
+  holdApprovals?: boolean;
 }
 
 export interface HookStatus {
@@ -54,6 +71,12 @@ export interface HookStatus {
   stale: boolean;
   /** settings.json has someone else's status line; Nöbetçi leaves it alone. */
   foreignStatusLine?: boolean;
+  /**
+   * Windows only: no spelling of the relay's path runs in both Git Bash and
+   * PowerShell, so the hooks run only where Claude Code uses Git Bash
+   * (hooks.rs `git_bash_only`).
+   */
+  gitBashOnly?: boolean;
 }
 
 export interface HookPreview {
@@ -106,10 +129,21 @@ export interface RiskFinding {
 /** Computed in Rust (src-tauri/src/risk.rs) for every permission request. */
 export interface RiskAssessment {
   level: RiskLevel;
+  /**
+   * The engine's own level, before a rule re-scored the request (C-2). The allow
+   * hotkey and a batch click only cover requests that are low by both. Absent
+   * from older payloads: then `level` is the engine's level.
+   */
+  engineLevel?: RiskLevel;
   kind: "command" | "write" | "read" | "web" | "mcp" | "other";
   target: string;
   preview: string | null;
   previewBefore?: string | null;
+  /**
+   * A MultiEdit's edits one by one (absent when there are none). `preview` and
+   * `previewBefore` then hold all of them joined, for older readers.
+   */
+  edits?: { before: string; after: string }[];
   findings: RiskFinding[];
   truncated: boolean;
 }
@@ -146,10 +180,22 @@ export interface AuditEntry {
   tool: string;
   kind: string;
   target: string;
+  /** The level the request was decided at. */
   level: RiskLevel;
+  /** The risk engine's own level, only where a user rule changed it (C-22). */
+  engineLevel?: RiskLevel;
+  /** The findings as the card showed them, in the language of that day. */
   labels: string[];
+  /**
+   * The findings' category ids (`risk_categories`), one per label in the same
+   * order (C-24). Absent when there were no findings, and in older entries.
+   */
+  categories?: string[];
   decision: "allow" | "deny" | "none";
-  /** user, hotkey, rule, trusted, session, timeout, terminal, paused, busy, unseen, resolved */
+  /**
+   * user, hotkey, batch, rule, trusted, session, timeout, terminal, cursor,
+   * app, paused, busy, unseen, resolved or undelivered (pipe.rs).
+   */
   by: string;
   rule: string;
   message: string;
@@ -223,7 +269,8 @@ export type InteractiveResponse =
 
 export type Anchor = { x: number; y: number; w: number; h: number };
 
-export type NotifyKind = "approval" | "finished" | "error" | "waiting";
+/** `focus`: a focus timer run ended (gated by Rust like the others: toasts on, not quiet). */
+export type NotifyKind = "approval" | "finished" | "error" | "waiting" | "focus";
 export type QuietReason = "dnd" | "hours" | "fullscreen" | null;
 
 // ── Commands ──────────────────────────────────────────────────────────────────
@@ -279,7 +326,10 @@ export interface AgendaItem {
 
 export const Bridge = {
   // ── Desktop mascot ────────────────────────────────────────────────────────
-  /** Tells the island and the desktop mascot something about the other. */
+  /**
+   * The island tells the desktop mascot its mood, reactions and colour. Only
+   * the island sends: the mascot's page has no right to emit events (C-13).
+   */
   toBuddy: async (event: string, payload: unknown) => {
     if (!IS_TAURI) return;
     try {
@@ -289,10 +339,19 @@ export const Bridge = {
     }
   },
   buddyOpenIsland: () => call<void>("buddy_open_island"),
+  /**
+   * The mascot's page is listening: Rust asks the island ("buddy-ready") to
+   * send its mood and colour, so the mascot never emits an event itself.
+   */
+  buddyReady: () => call<void>("buddy_ready"),
   // ── Assistant ─────────────────────────────────────────────────────────────
-  /** Opens an AI app with the prompt; `prefilled` says it went in the address. */
+  /**
+   * Opens an AI app with the prompt; `prefilled` says it went in the address,
+   * `maySendOnOpen` that the app may send it as it opens (absent from older
+   * builds: then any prefilled prompt may be on its way).
+   */
   assistantOpen: (target: string, prompt: string) =>
-    callOrThrow<{ prefilled: boolean; app: string | null }>("assistant_open", { target, prompt }),
+    callOrThrow<{ prefilled: boolean; maySendOnOpen?: boolean; app: string | null }>("assistant_open", { target, prompt }),
   /** Targets that have a desktop app on this computer. */
   assistantApps: () => call<{ target: string; name: string }[]>("assistant_apps"),
   /** Starts the system's dictation into the focused text box. */
@@ -305,12 +364,32 @@ export const Bridge = {
   buddyResizeBy: (step: number) => call<void>("buddy_resize_by", { step }),
   buddyResetPosition: () => call<void>("buddy_reset_position"),
 
-  islandMedia: (includeArtwork = false) => call<IslandMedia>("island_media", { includeArtwork }),
-  islandMediaControl: (source: string, action: MediaAction, positionMs?: number) =>
-    call<boolean>("island_media_control", { source, action, positionMs: positionMs ?? null }),
+  /**
+   * The player that is playing (or paused). Read only while the music card is
+   * on, unless `explicit`: the user typed /play, /next or /prev in the
+   * assistant (C-19). Either way Rust only asks a player that already runs.
+   */
+  islandMedia: (includeArtwork = false, explicit = false) =>
+    call<IslandMedia>("island_media", { includeArtwork, explicit }),
+  /**
+   * `positionMs` goes as whole milliseconds. Rust also takes a fraction and
+   * rounds it; a value that is not a number, is negative or is past any track
+   * makes it refuse the call (widgets.rs `seek_position`, shell-widgets#1).
+   */
+  islandMediaControl: (source: string, action: MediaAction, positionMs?: number, explicit = false) =>
+    call<boolean>("island_media_control", {
+      source,
+      action,
+      positionMs: positionMs == null || !Number.isFinite(positionMs) ? null : Math.max(0, Math.round(positionMs)),
+      explicit,
+    }),
   islandWeather: (cityId: string) => call<IslandWeather>("island_weather", { cityId }),
   islandStats: () => call<IslandStats>("island_stats"),
-  agendaList: () => call<AgendaItem[]>("agenda_list"),
+  /**
+   * The agenda. Rejects with `agenda_unreadable` when agenda.json is there but
+   * cannot be read (C-23): that is not an empty day.
+   */
+  agendaList: () => callOrThrow<AgendaItem[]>("agenda_list"),
   agendaPut: (item: AgendaItem) => callOrThrow<AgendaItem[]>("agenda_put", { item }),
   agendaDelete: (id: string) => callOrThrow<AgendaItem[]>("agenda_delete", { id }),
   boot: () => call<BootInfo>("boot"),
@@ -370,7 +449,9 @@ export const Bridge = {
   /**
    * Rejects with an error code when Rust refuses the decision:
    * `not_pending` (the relay gave up), `hold_required` (plain allow on high risk),
-   * `input_not_physical` (no real mouse click behind it), `unknown_decision`.
+   * `input_not_physical` (no real mouse click behind it), `too_soon` (the card
+   * had only just appeared), `hotkey_low_only`, `no_hotkey` (a "hotkey" decision
+   * with no real key press behind it), `unknown_decision`.
    */
   approvalDecision: (requestId: string, decision: Decision, opts: DecisionOptions = {}) =>
     callOrThrow<void>("approval_decision", {
@@ -387,12 +468,23 @@ export const Bridge = {
   /** Answers a question or a plan; `anchor` is the button pressed. */
   approvalRespond: (requestId: string, response: InteractiveResponse, anchor?: Anchor) =>
     callOrThrow<void>("approval_respond", { requestId, response, anchor: anchor ?? null }),
-  /** Allows every waiting low-risk request with one click; returns how many. */
-  approvalAllowLow: (anchor?: Anchor) => callOrThrow<number>("approval_allow_low", { anchor: anchor ?? null }),
-  /** "The card is up or queued" — until this lands the relay only waits a moment. */
+  /**
+   * Allows, with one click, the waiting requests the batch row listed (`ids`);
+   * Rust skips any that are no longer pending or not low by both levels (C-2).
+   * Resolves to how many it allowed.
+   */
+  approvalAllowLow: (anchor: Anchor | undefined, ids: string[]) =>
+    callOrThrow<number>("approval_allow_low", { anchor: anchor ?? null, ids }),
+  /**
+   * "The card is up or queued" — until this lands the relay only waits a moment.
+   * A repeat (a reloaded island putting its cards back) changes nothing.
+   */
   approvalAck: (requestId: string) => call<void>("approval_ack", { requestId }),
-  /** Nobody will act on this here — Claude Code asks in the terminal right away. */
-  approvalDecline: (requestId: string, reason: "terminal" | "paused" | "busy" | "resolved" = "terminal") =>
+  /**
+   * Nobody will act on this here — Claude Code asks in the terminal right away.
+   * `expired`: the card's countdown ran out on the island (C-6).
+   */
+  approvalDecline: (requestId: string, reason: "terminal" | "paused" | "busy" | "resolved" | "expired" = "terminal") =>
     call<void>("approval_decline", { requestId, reason }),
 
   // ── Risk & rules ──────────────────────────────────────────────────────────
@@ -418,10 +510,38 @@ export const Bridge = {
   settingsReset: () => call<Settings>("settings_reset"),
 
   // ── Notifications & hotkeys ───────────────────────────────────────────────
-  /** A desktop notification, if settings allow it right now. */
+  /**
+   * A desktop notification, if settings allow it right now. `islandVisible`:
+   * the island is open (expanded) and so already shows it; the compact pill
+   * does not count (D4).
+   */
   notify: (kind: NotifyKind, title: string, body: string, islandVisible: boolean) =>
     call<boolean>("notify", { kind, title, body, islandVisible }),
   hotkeysStatus: () => call<HotkeyStatus[]>("hotkeys_status"),
+};
+
+/**
+ * Commands only the island calls (the window permissions let no other window
+ * call them, C-13). Kept off `Bridge`, which the settings window takes whole as
+ * its own api (and mocks in the browser preview).
+ */
+export const IslandBridge = {
+  /**
+   * A card just became the front, clickable one (C-1). Rust refuses an allow
+   * that comes too soon after this (`too_soon`), so a click meant for the card
+   * before can never land on this one.
+   */
+  approvalShown: (requestId: string) => call<void>("approval_shown", { requestId }),
+  /**
+   * Every request still waiting for an answer, as the `hook` event carried it
+   * (C-11): the island re-adds the cards when it (re)loads.
+   */
+  approvalPending: () => call<Record<string, unknown>[]>("approval_pending"),
+  /**
+   * Why it is quiet right now; rejects when Rust could not be asked, so a failed
+   * call is never mistaken for "not quiet" (the island's 60 s check, C-14).
+   */
+  quietNow: () => callOrThrow<QuietReason>("quiet_state"),
 };
 
 export async function onEvent<T>(name: string, handler: (payload: T) => void) {

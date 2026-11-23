@@ -3,12 +3,12 @@
 // first-run wizard and event sync with Rust.
 
 import "./settings.css";
-import type { QuietReason } from "../core/bridge";
-import { applyMascotPalette } from "../core/mascot-theme";
+import { IS_TAURI, type QuietReason } from "../core/bridge";
 import { DEFAULT_SETTINGS, type Settings } from "../core/settings-model";
-import { onLangChange, setPlatform } from "../i18n/core";
+import { guardWebview } from "../core/webview";
+import { getPlatform, onLangChange, setPlatform } from "../i18n/core";
 import { h } from "../ui/dom";
-import { api, initApi } from "./api";
+import { api, initApi, type SettingsWarning } from "./api";
 import { cache, loadHookStatus } from "./data";
 import { t } from "./i18n";
 import { icon, owlMark } from "./icons";
@@ -19,7 +19,10 @@ import {
   flush,
   initSettings,
   onExternalChange,
+  onLocalChange,
+  onSaved,
   onSaveState,
+  saveError,
   settings,
   update,
   type SaveState,
@@ -33,8 +36,9 @@ import { guvenlikTab } from "./tabs/guvenlik";
 import { hakkindaTab } from "./tabs/hakkinda";
 import { kurallarTab } from "./tabs/kurallar";
 import { promptsTab } from "./tabs/prompts";
-import { closeTopLayer, toast, toggle } from "./ui";
-import { openWizard } from "./wizard";
+import { applySettingsTheme } from "./theme";
+import { closeTopLayer, installKeyboardTraps, notice, toast, toggle } from "./ui";
+import { openWizard, wizardOpen } from "./wizard";
 
 const TABS: Record<TabId, Tab> = {
   genel: genelTab,
@@ -88,8 +92,10 @@ const titleEl = h("h1", { class: "head-title" });
 const subEl = h("p", { class: "head-sub" });
 const saveEl = h("span", { class: "save-state", role: "status", "aria-live": "polite" });
 const content = h("div", { class: "content", id: "content" });
+/** Window-wide problems (settings unreadable, saves failing); outside the tab so redraws keep them. */
+const alerts = h("div", { class: "content-alerts" });
 const inner = h("div", { class: "content-inner" });
-content.append(inner);
+content.append(alerts, inner);
 const navButtons = new Map<TabId, { btn: HTMLButtonElement; label: HTMLElement; badge: HTMLElement }>();
 const sideFoot = h("div", { class: "side-foot" });
 const navEl = h("nav", { class: "nav" });
@@ -104,6 +110,10 @@ const closeBtn = h(
 );
 
 function closeWindow() {
+  // The window is only hidden: what the visible tab holds open (a folder path
+  // being typed, a shortcut being recorded) is settled first, so the save
+  // below takes it along. Shown again, the tab's onShow runs as usual.
+  TABS[active].onHide?.();
   void flush();
   void api.closeSettingsWindow();
   if (api.mock) toast(t("shell.previewClose"), "info");
@@ -174,7 +184,15 @@ function paintShellTexts() {
 
 // ── Sidebar footer: quick DND + quiet state ───────────────────────────────────
 
+/** What Rust last said about quiet (hours / full screen); DND itself is read from the settings. */
 let quiet: QuietReason = null;
+
+function quietNow(): QuietReason {
+  // DND is a setting, so it is known here at once — wherever it was switched
+  // (this footer, the Notifications tab, the island, the tray, a hotkey).
+  if (settings().dnd) return "dnd";
+  return quiet === "dnd" ? null : quiet;
+}
 
 function paintSideFoot() {
   const s = settings();
@@ -182,12 +200,12 @@ function paintSideFoot() {
     s.dnd,
     (v) => {
       update((x) => (x.dnd = v));
-      quiet = v ? "dnd" : quiet === "dnd" ? null : quiet;
       paintSideFoot();
       if (active === "bildirimler" || active === "genel") rerenderActive();
     },
     { label: t("shell.dnd"), fk: "side-dnd" },
   );
+  const now = quietNow();
   sideFoot.replaceChildren(
     h(
       "div",
@@ -199,13 +217,22 @@ function paintSideFoot() {
     h(
       "div",
       { class: "side-meta" },
-      quiet ? h("span", { class: "quiet-now", text: t(`shell.quiet.${quiet}`) }) : null,
+      now ? h("span", { class: "quiet-now", text: t(`shell.quiet.${now}`) }) : null,
       app.version ? h("span", { text: `v${app.version}` }) : null,
     ),
   );
 }
 
+/** The quiet-related settings Rust last answered for. */
+let quietAsked = "";
+
+function quietKey(): string {
+  const s = settings();
+  return JSON.stringify([s.dnd, s.quietEnabled, s.quietFrom, s.quietTo, s.quietFullscreen]);
+}
+
 async function refreshQuiet() {
+  quietAsked = quietKey();
   quiet = await api.quietState();
   paintSideFoot();
 }
@@ -228,15 +255,23 @@ function paintBadges() {
   }
 }
 
-// ── Save indicator ────────────────────────────────────────────────────────────
+// ── Save indicator and window-wide problems ───────────────────────────────────
 
 let saveTimer: number | null = null;
 let lastSave: SaveState = "idle";
+/**
+ * settings.json could not be used as it was at start: Rust runs on the defaults,
+ * or on every value it could read, and won't save over the file until a restart.
+ * Rust's own words (what failed, which values kept their defaults, where the
+ * copy is, what to do) are shown under the banner.
+ */
+let loadError: string | null = null;
 
 function paintSave(s: SaveState) {
   lastSave = s;
   if (saveTimer != null) window.clearTimeout(saveTimer);
   saveEl.className = `save-state ${s}`;
+  saveEl.removeAttribute("title");
   saveEl.replaceChildren();
   if (s === "pending" || s === "saving") saveEl.append(h("span", { class: "spinner sm" }), t("common.saving"));
   else if (s === "saved") {
@@ -245,7 +280,50 @@ function paintSave(s: SaveState) {
       saveEl.className = "save-state idle";
       lastSave = "idle";
     }, 1800);
-  } else if (s === "error") saveEl.append(icon("warn", 14), t("common.saveFailed"));
+  } else if (s === "error") {
+    saveEl.append(icon("warn", 14), t("common.saveFailed"));
+    const why = saveError()?.text();
+    if (why) saveEl.title = why;
+  }
+  paintAlerts();
+}
+
+/** The banners above the tab: a settings file that couldn't be read, a save that failed. */
+function paintAlerts() {
+  const err = lastSave === "error" ? saveError() : null;
+  const items: HTMLElement[] = [];
+  if (loadError) {
+    items.push(
+      notice(
+        "error",
+        h("strong", { text: t("shell.loadErrorTitle") }),
+        " ",
+        t("shell.loadErrorText"),
+        h("span", { class: "verbatim alert-detail", text: loadError }),
+      ),
+    );
+  }
+  // An unreadable file is already explained above; anything else is shown as Rust said it.
+  if (err && !(loadError && err.code === "settings_unreadable")) {
+    items.push(
+      notice(
+        "error",
+        h("strong", { text: t("shell.saveErrorTitle") }),
+        " ",
+        h("span", { class: "verbatim", text: err.text() || t("common.saveFailed") }),
+      ),
+    );
+  }
+  alerts.replaceChildren(...items);
+  alerts.hidden = !items.length;
+}
+
+const WARNINGS: Record<string, "shell.warn.autostart"> = { autostart_failed: "shell.warn.autostart" };
+
+function showWarning(w: SettingsWarning) {
+  const key = WARNINGS[w.code];
+  const text = key ? t(key) : w.code;
+  toast(w.detail ? `${text} (${w.detail})` : text, "error");
 }
 
 // ── Routing ───────────────────────────────────────────────────────────────────
@@ -280,6 +358,21 @@ function rerenderActive() {
   paintBadges();
 }
 
+const stillMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+
+/** A short entrance when a tab is opened. Redraws of the same tab never replay it. */
+function enter() {
+  if (stillMotion.matches || typeof inner.animate !== "function") return;
+  inner.getAnimations?.().forEach((a) => a.cancel());
+  inner.animate(
+    [
+      { opacity: 0, transform: "translateY(6px)" },
+      { opacity: 1, transform: "none" },
+    ],
+    { duration: 280, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)" },
+  );
+}
+
 function go(id: TabId) {
   if (id !== active) TABS[active].onHide?.();
   active = id;
@@ -299,14 +392,18 @@ function go(id: TabId) {
   }
   inner.replaceChildren(TABS[id].render());
   content.scrollTop = 0;
+  enter();
   paintBadges();
   TABS[id].onShow?.();
 }
 
 /** `settings-tab` payloads and `?tab=`: a tab id, or the wizard. */
 function openTarget(target: string) {
-  if (target === WIZARD_ID) openWizard();
-  else if (isTab(target)) go(target);
+  if (target === WIZARD_ID) {
+    // Rust's first-run nudge comes a few seconds after start: by then the wizard
+    // may be open already (leave it on its step) or done with (don't bring it back).
+    if (!wizardOpen() && !settings().onboarded) openWizard();
+  } else if (isTab(target)) go(target);
 }
 
 // ── Keys ──────────────────────────────────────────────────────────────────────
@@ -318,15 +415,40 @@ window.addEventListener("keydown", (e) => {
   closeWindow();
 });
 
-// Ctrl+1…8 switches tabs.
+// Ctrl+1…9 opens the first nine tabs, Ctrl+0 the tenth (About).
 window.addEventListener("keydown", (e) => {
   if (!e.ctrlKey || e.altKey || e.shiftKey || e.metaKey) return;
-  const n = Number(e.key);
-  if (n >= 1 && n <= TAB_IDS.length) {
+  if (!/^[0-9]$/.test(e.key)) return;
+  const n = e.key === "0" ? 10 : Number(e.key);
+  if (n <= TAB_IDS.length) {
     e.preventDefault();
     go(TAB_IDS[n - 1]);
   }
 });
+
+// The window is a page in a webview (D12): a reload would only throw away what
+// is on screen, so the reload keys do nothing and the webview's own right-click
+// menu (Reload, Back…) stays shut — the island's guard, shared. Only in the app:
+// the browser preview keeps F5.
+//
+// The menu is kept where text is typed, for copy and paste. guardWebview also
+// spares every <input> and <select>; here a checkbox, a slider or a list has
+// nothing to copy or paste, so it gets no menu either.
+const TYPED_INPUTS = new Set(["text", "search", "url", "email", "password", "number", "tel"]);
+
+function typesText(target: EventTarget | null): boolean {
+  const el = target instanceof Element ? target.closest("input, textarea, [contenteditable]") : null;
+  if (el instanceof HTMLTextAreaElement) return true;
+  if (el instanceof HTMLInputElement) return TYPED_INPUTS.has(el.type);
+  return el instanceof HTMLElement && el.isContentEditable;
+}
+
+if (IS_TAURI) {
+  guardWebview();
+  document.addEventListener("contextmenu", (e) => {
+    if (!typesText(e.target)) e.preventDefault();
+  });
+}
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 
@@ -334,24 +456,40 @@ async function start() {
   await initApi();
   const boot = await api.boot();
   initSettings(boot?.settings ?? DEFAULT_SETTINGS);
-  applyMascotPalette(settings().mascotTheme);
+  applySettingsTheme(settings().mascotTheme);
   app.version = boot?.version ?? "";
   app.hookPath = boot?.hookPath ?? "";
   app.systemLang = boot?.systemLang ?? "en";
   app.hooksLost = boot?.hooksLost ?? false;
   app.fullscreenSupported = boot?.fullscreenSupported ?? true;
+  loadError = boot?.settingsLoadError ?? null;
   if (boot?.platform) setPlatform(boot.platform);
+  // Rust says whether the island may approve a hold; a build that doesn't say
+  // follows D23 by platform. The Linux wording (`key@linux`) says the same.
+  app.holdApprovals = boot?.holdApprovals ?? getPlatform() !== "linux";
   initLanguage(app.systemLang);
 
+  installKeyboardTraps();
   setNav({ rerender: rerenderActive, go, current: () => active, badges: paintBadges });
   buildShell();
   onSaveState(paintSave);
   onExternalChange(() => {
-    applyMascotPalette(settings().mascotTheme);
+    applySettingsTheme(settings().mascotTheme);
     // An import, a reset or another window may have changed the language too.
     applyLanguage();
     paintSideFoot();
     rerenderActive();
+  });
+  // DND switched anywhere in this window (the Notifications tab too) shows in
+  // the footer at once; Rust's word on quiet hours follows once the save lands.
+  let dnd = settings().dnd;
+  onLocalChange(() => {
+    if (settings().dnd === dnd) return;
+    dnd = settings().dnd;
+    paintSideFoot();
+  });
+  onSaved(() => {
+    if (quietKey() !== quietAsked) void refreshQuiet();
   });
   onLangChange(() => {
     // Rust localises labels, notes and errors by the same setting: drop what it
@@ -366,12 +504,23 @@ async function start() {
   });
 
   go(initialTab());
+  paintAlerts();
   void loadHookStatus().then(paintBadges);
   void refreshQuiet();
 
   if (OPENED_WITH === WIZARD_ID || !settings().onboarded) openWizard();
 
-  void api.onEvent<Settings>("settings-changed", (s) => applyIncoming(s));
+  void api.onEvent<Settings>("settings-changed", (s) => {
+    const before = settings().dnd;
+    applyIncoming(s);
+    // DND from the island, the tray or a hotkey: the footer follows at once.
+    if (settings().dnd !== before) {
+      dnd = settings().dnd;
+      paintSideFoot();
+      void refreshQuiet();
+    }
+  });
+  void api.onEvent<SettingsWarning>("settings-warning", showWarning);
   void api.onEvent<null>("history-changed", () => historyChanged());
   // Rust sends a plain id whenever the (already created, hidden) window is opened
   // for something specific: a tab, or "hosgeldin" for the wizard. Unknown ids are ignored.
@@ -379,7 +528,15 @@ async function start() {
 
   // The window is hidden, not closed: refresh what may have changed meanwhile.
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState !== "visible") return;
+    if (document.visibilityState !== "visible") {
+      // Hidden from elsewhere (the tray, the title bar, minimised): save what is
+      // saved, but leave the tab as it is. A hidden window keeps its fields, so
+      // a folder path half typed is still there, unsaved, when it comes back:
+      // minimising to look up the rest of the path must not trust "C:\Users\".
+      // Esc and the Close button (closeWindow) do settle it.
+      void flush();
+      return;
+    }
     void refreshQuiet();
     void loadHookStatus().then(paintBadges);
     TABS[active].onShow?.();

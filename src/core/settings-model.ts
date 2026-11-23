@@ -126,6 +126,26 @@ export const ALL_EVENTS = [
 /** A fresh install's events: every hook, but not the opt-in status line. */
 export const DEFAULT_EVENTS: string[] = ALL_EVENTS.filter((e) => e !== "StatusLine");
 
+/**
+ * The deny reasons a fresh install starts with, per language. Rust picks the
+ * list by the language it starts in (settings.rs); these copies only matter where
+ * there is no Rust (the browser preview, the website's demo).
+ */
+export const DEFAULT_DENY_REASONS: Record<"tr" | "en", string[]> = {
+  tr: [
+    "Bunu yapma.",
+    "Önce ne yapacağını açıkla, sonra tekrar sor.",
+    "Başka, daha güvenli bir yol dene.",
+    "Bu dosyaya/klasöre dokunma.",
+  ],
+  en: [
+    "Don't do this.",
+    "Explain what you are about to do first, then ask again.",
+    "Try a different, safer approach.",
+    "Don't touch this file or folder.",
+  ],
+};
+
 export const DEFAULT_SETTINGS: Settings = {
   language: "auto",
   mascotTheme: "owl",
@@ -158,12 +178,7 @@ export const DEFAULT_SETTINGS: Settings = {
   disabledCategories: [],
   rules: [],
   projects: [],
-  denyReasons: [
-    "Bunu yapma.",
-    "Önce ne yapacağını açıkla, sonra tekrar sor.",
-    "Başka, daha güvenli bir yol dene.",
-    "Bu dosyaya/klasöre dokunma.",
-  ],
+  denyReasons: [...DEFAULT_DENY_REASONS.tr],
   soundEnabled: true,
   soundVolume: 0.35,
   mutedSounds: [],

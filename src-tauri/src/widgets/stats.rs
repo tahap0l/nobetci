@@ -111,13 +111,18 @@ fn gpu() -> Option<f32> {
     }
 }
 
+/// How long a helper program may take to report the graphics load. nvidia-smi
+/// needs a second or two when the driver is not kept loaded; one that hangs
+/// is stopped, so the card's two-second poll cannot pile them up.
+#[cfg(unix)]
+const GPU_PROGRAM_LIMIT: std::time::Duration = std::time::Duration::from_secs(3);
+
 #[cfg(target_os = "macos")]
 fn gpu() -> Option<f32> {
     // "Device Utilization %" from the graphics driver's statistics.
-    let out = std::process::Command::new("/usr/sbin/ioreg")
-        .args(["-r", "-d", "1", "-w", "0", "-c", "IOAccelerator"])
-        .output()
-        .ok()?;
+    let mut ioreg = crate::sys::command("/usr/sbin/ioreg");
+    ioreg.args(["-r", "-d", "1", "-w", "0", "-c", "IOAccelerator"]);
+    let out = super::output_within(ioreg, GPU_PROGRAM_LIMIT)?;
     parse_ioreg(&String::from_utf8_lossy(&out.stdout))
 }
 
@@ -169,10 +174,9 @@ fn nvidia_smi() -> Option<f32> {
     if !present {
         return None;
     }
-    let out = std::process::Command::new("nvidia-smi")
-        .args(["--query-gpu=utilization.gpu", "--format=csv,noheader,nounits"])
-        .output()
-        .ok()?;
+    let mut smi = crate::sys::command("nvidia-smi");
+    smi.args(["--query-gpu=utilization.gpu", "--format=csv,noheader,nounits"]);
+    let out = super::output_within(smi, GPU_PROGRAM_LIMIT)?;
     String::from_utf8_lossy(&out.stdout).lines().filter_map(|l| l.trim().parse::<f32>().ok()).reduce(f32::max)
 }
 

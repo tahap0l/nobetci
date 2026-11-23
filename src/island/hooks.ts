@@ -6,12 +6,12 @@
 // quiet hours, a full-screen app) nothing pops open or makes a sound; requests
 // still queue and wait on the compact island.
 
-import { Bridge, onEvent, type NotifyKind, type QuietReason, type RiskAssessment, type RiskLevel } from "../core/bridge";
+import { Bridge, IslandBridge, onEvent, type NotifyKind, type QuietReason, type RiskAssessment, type RiskLevel } from "../core/bridge";
 import { Sound } from "../core/sound";
 import {
-  DECISION_WINDOW_MS, LEVEL_ORDER, MAX_QUEUE, State, needsHold, type CallSignature, type Session,
+  DECISION_WINDOW_MS, LEVEL_ORDER, MAX_QUEUE, State, handBackTo, needsHold, type CallSignature, type Session,
 } from "../core/state";
-import { t } from "../i18n/island";
+import { placed, t } from "../i18n/island";
 import type { Island } from "./island";
 
 interface HookPayload {
@@ -58,6 +58,11 @@ interface HookPayload {
     diff: string;
     cut: boolean;
   };
+  /**
+   * Only on a request handed back by `approval_pending` (C-11), when Rust says
+   * how long it has been waiting already: the card's countdown starts from there.
+   */
+  nobetci_waited_ms?: number;
   /** StatusLine (Claude Code's status line, via the relay). */
   model?: string;
   context_used?: number | null;
@@ -207,22 +212,44 @@ function sessionFor(p: HookPayload): Session {
   if (p.nobetci_parents?.length) s.parents = p.nobetci_parents.map((x) => x.pid);
   const term = terminalName(p);
   if (term) s.terminal = term;
+  if (p.agent_name) s.agent = p.agent_name;
   return s;
 }
 
-/** Drops a session's cards: the request was answered somewhere else. */
-function releaseApprovals(sessionId: string, done?: HookPayload) {
+/** Drops a session's cards: the request was answered somewhere else. Says whether any went. */
+function releaseApprovals(sessionId: string, done?: HookPayload): boolean {
   const match = done && callSignature(done);
+  let released = false;
   for (const a of [...State.approvals]) {
     if (a.sessionId !== sessionId) continue;
     if (match && !sameCall(a.signature, match, done.nobetci_truncated === true)) continue;
     State.removeApproval(a.requestId);
     void Bridge.approvalDecline(a.requestId, "resolved");
+    released = true;
   }
+  return released;
 }
 
+/**
+ * A desktop notification. The island "already shows it" only while it is open:
+ * the compact pill at the top edge does not count (D4), so with the default
+ * "only when the island isn't showing it" a request still notifies.
+ */
 function toast(kind: NotifyKind, title: string, body: string) {
-  void Bridge.notify(kind, title, body, State.mode !== "hidden");
+  void Bridge.notify(kind, title, body, State.mode === "expanded");
+}
+
+/**
+ * A command or question for a notification body. It goes to Rust whole, so
+ * that Rust masks secrets with the whole text in view and only then cuts it
+ * (`notification_body` in lib.rs): a cut made here could end inside a
+ * password, leaving Rust to guess at the rest. Capped at 4000 code points,
+ * the most Rust reads, and never inside a surrogate pair, which Rust's JSON
+ * reader refuses. 4000 code points take at most 8000 UTF-16 units, so the
+ * first cut only keeps a huge command from becoming a huge array.
+ */
+function notifyText(text: string): string {
+  return Array.from(text.slice(0, 8000)).slice(0, 4000).join("");
 }
 
 function applyQuiet(p: HookPayload) {
@@ -240,16 +267,35 @@ export function registerHookHandlers(island: Island) {
     State.notify();
   });
 
-  // Expire cards the relay has already given up on, and forget dead sessions.
+  // Expire cards whose time is up, and forget dead sessions.
+  let lastWall = Date.now();
+  let lastMono = performance.now();
   window.setInterval(() => {
     const now = Date.now();
+    const mono = performance.now();
+    // Rust and the relay count their budget on a monotonic clock. When the wall
+    // clock is set back, move the cards' deadlines with it so each card still
+    // ends when Rust's wait does. (A jump forward, or a suspend, makes cards
+    // expire early instead; Rust is told below, so the terminal asks at once.)
+    const drift = now - lastWall - (mono - lastMono);
+    if (drift < -2_000) for (const a of State.approvals) a.expiresAt += drift;
+    lastWall = now;
+    lastMono = mono;
+
     let changed = false;
     for (const a of [...State.approvals]) {
       if (now >= a.expiresAt) {
         State.removeApproval(a.requestId);
+        // The countdown ran out here: Rust hands it to the terminal right away and
+        // records a timeout, rather than keep waiting on a card nobody sees (C-6).
+        void Bridge.approvalDecline(a.requestId, "expired");
+        if (State.cardWarning?.requestId === a.requestId) State.cardWarning = null;
         const s = State.session(a.sessionId);
-        if (s && s.state === "approval") State.setState(s, "working");
-        if (s) State.step(s, t("step.timeout"));
+        if (s && s.state === "approval" && !State.approvals.some((x) => x.sessionId === s.id)) {
+          State.setState(s, "working");
+        }
+        // What asks now: the terminal, Cursor's own prompt or the Claude app's dialog.
+        if (s) State.step(s, `${placed("step.timeout", handBackTo(s))} · ${a.tool}`);
         changed = true;
       }
     }
@@ -259,6 +305,28 @@ export function registerHookHandlers(island: Island) {
       State.notify();
     }
   }, 1000);
+}
+
+/**
+ * Re-adds the cards of requests that were still waiting when the island
+ * (re)loaded — a reload must not leave a request on neither the island nor the
+ * terminal (C-11). Resolves to how many came back.
+ */
+export async function restorePending(island: Island): Promise<number> {
+  const list = await IslandBridge.approvalPending();
+  let restored = 0;
+  for (const raw of list ?? []) {
+    const p = raw as HookPayload;
+    if (!p || typeof p !== "object" || !p.request_id) continue;
+    if (State.approvals.some((a) => a.requestId === p.request_id)) continue;
+    // Its quiet flag is from when it arrived; the island asked Rust afresh at boot.
+    if (onPermissionRequest(island, p, true)) restored++;
+  }
+  if (restored) {
+    void Bridge.log(`restored ${restored} waiting request(s) after a reload`);
+    State.notify();
+  }
+  return restored;
 }
 
 /** Browser preview only (`npm run dev`): feeds a fake event through the real handler. */
@@ -294,11 +362,14 @@ function handle(island: Island, p: HookPayload) {
       if (!quiet) island.flash(t("fl.sessionStart", { name: s.name }), "info");
       break;
 
-    case "UserPromptSubmit":
-      releaseApprovals(s.id);
+    case "UserPromptSubmit": {
+      // A new prompt means the terminal moved on: its waiting cards are dead.
+      const released = releaseApprovals(s.id);
       State.setState(s, "thinking");
       if (p.prompt ?? p.message) State.step(s, `» ${p.prompt ?? p.message}`);
+      if (released) island.afterApprovalChange();
       break;
+    }
 
     case "PreCompact":
       if (s.state !== "approval") State.setState(s, "thinking");
@@ -405,24 +476,31 @@ function withinCeiling(level: RiskLevel): boolean {
   return ceiling !== "none" && LEVEL_ORDER[level] <= LEVEL_ORDER[ceiling];
 }
 
-function onPermissionRequest(island: Island, p: HookPayload) {
+/**
+ * Queues a request's card. `restored`: the island (re)loaded while it waited
+ * (C-11) — it was announced the first time, so not again. It is acknowledged
+ * again: Rust ignores a second acknowledgement, and starts the long wait on one
+ * that never arrived. Says whether a card was added.
+ */
+function onPermissionRequest(island: Island, p: HookPayload, restored = false): boolean {
   const requestId = p.request_id ?? "";
-  if (!requestId) return;
+  if (!requestId) return false;
 
   // Paused means paused: hand it to the terminal at once instead of letting the
   // relay wait for a card nobody will see.
   if (State.paused || !p.risk) {
     void Bridge.approvalDecline(requestId, "paused");
-    return;
+    return false;
   }
   if (State.approvals.length >= MAX_QUEUE) {
     void Bridge.approvalDecline(requestId, "busy");
-    return;
+    return false;
   }
 
   const s = sessionFor(p);
   const now = Date.now();
   const kind = p.nobetci_kind ?? "permission";
+  const waited = restored && typeof p.nobetci_waited_ms === "number" && p.nobetci_waited_ms > 0 ? p.nobetci_waited_ms : 0;
   State.approvals.push({
     kind,
     input: p.tool_input ?? {},
@@ -434,8 +512,8 @@ function onPermissionRequest(island: Island, p: HookPayload) {
     policy: p.policy ?? "normal",
     grantable: p.grantable ?? withinCeiling(p.risk.level),
     signature: callSignature(p),
-    receivedAt: now,
-    expiresAt: now + DECISION_WINDOW_MS,
+    receivedAt: now - waited,
+    expiresAt: now + Math.max(1_000, DECISION_WINDOW_MS - waited),
   });
   // Queued is as good as shown: a person can act on it, so the long wait begins.
   void Bridge.approvalAck(requestId);
@@ -449,22 +527,26 @@ function onPermissionRequest(island: Island, p: HookPayload) {
   } else {
     Sound.play("blip");
   }
-  if (kind === "permission") {
-    toast(
-      "approval",
-      `${risky ? "⚠ " : ""}${t("toast.approval", { name: s.name })}`,
-      `${toolLabel(p.tool_name ?? "")}: ${p.risk.target.slice(0, 160)}`,
-    );
-  } else {
-    const title = t(kind === "question" ? "toast.question" : "toast.plan", { name: s.name });
-    toast("waiting", title, kind === "question" ? firstQuestion(p.tool_input) : t("toast.planBody"));
+  // A restored card was announced when it first arrived.
+  if (!restored) {
+    if (kind === "permission") {
+      toast(
+        "approval",
+        `${risky ? "⚠ " : ""}${t("toast.approval", { name: s.name })}`,
+        `${toolLabel(p.tool_name ?? "")}: ${notifyText(p.risk.target)}`,
+      );
+    } else {
+      const title = t(kind === "question" ? "toast.question" : "toast.plan", { name: s.name });
+      toast("waiting", title, kind === "question" ? firstQuestion(p.tool_input) : t("toast.planBody"));
+    }
   }
   island.showApprovals();
+  return true;
 }
 
 function firstQuestion(input: Record<string, unknown> | undefined): string {
   const qs = Array.isArray(input?.questions) ? (input?.questions as { question?: unknown }[]) : [];
-  return typeof qs[0]?.question === "string" ? qs[0].question.slice(0, 160) : "";
+  return typeof qs[0]?.question === "string" ? notifyText(qs[0].question) : "";
 }
 
 /** Claude Code's status line: context use and cost per session, plan limits for all. */

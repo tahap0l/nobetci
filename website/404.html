@@ -1,5 +1,62 @@
 <!doctype html>
-<html lang="tr">
-  <head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><meta name="theme-color" content="#08111f" /><link rel="icon" type="image/png" href="/assets/owl.png" /><link rel="stylesheet" href="/styles.css?v=2.3.1" /><title>Sayfa bulunamadı — Nöbetçi</title></head>
-  <body><div class="site-shell"><div class="aurora" aria-hidden="true"><i></i><i></i><i></i></div><main class="container policy-main"><article class="policy-content"><div class="eyebrow"><span class="eyebrow-dot"></span>404</div><h1>Bu sayfa nöbette değil.</h1><p>Aradığın sayfa burada yok. Nöbetçi ana sayfasına dönebilirsin.</p><a class="button button-primary" href="/">Ana sayfaya dön</a></article></main></div></body>
+<html lang="tr" data-page="404">
+  <head>
+    <meta charset="utf-8" />
+    <!-- GitHub Pages sends no headers of ours (see public/_headers): the policy travels with the page. -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; frame-src 'self'; base-uri 'self'; form-action 'self'; object-src 'none'" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#070b14" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+    <meta name="robots" content="noindex" />
+    <meta name="description" content="Aradığın sayfa burada yok." />
+    <meta name="nobetci-base" content="/" />
+    <link rel="icon" type="image/png" href="/assets/owl.png" />
+    <link rel="stylesheet" href="/styles.css?v=2.5.0" />
+    <title>Sayfa bulunamadı — Nöbetçi</title>
+    <script src="/i18n.js?v=2.5.0"></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main" data-i18n="skip">İçeriğe atla</a>
+    <div class="site-shell">
+      <div class="aurora" aria-hidden="true"><i></i><i></i><i></i></div>
+      <header class="site-header">
+        <div class="container nav">
+          <a class="brand" href="/" aria-label="Nöbetçi ana sayfa" data-i18n-aria="homeLabel"><img src="/assets/owl.png" alt="" width="36" height="36" /><span>Nöbetçi</span></a>
+          <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="site-nav"><span class="menu-icon" aria-hidden="true"><i></i><i></i><i></i></span><span data-menu-label data-i18n="menu">Menü</span></button>
+          <nav class="nav-links" id="site-nav" aria-label="Ana gezinme" data-i18n-aria="navMain">
+            <a href="/#features" data-i18n="navFeatures">Özellikler</a>
+            <a href="/#new" data-i18n="navNew">Yenilikler</a>
+            <a href="/#demo" data-i18n="navDemo">Canlı demo</a>
+            <a href="/#download" data-i18n="navDownload">İndir</a>
+            <a href="/#faq" data-i18n="navFaq">SSS</a>
+          </nav>
+          <div class="nav-actions">
+            <button class="language-toggle" type="button" data-language-toggle lang="en" aria-label="Switch language to English">EN</button>
+            <a class="button button-small button-quiet" href="https://github.com/tahap0l/nobetci" target="_blank" rel="noreferrer">GitHub</a>
+          </div>
+        </div>
+      </header>
+      <main id="main" class="container policy-main not-found">
+        <article class="policy-content">
+          <div class="eyebrow"><span class="eyebrow-dot"></span>404</div>
+          <h1 data-i18n="nfTitle">Bu sayfa nöbette değil.</h1>
+          <p class="policy-intro" data-i18n="nfText">Aradığın sayfa burada yok; taşınmış ya da kaldırılmış olabilir. Nöbetçi ana sayfasından devam edebilirsin.</p>
+          <div class="not-found-actions">
+            <a class="button button-primary" href="/"><span data-i18n="nfHome">Ana sayfaya dön</span></a>
+            <a class="button button-secondary" href="/demo/"><span class="live-dot" aria-hidden="true"></span><span data-i18n="nfDemo">Canlı demoyu aç</span></a>
+          </div>
+        </article>
+      </main>
+      <footer class="site-footer">
+        <div class="container footer-inner">
+          <a class="brand" href="/"><img src="/assets/owl.png" alt="" width="28" height="28" /><span>Nöbetçi</span></a>
+          <p data-i18n="footerLine">Dikkatli ajanlar için küçük bir baykuş.</p>
+          <nav aria-label="Alt gezinme" data-i18n-aria="footerNav"><a href="/privacy.html" data-i18n="footerPrivacy">Gizlilik</a><a href="/code-signing.html" data-i18n="footerSigning">Kod imzalama politikası</a><a href="https://github.com/tahap0l/nobetci/blob/main/CHANGELOG.md" target="_blank" rel="noreferrer" data-i18n="footerChanges">Sürüm notları</a><a href="https://github.com/tahap0l/nobetci/issues" target="_blank" rel="noreferrer" data-i18n="footerContact">İletişim</a></nav>
+          <span class="copyright">© 2026 Nöbetçi</span>
+        </div>
+      </footer>
+    </div>
+    <script src="/site.js?v=2.5.0" defer></script>
+  </body>
 </html>

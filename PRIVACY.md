@@ -1,6 +1,6 @@
 # Nöbetçi Privacy Policy
 
-**Last updated: November 16, 2026**
+**Last updated: November 22, 2026**
 
 Nöbetçi is a desktop application that helps you review AI coding-agent permission requests and
 prepare messages for AI agents. It runs on your computer and does not require an account.
@@ -26,7 +26,7 @@ Prompt Studio sends a draft only after you choose a provider and select **Improv
 
 The rewritten message is shown for your review. You decide whether to copy it to another app.
 
-## Optional Island widgets
+## Optional island widgets
 
 Weather is off by default. If you select a city, Open-Meteo receives that city's coordinates and your
 connection's IP address. Device location and agent data are not sent. The media card reads track details
@@ -36,22 +36,42 @@ processor, memory and graphics load on your device, only while it is on screen. 
 
 ## The island assistant
 
-When you send a message to an AI app from the assistant, Nöbetçi does not send it itself: it opens the
-app or your browser with your message and copies the message to the clipboard; sending is up to you.
+When you send a message to an AI app from the assistant, Nöbetçi sends nothing to that service
+itself: it opens the app or your browser and copies the message to the clipboard. Where the message
+goes from there depends on what you picked:
+
+- **ChatGPT, Claude, Perplexity, Copilot or Grok on the web:** the message travels inside the page's
+  address. It reaches that service as soon as your browser opens the page, and it is written to your
+  browser history. The service may answer it right away: Perplexity runs the search at once, and the
+  chat services may send what they are handed.
+- **The ChatGPT and Perplexity desktop apps:** the message travels inside the link that opens the
+  app, and the app may send it as soon as it opens.
+- **The Claude desktop app:** the message goes into the app's text box; sending is up to you.
+- **Gemini, DeepSeek, Mistral and the Copilot app:** the page or app opens without the message; you
+  paste it from the clipboard and send it yourself. The same goes for a message too long for an
+  address.
+
 **Ask here** sends the message to the provider you chose in Prompt Studio (Ollama or OpenAI). Voice
-input is your operating system's own dictation; Nöbetçi records no audio.
+input (Windows and macOS) is your operating system's own dictation; Nöbetçi records no audio.
 
 ## Installer and code signing
 
-The installer does not collect or send information. Windows releases are being moved to code signing
-through SignPath (see the [code signing policy](CODE_SIGNING_POLICY.md)); signing happens when a
-release is built and involves no data from your computer.
+The installer does not collect or send information. Windows releases are not code-signed yet; once
+signing through SignPath is switched on, it happens when a release is built and involves no data from
+your computer (see the [code signing policy](CODE_SIGNING_POLICY.md)).
 
 ## Your choices
 
 You can use Nöbetçi without Prompt Studio, choose local Ollama, or choose OpenAI with your own API
 key. You can remove the saved OpenAI key in Prompt Studio. You control the local history and settings
 from the app.
+
+## This website
+
+The website (<https://tahap0l.github.io/nobetci/>) is published on GitHub Pages: GitHub serves the
+pages and keeps its own record of visits (IP addresses included) under GitHub's privacy statement.
+The site has no cookies, analytics or ads. It remembers the language and mascot you pick in your
+browser only. The live demo runs entirely in your browser and sends nothing anywhere.
 
 ## Changes and contact
 
@@ -62,7 +82,7 @@ open an issue at <https://github.com/tahap0l/nobetci/issues>.
 
 # Nöbetçi Gizlilik Politikası
 
-**Son güncelleme: 16 Kasım 2026**
+**Son güncelleme: 22 Kasım 2026**
 
 Nöbetçi, yapay zekâ kodlama ajanlarının izin isteklerini incelemene ve ajanlara göndereceğin
 mesajları hazırlamana yardımcı olan bir masaüstü uygulamasıdır. Bilgisayarında çalışır ve hesap
@@ -99,22 +119,43 @@ dosyasında kalır.
 
 ## Ada asistanı
 
-Asistanda bir yapay zekâ uygulaması seçip gönderdiğinde Nöbetçi mesajı kendisi göndermez: uygulamayı
-ya da tarayıcını mesajınla açar ve mesajı panoya kopyalar; göndermeye sen karar verirsin. **Burada
-sor** seçeneği mesajı Mesaj Atölyesi'nde seçtiğin sağlayıcıya (Ollama ya da OpenAI) gönderir. Sesle
-yazma işletim sisteminin kendi dikte özelliğidir; Nöbetçi ses kaydetmez.
+Asistanda bir yapay zekâ uygulaması seçip gönderdiğinde Nöbetçi o servise kendisi bir şey göndermez:
+uygulamayı ya da tarayıcını açar ve mesajı panoya kopyalar. Mesajın oradan nereye gittiği seçtiğin
+yere bağlıdır:
+
+- **Web'de ChatGPT, Claude, Perplexity, Copilot ya da Grok:** Mesaj sayfanın adresinin içinde gider.
+  Tarayıcın sayfayı açtığı anda mesaj o servise ulaşır ve tarayıcı geçmişine de yazılır. Servis
+  mesajı hemen cevaplayabilir: Perplexity aramayı hemen yapar, sohbet servisleri de kendilerine
+  verilen mesajı gönderebilir.
+- **ChatGPT ve Perplexity masaüstü uygulamaları:** Mesaj uygulamayı açan bağlantının içinde gider;
+  uygulama mesajı açılır açılmaz gönderebilir.
+- **Claude masaüstü uygulaması:** Mesaj uygulamanın yazı kutusuna gelir; göndermeye sen karar
+  verirsin.
+- **Gemini, DeepSeek, Mistral ve Copilot uygulaması:** Sayfa ya da uygulama mesajsız açılır; mesajı
+  panodan sen yapıştırır ve gönderirsin. Bir adrese sığmayacak kadar uzun bir mesaj için de böyledir.
+
+**Burada sor** seçeneği mesajı Mesaj Atölyesi'nde seçtiğin sağlayıcıya (Ollama ya da OpenAI)
+gönderir. Sesle yazma (Windows ve macOS) işletim sisteminin kendi dikte özelliğidir; Nöbetçi ses
+kaydetmez.
 
 ## Kurulum dosyası ve kod imzalama
 
-Kurulum dosyası bilgi toplamaz ve göndermez. Windows sürümleri SignPath üzerinden kod imzalamaya
-geçiyor (bkz. [kod imzalama politikası](CODE_SIGNING_POLICY.md)); imzalama sürüm derlenirken yapılır ve
-bilgisayarından hiçbir veri içermez.
+Kurulum dosyası bilgi toplamaz ve göndermez. Windows sürümleri henüz kod imzalı değil; SignPath
+üzerinden imzalama açıldığında bu iş sürüm derlenirken yapılır ve bilgisayarından hiçbir veri içermez
+(bkz. [kod imzalama politikası](CODE_SIGNING_POLICY.md)).
 
 ## Seçimlerin
 
 Nöbetçi'yi Mesaj Atölyesi olmadan kullanabilir, yerel Ollama'yı seçebilir veya kendi API anahtarınla
 OpenAI'yi seçebilirsin. Kayıtlı OpenAI anahtarını Mesaj Atölyesi'nden silebilirsin. Yerel geçmişini
 ve ayarlarını uygulama içinden yönetirsin.
+
+## Bu web sitesi
+
+Web sitesi (<https://tahap0l.github.io/nobetci/>) GitHub Pages'te yayınlanır: sayfaları GitHub sunar
+ve ziyaretlerin kaydını (IP adresi dahil) GitHub'ın gizlilik bildirimine göre tutar. Sitede çerez,
+analiz ya da reklam yok. Seçtiğin dili ve maskotu yalnızca tarayıcında hatırlar. Canlı demo tamamen
+tarayıcında çalışır ve hiçbir yere bir şey göndermez.
 
 ## Değişiklikler ve iletişim
 

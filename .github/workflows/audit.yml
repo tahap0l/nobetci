@@ -1,0 +1,51 @@
+# Checks Cargo.lock against the RustSec advisory database. Runs when the Rust
+# dependencies change, and once a week, because a new advisory can concern a
+# lock file nobody touched. (npm and the actions are covered by Dependabot.)
+
+name: Security audit
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "**/Cargo.toml"
+      - Cargo.lock
+      - .github/workflows/audit.yml
+  pull_request:
+    branches: [main]
+    paths:
+      - "**/Cargo.toml"
+      - Cargo.lock
+      - .github/workflows/audit.yml
+  schedule:
+    - cron: "17 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  cargo-audit:
+    name: RustSec advisories (cargo audit)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # A prebuilt cargo-audit, checked against the SHA-256 in the pinned
+      # action's own manifest. Nothing falls back to building it or to another
+      # download.
+      - name: Install cargo-audit
+        uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
+        with:
+          tool: cargo-audit@0.22.2
+          fallback: none
+
+      # Fails on a vulnerability. Unmaintained and unsound crates are shown as
+      # warnings: so far they all come in through Tauri's GTK 3 and D-Bus
+      # stacks (glib, zvariant, …), which this project cannot swap on its own.
+      - name: Audit Cargo.lock
+        run: cargo audit --file Cargo.lock

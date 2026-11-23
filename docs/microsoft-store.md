@@ -4,12 +4,22 @@ This guide describes the current Store build path for Nöbetçi. A package built
 below is **offline**, but it is not ready for Store submission until it is signed and the remaining
 Partner Center requirements are completed.
 
+## Status
+
+- **Not submittable yet.** Microsoft requires the installer and every program in it to be
+  code-signed. No Nöbetçi release has been signed so far (see the
+  [code signing policy](../CODE_SIGNING_POLICY.md)): Windows signing through SignPath is ready in the
+  release workflow but not switched on.
+- **Built by hand.** The [release workflow](../.github/workflows/release.yml) builds and publishes
+  the regular installer only. The Store package has to be built on a Windows machine and hosted
+  separately (see below).
+
 ## Current package
 
 Regular Windows releases use Tauri's NSIS setup executable. The regular installer can download
 WebView2 if needed, which is unsuitable for Microsoft's offline MSI/EXE submission path. The
-Store-specific Tauri overlay bundles the WebView2 offline installer without changing the normal
-GitHub release installer.
+Store-specific Tauri overlay (`src-tauri/tauri.store.conf.json`) bundles the WebView2 offline
+installer without changing the normal GitHub release installer.
 
 From a Windows build environment with the project's Node.js and Rust dependencies installed, run:
 
@@ -20,10 +30,26 @@ npm run pack:store:offline
 The resulting package is written to `release/store/Nobetci-<version>-setup.exe`. It supports the
 NSIS silent-install switch `/S`. Tauri's offline WebView2 mode adds about 127 MB to the installer.
 
+What the Store package shares with the regular installer:
+
+- It installs for the current user only, into `%LOCALAPPDATA%\Nobetci`, without administrator
+  rights, and speaks Turkish on a Turkish Windows and English elsewhere.
+- A silent `/S` install over an existing installation never shows the reinstall page, so it
+  overwrites the program files in place: the Claude Code, Codex and Cursor hooks, **Start with
+  Windows** and the user's data stay. (The interactive installer keeps them too: replacing one
+  version with another runs the old uninstaller in update mode.)
+- The uninstaller asks about a running Nöbetçi before it removes anything, removes only
+  Nöbetçi's own hook entries (with a dated backup of each file), keeps the relay and log if that
+  fails, removes the ChatGPT Web bridge's per-user browser registration if the user made one, and
+  deletes the application data only when the user ticks **Delete the application data**. It makes
+  no network requests.
+
 ## Required before submission
 
 1. Sign the setup executable and every bundled PE executable with a code-signing certificate
-   chaining to a CA in Microsoft's Trusted Root Program. Current public releases are not signed.
+   chaining to a CA in Microsoft's Trusted Root Program. Current public releases are not signed,
+   and the Store package is not built by the release workflow, so it would have to be signed
+   separately.
 2. Keep the Store package as a standalone installer. It must not download dependencies or other
    binaries during installation. Test `/S` and confirm the installation only installs Nöbetçi.
 3. Host each submitted version at a reliable HTTPS download URL. Use a new versioned URL for each
@@ -32,8 +58,8 @@ NSIS silent-install switch `/S`. Tauri's offline WebView2 mode adds about 127 MB
    the package URL, architecture, installer type, and `/S` installer parameter.
 5. Complete the Store listing: description, category, age rating, screenshots, support details, and
    this privacy policy at `https://github.com/tahap0l/nobetci/blob/main/PRIVACY.md`. Desktop
-   screenshots must be at least 1366×768; one is required and four are recommended. Existing README
-   screenshots are too small, so capture new images at 2× scale.
+   screenshots must be at least 1366×768; one is required and four are recommended. Capture them
+   at 2× scale as described below.
 6. Submit for certification. For each update, sign and host a new immutable package, then submit
    its new versioned URL in Partner Center. Store delivery of EXE updates is not automatic; the
    installer or app must manage updates.
@@ -46,15 +72,16 @@ other installer behavior before switching packaging formats.
 
 **Name:** Nöbetçi
 
-**Short description:** Review Claude Code permission requests and prepare clearer messages for AI
-agents.
+**Short description:** Review Claude Code, Codex and Cursor permission requests and prepare clearer
+messages for AI agents.
 
-**Long description:** Nöbetçi keeps Claude Code permission requests visible while you work. It shows
-why a request may be risky and lets you decide whether to allow or deny it. Prompt Studio can help
-improve a message for Claude Code, Codex, Cursor, ChatGPT, Gemini, or another agent. Drafts stay
-local with Ollama, unless you choose a cloud model. If you select OpenAI, the draft is sent only when
-you choose Improve. Nöbetçi never sends the rewritten message to an agent automatically; review and
-copy it yourself.
+**Long description:** Nöbetçi keeps your AI coding agents' permission requests visible while you
+work. It shows why a request may be risky and lets you decide whether to allow or deny it; risky
+requests need a deliberate press-and-hold, and nothing high-risk is ever approved automatically.
+Prompt Studio can help improve a message for Claude Code, Codex, Cursor, ChatGPT, Gemini, or
+another agent. Drafts stay local with Ollama, unless you choose a cloud model. If you select
+OpenAI, the draft is sent only when you choose Improve. Nöbetçi never sends the rewritten message
+to an agent automatically; review and copy it yourself.
 
 **Category:** Developer tools
 

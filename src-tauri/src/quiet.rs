@@ -14,6 +14,8 @@ fn minutes(hhmm: &str) -> Option<u32> {
 }
 
 /// Whether `now` falls in [from, to), wrapping past midnight when from > to.
+/// Equal ends make an empty window — no quiet hours at all; quiet all day is
+/// what do-not-disturb is for.
 fn in_window(now: u32, from: u32, to: u32) -> bool {
     if from == to {
         false

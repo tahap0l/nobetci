@@ -9,13 +9,23 @@
 // something is already answering on the socket rather than serving on top of it.
 // nobetci-hook makes the mirror-image checks (socket owner, peer uid) before it
 // sends anything.
+//
+// A socket file outlives its process. One left behind breaks nothing (the next
+// start and the relay both see that nobody answers), but quitting should leave
+// the folder as it was: the socket we bound is removed when the process exits
+// normally (an atexit handler — every quit ends in `exit`) and on SIGTERM and
+// SIGINT, which then end the process as they would have. Only the very file we
+// bound goes, never one that took its place, and only libc is needed for it.
 
-use std::ffi::CStr;
+use std::ffi::{CStr, CString};
 use std::io;
+use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 #[cfg(target_os = "macos")]
 use std::os::unix::io::AsRawFd;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicPtr, AtomicU64, Ordering};
+use std::sync::Once;
 use std::time::Duration;
 
 use tauri::AppHandle;
@@ -25,8 +35,9 @@ use super::Conn;
 use crate::log;
 
 impl Conn for UnixStream {
-    // Dropping the stream closes it; the relay sees end-of-file.
-    fn close(&mut self) {}
+    // Dropping the stream closes it and the relay sees end-of-file — after
+    // reading whatever we wrote: a socket keeps unread data for its peer.
+    async fn close(&mut self) {}
 }
 
 /// The home folder from the user database, not `$HOME` — exactly as nobetci-hook
@@ -144,6 +155,81 @@ fn bind(path: &Path) -> io::Result<UnixListener> {
     Ok(listener)
 }
 
+/// The socket we bound, for removing it at exit: its path (a C string kept for
+/// the life of the process), device and inode. Read from a signal handler, so
+/// atomics only.
+static BOUND: AtomicPtr<libc::c_char> = AtomicPtr::new(std::ptr::null_mut());
+static BOUND_DEV: AtomicU64 = AtomicU64::new(0);
+static BOUND_INO: AtomicU64 = AtomicU64::new(0);
+
+/// Remembers `path` as the socket this process bound.
+fn remember(path: &Path) {
+    let Ok(meta) = std::fs::symlink_metadata(path) else { return };
+    let Ok(c_path) = CString::new(path.as_os_str().as_bytes()) else { return };
+    BOUND_DEV.store(meta.dev(), Ordering::SeqCst);
+    BOUND_INO.store(meta.ino(), Ordering::SeqCst);
+    // Kept for the life of the process: a signal handler may read it any time.
+    BOUND.store(c_path.into_raw(), Ordering::SeqCst);
+}
+
+/// Removes the socket we bound, if the file there is still that one. Safe to
+/// run in a signal handler: atomics, lstat and unlink only.
+fn remove_ours() {
+    let path = BOUND.load(Ordering::SeqCst);
+    if path.is_null() {
+        return;
+    }
+    // SAFETY: `path` is a NUL-terminated string that lives for the process;
+    // lstat and unlink are async-signal-safe.
+    unsafe {
+        let mut st: libc::stat = std::mem::zeroed();
+        if libc::lstat(path, &mut st) == 0
+            && st.st_dev as u64 == BOUND_DEV.load(Ordering::SeqCst)
+            && st.st_ino as u64 == BOUND_INO.load(Ordering::SeqCst)
+        {
+            libc::unlink(path);
+        }
+    }
+}
+
+extern "C" fn remove_at_exit() {
+    remove_ours();
+}
+
+/// SIGTERM or SIGINT: the socket goes, then the signal does what it would have
+/// done — the handler was reset on entry (SA_RESETHAND), so the signal raised
+/// again ends the process the usual way.
+extern "C" fn remove_on_signal(signal: libc::c_int) {
+    remove_ours();
+    // SAFETY: raise is async-signal-safe.
+    unsafe { libc::raise(signal) };
+}
+
+/// Removes the socket at `path` when the process ends: at a normal exit, and on
+/// SIGTERM and SIGINT unless something else already handles (or ignores) them.
+fn remove_at_end(path: &Path) {
+    remember(path);
+    static INSTALL: Once = Once::new();
+    INSTALL.call_once(|| {
+        // SAFETY: plain libc calls with valid arguments; the handlers only use
+        // async-signal-safe calls.
+        unsafe {
+            libc::atexit(remove_at_exit);
+            for signal in [libc::SIGTERM, libc::SIGINT] {
+                let mut old: libc::sigaction = std::mem::zeroed();
+                if libc::sigaction(signal, std::ptr::null(), &mut old) != 0 || old.sa_sigaction != libc::SIG_DFL {
+                    continue;
+                }
+                let mut new: libc::sigaction = std::mem::zeroed();
+                new.sa_sigaction = remove_on_signal as extern "C" fn(libc::c_int) as libc::sighandler_t;
+                new.sa_flags = libc::SA_RESETHAND;
+                libc::sigemptyset(&mut new.sa_mask);
+                libc::sigaction(signal, &new, std::ptr::null_mut());
+            }
+        }
+    });
+}
+
 pub fn start(app: AppHandle) {
     tauri::async_runtime::spawn(async move {
         let Some(path) = socket_path() else {
@@ -157,6 +243,7 @@ pub fn start(app: AppHandle) {
                 return;
             }
         };
+        remove_at_end(&path);
         loop {
             let stream = match listener.accept().await {
                 Ok((stream, _)) => stream,
@@ -180,4 +267,29 @@ pub fn start(app: AppHandle) {
             super::accept(app.clone(), stream);
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn only_the_socket_we_bound_is_removed() {
+        let dir = std::env::temp_dir().join(format!("nobetci-socket-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("nobetci.sock");
+        remove_ours(); // nothing bound yet: nothing happens
+        let ours = std::os::unix::net::UnixListener::bind(&path).unwrap();
+        remember(&path);
+        remove_ours();
+        assert!(std::fs::symlink_metadata(&path).is_err(), "the socket we bound is gone");
+        // Another socket in its place — another Nöbetçi that started after this
+        // one lost its file, say — is not ours to remove.
+        let theirs = std::os::unix::net::UnixListener::bind(&path).unwrap();
+        remove_ours();
+        assert!(std::fs::symlink_metadata(&path).is_ok(), "another's socket stays");
+        drop((ours, theirs));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

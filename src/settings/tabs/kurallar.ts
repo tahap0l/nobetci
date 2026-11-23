@@ -4,7 +4,7 @@
 import type { Evaluation } from "../../core/bridge";
 import { newRule, type ProjectPolicy, type RuleAction, type RuleMode, type UserRule } from "../../core/settings-model";
 import { h } from "../../ui/dom";
-import { api } from "../api";
+import { api, errText } from "../api";
 import { ceilingLabel } from "../data";
 import { t, type MsgKey } from "../i18n";
 import { icon } from "../icons";
@@ -151,51 +151,170 @@ function actionBadge(a: RuleAction): HTMLElement {
   return h("span", { class: `act act-${a}` }, icon(ic, 13), actionLabel(a));
 }
 
+/** A long pattern shows two lines at most in the list; the whole of it is in the tooltip. */
+const LONG_PATTERN = 60;
+
 function summary(r: UserRule): HTMLElement {
   const folder = r.project.trim();
+  const pattern = r.pattern.trim();
+  const long = pattern.length > LONG_PATTERN;
+  // A long pattern gets a line of its own, cut after two (.rs-pat-long).
+  const pat = h("code", { class: `rs-pat mono${long ? " rs-pat-long" : ""}`, text: `“${pattern}”`, title: pattern });
+  // Every separator travels with what follows it ("· starts with “…”",
+  // "→ Auto-allow"), so a wrap never leaves a lone · or → at the end of a line.
   return h(
     "span",
     { class: "rule-sum" },
     h("span", { class: "rs-tool", text: toolText(r.tool) }),
-    h("span", { class: "rs-sep", text: "·" }),
-    r.pattern.trim()
-      ? h(
-          "span",
-          {},
-          h("span", { class: "rs-mode", text: `${t(`rules.sum.${r.mode}`)} ` }),
-          h("code", { class: "rs-pat mono", text: `“${r.pattern}”` }),
-        )
-      : h("span", { class: "rs-mode", text: t("rules.everyRequest") }),
+    h(
+      "span",
+      { class: "rs-group" },
+      h("span", { class: "rs-sep", text: "·" }),
+      "\u00A0",
+      pattern
+        ? h("span", { class: "rs-mode", text: `${t(`rules.sum.${r.mode}`)} ` })
+        : h("span", { class: "rs-mode", text: t("rules.everyRequest") }),
+      pattern && !long ? pat : null,
+    ),
+    long ? pat : null,
     folder
       ? h("span", { class: "rs-proj", title: folder }, icon("folder", 12), h("span", { text: folderName(folder) }))
       : null,
-    h("span", { class: "rs-arrow", text: "→" }),
-    actionBadge(r.action),
+    h("span", { class: "rs-keep" }, h("span", { class: "rs-arrow", text: "→" }), "\u00A0", actionBadge(r.action)),
   );
 }
 
+// ── Pattern checks ────────────────────────────────────────────────────────────
+// Rules run on Rust's regex crate, where a pattern that does not compile
+// matches nothing: a deny rule would silently never deny. So the editor asks
+// Rust (rule_pattern_check compiles exactly as rules.rs does) and only falls
+// back to the browser's RegExp when that command can't be reached.
+
+/** Rust's own answer (English, with a caret under the spot), or the browser's guess as a message key. */
+type Problem = { raw: string } | { key: MsgKey };
+
+/** The regex crate's message → what to tell the user (checked in order). */
+const REGEX_MESSAGES: [RegExp, MsgKey][] = [
+  [/exceeds size limit/, "editor.re.tooBig"],
+  [/look-?around/, "editor.regexLook"],
+  [/backreference/, "editor.regexBackref"],
+  [/unclosed group/, "editor.re.unclosedGroup"],
+  [/unopened group/, "editor.re.unopenedGroup"],
+  [/unclosed character class/, "editor.re.unclosedClass"],
+  [/invalid escape sequence found in character class/, "editor.re.classEscape"],
+  [/hexadecimal/, "editor.re.hex"],
+  [/incomplete escape|reached end of pattern/, "editor.re.trailing"],
+  [/unrecognized escape/, "editor.re.escape"],
+  [/repetition quantifier expects|unclosed counted repetition|decimal literal/, "editor.re.braces"],
+  [/repetition operator missing/, "editor.re.nothingToRepeat"],
+  [/repetition count range/, "editor.re.countOrder"],
+  [/character class range/, "editor.re.rangeOrder"],
+  [/range boundary/, "editor.re.rangeBoundary"],
+  [/flag/, "editor.re.flag"],
+  [/capture group name|capture group character/, "editor.re.groupName"],
+  [/unicode/i, "editor.re.unicode"],
+  [/nested|maximum number/, "editor.re.tooDeep"],
+];
+
+/** The user-facing text of a pattern problem, in the current language. */
+function problemText(p: Problem): string {
+  if ("key" in p) return t("editor.regexBad", { err: t(p.key) });
+  // Only the engine's last line names the problem; the lines above quote the
+  // pattern itself, whose words must not be mistaken for the message.
+  const what = /\nerror:\s*([^\n]*)\s*$/.exec(p.raw)?.[1] ?? p.raw;
+  const key = REGEX_MESSAGES.find(([re]) => re.test(what))?.[1] ?? "editor.re.generic";
+  // A one-line pattern comes back as "    <pattern>" then "    ^^" under the spot.
+  const lines = p.raw.split("\n");
+  const caret = lines.findIndex((l) => /^ {4}\s*\^+\s*$/.test(l));
+  if (caret > 0 && /^ {4}/.test(lines[caret - 1]) && !lines.some((l) => /^~+$/.test(l))) {
+    const chars = [...lines[caret - 1].slice(4)];
+    let start = lines[caret].indexOf("^") - 4;
+    const end = start + (lines[caret].trim().length || 1);
+    // A bad hex digit is marked alone ("s" of C:\Users): show it with its \U.
+    if (key === "editor.re.hex") {
+      const slash = chars.lastIndexOf("\\", start);
+      if (slash >= 0 && start - slash <= 9) start = slash;
+    }
+    const at = chars.slice(Math.max(0, start), Math.max(start + 1, end)).join("");
+    if (at.trim()) return t("editor.regexBadAt", { at, err: t(key) });
+  }
+  return t("editor.regexBad", { err: t(key) });
+}
+
 /**
- * Why Rust's `regex` crate would reject `pattern`, as far as the browser can
- * tell: JS syntax errors, plus features JS accepts but Rust does not
- * (lookaround, backreferences). Rust-only inline flags like `(?i)` are fine.
+ * The browser's guess, used only where Rust can't be asked: JS syntax errors
+ * plus what JS accepts but Rust refuses (lookaround, backreferences).
  */
-function regexError(pattern: string): string | null {
-  if (/\(\?<?[=!]/.test(pattern)) return t("editor.regexLook");
-  if (/\\[1-9]|\\k</.test(pattern)) return t("editor.regexBackref");
+function browserGuess(pattern: string): Problem | null {
+  if (/\(\?<?[=!]/.test(pattern)) return { key: "editor.regexLook" };
+  if (/\\[1-9]|\\k</.test(pattern)) return { key: "editor.regexBackref" };
   try {
     new RegExp(pattern.replace(/\(\?[imsxU-]+\)/g, ""), "i");
     return null;
-  } catch (err) {
-    return err instanceof Error ? err.message.replace(/^Invalid regular expression: /, "") : String(err);
+  } catch {
+    return { key: "editor.re.generic" };
   }
 }
 
-/** Native folder picker that fills `input` (and fires its input handler). */
-async function pickInto(input: HTMLInputElement): Promise<void> {
+/** Why `pattern` can't work in `mode` (null when it compiles), as Rust's rules would compile it. */
+async function patternProblem(mode: RuleMode, pattern: string): Promise<Problem | null> {
+  const p = pattern.trim();
+  if (!p || (mode !== "regex" && mode !== "glob")) return null;
+  try {
+    await api.rulePatternCheck(mode, p);
+    return null;
+  } catch (err) {
+    const raw = errText(err);
+    if (/^regex parse error|exceeds size limit/i.test(raw)) return { raw };
+    // The check itself is unavailable (a plain browser): the browser's guess.
+    return mode === "regex" ? browserGuess(p) : null;
+  }
+}
+
+/** Results for the patterns in the list, by [mode, pattern]: a broken rule is marked there. */
+const listChecks = new Map<string, Problem | null>();
+const listChecking = new Set<string>();
+
+function listProblem(r: UserRule): Problem | null {
+  const pattern = r.pattern.trim();
+  if (!pattern || (r.mode !== "regex" && r.mode !== "glob")) return null;
+  const key = JSON.stringify([r.mode, pattern]);
+  if (listChecks.has(key)) return listChecks.get(key) ?? null;
+  if (!listChecking.has(key)) {
+    listChecking.add(key);
+    void patternProblem(r.mode, pattern).then((p) => {
+      listChecking.delete(key);
+      listChecks.set(key, p);
+      if (p) rerender("kurallar");
+    });
+  }
+  return null;
+}
+
+// ── Paths ─────────────────────────────────────────────────────────────────────
+
+/**
+ * A folder path as typed or pasted, ready to compare: no surrounding spaces and
+ * no surrounding quotes (Explorer's "Copy as path" adds them). Rust compares
+ * paths as they are, so `"C:\work"` would never match anything.
+ */
+function cleanPath(raw: string): string {
+  let s = raw.trim();
+  for (;;) {
+    const m = /^(["'])([\s\S]*)\1$/.exec(s);
+    if (!m) return s;
+    s = m[2].trim();
+  }
+}
+
+/** Native folder picker that fills `input` (and fires its input and change handlers); true when a folder was picked. */
+async function pickInto(input: HTMLInputElement): Promise<boolean> {
   const picked = await api.pickFolder(input.value.trim() || undefined);
-  if (!picked) return;
+  if (!picked) return false;
   input.value = picked;
   input.dispatchEvent(new Event("input", { bubbles: true }));
+  input.dispatchEvent(new Event("change", { bubbles: true }));
+  return true;
 }
 
 function pickButton(input: HTMLInputElement): HTMLButtonElement {
@@ -284,6 +403,7 @@ function rulesCard(): HTMLElement {
   const rules = settings().rules;
   const list = h("div", { class: "rule-list" });
   rules.forEach((r, i) => {
+    const broken = listProblem(r);
     list.append(
       h(
         "div",
@@ -312,6 +432,15 @@ function rulesCard(): HTMLElement {
           },
           h("span", { class: "rule-name", text: ruleTitle(r) }),
           summary(r),
+          broken
+            ? h(
+                "span",
+                { class: "field-hint bad", title: problemText(broken) },
+                icon("warn", 13),
+                " ",
+                t("rules.brokenPattern"),
+              )
+            : null,
         ),
         h(
           "div",
@@ -372,10 +501,67 @@ function rulesCard(): HTMLElement {
 
 // ── Rule editor ───────────────────────────────────────────────────────────────
 
+/** Lower case, forward slashes, no trailing slash, Git Bash's /c/ as c: — as risk.rs compares paths. */
+function normPath(path: string): string {
+  let s = path.replace(/\\/g, "/").toLowerCase().replace(/\/+$/, "");
+  const m = /^\/([a-z])(\/|$)/.exec(s);
+  if (m) s = `${m[1]}:${s.slice(2)}`;
+  return s;
+}
+
+/** `path` is `folder` or inside it (rules.rs `within`). */
+function inside(path: string, folder: string): boolean {
+  const p = normPath(path);
+  const f = normPath(folder);
+  return !!f && (p === f || p.startsWith(`${f}/`));
+}
+
+/** Tools whose target is a file path: rules.rs matches those where the path really leads. */
+const PATH_TOOLS = new Set(["write", "edit", "multiedit", "notebookedit", "read", "notebookread", "ls", "glob", "grep"]);
+
+function toolSpecs(tool: string): string[] {
+  return tool
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+/** The rule is about file paths: it names a path tool, or (for any tool) its pattern reads as a path. */
+function pathRule(tool: string, pattern: string): boolean {
+  const p = pattern.trim();
+  if (!p) return false;
+  const specs = toolSpecs(tool);
+  if (specs.some((s) => PATH_TOOLS.has(s))) return true;
+  const anyTool = !specs.length || specs.includes("*");
+  return anyTool && /^(~|\.{1,2}[\\/]|[a-z]:[\\/]|[\\/]|\$home\b|\$\{home\}|%userprofile%)/i.test(p);
+}
+
+/** The rule names file-path tools only: it never sees a command, so the chain check (rules.rs) passes it by. */
+function pathToolsOnly(tool: string): boolean {
+  const specs = toolSpecs(tool);
+  return specs.length > 0 && specs.every((s) => PATH_TOOLS.has(s));
+}
+
+/** What Rust calls a rule: its name, or its pattern when unnamed. */
+function reportedName(r: UserRule): string {
+  return r.name.trim() || r.pattern.trim();
+}
+
 function openEditor(original: UserRule, index: number) {
   const draft: UserRule = { ...original };
   const isNew = index < 0;
   const ceiling = settings().autoAllowMax;
+  /** What saving would store; differs from the start when the dialog holds unsaved edits. */
+  const stored = (r: UserRule) =>
+    JSON.stringify({
+      ...r,
+      name: r.name.trim(),
+      tool: r.tool.trim() || "*",
+      pattern: r.pattern.trim(),
+      project: cleanPath(r.project),
+    });
+  const initial = stored(original);
+  let gone = false;
 
   const name = textInput({
     value: draft.name,
@@ -414,7 +600,7 @@ function openEditor(original: UserRule, index: number) {
     label: t("editor.pattern"),
     onInput: (v) => ((draft.pattern = v), changed()),
   });
-  const patHint = h("span", { class: "field-hint" });
+  const patHint = h("span", { class: "field-hint", "aria-live": "polite" });
 
   const projIn = textInput({
     value: draft.project,
@@ -422,6 +608,15 @@ function openEditor(original: UserRule, index: number) {
     placeholder: t("editor.projectPh"),
     label: t("editor.project"),
     onInput: (v) => ((draft.project = v), changed()),
+    // A pasted "C:\work" (quotes and all) would never match: cleaned once typed.
+    onChange: (v, el) => {
+      const clean = cleanPath(v);
+      if (clean === v) return;
+      el.value = clean;
+      draft.project = clean;
+      toast(t("proj.cleaned"), "info");
+      changed();
+    },
   });
 
   // Action picker: three decisions, then four re-scores.
@@ -501,19 +696,28 @@ function openEditor(original: UserRule, index: number) {
   const testCwd = textInput({
     value: test.cwd,
     mono: true,
-    placeholder: t("tester.defaultCwd"),
+    placeholder: t("tester.cwdPh"),
     label: t("tester.cwdAria"),
     onInput: (v) => ((test.cwd = v), runTest()),
   });
   const testOut = h("div", { class: "rule-test-out", "aria-live": "polite" });
   let seq = 0;
 
+  // The draft runs under the PROBE name in both evaluations, so the result can
+  // tell it apart from every other rule (an unnamed one, or one with the same
+  // name) and the names Rust reports are put back afterwards.
   const draftRules = (): UserRule[] => {
     const rules = settings().rules.map((r) => ({ ...r }));
-    const clean = { ...draft, name: draft.name.trim() };
-    if (isNew) rules.push(clean);
-    else rules[index] = clean;
+    const probe = { ...draft, name: PROBE };
+    if (isNew) rules.push(probe);
+    else rules[index] = probe;
     return rules;
+  };
+  /** What Rust calls the rule once saved: its name, or its pattern when unnamed. */
+  const savedName = () => draft.name.trim() || draft.pattern.trim();
+  const named = (ev: Evaluation): Evaluation => {
+    const fix = (s: string | null) => (s == null ? s : s.split(PROBE).join(savedName()));
+    return { ...ev, rule: fix(ev.rule), note: fix(ev.note), message: fix(ev.message) };
   };
 
   const runTest = debounce(async () => {
@@ -525,7 +729,8 @@ function openEditor(original: UserRule, index: number) {
     }
     const tool = test.tool.trim() || "Bash";
     const input = buildInput(tool, target);
-    const cwd = test.cwd.trim() || t("tester.defaultCwd");
+    // No folder typed: none sent (see the Safety tab's tester).
+    const cwd = cleanPath(test.cwd);
     const s = settings();
     // The draft alone: tells "does not match" apart from "an earlier rule wins".
     const probeRule: UserRule = { ...draft, enabled: true, name: PROBE };
@@ -546,15 +751,22 @@ function openEditor(original: UserRule, index: number) {
     const why: string[] = [];
     if (!matched) {
       if (!toolMatches(draft.tool, tool)) why.push(t("editor.whyTool", { tool }));
-      if (
-        draft.project.trim() &&
-        !cwd.toLowerCase().replace(/\\/g, "/").startsWith(draft.project.trim().toLowerCase().replace(/\\/g, "/"))
-      )
-        why.push(t("editor.whyFolder"));
+      const folder = cleanPath(draft.project);
+      if (folder && !inside(cwd, folder)) why.push(t("editor.whyFolder"));
       if (!why.length) why.push(t("editor.whyPattern"));
     }
-    const selfName = draft.name.trim() || draft.pattern.trim();
-    const earlier = matched && full.rule && full.rule !== selfName ? full.rule : null;
+    const other = matched && draft.enabled && full.rule && full.rule !== PROBE ? full.rule : null;
+    // Another rule decided. Usually it comes first; the one exception (rules.rs
+    // `deciding_rule`) is a deny rule further down, when this rule matched a
+    // path only where it leads: say which, by their places in the list.
+    let decidedBy: HTMLElement | null = null;
+    if (other) {
+      const rules = draftRules();
+      const at = rules.findIndex((r) => r.name === PROBE);
+      const places = rules.flatMap((r, j) => (j !== at && r.enabled && reportedName(r) === other ? [j] : []));
+      const below = places.length > 0 && places.every((j) => j > at);
+      decidedBy = notice("warn", t(below ? "editor.below" : "editor.earlier", { name: other }));
+    }
     return h(
       "div",
       { class: "rule-test-res" },
@@ -566,54 +778,110 @@ function openEditor(original: UserRule, index: number) {
         !matched ? h("span", { class: "muted", text: `— ${why.join(", ")}` }) : null,
         matched && !draft.enabled ? h("span", { class: "muted", text: t("editor.butDisabled") }) : null,
       ),
-      earlier ? notice("warn", t("editor.earlier", { name: earlier })) : null,
+      decidedBy,
       h("div", { class: "rt-caption", text: t("editor.result") }),
-      evaluationView(full, { compact: true }),
+      evaluationView(named(full), { compact: true }),
+      cwd ? null : h("p", { class: "fine", text: t("tester.noCwd") }),
     );
   };
 
-  const changed = () => {
-    // Pattern help and validation.
-    patHint.classList.remove("bad");
-    if (draft.mode === "regex" && draft.pattern.trim()) {
-      const err = regexError(draft.pattern);
-      if (err) {
-        patHint.classList.add("bad");
-        patHint.textContent = t("editor.regexBad", { err });
-      } else patHint.textContent = t("editor.regexOk");
-    } else if (draft.mode === "glob") patHint.textContent = t("editor.globHint");
-    else if (!draft.pattern.trim()) patHint.textContent = t("editor.emptyPattern");
-    else patHint.textContent = t("editor.patternHint");
+  // Pattern check: Rust's answer for the pattern as it now reads. Until it
+  // comes, the previous verdict stays (no flicker while typing); Save asks once
+  // more before it stores anything.
+  let problem: Problem | null = null;
+  let checkSeq = 0;
+  const checkPattern = debounce(async () => {
+    const my = ++checkSeq;
+    const p = await patternProblem(draft.mode, draft.pattern);
+    if (my !== checkSeq || gone) return;
+    problem = p;
+    paintPattern();
+  }, 200);
 
-    // Action notes.
+  const paintPattern = () => {
+    const p = draft.pattern.trim();
+    let text: string;
+    if (!p) text = t("editor.emptyPattern");
+    else if (problem) text = problemText(problem);
+    else if (draft.mode === "regex") text = t("editor.regexOk");
+    else if (draft.mode === "glob") text = t("editor.globHint");
+    else if (draft.mode === "prefix") text = t("editor.prefixHint");
+    else text = t("editor.patternHint");
+    // Rust trims a pattern before it matches; say so rather than let "git " look like a word boundary.
+    if (p && p !== draft.pattern) text += ` ${t("editor.edgeSpaces")}`;
+    patHint.textContent = text;
+    patHint.classList.toggle("bad", !!problem);
+    saveBtn.disabled = !!problem;
+  };
+
+  const changed = () => {
+    if ((draft.mode === "regex" || draft.mode === "glob") && draft.pattern.trim()) checkPattern();
+    else {
+      checkSeq++;
+      problem = null;
+    }
+    paintPattern();
+
+    // Action notes. A rule with no pattern for every tool applies to every
+    // request (on purpose: "always ask for MCP tools" relies on an empty
+    // pattern), so it says what that means for its action.
     actionNote.replaceChildren();
-    if (draft.action === "allow") {
+    const everything = !draft.pattern.trim() && (!draft.tool.trim() || draft.tool.trim() === "*");
+    // The chain check is about commands (rules.rs `command_of`): a Write or Read
+    // rule has none to chain.
+    const loose =
+      (!draft.pattern.trim() || (draft.mode !== "exact" && draft.mode !== "regex")) && !pathToolsOnly(draft.tool);
+    const chainNote = h("p", { class: "fine", text: t("editor.chainNote") });
+    const a = draft.action;
+    if (a === "allow") {
       actionNote.append(
         ceiling === "none"
           ? notice("warn", t("editor.allowOff"))
           : notice("info", t("editor.allowCeiling", { ceiling: ceilingLabel(ceiling) })),
       );
-      if (!draft.pattern.trim() && (!draft.tool.trim() || draft.tool.trim() === "*"))
-        actionNote.append(notice("warn", t("editor.allowEverything")));
-    } else if (draft.action === "low" || draft.action === "medium") {
-      actionNote.append(notice("info", t("editor.rescoreNote")));
-    } else if (draft.action === "deny") {
+      if (everything) actionNote.append(notice("warn", t("editor.allowEverything")));
+      else if (loose) actionNote.append(chainNote);
+    } else if (a === "deny") {
       actionNote.append(notice("info", t("editor.denyNote")));
+      if (everything) actionNote.append(notice("warn", t("editor.denyEverything")));
+    } else if (a === "ask") {
+      if (everything) actionNote.append(notice("warn", t("editor.askEverything")));
+    } else {
+      if (a === "low" || a === "medium") actionNote.append(notice("info", t("editor.rescoreNote")));
+      if (everything) actionNote.append(notice("warn", t("editor.rescoreEverything", { level: levelLabel(a) })));
+      else if (loose && (a === "low" || a === "medium")) actionNote.append(chainNote);
     }
-    msgField.hidden = draft.action !== "deny";
-    saveBtn.disabled = draft.mode === "regex" && !!draft.pattern.trim() && !!regexError(draft.pattern);
+    // On a file path the matching is lopsided (rules.rs `covers`): a rule that
+    // lets a request through or lowers its risk applies only where the path
+    // really leads; one that denies, asks or raises catches it however spelled.
+    if (pathRule(draft.tool, draft.pattern)) {
+      const loosens = a === "allow" || a === "low" || a === "medium";
+      actionNote.append(h("p", { class: "fine", text: t(loosens ? "editor.pathLoose" : "editor.pathCatch") }));
+    }
+    msgField.hidden = a !== "deny";
     runTest();
   };
 
   const saveBtn = button(isNew ? t("editor.addRule") : t("common.save"), {
     kind: "primary",
     icon: "check",
-    onClick: () => {
+    onClick: async () => {
+      saveBtn.disabled = true;
+      // The last word on the pattern comes from Rust, right before it is stored.
+      const p = await patternProblem(draft.mode, draft.pattern);
+      if (gone) return;
+      if (p) {
+        problem = p;
+        paintPattern();
+        patIn.focus();
+        return;
+      }
       const clean: UserRule = {
         ...draft,
         name: draft.name.trim(),
         tool: draft.tool.trim() || "*",
-        project: draft.project.trim(),
+        pattern: draft.pattern.trim(),
+        project: cleanPath(draft.project),
       };
       update((x) => {
         if (isNew) x.rules.push(clean);
@@ -634,6 +902,11 @@ function openEditor(original: UserRule, index: number) {
     subtitle: isNew ? t("editor.newSub") : t("editor.position", { n: index + 1 }),
     wide: true,
     cls: "modal-rule",
+    // A stray click beside the dialog, or Esc, never throws the edits away unasked.
+    isDirty: () => stored(draft) !== initial,
+    onClose: () => {
+      gone = true;
+    },
     body: [
       h(
         "div",
@@ -742,9 +1015,15 @@ async function loadRecent() {
   rerender("kurallar");
 }
 
+/** Another row already holds `path` (compared as Rust compares folders). */
+function duplicatePath(path: string, except = -1): boolean {
+  const n = normPath(path);
+  return !!n && settings().projects.some((p, i) => i !== except && normPath(cleanPath(p.path)) === n);
+}
+
 function addProject(path: string, mode: ProjectPolicy["mode"] = "normal") {
-  const clean = path.trim();
-  if (clean && settings().projects.some((p) => p.path.trim().toLowerCase() === clean.toLowerCase())) {
+  const clean = cleanPath(path);
+  if (clean && duplicatePath(clean)) {
     toast(t("proj.duplicate"), "info");
     return;
   }
@@ -759,18 +1038,92 @@ async function pickProject() {
   if (picked) addProject(picked);
 }
 
+/**
+ * A row's path while it is being typed. It takes effect only when it is
+ * finished (Enter, leaving the field, a folder pick, leaving the tab or the
+ * window), never letter by letter: a trusted row retyped from scratch would
+ * otherwise trust "C:\Users\" for as long as you paused there.
+ *
+ * The draft belongs to the row by the path it had (`from`; an empty, new row
+ * by its place), not by its place alone: a row removed above it, or an Undo,
+ * must not hand it to another folder. A redraw (an Undo bar running out, a
+ * change from the island, a save landing) rebuilds the field from it.
+ */
+let pathDraft: { index: number; from: string; value: string } | null = null;
+
+/** The row the draft belongs to now, or -1 when that row is gone. */
+function draftRow(): number {
+  const d = pathDraft;
+  if (!d) return -1;
+  const projects = settings().projects;
+  if (d.from) return projects.findIndex((p) => p.path === d.from);
+  return projects[d.index]?.path === "" ? d.index : -1;
+}
+
+/**
+ * Stores `raw` as row `i`'s path (trimmed, unquoted) unless another row has it
+ * already; returns what the field should show afterwards.
+ */
+function commitPath(i: number, raw: string): string {
+  if (pathDraft && draftRow() === i) pathDraft = null;
+  const current = settings().projects[i];
+  if (!current) return raw;
+  const clean = cleanPath(raw);
+  if (clean && duplicatePath(clean, i)) {
+    toast(t("proj.duplicate"), "info");
+    return current.path;
+  }
+  if (clean !== raw) toast(t("proj.cleaned"), "info");
+  if (current.path !== clean)
+    update((x) => {
+      if (x.projects[i]) x.projects[i].path = clean;
+    });
+  return clean;
+}
+
+/** Settles a draft whose field is gone (the tab or the window was left mid-typing). */
+function commitPathDraft() {
+  const d = pathDraft;
+  if (!d) return;
+  const i = draftRow();
+  pathDraft = null;
+  if (i >= 0) commitPath(i, d.value);
+}
+
 function projectsCard(): HTMLElement {
   const projects = settings().projects;
   const list = h("div", { class: "proj-list" });
+  const drafted = draftRow();
   projects.forEach((p, i) => {
+    const settle = (el: HTMLInputElement) => {
+      const shown = commitPath(i, el.value);
+      if (el.value !== shown) el.value = shown;
+    };
     const pathIn = textInput({
-      value: p.path,
+      value: drafted === i && pathDraft ? pathDraft.value : p.path,
       mono: true,
       placeholder: t("proj.pathPh"),
       label: t("proj.pathAria"),
       fk: `proj-path:${i}`,
-      onInput: (v) => update((x) => (x.projects[i].path = v)),
+      onInput: (v) => {
+        const from = pathDraft && draftRow() === i ? pathDraft.from : (settings().projects[i]?.path ?? p.path);
+        pathDraft = { index: i, from, value: v };
+      },
+      onEnter: (_v, el) => settle(el),
     });
+    // Leaving the field stores the path. A field a redraw took away was not
+    // left by the user: Chromium fires its change as it goes, WebKit nothing at
+    // all. So the store waits a turn and only counts a field still on the page;
+    // the draft lives on in the field drawn in its place, whose own blur stores
+    // it (its value was set by script, so it would fire no change). Nor is the
+    // window losing focus a leave (the field keeps it: switching to a file
+    // manager to look up the rest of the path must not trust "C:\Users\").
+    const leave = () =>
+      window.setTimeout(() => {
+        if (pathIn.isConnected && document.activeElement !== pathIn) settle(pathIn);
+      }, 0);
+    pathIn.addEventListener("change", leave);
+    pathIn.addEventListener("blur", leave);
     if (focusNewProject && i === projects.length - 1) {
       focusNewProject = false;
       window.setTimeout(() => pathIn.focus(), 0);
@@ -782,7 +1135,16 @@ function projectsCard(): HTMLElement {
         h(
           "div",
           { class: "proj-path" },
-          iconButton("folder", t("proj.pick"), () => void pickInto(pathIn), { fk: `proj-pick:${i}` }),
+          // A picked folder is a finished path: stored at once, focus or not.
+          iconButton(
+            "folder",
+            t("proj.pick"),
+            () =>
+              void pickInto(pathIn).then((picked) => {
+                if (picked && pathIn.isConnected) settle(pathIn);
+              }),
+            { fk: `proj-pick:${i}` },
+          ),
           pathIn,
         ),
         segmented(
@@ -810,11 +1172,19 @@ function projectsCard(): HTMLElement {
           "trash",
           t("common.remove"),
           () => {
+            // The row as it is now: saves replace the store's objects, so the
+            // one this list was drawn from may be an older copy.
+            const live = settings().projects[i];
+            if (!live) return;
+            // A path half-typed into the row being removed goes with it (Undo
+            // brings back the row as it was stored).
+            if (pathDraft && draftRow() === i) pathDraft = null;
+            const removed: ProjectPolicy = { ...live };
             if (projectUndo) window.clearTimeout(projectUndo.timer);
             update((x) => x.projects.splice(i, 1));
             projectUndo = makeUndo(
-              () => t("proj.removed", { path: p.path || t("proj.unnamed") }),
-              () => update((x) => x.projects.splice(Math.min(i, x.projects.length), 0, p)),
+              () => t("proj.removed", { path: removed.path || t("proj.unnamed") }),
+              () => update((x) => x.projects.splice(Math.min(i, x.projects.length), 0, { ...removed })),
               () => (projectUndo = null),
             );
             refreshBadges();
@@ -988,6 +1358,8 @@ export const kurallarTab: Tab = {
   subtitle: () => t("rules.subtitle"),
   icon: "kurallar",
   render,
+  // Leaving the tab (or the window, main.ts) mid-typing leaves the field too.
+  onHide: commitPathDraft,
   onShow: () => {
     if (!recentFolders) void loadRecent();
     if (!devDone) {

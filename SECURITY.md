@@ -14,8 +14,9 @@ report. ([How private reporting works](https://docs.github.com/en/code-security/
 
 A useful report says:
 
-- the Nöbetçi version, the operating system (Windows or macOS) and its version, and the Claude
-  Code version;
+- the Nöbetçi version, the operating system (Windows, macOS or Linux — and on Linux, X11 or
+  Wayland and which desktop) and its version, and the version of the agent (Claude Code, Codex or
+  Cursor);
 - what an attacker can do, and from where (the agent's own output, another program running as you,
   another account on the same machine…);
 - the steps to reproduce it. Please keep proofs of concept harmless — `echo`, `calc.exe` or a file
@@ -36,13 +37,18 @@ There is no bug bounty.
 Report privately anything that breaks one of the promises below, for example:
 
 - something other than you approving a request: synthetic input getting past the click guard, the
-  hold being bypassed, a HIGH or CRITICAL request approved automatically;
+  hold being bypassed, a HIGH or CRITICAL request approved automatically, through the allow hotkey
+  or a batch, or on the island at all on Linux (a program clicking LOW or MEDIUM through the real
+  mouse on Linux is the known limit [described below](#what-it-does-not-protect-against));
 - the card showing something different from what will run (rendering tricks, truncation,
   invisible characters that aren't revealed);
 - text from a request being interpreted as HTML or script in the island or the settings window;
 - another account, or a remote machine, reading from or writing to your pipe or socket, or a
   fake server tricking the relay into talking to it;
-- Nöbetçi writing to `~/.claude/settings.json` without your explicit consent, or damaging it;
+- Nöbetçi writing to `~/.claude/settings.json`, or to Codex's or Cursor's `hooks.json`, without
+  your explicit consent, or damaging them;
+- an agent request that changes Nöbetçi's own files, swaps its relay or removes its hooks without
+  being scored CRITICAL;
 - secrets that the redaction should catch ending up in the history or in a notification;
 - formula injection through an exported CSV;
 - anything in the build and release workflows that could let someone tamper with a published
@@ -53,18 +59,20 @@ Report privately anything that breaks one of the promises below, for example:
 - **A risky command that scores too low, or a harmless one that scores too high**, is a gap in a
   heuristic rather than a vulnerability. Use the
   [risk rule issue template](https://github.com/tahap0l/nobetci/issues/new?template=risk_rule.yml)
-  — unless the trick makes the *card* lie about what will run, which belongs here.
+  — unless the trick makes the *card* lie about what will run, or gets past Nöbetçi's
+  self-protection, which belong here.
 - **Vulnerabilities in Claude Code itself** go to Anthropic:
   <https://www.anthropic.com/responsible-disclosure-policy>.
-- **Bugs in Windows, macOS, WebView2, WKWebView or Tauri** go to their respective projects. If one of them affects
-  Nöbetçi, a private report here is still welcome so we can work around it.
+- **Bugs in Windows, macOS, Linux desktops, WebView2, WKWebView, WebKitGTK or Tauri** go to their
+  respective projects. If one of them affects Nöbetçi, a private report here is still welcome so we
+  can work around it.
 
 ## Supported versions
 
 | Version | Supported |
 | --- | --- |
-| 0.2.x | ✅ Security fixes |
-| 0.1.x | ❌ Internal builds, never released |
+| 2.4.x (the latest release) | ✅ Security fixes |
+| Earlier releases | ❌ Please update |
 
 Fixes land in the latest release only. Please update before reporting.
 
@@ -73,13 +81,21 @@ Fixes land in the latest release only. Please update before reporting.
 ### What Nöbetçi is
 
 Nöbetçi is a **reviewer**, not a sandbox. It shows you the permission requests Claude Code would
-otherwise ask about in a terminal, scores each one with a set of heuristics, and passes your
-decision back. It runs as you, on your machine. Network access is limited to Prompt Studio's
-explicit model request: Ollama on loopback (cloud-tagged Ollama models may forward the draft), or
-the OpenAI API after the user selects it and clicks Improve. It decides on its own only where you
-told it to — a rule, a trusted project or a session grant — and never above MEDIUM risk.
+otherwise ask about in a terminal — and those of Codex and Cursor, as far as their hooks allow —
+scores each one with a set of heuristics, and passes your decision back. It runs as you, on your
+machine. It decides on its own only where you told it to — a rule, a trusted project or a session
+grant — and never above MEDIUM risk.
 
-Nöbetçi runs on Windows and, since 0.2.0, on macOS. Where the two differ, this page says so.
+Network access is limited to what you switch on: Prompt Studio's model request (Ollama on loopback,
+whose cloud-tagged models may forward the draft, or the OpenAI API after you select it and click
+Improve), the island assistant's **Ask here** (the same provider), and the weather card, which asks
+Open-Meteo for the forecast of the city you pick. Sending a message to an AI app from the assistant
+opens that app through a fixed link, or your browser at a fixed `https://` address; for most
+targets the message travels in that link or address, and the service may answer it as soon as it
+opens (the [privacy policy](PRIVACY.md) says which).
+
+Nöbetçi runs on Windows, on macOS (since 0.2.0) and on Linux (since 2.3.0). Where they differ, this
+page says so.
 
 It assumes the following can be hostile:
 
@@ -96,43 +112,99 @@ It assumes the following can be hostile:
 reasons behind it, and the parts of the command that triggered a finding are highlighted. HIGH and
 CRITICAL requests need the Allow button to be held down: 1.2 s and 2.4 s by default. The holds can
 be changed, but Rust clamps them so they can't drop below 0.4 s, and the CRITICAL hold is never
-shorter than the HIGH one.
+shorter than the HIGH one. On Linux, HIGH and CRITICAL requests can't be approved on the island
+at all: they are approved in the terminal (see the click guard below).
 
 **The hold is enforced in Rust.** The decision handler in `src-tauri/src/pipe.rs` refuses a plain
 "allow" for a HIGH or CRITICAL request; the island sends the confirmed form only after a completed
-hold. A bug in the front end can't turn a click into an approval of a risky request. There is no
-"always allow" anywhere — not in the app, and not in what the relay understands.
+hold. A bug in the front end can't turn a click into an approval of a risky request. Where the
+click guard can't vouch for a hold — on Linux — the same handler refuses every approval of a HIGH
+or CRITICAL request from the island, click, hold or key alike (`terminal_only`): the request stays
+waiting until you deny it or hand it to the terminal. There is no "always allow" anywhere — not in
+the app, and not in what the relay understands.
 
 **Nothing HIGH or CRITICAL is approved automatically.** Rules, trusted projects and "don't ask
 again in this session" grants are capped in Rust (`src-tauri/src/rules.rs`). The auto-allow
 ceiling can be off, LOW or MEDIUM, and a hand-edited settings file can't raise it further
-(`src-tauri/src/settings.rs` sanitises it on load). A rule may re-score a false alarm, but a
-CRITICAL finding never drops below HIGH. Rules may always deny.
+(`src-tauri/src/settings.rs` sanitises it on load). A settings file that can be read only in part
+can't widen anything either: when a rule that was switched on, or a project that wasn't trusted,
+can't be read, allow rules and rules that lower a risk to LOW are off and trusted projects count
+as normal until the file is fixed, and a ceiling that can't be read is off. A rule may re-score a
+false alarm, but a CRITICAL finding never drops below HIGH, and the cap also looks at the engine's
+own level: a request the engine scored HIGH that a rule lowered to LOW becomes a plain click —
+never an automatic pass, never something the allow hotkey or a batch approval can take. Rules may
+always deny.
+
+**Rules mean what they say.** A *starts with* pattern ends at a word boundary, glob patterns cross
+line breaks, and a loose pattern (*starts with*, *contains*, glob or empty) that allows or lowers a
+request doesn't match a command that runs more commands than the pattern itself — a line break, `;`,
+`&&`, `||`, `|`, `&`, backticks, `$(`, `<(`, `>(`, or the brackets PowerShell, fish and zsh run a
+command in: `( )`, `@( )`, `{ }`, `=( )` and glob qualifiers — so `npm test` can't carry `rm -rf ~`
+or `(iwr …)` along. A regex pattern that allows or lowers covers what it matches and nothing a
+command runs past it. Deny rules match anywhere. For a file path, an allow rule, a rule that lowers
+the level and a "don't ask again" grant have to match the path both as written and where it really
+leads once `..`, `.`, `~`, `$HOME` and relative parts are resolved — an allow rule for `/work/app/*`
+doesn't cover `/work/app/../../etc/hosts`, nor one for `~/*` cover `~/../../etc/x` — and a path that
+climbs above a folder Nöbetçi can't place (another user's `~bob`, `%APPDATA%`) never passes that
+way. Deny, always-ask and raising rules match the path as written or where it leads, and these
+other spellings of it: repeated leading slashes (`//etc/x`), a process's root folder on Linux
+(`/proc/self/root/etc/x`), `/private/etc/x` on macOS, Windows device and object-manager paths
+(`\\?\C:\x`, `\\.\C:\x`, `\??\C:\x`, `\\?\UNC\server\share\x`), this computer's administrative
+shares (`\\localhost\C$\x`, `\\127.0.0.1\C$\x`), trailing dots, spaces and `::$DATA` on Windows
+names (`C:\Windows.\x`), and an 8.3 short name of a folder or file the rule names (`C:\PROGRA~1\x`
+for `C:\Program Files\*`). Nothing else: links, junctions, mount points, substituted drives, a
+share reached by the computer's own name and short names of folders the rule doesn't name aren't
+followed, and a rule on a command matches the command's text as written. The first rule that
+matches decides, except that one which matched a path only where it leads, and doesn't deny, never
+hides a deny rule further down: resolving a path can't turn your deny into a question.
 
 **What you see is what runs.** The relay forwards every field of a permission request whole, up to
 64 KiB. Anything longer is cut, flagged and scored HIGH, with a finding telling you to review the
-request in the terminal; that category can't be switched off. On the card:
+request in the terminal; that category can't be switched off, and the card marks the cut. A
+request too large for the channel (over 1 MiB in all) has its longest fields cut evenly until it
+fits: it reaches the card cut and HIGH, and no rule or grant can approve it. Two kinds never reach
+a card: a request whose shape alone is too large (say, an argument holding a hundred thousand
+numbers), and a question or a plan that had to be cut, whose answer would hand the cut text back
+as if it were whole. Both are logged, recorded in the history and left to the agent's own prompt.
+Write and edit requests show the whole content, and every edit of a multi-edit. On the card:
 
-- zero-width characters and direction marks (U+200B to U+200F), bidirectional embeddings and
-  overrides (U+202A to U+202E), bidirectional isolates (U+2066 to U+2069) and the zero-width
-  no-break space (U+FEFF) are shown as visible markers such as `⟦U+202E⟧`; in a command, or in
-  content about to be written, they also score HIGH;
+- invisible and direction-changing characters — zero-width characters and direction marks, the
+  Arabic letter mark, bidirectional embeddings, overrides and isolates, word joiners, the soft
+  hyphen, the combining grapheme joiner, the Mongolian vowel separator, Hangul fillers, tag
+  characters, line and paragraph separators, the zero-width no-break space, control characters
+  and a lone carriage return — are shown as visible markers such as `⟦U+202E⟧`; in a command, or
+  in content about to be written, they also score HIGH (a zero-width joiner inside an emoji or a
+  Persian or Indic word is ordinary text and doesn't, nor do the tag characters that make the
+  England, Scotland and Wales flags; any other run of tag characters does);
 - runs of four or more blank lines, or 40 or more spaces, are collapsed into visible markers such
-  as `⟦12 blank lines⟧`; in a command, twelve blank lines or 120 spaces with more text after them
-  score HIGH as an attempt to push part of it out of view;
-- a command box that has to scroll says "there's more — scroll".
+  as `⟦12 blank lines⟧` — no-break, wide and ideographic spaces count as blanks too; in a command,
+  twelve blank lines or 120 spaces with more text after them score HIGH as an attempt to push part
+  of it out of view;
+- a command box that has to scroll says so.
+
+For a tool it doesn't know, Nöbetçi shows, scores and matches the whole argument object, not one
+field of it.
 
 **No HTML from requests.** The island and the settings window build their DOM from text nodes and
 never use `innerHTML`, so text from a request can't become markup or script in a window that can
 approve commands. The webview runs under a Content Security Policy that only allows the app's own
-scripts.
+scripts. On Linux, a notification's text is escaped for notification servers that read markup, so
+a command can't turn into a link or formatting there.
 
-**Physical-click guard.** While a request is waiting, Nöbetçi records every left-button press and
-whether it came from a real device:
+**Each window can do only its own job.** The island, the settings window and the desktop mascot
+can each call only the app commands they use. The approval commands answer the island alone;
+previewing and writing hooks, testing rules and reading or clearing the history answer the settings
+window alone; the desktop mascot only shows itself, says it is ready and opens the island, and
+can't send the island events. A script running in the settings window or the mascot can't approve
+a request.
+
+**Physical-click guard.** While a request is waiting, Nöbetçi records every press of the primary
+mouse button and whether it came from a real device:
 
 - **Windows:** it listens to Raw Input through a message-only window, without any global hook. A
   press from a real device carries the handle of that device; input synthesised with `SendInput`
-  carries none, and pressing a button through UI Automation produces no mouse input at all.
+  carries none, and pressing a button through UI Automation produces no mouse input at all. With
+  the mouse buttons swapped (left-handed), the guard follows the button you made primary.
 - **macOS:** a local AppKit event monitor sees the presses Nöbetçi's own windows receive (no
   Accessibility or Input Monitoring permission needed). Every mouse event carries the process id
   of whoever posted it: events from a real mouse or trackpad come from the HID system with pid 0,
@@ -140,21 +212,44 @@ whether it came from a real device:
   through the accessibility API (`AXPress`) produces no mouse event at all. macOS itself only lets
   a program post mouse events or press other apps' buttons once you've granted it Accessibility
   access.
+- **Linux:** a thread reads XInput2 raw button events on the root window (no grab) and, at every
+  press, asks the X server about the device it came from. That catches the usual way to fake a
+  click: `xdotool`, `xte` and most other tools use XTEST's core request, which presses through an
+  XTEST device — including the one a program gets by adding a master pointer of its own later —
+  and such a press, or one from a device the server no longer knows, counts as synthetic. Pressing
+  the button through the accessibility bus (AT-SPI) makes no mouse event at all. What the guard
+  can't tell: XTEST can also press *through a device the program names*, the real mouse included
+  (XInput 1's `XOpenDevice`, then `XTestFakeDeviceButtonEvent`), and such a press names the real
+  mouse as its source, with nothing in it to set it apart from a hand on that mouse. So on Linux
+  the guard is a speed bump for LOW and MEDIUM approvals, not a proof, and **HIGH and CRITICAL
+  requests are never approved on the island**: their card explains why and offers **Hand to
+  terminal** (**Hand to Cursor** in Cursor) and **Deny**, and Rust refuses any approval of them from
+  the island. Nöbetçi asks for XInput 2.2, so it also sees the release while the island's own
+  toolkit holds the pointer. The guard follows the button maps (`xinput set-button-map`, or
+  `xmodmap -e 'pointer = 3 2 1'` for a left-handed mouse), so the press it records is the one that
+  acts as the primary click; a press a program makes counts as synthetic whatever its button, and a
+  real click judged while a button map was changing under it backs no approval (click again).
 
-Nöbetçi also notes where each press landed. An approval made on the island is accepted only if the most
-recent left-button press was physical, recent — within 3 seconds for a click, or the hold time
-plus 3 seconds for a hold — and landed on the Allow button. A press is spent by the approval it
-backs, so one real click can't vouch for a second card waiting in the queue. Otherwise the approval
-is refused, logged as suspicious, and the card itself says that something may have tried to approve
-on your behalf.
-Rust measures the physical hold for HIGH and CRITICAL requests. If the mouse is released early
-or physical input cannot be verified, use the terminal to decide. The guard stops recording
-when no requests are waiting. **Settings → Safety** can turn off physical click verification
-for LOW and MEDIUM approvals. The health check shows whether the platform listener is active.
+Nöbetçi also notes where each press landed. An approval made on the island is accepted only if the
+most recent press was physical, began after the card appeared, is fresh — released within 3 seconds,
+or the hold time plus 3 seconds while still held — and landed on the Allow button, and no button a
+program pressed was still held down when it began. A card accepts no approval in its first 350 ms. A
+press is spent by the approval it backs, so one real click can't vouch for a second card waiting in
+the queue, and the second half of a double-click or the release of a hold meant for the previous
+card is ignored quietly. Otherwise the approval is refused, logged as suspicious, and the card
+itself says that something may have tried to approve on your behalf. On Windows and macOS, Rust
+measures the physical hold for HIGH and CRITICAL requests. If the mouse is released early or
+physical input cannot be verified, use the terminal to decide. The guard stops recording when no
+requests are waiting. **Settings → Safety** can turn off physical click verification for LOW and
+MEDIUM approvals. The health check shows whether the platform listener is active.
 
 **The allow hotkey is LOW-only.** Global hotkeys can be triggered by any program that fakes
 keystrokes. The allow hotkey is therefore not set by default, and even when it is, Rust refuses it
-for anything above LOW.
+for anything the engine itself scored above LOW, whatever a rule made of it. Rust also accepts a
+hotkey approval only within 1.5 s of a press of the allow shortcut that it registered itself, so
+nothing inside a window can claim one. Batch approval (the row's **Allow all** button) covers only
+the requests the batch row lists, only those still LOW by both the engine's and the current level,
+and takes one physical click.
 
 **A channel only you can use.**
 
@@ -162,28 +257,80 @@ for anything above LOW.
   with an explicit DACL that grants access to your account and SYSTEM only, rejects remote
   clients, and refuses to start serving if another process already owns that name. Before
   sending anything, the relay checks that the process serving the pipe runs under your SID; if it
-  can't tell, it sends nothing.
+  can't tell, it sends nothing. It also opens the pipe at the identification level, so a server
+  that grabbed the name first could at most learn who you are, never act as you. An answer is
+  flushed before the pipe is disconnected, so a decision made on the spot by a rule is never lost.
 - **macOS:** they talk over a Unix socket, `~/Library/Application Support/Nobetci/nobetci.sock`.
   The app keeps that folder at mode 0700 and the socket at 0600, refuses to start if something
   already answers on the socket, and drops any connection whose peer (`getpeereid`) isn't your
   user id. Before sending anything, the relay checks that the socket file belongs to you and that
   the process on the other end runs as you; otherwise it sends nothing.
+- **Linux:** the same, with the socket at `~/.local/state/nobetci/nobetci.sock` (or
+  `/tmp/nobetci-<uid>/` when the home path is too long for a socket) and the peer checked with
+  `SO_PEERCRED`.
 
 **Failing safe, never failing open.** If Nöbetçi is closed, paused, busy or slow, the request falls
-back to Claude Code's own prompt in the terminal. The relay never prints a decision it doesn't
-fully recognise: unknown or malformed answers produce no output, which leaves the decision to the
-terminal.
+back to the agent's own prompt: Claude Code and Codex ask in the terminal, and Cursor asks you
+itself. The relay never prints a decision it doesn't fully recognise: unknown or malformed answers
+produce no output, which leaves the decision to the terminal. Nöbetçi registers its Cursor
+permission hooks fail-closed, so a relay that crashes or can't be started makes Cursor refuse the
+command rather than run it unreviewed.
 
 **Careful with `~/.claude/settings.json`.** Installing or removing hooks from the app always shows
 a diff first, saves a dated backup, merges without touching other settings or other tools' hooks,
-writes only after an explicit click, and refuses if the file changed since the preview. Writes go
-to a temporary file that is renamed over the original, and a file that can't be read or parsed is
-never overwritten. The uninstaller's `nobetci.exe --remove-hooks` is the one path without a
-preview: it only removes Nöbetçi's own entries, and still keeps a dated backup. (macOS has no
-uninstaller; the same command can be run by hand.) A request from the
-agent to change Claude Code's permission or hook settings is scored CRITICAL; one that writes
-hooks, agents, plugins or `.mcp.json` is HIGH. The same goes for Nöbetçi itself: a request to
-change its settings, history or relay is CRITICAL, and one that tries to stop it is HIGH.
+writes only after an explicit click, and refuses if the file changed since the preview. What is
+written is exactly what the preview showed: the diff is computed on the file's own text, so any
+other reformatting would show in it too — a change of line endings is named at the top of the
+diff, which then shows each carriage return as `␍` — the file keeps its key order, and a backup is
+announced only when there is a file to back up. Writes go to a temporary file that is renamed over
+the original — for a symbolic link, over the file it points to, so the link stays a link — and a
+file that can't be read or parsed is never overwritten. Codex's and Cursor's `hooks.json` are handled
+the same way. When Claude Code keeps its settings elsewhere with an absolute `CLAUDE_CONFIG_DIR`,
+Nöbetçi writes `$CLAUDE_CONFIG_DIR/settings.json` instead, provided Nöbetçi itself sees that
+variable; Settings → Claude Code shows which file it uses.
+
+`nobetci --remove-hooks` is the one path without a preview. The Windows uninstaller runs it, and on
+macOS and Linux you run it by hand before deleting the app. It removes only Nöbetçi's own hook
+commands — those whose program is the relay, also when an older version wrote its Windows 8.3
+short name — never another tool's hook, even one that shares a matcher group with Nöbetçi's — from
+`~/.claude/settings.json`, Codex's `hooks.json` and `~/.cursor/hooks.json`, keeps a dated backup of
+each, and prints one line per file in a terminal on macOS and Linux (on Windows, where it has no
+console, `nobetci.log` notes each file it cleaned or couldn't clean). It exits with status 1 when a
+file couldn't be cleaned (0 when no entry of Nöbetçi's is left), in which case the Windows
+uninstaller keeps the relay in place and tells you what is left.
+
+**Nöbetçi guards itself.** A request from the agent to change Claude Code's permission or hook
+settings (`settings.json` or `settings.local.json` in `~/.claude`, or in the folder
+`CLAUDE_CONFIG_DIR` names — when Nöbetçi sees that variable, and whenever a command spells
+`$CLAUDE_CONFIG_DIR` out), or Codex's or Cursor's hook settings (their `hooks.json`, and Codex's
+`config.toml`), is scored CRITICAL; one that writes hooks, agents, commands, skills, plugins or
+`.mcp.json` is HIGH. The same goes for Nöbetçi itself, on all three systems:
+
+- writing to its folders — `%APPDATA%\Nobetci` and `%LOCALAPPDATA%\Nobetci` on Windows;
+  `~/Library/Application Support/Nobetci` and `/Applications/Nobetci.app` on macOS;
+  `~/.config/nobetci`, `~/.local/share/nobetci`, `~/.local/state/nobetci` (and their
+  `$XDG_*_HOME` forms) and the installed programs on Linux — or to its relay wherever it lies, is
+  CRITICAL, whatever does the writing: a redirection, `tee`, `cp`, `mv`, `install`, `ln`, `rsync`,
+  `curl -o`, `wget -O`, `sed -i`, `chmod`, `rm`, `dd of=`, an editor or a one-liner in a scripting
+  language — and a program Nöbetçi doesn't know, handed one of those paths, counts as writing
+  there. Reading those files stays LOW;
+- `nobetci --remove-hooks` is CRITICAL by any path and however it is run — piped into a shell,
+  through `xargs`, `$(…)` or a variable, or from an option of git, `script`, `tmux` or `env -S`
+  that runs commands. A line that only names it in text it prints, searches or records (`echo`,
+  `grep`, `git commit -m`, `gh pr create --body`), and runs nothing that is handed that text, isn't
+  scored CRITICAL for it;
+- stopping or uninstalling it (`taskkill`, `pkill`, `launchctl bootout`, `systemctl --user stop`,
+  a package manager's remove…) is HIGH.
+
+Paths are resolved against the session's folder first, so `.claude//settings.json`, `./` segments,
+`..` and relative paths meet the same rules as the plain spelling, `~/..` and `$HOME/..` lead out
+of the home folder to where they really point (`~/../../etc/x` is `/etc/x`), and a `cd` earlier in
+the command is followed: `cd ~/.claude` and then `> settings.json` is a write to Claude Code's
+settings. The other spellings a system accepts for a path count as that path too: repeated leading
+slashes (`//etc`) on Linux and macOS, a process's root folder (`/proc/self/root/…`) on Linux,
+Windows device and object-manager paths (`\\?\C:\…`, `\\.\C:\…`, `\??\C:\…`), this computer's
+administrative shares (`\\localhost\C$\…`), 8.3 short names such as `C:\PROGRA~1`, and Git Bash's
+`/c/…` — so a write into a system folder is HIGH in any of them, as it is in the plain spelling.
 
 **No telemetry; explicit provider requests only.** Nöbetçi has no analytics, crash reporting or
 update checks. Prompt drafts are not saved. Ollama receives the draft at the local Ollama service;
@@ -193,17 +340,32 @@ never in settings, logs or history. Review OpenAI's data policies for how API re
 by the provider.
 
 **Secrets are masked in what lingers.** Before a request is written to the history, and before a
-Windows notification is shown, its text goes through redaction: PEM private keys; tokens with a
+notification is shown, its text goes through redaction: PEM private keys; tokens with a
 recognisable prefix (Anthropic and OpenAI style `sk-…` keys, GitHub, GitLab, Slack, AWS access key
-IDs, Google API keys, Stripe, npm); JSON Web Tokens; `Authorization` and `Bearer` credentials;
-values of `password`, `secret`, `token`, `api_key` and similar in `key=value`, `key: value` and
-`--key value` form; and passwords in URLs. The approval card is deliberately not redacted: you
-have to see exactly what you approve. The log file (`nobetci.log`) records what happened —
-request IDs, tool names, risk levels and decisions — but not the requests themselves.
+IDs, Google API keys, Stripe, npm, Hugging Face and more); JSON Web Tokens; `Authorization` and
+`Bearer` headers, and the name=value pairs of cookie headers; Slack, Discord, Telegram and Teams
+webhook addresses; values of `password`, `secret`, `token`, `api_key`, `*_PASS`, `*_PWD`, `*_PW`
+(`DB_ADMIN_PASS` too) and similar in `key=value`, `key: value` and `--key value` form — also right
+after another `=` or `:`, as in `$env:API_TOKEN=…`, `--from-literal=password=…` or npm's
+`:_authToken=…` — quoted values whole; credentials on command lines (`-u user:…` for `curl`,
+`wget`, HTTPie, `xh`, `lftp`, `ftp` and `aria2c`, while `docker run -u 1000:1000` is left alone;
+`smbclient -U user%…`, `mysql -p…`, `sshpass -p`, `redis-cli -a`, `docker login -p`, `openssl …
+pass:`); and passwords in URLs, with or without a user name (`redis://:…@host`). A word like
+"token" or "password" in a sentence is left alone. A notification is masked first and shortened
+afterwards, so the cut can't leave the beginning of a secret showing. The approval card is
+deliberately not redacted: you have to see exactly what you approve. The log file (`nobetci.log`)
+records what happened — request IDs, tool names, risk levels and decisions — but not the requests
+themselves. On macOS and Linux, Nöbetçi keeps its settings and data folders readable by your
+account only (0700) and writes the settings, the agenda, their dated copies, the history and the
+log for your account only (0600). On a file system that can't hold those permissions (FAT, exFAT,
+some network shares) it uses its own folders as they are and says so in the log; a folder that
+belongs to another account is refused.
 
-**Formula-safe CSV.** Every exported cell is quoted, and a cell that starts with `=`, `+`, `-`,
-`@`, a tab or a carriage return gets a leading apostrophe, so a spreadsheet shows it as text
-instead of running it.
+**Formula-safe CSV.** Every exported cell is quoted, and wherever a spreadsheet could start a new
+cell inside it — at its start, at the start of a line in it, and after a comma or a semicolon, so a
+file opened with the other separator is covered too — text that starts with `=`, `+`, `-`, `@` or a
+tab gets a leading apostrophe, so a spreadsheet shows it as text instead of running it. The
+separator is a comma, or a semicolon for spreadsheets that expect one.
 
 ### What it does not protect against
 
@@ -216,16 +378,21 @@ there are many ways to make a dangerous action look ordinary. LOW means "nothing
 "safe". Read what you approve.
 
 **Software that already runs as you.** Windows draws its security boundary between accounts, not
-between programs of the same account. Anything running as you — including something an approved
-command started — can edit `~/.claude/settings.json` (for example to allow everything so Claude
-Code never asks), change Nöbetçi's settings or history, replace the relay in
-`%LOCALAPPDATA%\Nobetci\bin` (Windows) or `~/Library/Application Support/Nobetci/bin` (macOS), or
-simply end Nöbetçi. An administrator can do all of that for every account.
+between programs of the same account, and so do macOS and Linux for files in your home folder.
+Anything running as you — including something an approved command started — can edit
+`~/.claude/settings.json` (for example to allow everything so Claude Code never asks), change
+Nöbetçi's settings or history, replace the relay in `%LOCALAPPDATA%\Nobetci\bin` (Windows),
+`~/Library/Application Support/Nobetci/bin` (macOS) or `~/.local/share/nobetci/bin` (Linux), or
+simply end Nöbetçi. Nöbetçi scores an agent's request to do any of this CRITICAL or HIGH, but it
+can't see what a program does after you approved it. An administrator can do all of that for every
+account.
 
-**Decisions made somewhere else.** Nöbetçi only sees the requests Claude Code would ask you about.
+**Decisions made somewhere else.** Nöbetçi only sees the requests the agent would ask you about.
 Tool calls that Claude Code's own permission settings already allow, sessions running with
 permission checks turned off, and requests answered in the terminal (after **Hand to terminal**, a
-timeout, a pause, or while Nöbetçi isn't running) are never reviewed by it.
+timeout, a pause, or while Nöbetçi isn't running) are never reviewed by it. (In the Claude desktop
+app, where Nöbetçi asks from `PreToolUse`, it does see calls the app's allow list would have let
+through — and makes them wait for the island.)
 
 **Fake keystrokes.** Any program can trigger a global hotkey. That's why the allow hotkey is off by
 default and limited to LOW risk; the deny hotkey can be triggered too, but denying is the safe
@@ -233,27 +400,54 @@ direction.
 
 **The limits of the click guard.** It proves that a real press landed on the Allow button a moment
 before the approval, and each press backs one approval — not that you read the card before
-pressing. On macOS it rests on the event's source process id, which the system records for
-posted events. Clicks that macOS itself makes on your behalf — Mouse Keys, for instance — look
-like hardware, and a program with Accessibility access can switch such features on; that access
-already means broad control over your Mac, so keep the list short. The macOS guard is new and
-hasn't yet been tested against every way of making a click. If you turn off physical click
-verification for accessibility, remote control or a touchscreen, a program that can send input
-can approve LOW and MEDIUM requests through the island.
+pressing.
+
+- On macOS it rests on the event's source process id, which the system records for posted events.
+  Clicks that macOS itself makes on your behalf — Mouse Keys, for instance — look like hardware,
+  and a program with Accessibility access can switch such features on; that access already means
+  broad control over your Mac, so keep the list short.
+- On Linux, any program running as you can press a button through the real mouse device (XTEST
+  aimed at that device, as above), and the guard can't tell that click from yours. That is why
+  HIGH and CRITICAL requests are approved in the terminal there; a LOW or MEDIUM approval on the
+  island is only as safe as the programs you run. An agent's request to run a program that fakes
+  input — `xdotool`, `ydotool`, `xte`, `xinput create-master`, a script that loads XTest or
+  uinput — is scored HIGH, and so is a request that puts such code in a file, through the Write
+  or Edit tools or a command's redirection (`echo … > c.py`, a here-document): code that loads
+  XTest, uinput, pyautogui, pynput, robotjs, nut-js, `SendInput` or `SendKeys` (a document such as
+  a `.md` or `.txt` file is left alone).
+- On Linux under Wayland, input the compositor itself injects reaches XWayland as ordinary pointer
+  input. GNOME and KDE inject only after a remote-desktop prompt, but wlroots compositors (sway,
+  Hyprland, river…) let any program inject through their virtual-pointer protocol, and the guard
+  can't tell such a click from yours there either.
+- On some Windows laptops, precision touchpads report presses without a device handle, as
+  `SendInput` does, so the guard refuses them; the log notes each such press. Use a mouse, or turn
+  the guard off for LOW and MEDIUM.
+
+If you turn off physical click verification for accessibility, remote control or a touchscreen, a
+program that can send input can approve LOW and MEDIUM requests through the island.
 
 **Redaction is best effort.** It recognises common formats; an unusual secret can slip through.
 The approval card always shows the full request, so a screenshot or a screen share can expose a
 secret that's on it.
 
-**Release integrity.** Releases are built by GitHub Actions from the tagged commit, with every
-third-party action pinned to a full commit SHA, and `SHA256SUMS.txt` is published next to the
-Windows installer and the macOS disk image. Releases are not code-signed yet (the macOS app is
-only ad-hoc signed and not notarized), so a matching hash proves that your download is the file
-on the release page — not that the release page itself was never tampered with.
+**Release integrity.** Releases are started by hand from `main` and built by GitHub Actions from
+that commit, with every third-party action pinned to a full commit SHA; the build jobs get no
+signing secrets, and the jobs that use one run nothing from the repository, npm or cargo. A
+`cargo audit` job checks `Cargo.lock` against the RustSec advisory database whenever the Rust
+dependencies change and once a week, and Dependabot watches npm and the actions. One advisory
+can't be fixed here yet: glib 0.18 (RUSTSEC-2024-0429), which Tauri's GTK 3 stack brings in on
+Linux, is unsound only in an iterator that neither Nöbetçi nor any crate it builds calls, and goes
+away when Tauri moves to GTK 4. (rustix is at 1.1.6, past RUSTSEC-2026-0486.)
+`SHA256SUMS.txt` is published next to the Windows installer, the macOS disk image and the Linux
+packages. Releases are not code-signed yet (the macOS app is only ad-hoc signed and not
+notarized), so a matching hash proves that your download is the file on the release page — not
+that the release page itself was never tampered with. See the
+[code signing policy](CODE_SIGNING_POLICY.md).
 
 ### The rules that keep it this way
 
 Contributions must keep these properties; [CONTRIBUTING.md](CONTRIBUTING.md) explains them in
 full. In short: never block Claude Code; never write `~/.claude/settings.json` without a reviewed
 diff; never approve HIGH or CRITICAL without a person; never use `innerHTML`; never truncate what
-the card shows without flagging it; and no telemetry, network calls or stored secrets.
+the card shows without flagging it; and no telemetry, no network calls the user didn't switch on,
+and no stored secrets.

@@ -1,22 +1,68 @@
-# ChatGPT Web bağlantısı
+# ChatGPT Web bridge
 
-Nöbetçi, Chrome veya Edge’de chatgpt.com yanıt üretirken adada **ChatGPT Web** oturumunu gösterir.
-Yanıt üretimi bittiğinde durum güncellenir. Eklenti mesaj metnini, başlığı, sohbet adresini ve çerezleri
-aktarmaz. Yalnızca rastgele bir oturum kimliği ile çalışma durumunu yerel uygulamaya gönderir.
+**English** · [Türkçe](README.tr.md)
 
-## Windows üzerinde deneme
+While chatgpt.com writes a response in Chrome or Edge, Nöbetçi shows a **ChatGPT Web** session on
+the island. When the response is finished the session says so, and closing the tab removes it.
 
-1. Nöbetçi 2.1.2 veya daha yeni bir sürümü kur ve uygulamayı aç.
-2. Chrome’da `chrome://extensions`, Edge’de `edge://extensions` sayfasını aç. Geliştirici modunu aç ve
-   **Paketlenmemiş öğe yükle** ile buradaki `extension` klasörünü seç.
-3. Eklenti kimliğini kopyala. Bu dizinde PowerShell’de aşağıdaki komutu çalıştır. Edge için `-Browser Edge` kullan.
+**Windows only.** Only this folder's Windows script registers the bridge with the browser. macOS and
+Linux have no registration, so there the extension has nothing to talk to.
+
+## What it sends
+
+The extension watches one thing: whether ChatGPT's stop button is on the page. It sends Nöbetçi a
+random session id and one of three states: working, finished or closed. Never the conversation,
+its title, its address or your cookies.
+
+There are no approvals for ChatGPT Web. ChatGPT in the browser runs nothing on your computer, so
+there is nothing to approve.
+
+## Set up
+
+1. Install the latest Nöbetçi and open it once: it puts its relay in `%LOCALAPPDATA%\Nobetci\bin`.
+   Nöbetçi 2.1.4 to 2.4.1 drop the bridge's messages, so nothing appears on the island with them.
+   Nöbetçi 2.5.0 fixes this.
+2. Open `chrome://extensions` in Chrome or `edge://extensions` in Edge. Turn on **Developer mode**,
+   choose **Load unpacked** and pick the `extension` folder here.
+3. Copy the extension's ID (32 letters from a to p). Open PowerShell in this folder and run the
+   command below. For Edge, use `-Browser Edge`.
 
    ```powershell
-   .\register-windows.ps1 -ExtensionId BURAYA_EKLENTI_KIMLIGI -Browser Chrome
+   powershell -NoProfile -ExecutionPolicy Bypass -File .\register-windows.ps1 -ExtensionId YOUR_EXTENSION_ID -Browser Chrome
    ```
 
-4. ChatGPT sekmesini yenile ve yeni bir yanıt başlat. Adada önce çalışan, ardından biten bir oturum görünür.
-   Sekmeyi kapattığında oturum kaldırılır.
+   `-ExecutionPolicy Bypass` applies to this one run and does not change your system's policy.
+   Without it, Windows refuses to run the script: unsigned scripts are blocked by default, and so are
+   files from a downloaded ZIP.
+4. Reload the ChatGPT tab and start a response. The island shows a working session, then a finished
+   one.
 
-Bu bağlantı ChatGPT’nin web arayüzündeki yanıtı durdurma düğmesini gözler. ChatGPT bu düğmeyi değiştirirse
-algılama güncelleme gerektirebilir. ChatGPT web oturumları için komut onayı sunulmaz.
+The script writes `%LOCALAPPDATA%\Nobetci\chatgpt-native-host-Chrome.json` (or `-Edge.json`) and
+points the registry key
+`HKCU\Software\Google\Chrome\NativeMessagingHosts\io.github.tahap0l.nobetci.chatgpt` (or the same
+key under `Microsoft\Edge`) at it. It changes nothing else and needs no administrator rights. Its
+messages follow your Windows display language.
+
+## Remove
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\unregister-windows.ps1
+```
+
+This removes the registration for both browsers; add `-Browser Chrome` or `-Browser Edge` for one.
+Then remove the extension in `chrome://extensions` or `edge://extensions`.
+
+Uninstalling Nöbetçi removes the registration for both browsers as well, so only the extension is
+left for you to remove; an update keeps it. The uninstallers of 2.4.1 and earlier leave the
+registration behind, pointing the browser at a relay that is no longer there: if you uninstall one
+of those, run the command above first.
+
+## When nothing shows up
+
+- **Is Nöbetçi running?** While it is closed, the extension waits longer and longer between tries:
+  5 seconds, then twice as long each time, up to a minute. Open Nöbetçi again and the island catches
+  up within a minute.
+- **Right browser, right ID?** Run the register script again with the ID that `chrome://extensions`
+  shows now. An unpacked extension gets a new ID when its folder moves.
+- **Has ChatGPT changed?** The bridge watches ChatGPT's stop button
+  (`button[data-testid="stop-button"]`). If ChatGPT changes that button, the bridge needs an update.

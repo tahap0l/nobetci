@@ -1,3 +1,7 @@
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Mutex, PoisonError};
+use std::time::{Duration, Instant};
+
 use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
 
@@ -163,7 +167,7 @@ pub async fn island_weather(app: AppHandle, city_id: String) -> Option<Weather> 
 /// What is playing, as the island's media card shows it. Every OS has its own
 /// source: the system media controls on Windows, Spotify and Music on macOS,
 /// and any MPRIS player (Spotify, VLC, browsers…) on Linux.
-#[derive(Serialize, Default, Debug)]
+#[derive(Serialize, Default, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Media {
     title: String,
@@ -206,35 +210,125 @@ pub mod stats;
 mod linux_media;
 #[cfg(target_os = "linux")]
 use linux_media as platform_media;
-#[cfg(target_os = "macos")]
+// Also built for the tests on Linux: its scripts and their answers are checked there.
+#[cfg(any(target_os = "macos", all(test, unix)))]
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 mod mac_media;
 #[cfg(target_os = "macos")]
 use mac_media as platform_media;
 #[cfg(windows)]
 use windows_media as platform_media;
 
-#[tauri::command]
-pub async fn island_media(app: AppHandle, include_artwork: Option<bool>) -> Option<Media> {
-    if !super::current(&app).island_media {
-        return None;
+/// Whether the island may ask about the player: when the media card is on, or
+/// when the user typed a media command in the assistant (`explicit`, C-19).
+/// Either way only a player that is already running is asked; none is started.
+fn media_allowed(card_on: bool, explicit: Option<bool>) -> bool {
+    card_on || explicit == Some(true)
+}
+
+/// How long the last answer stands in for a read that is still under way.
+const MEDIA_STALE: Duration = Duration::from_secs(30);
+
+/// Reads the player one question at a time. The compact island and the card
+/// ask every few seconds without waiting for each other, and a player that
+/// hangs (AppleScript waits for it) must not pile up threads and processes:
+/// while a read is under way, the answer it is about to replace stands in.
+fn read_media(include_artwork: bool, read: impl FnOnce(bool) -> Option<Media>) -> Option<Media> {
+    static BUSY: AtomicBool = AtomicBool::new(false);
+    static LAST: Mutex<Option<(Instant, Option<Media>)>> = Mutex::new(None);
+    let last = || match &*LAST.lock().unwrap_or_else(PoisonError::into_inner) {
+        Some((at, media)) if at.elapsed() < MEDIA_STALE => media.clone(),
+        _ => None,
+    };
+    if BUSY.swap(true, Ordering::AcqRel) {
+        return last();
     }
-    tauri::async_runtime::spawn_blocking(move || platform_media::read(include_artwork.unwrap_or(false)))
-        .await
-        .ok()
-        .flatten()
+    /// Lets the next read in, however this one ends.
+    struct Done;
+    impl Drop for Done {
+        fn drop(&mut self) {
+            BUSY.store(false, Ordering::Release);
+        }
+    }
+    let _done = Done;
+    let media = read(include_artwork);
+    *LAST.lock().unwrap_or_else(PoisonError::into_inner) = Some((Instant::now(), media.clone()));
+    media
 }
 
 #[tauri::command]
-pub async fn island_media_control(app: AppHandle, source: String, action: String, position_ms: Option<u64>) -> bool {
-    if !super::current(&app).island_media {
+pub async fn island_media(app: AppHandle, include_artwork: Option<bool>, explicit: Option<bool>) -> Option<Media> {
+    if !media_allowed(super::current(&app).island_media, explicit) {
+        return None;
+    }
+    let include_artwork = include_artwork.unwrap_or(false);
+    tauri::async_runtime::spawn_blocking(move || read_media(include_artwork, platform_media::read)).await.ok().flatten()
+}
+
+/// A seek position as the card sends it — the share of the bar clicked times
+/// the track's length, so rarely a whole number — in whole milliseconds. Not a
+/// number, negative or past any track: refused (Err), never sent to a player.
+fn seek_position(position_ms: Option<f64>) -> Result<Option<u64>, ()> {
+    match position_ms {
+        None => Ok(None),
+        // NaN and the infinities are outside the range too.
+        Some(ms) if (0.0..1e15).contains(&ms) => Ok(Some(ms.round() as u64)),
+        Some(_) => Err(()),
+    }
+}
+
+#[tauri::command]
+pub async fn island_media_control(
+    app: AppHandle,
+    source: String,
+    action: String,
+    position_ms: Option<f64>,
+    explicit: Option<bool>,
+) -> bool {
+    if !media_allowed(super::current(&app).island_media, explicit) {
         return false;
     }
     if !matches!(action.as_str(), "previous" | "toggle" | "next" | "seek") {
         return false;
     }
+    let Ok(position_ms) = seek_position(position_ms) else { return false };
     tauri::async_runtime::spawn_blocking(move || platform_media::control(&source, &action, position_ms))
         .await
         .unwrap_or(false)
+}
+
+/// Runs one of the small programs the cards ask (osascript, ioreg, nvidia-smi)
+/// and returns what it printed, or None when it fails or is still running after
+/// `limit`; then it is stopped. A program that hangs must not hold a thread, or
+/// pile up, while the card keeps asking.
+#[cfg(unix)]
+pub(crate) fn output_within(mut command: std::process::Command, limit: Duration) -> Option<std::process::Output> {
+    use std::io::Read;
+    use std::process::Stdio;
+    let mut child = command.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::null()).spawn().ok()?;
+    // Read while it runs: a full pipe must not stall it.
+    let mut stdout = child.stdout.take();
+    let reader = std::thread::spawn(move || {
+        let mut out = Vec::new();
+        if let Some(pipe) = stdout.as_mut() {
+            let _ = pipe.read_to_end(&mut out);
+        }
+        out
+    });
+    let deadline = Instant::now() + limit;
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break Some(status),
+            Ok(None) if Instant::now() < deadline => std::thread::sleep(Duration::from_millis(20)),
+            _ => {
+                let _ = child.kill();
+                let _ = child.wait();
+                break None;
+            }
+        }
+    };
+    let stdout = reader.join().unwrap_or_default();
+    status.map(|status| std::process::Output { status, stdout, stderr: Vec::new() })
 }
 
 #[cfg(windows)]
@@ -385,5 +479,107 @@ mod weather_tests {
             assert!(lat.abs() <= 90.0 && lon.abs() <= 180.0, "{id}");
             assert!(CITIES[i + 1..].iter().all(|(other, _, _)| other != id), "{id}");
         }
+    }
+}
+
+#[cfg(test)]
+mod media_tests {
+    use super::*;
+    use std::sync::mpsc;
+
+    /// shell-widgets#1: a click on the time bar sends a fractional position
+    /// (62 % of a 215 s track is 133886.36… ms); it is taken, rounded.
+    #[test]
+    fn a_seek_position_need_not_be_a_whole_number() {
+        let sent: Option<f64> = serde_json::from_value(serde_json::json!(133886.36363636362)).unwrap();
+        assert_eq!(seek_position(sent), Ok(Some(133886)));
+        let whole: Option<f64> = serde_json::from_value(serde_json::json!(133886)).unwrap();
+        assert_eq!(seek_position(whole), Ok(Some(133886)), "a whole number still reads");
+        assert_eq!(seek_position(Some(0.4)), Ok(Some(0)));
+        assert_eq!(seek_position(None), Ok(None));
+        for bad in [-1.0, f64::NAN, f64::INFINITY, 1e300] {
+            assert_eq!(seek_position(Some(bad)), Err(()), "{bad}");
+        }
+    }
+
+    #[test]
+    fn the_player_is_asked_only_with_the_card_on_or_when_the_user_asks() {
+        assert!(media_allowed(true, None));
+        assert!(media_allowed(true, Some(false)));
+        assert!(!media_allowed(false, None), "the card is off and nobody asked");
+        assert!(!media_allowed(false, Some(false)));
+        assert!(media_allowed(false, Some(true)), "/play typed in the assistant (C-19)");
+    }
+
+    fn track(title: &str) -> Option<Media> {
+        Some(Media { title: title.into(), ..Media::default() })
+    }
+
+    fn title(media: Option<Media>) -> Option<String> {
+        media.map(|m| m.title)
+    }
+
+    #[test]
+    fn a_player_that_hangs_is_asked_once_at_a_time() {
+        // The only test that reads through read_media: its state is shared.
+        assert_eq!(title(read_media(false, |_| track("First"))), Some("First".into()));
+
+        let (started, wait_started) = mpsc::channel();
+        let (release, wait_release) = mpsc::channel::<()>();
+        let slow = std::thread::spawn(move || {
+            read_media(true, move |artwork| {
+                assert!(artwork);
+                started.send(()).unwrap();
+                wait_release.recv().unwrap();
+                track("Second")
+            })
+        });
+        wait_started.recv().unwrap();
+        // Meanwhile every other read answers at once with what was last known,
+        // without asking the player.
+        for _ in 0..20 {
+            assert_eq!(title(read_media(false, |_| panic!("asked while busy"))), Some("First".into()));
+        }
+        release.send(()).unwrap();
+        assert_eq!(title(slow.join().unwrap()), Some("Second".into()));
+        // Done: the next read asks the player again.
+        assert_eq!(title(read_media(false, |_| None)), None);
+        assert_eq!(title(read_media(false, |_| track("Third"))), Some("Third".into()));
+    }
+
+    #[cfg(unix)]
+    fn sh(script: &str) -> std::process::Command {
+        let mut command = std::process::Command::new("sh");
+        command.args(["-c", script]);
+        command
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_helper_program_answers_in_full() {
+        let out = output_within(sh("printf 'a\\nb'"), Duration::from_secs(10)).unwrap();
+        assert!(out.status.success());
+        assert_eq!(out.stdout, b"a\nb");
+        let failed = output_within(sh("exit 3"), Duration::from_secs(10)).unwrap();
+        assert_eq!(failed.status.code(), Some(3));
+        // More than a pipe holds: read while it runs, so it never stalls.
+        let big = output_within(sh("head -c 300000 /dev/zero"), Duration::from_secs(10)).unwrap();
+        assert_eq!(big.stdout.len(), 300_000);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_helper_program_that_hangs_is_stopped_and_reaped() {
+        let pid_file = std::env::temp_dir().join(format!("nobetci-hang-{}", std::process::id()));
+        let _ = std::fs::remove_file(&pid_file);
+        let started = Instant::now();
+        let script = format!("echo $$ > '{}'; exec sleep 30", pid_file.display());
+        assert!(output_within(sh(&script), Duration::from_millis(400)).is_none());
+        assert!(started.elapsed() < Duration::from_secs(5), "{:?}", started.elapsed());
+        let pid: i32 = std::fs::read_to_string(&pid_file).unwrap().trim().parse().unwrap();
+        let _ = std::fs::remove_file(&pid_file);
+        // Gone, not even a zombie: signal 0 finds no such process.
+        let alive = unsafe { libc::kill(pid, 0) } == 0;
+        assert!(!alive, "process {pid} is still there");
     }
 }

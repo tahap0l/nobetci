@@ -111,6 +111,11 @@ export class Tracked {
     return this.mode !== "idle";
   }
 
+  /** Where it is heading (where it is, once at rest). */
+  get target(): number {
+    return this.spring.target;
+  }
+
   jump(v: number) {
     this.spring.set(v);
     this.mode = "idle";

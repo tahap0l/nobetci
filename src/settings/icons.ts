@@ -74,6 +74,53 @@ const ICONS = {
       d: "M8 12.5V6a1.5 1.5 0 0 1 3 0v5.5M11 11V4.5a1.5 1.5 0 0 1 3 0V11M14 11V6a1.5 1.5 0 0 1 3 0v7c0 4-2.5 7-6 7-2.5 0-4-1.2-5.2-3.2L3.5 13a1.5 1.5 0 0 1 2.4-1.7L8 13.5",
     },
   ],
+  /** Appearance: a painter's palette. */
+  palette: [
+    {
+      d: "M12 3.5a8.5 8.5 0 1 0 0 17c1.2 0 1.9-.8 1.9-1.8 0-1-.9-1.4-.9-2.4 0-.9.7-1.5 1.6-1.5h2c2.2 0 3.9-1.7 3.9-3.9C20.5 7 16.7 3.5 12 3.5z",
+    },
+    { c: [7.6, 11.6, 1.15], fill: true },
+    { c: [9.8, 7.7, 1.15], fill: true },
+    { c: [14.4, 7.6, 1.15], fill: true },
+  ],
+  /** The desktop mascot: an owl's face with ear tufts. */
+  mascot: [
+    { d: "M6 10L6.8 4.5l3.4 2.9a6.8 6.8 0 0 1 3.6 0l3.4-2.9L18 10v3.5a6 6 0 0 1-12 0V10z" },
+    { c: [9.6, 12.2, 1.6] },
+    { c: [14.4, 12.2, 1.6] },
+    { d: "M11.3 16h1.4L12 17.3z" },
+  ],
+  /** Island widgets: four tiles. */
+  widgets: [{ r: [4, 4, 7, 7, 2] }, { r: [13, 4, 7, 7, 2] }, { r: [4, 13, 7, 7, 2] }, { r: [13, 13, 7, 7, 2] }],
+  /** The assistant: a speech bubble. */
+  assistant: [
+    {
+      d: "M5.5 5h13A1.5 1.5 0 0 1 20 6.5v8a1.5 1.5 0 0 1-1.5 1.5H11l-4.5 3.5V16h-1A1.5 1.5 0 0 1 4 14.5v-8A1.5 1.5 0 0 1 5.5 5zM8 9.5h8M8 12.5h5",
+    },
+  ],
+  /** The island: a screen with the pill at its top edge. */
+  island: [{ r: [3, 4.5, 18, 15, 2.5] }, { r: [8.5, 6.8, 7, 3.2, 1.6] }],
+  /** Sessions: a list of rows. */
+  sessions: [
+    { d: "M9.5 7h10.5M9.5 12h10.5M9.5 17h10.5" },
+    { c: [5.2, 7, 1.2], fill: true },
+    { c: [5.2, 12, 1.2], fill: true },
+    { c: [5.2, 17, 1.2], fill: true },
+  ],
+  /** Claude's questions and plans. */
+  question: [{ c: [12, 12, 8.5] }, { d: "M9.7 9.6a2.4 2.4 0 1 1 3.5 2.1c-.8.4-1.2 1-1.2 1.8v.4M12 16.6v.2" }],
+  /** A model that runs on this computer. */
+  chip: [
+    { r: [6.5, 6.5, 11, 11, 2] },
+    { r: [9.5, 9.5, 5, 5, 1] },
+    { d: "M9.5 3.5v3M14.5 3.5v3M9.5 17.5v3M14.5 17.5v3M3.5 9.5h3M3.5 14.5h3M17.5 9.5h3M17.5 14.5h3" },
+  ],
+  /** Opens outside the app (a browser). */
+  external: [
+    { d: "M13.5 4.5h6v6M19.5 4.5l-8 8M17.5 13.5v5A1.5 1.5 0 0 1 16 20H6a1.5 1.5 0 0 1-1.5-1.5V8A1.5 1.5 0 0 1 6 6.5h5" },
+  ],
+  /** Startup. */
+  power: [{ d: "M12 3.5v7.5M7.3 6.3a7.5 7.5 0 1 0 9.4 0" }],
 } satisfies Record<string, Shape[]>;
 
 export type IconName = keyof typeof ICONS;

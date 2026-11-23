@@ -3,8 +3,15 @@
 <plist version="1.0">
 <dict>
   <!-- Merged into the bundle by Tauri. Asked only when the island's media card is on
-       and Spotify or Music is already running. -->
+       and Spotify or Music is already running. The app is signed with the hardened
+       runtime, which lets it ask at all only with the apple-events entitlement in
+       entitlements.plist (also for the osascript it starts). -->
   <key>NSAppleEventsUsageDescription</key>
   <string>Nöbetçi shows and controls the song playing in Spotify or Music. · Nöbetçi, Spotify veya Music'te çalan şarkıyı gösterir ve kontrol eder.</string>
+  <!-- The bundle is Nobetci.app (ASCII, like every path the app uses), but Finder,
+       the Dock and the disk image show "Nöbetçi" from macos/*.lproj/InfoPlist.strings,
+       which also carry the text above in each language. -->
+  <key>LSHasLocalizedDisplayName</key>
+  <true/>
 </dict>
 </plist>

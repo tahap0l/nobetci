@@ -8,9 +8,10 @@ const animals = {
   canary: ["Kanarya", "#f4e66f", "#c7a132"],
   eagle: ["Kartal", "#a5d7ff", "#7c98b8"],
 };
-// The desktop app's mascot heads (src/baykus/mascot.ts and, for the owl,
-// src/baykus/mini.ts), kept in step by hand: flat fills, one dark outline,
-// big rimmed eyes. Each lives in a 100 × 100 box.
+// The desktop app's mascot heads (DESIGNS in src/baykus/mascot.ts, the owl's
+// outlined head included), kept in step by hand: flat fills, one dark outline,
+// big rimmed eyes. Each lives in a 100 × 100 box. (src/baykus/mini.ts only adds
+// the app's tiny owl head for sizes below 30 px, where an outline would blur.)
 const dot = (x, y, r) => `M${x - r} ${y}a${r} ${r} 0 1 0 ${2 * r} 0a${r} ${r} 0 1 0 ${-2 * r} 0Z`;
 const at = (side, dx) => 50 + side * dx;
 const mirror = (points) => points(-1) + points(1);

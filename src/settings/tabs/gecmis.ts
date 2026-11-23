@@ -4,12 +4,13 @@
 // Every string in an entry may have been chosen by a hostile prompt: it is only
 // ever set as textContent.
 
-import type { AuditEntry, AuditFilter, AuditPage, AuditStats, RiskLevel } from "../../core/bridge";
+import type { AuditFilter, AuditStats, RiskLevel } from "../../core/bridge";
 import { locale } from "../../i18n/core";
 import { h } from "../../ui/dom";
-import { api, errText } from "../api";
+import { api, errText, type CsvSeparator, type HistoryEntry, type HistoryPage } from "../api";
 import { SERIES, dailyChart, dailyTable, legend, rankList, riskBar } from "../charts";
-import { BY_KEYS, byLabel, decisionLabel } from "../data";
+import { BY_KEYS, byLabel, cache, decisionLabel, findingLabel, findingLabels, loadCategories } from "../data";
+import { countedFrom, localDayStarts } from "../days";
 import { t, type MsgKey } from "../i18n";
 import { icon } from "../icons";
 import { currentTab, devParam, rerender, type Tab } from "../nav";
@@ -25,6 +26,7 @@ import {
   iconButton,
   inlineConfirm,
   levelChip,
+  levelLabel,
   notice,
   pushLayer,
   row,
@@ -39,13 +41,23 @@ const PAGE = 50;
 
 type Range = "7" | "30" | "90";
 
-/** A message is either one of ours (re-translated on render) or Rust's own text. */
-type Msg = { kind: "ok" | "error" | "info"; key?: MsgKey; vars?: Record<string, string>; raw?: string };
+/** A message is either one of ours or a Rust error, both put in words on render (so a language switch follows). */
+type Msg = { kind: "ok" | "error" | "info"; key?: MsgKey; vars?: Record<string, string>; err?: unknown };
+
+const SEP_KEY = "nobetci.settings.csvSeparator";
+
+function storedSeparator(): CsvSeparator {
+  try {
+    return localStorage.getItem(SEP_KEY) === ";" ? ";" : ",";
+  } catch {
+    return ",";
+  }
+}
 
 const st = {
   range: "30" as Range,
   stats: null as AuditStats | null,
-  page: null as AuditPage | null,
+  page: null as HistoryPage | null,
   loading: false,
   filter: {
     text: "",
@@ -58,7 +70,15 @@ const st = {
   showTable: false,
   exportMsg: null as Msg | null,
   stale: true,
-  seq: 0,
+  // Stats and pages load on their own counters: a page asked for while the
+  // stats are still loading must not throw the stats away.
+  statsSeq: 0,
+  pageSeq: 0,
+  /** The whole history (any range) is empty: asked only when a page with no filter comes back empty. */
+  historyEmpty: null as boolean | null,
+  /** The next page lands with its first rows in view (the pager sits at the bottom). */
+  scrollToEntries: false,
+  separator: storedSeparator(),
 };
 
 /** Fallback project names (pages and top-6 stats) when auditProjects is unavailable. */
@@ -66,52 +86,88 @@ const knownProjects = new Set<string>();
 /** Every project in the history with its count, busiest first. */
 let allProjects: [string, number][] | null = null;
 
-function since(): number {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  d.setDate(d.getDate() - Number(st.range) + 1);
-  return d.getTime();
+/**
+ * The range's day boundaries for audit_stats (C-18: the real local midnights,
+ * so a day before a daylight-saving change keeps its own hours) and where the
+ * list starts: the first instant audit_stats counts. The entries listed are
+ * then exactly the ones counted.
+ */
+function rangeBounds(): { starts: number[]; since: number } {
+  const days = Number(st.range);
+  const starts = localDayStarts(days);
+  return { starts, since: countedFrom(starts, days, new Date().getTimezoneOffset()) };
 }
 
-function currentFilter(): AuditFilter {
+function filterActive(): boolean {
   const f = st.filter;
-  return { text: f.text.trim(), level: f.level, decision: f.decision, by: f.by, project: f.project, since: since() };
+  return !!(f.text.trim() || f.level || f.decision || f.by || f.project);
 }
 
-async function loadAll() {
-  const my = ++st.seq;
+function currentFilter(since = rangeBounds().since): AuditFilter {
+  const f = st.filter;
+  return { text: f.text.trim(), level: f.level, decision: f.decision, by: f.by, project: f.project, since };
+}
+
+/** An empty page with no filter: is the history empty, or only this range? */
+async function checkEmpty(page: HistoryPage | null) {
+  if (!page) return;
+  if (page.total > 0) st.historyEmpty = false;
+  else if (!filterActive()) st.historyEmpty = ((await api.auditQuery({ limit: 1 }))?.total ?? 1) === 0;
+}
+
+/** Stats, the current page and (unless only a new decision came in) the project list. */
+async function loadAll(withProjects = true) {
+  const my = ++st.statsSeq;
+  const myPage = ++st.pageSeq;
   st.loading = true;
   paintLoading();
+  // One set of boundaries for both, so the list and the totals agree.
+  const { starts, since } = rangeBounds();
   const [stats, page, projects] = await Promise.all([
-    api.auditStats(Number(st.range)),
-    api.auditQuery({ ...currentFilter(), limit: PAGE, offset: st.offset }),
-    api.auditProjects(),
+    api.auditStats(Number(st.range), starts),
+    api.auditQuery({ ...currentFilter(since), limit: PAGE, offset: st.offset }),
+    withProjects || !allProjects ? api.auditProjects() : Promise.resolve(allProjects),
+    // Findings are named by their category in the UI language (C-24).
+    loadCategories(),
   ]);
-  if (my !== st.seq) return;
+  if (my !== st.statsSeq) return;
   st.stats = stats;
   allProjects = projects;
-  st.page = page;
-  st.loading = false;
   st.stale = false;
   for (const [p] of stats?.topProjects ?? []) knownProjects.add(p);
-  for (const e of page?.entries ?? []) if (e.project) knownProjects.add(e.project);
+  // A page asked for meanwhile (a filter, the search) is newer than this one.
+  if (myPage === st.pageSeq) {
+    await checkEmpty(page);
+    if (myPage !== st.pageSeq) return;
+    st.page = page;
+    st.loading = false;
+    for (const e of page?.entries ?? []) if (e.project) knownProjects.add(e.project);
+  }
   rerender("gecmis");
   maybeDevDetail();
 }
 
 async function loadPage() {
-  const my = ++st.seq;
+  const my = ++st.pageSeq;
   st.loading = true;
   paintLoading();
   const page = await api.auditQuery({ ...currentFilter(), limit: PAGE, offset: st.offset });
-  if (my !== st.seq) return;
+  if (my !== st.pageSeq) return;
+  await checkEmpty(page);
+  if (my !== st.pageSeq) return;
   st.page = page;
   st.loading = false;
   for (const e of page?.entries ?? []) if (e.project) knownProjects.add(e.project);
   rerender("gecmis");
+  if (st.scrollToEntries) {
+    st.scrollToEntries = false;
+    document.querySelector<HTMLElement>("[data-hist-entries]")?.scrollIntoView({ block: "start" });
+  }
 }
 
-const reloadSoon = debounce(() => void loadAll(), 400);
+// A new decision changes the stats and the page; the project list can wait for
+// the next time the tab is shown (one full read of the log fewer per decision).
+const reloadSoon = debounce(() => void loadAll(false), 400);
 const searchSoon = debounce(() => {
   st.offset = 0;
   void loadPage();
@@ -122,7 +178,7 @@ function paintLoading() {
 }
 
 function msgView(m: Msg): HTMLElement {
-  const text = m.key ? t(m.key, m.vars) : (m.raw ?? "");
+  const text = m.key ? t(m.key, m.vars) : errText(m.err);
   return notice(m.kind, h("span", { class: "verbatim", text }));
 }
 
@@ -168,6 +224,62 @@ function asLevel(l: string): RiskLevel {
   return l === "medium" || l === "high" || l === "critical" ? l : "low";
 }
 
+const RANK: Record<RiskLevel, number> = { low: 0, medium: 1, high: 2, critical: 3 };
+
+/** The risk engine's own level when a rule changed it (C-22), else null. */
+function engineOf(e: HistoryEntry): RiskLevel | null {
+  if (!e.engineLevel) return null;
+  const engine = asLevel(e.engineLevel);
+  return engine === asLevel(e.level) ? null : engine;
+}
+
+function engineTitle(e: HistoryEntry, engine: RiskLevel): string {
+  return t("hist.engineLevelTitle", { engine: levelLabel(engine), level: levelLabel(asLevel(e.level)) });
+}
+
+/**
+ * The tool as the table names it. An MCP tool reads "server › tool" (the
+ * island's wording) instead of `mcp__server__tool`, and when even that is too
+ * long for its half of the cell the server's name gives way before the tool's.
+ */
+function toolChip(tool: string): HTMLElement {
+  if (!tool.startsWith("mcp__")) return h("span", { class: "t-tool", text: tool });
+  const rest = tool.slice(5);
+  const cut = rest.indexOf("__");
+  const server = cut < 0 ? rest : rest.slice(0, cut);
+  const name = cut < 0 ? "" : rest.slice(cut + 2) || "?";
+  return h(
+    "span",
+    { class: "t-tool t-mcp" },
+    h("span", { class: "t-srv", text: server }),
+    name ? h("span", { class: "t-act", text: ` › ${name}` }) : null,
+  );
+}
+
+/**
+ * Top findings in the UI language (C-24). Rust names each finding it can by its
+ * category in the language of the day; an id that comes through as it is gets
+ * its label here, and labels that turn out the same are counted together.
+ */
+function topFindings(s: AuditStats | null): [string, number][] {
+  const merged = new Map<string, number>();
+  for (const [key, n] of s?.topLabels ?? []) {
+    const id = cache.categories?.some((c) => c.id === key) ? key : undefined;
+    const label = findingLabel(id, key);
+    merged.set(label, (merged.get(label) ?? 0) + n);
+  }
+  return [...merged.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], locale()));
+}
+
+/** Rust's note that stands in for a missing target, or "". Only a request too
+ *  large to read (pipe.rs `too_long`) has one: it was never scored, so it has no
+ *  kind and no target, and with no answer (decision none) its message is
+ *  Nöbetçi's note on why. Any other message is what Claude was told, or a note
+ *  on the decision, never a target: only the drawer shows it, under its label. */
+function oversizeNote(e: HistoryEntry): string {
+  return !e.target && !e.kind && e.decision === "none" ? e.message : "";
+}
+
 // ── Detail drawer ─────────────────────────────────────────────────────────────
 
 let closeDrawer: (() => void) | null = null;
@@ -182,6 +294,9 @@ function openDetail(index: number) {
     kind: "subtle",
     small: true,
     icon: "copy",
+    // No target (a request too large to read, or one sent with no arguments):
+    // nothing to copy.
+    disabled: !e.target,
     onClick: async () => {
       try {
         await navigator.clipboard.writeText(e.target);
@@ -207,14 +322,20 @@ function openDetail(index: number) {
   fact(t("hist.f.kind"), kindLabel(e.kind));
   fact(t("hist.f.by"), byLabel(e.by));
   fact(t("hist.f.rule"), e.rule, true);
-  fact(t("hist.f.message"), e.message);
+  // With no answer delivered (timed out, handed to the terminal, too large,
+  // undelivered…) Claude was told nothing: the text is Nöbetçi's note on why.
+  fact(e.decision === "none" ? t("hist.f.note") : t("hist.f.message"), e.message);
   fact(t("hist.f.duration"), e.ms ? fmtDuration(e.ms) : null);
   fact(t("hist.f.session"), e.session, true);
   fact(t("hist.f.id"), e.id, true);
 
+  // Named in the UI language where the entry kept its finding ids (C-24); older
+  // entries keep the words of the day they were recorded.
+  const names = findingLabels(e);
   const labels = h("ul", { class: "findings" });
-  for (const l of e.labels) labels.append(h("li", {}, h("span", { class: "f-label", text: l })));
-  if (!e.labels.length) labels.append(h("li", { class: "f-none" }, h("span", { text: t("hist.noFindings") })));
+  for (const l of names) labels.append(h("li", {}, h("span", { class: "f-label", text: l })));
+  if (!names.length) labels.append(h("li", { class: "f-none" }, h("span", { text: t("hist.noFindings") })));
+  const engine = engineOf(e);
 
   const prev = iconButton("left", t("hist.prev"), () => openDetail(index - 1), { disabled: index === 0 });
   const next = iconButton("right", t("hist.next"), () => openDetail(index + 1), {
@@ -248,10 +369,21 @@ function openDetail(index: number) {
         "div",
         { class: "eval-head" },
         levelChip(asLevel(e.level)),
+        // A rule changed the level: what the risk engine itself found (C-22).
+        engine
+          ? h(
+              "span",
+              { class: "engine-level", title: engineTitle(e, engine) },
+              h("span", { class: "muted", text: t("hist.engineLevel") }),
+              levelChip(engine, true),
+            )
+          : null,
         decisionChip(e.decision),
         h("span", { class: "muted", text: byLabel(e.by) }),
       ),
       h("div", { class: "target-head" }, h("span", { class: "field-label", text: t("hist.targetFull") }), copyBtn),
+      // The drawer body scrolls; the full target, the point of the drawer, is
+      // never the part that gives way (.target-full does not shrink).
       h("pre", { class: "target-full mono", tabindex: "0", text: e.target || "—" }),
       h("div", { class: "field-label", text: t("hist.findings") }),
       labels,
@@ -358,7 +490,7 @@ function statsSection(): HTMLElement {
         s ? riskBar(s) : h("p", { class: "muted", text: "…" }),
       ),
       card({ title: t("hist.projects"), icon: "folder" }, rankList(s?.topProjects ?? [], t("hist.noRecords"))),
-      card({ title: t("hist.topFindings"), icon: "warn" }, rankList(s?.topLabels ?? [], t("hist.noFindings"))),
+      card({ title: t("hist.topFindings"), icon: "warn" }, rankList(topFindings(s), t("hist.noFindings"))),
       card({ title: t("hist.tools"), icon: "claude" }, rankList(s?.topTools ?? [], t("hist.noRecords"), true)),
     ),
   );
@@ -448,29 +580,69 @@ function table(): HTMLElement {
   const page = st.page;
   if (!page)
     return h("p", { class: "muted empty-line", text: st.loading ? t("common.loading") : t("hist.readFailed") });
-  if (!page.entries.length)
+  if (!page.entries.length) {
+    // Say why there is nothing: filters, the range, or an empty history.
+    const [title, text]: [MsgKey, MsgKey] = filterActive()
+      ? ["hist.noMatch", "hist.noMatchText"]
+      : st.historyEmpty
+        ? settings().auditEnabled
+          ? ["hist.emptyTitle", "hist.emptyText"]
+          : ["hist.offTitle", "hist.offText"]
+        : ["hist.noRangeTitle", "hist.noRangeText"];
     return h(
       "div",
       { class: "empty" },
       icon("gecmis", 26),
-      h("strong", { text: t("hist.noMatch") }),
-      h("span", { text: t("hist.noMatchText") }),
+      h("strong", { text: t(title) }),
+      h("span", { text: t(text) }),
     );
+  }
   const tbody = h("tbody", {});
-  page.entries.forEach((e: AuditEntry, i) => {
+  page.entries.forEach((e: HistoryEntry, i) => {
+    const note = oversizeNote(e);
+    const level = asLevel(e.level);
+    const engine = engineOf(e);
+    const by = byLabel(e.by);
+    // The whole tool name and target on hover; the cell shows what fits.
+    const full = [e.tool, (e.target || note).slice(0, 400)].filter(Boolean).join("\n");
     const tr = h(
       "tr",
       { tabindex: "0", "data-fk": `hrow:${e.id}` },
-      h("td", { class: "t-when", text: when(e.ts) }),
+      h("td", { class: "t-when", title: fullWhen(e.ts), text: when(e.ts) }),
       h("td", { class: "t-proj", title: e.cwd, text: e.project || "—" }),
-      h("td", {}, levelChip(asLevel(e.level), true)),
-      h("td", {}, decisionChip(e.decision)),
-      h("td", { class: "t-by", text: byLabel(e.by) }),
+      // A rule moved the level: an arrow says which way, the title from what (C-22).
       h(
         "td",
-        { class: "t-target", title: e.target.slice(0, 400) },
-        h("span", { class: "t-tool", text: e.tool }),
-        h("span", { class: "mono", text: e.target }),
+        { class: "t-risk", title: engine ? engineTitle(e, engine) : undefined },
+        levelChip(level, true),
+        engine
+          ? h("span", {
+              class: "t-moved",
+              role: "img",
+              text: RANK[level] < RANK[engine] ? "↓" : "↑",
+              "aria-label": engineTitle(e, engine),
+            })
+          : null,
+      ),
+      // Who decided rides with the decision: the target gets the room (and the
+      // columns stay the same below 920 px, where only the "by" part gives way).
+      h(
+        "td",
+        { class: "t-dec", title: `${decisionLabel(e.decision)} · ${by}` },
+        decisionChip(e.decision),
+        h("span", { class: "t-by", text: by }),
+      ),
+      // The target; for a request too large to read, Rust's note on why there is
+      // none. A message to Claude never shows here (see oversizeNote).
+      h(
+        "td",
+        { class: "t-target", title: full || undefined },
+        e.tool ? toolChip(e.tool) : null,
+        e.target
+          ? h("span", { class: "mono", text: e.target })
+          : note
+            ? h("span", { class: "t-note", text: note })
+            : h("span", { class: "muted", text: "—" }),
       ),
     );
     tr.addEventListener("click", () => openDetail(i));
@@ -502,8 +674,7 @@ function table(): HTMLElement {
             h("th", { text: t("hist.col.time") }),
             h("th", { text: t("hist.col.project") }),
             h("th", { text: t("hist.col.risk") }),
-            h("th", { text: t("hist.col.decision") }),
-            h("th", { text: t("hist.col.by") }),
+            h("th", { text: t("hist.col.decisionBy") }),
             h("th", { text: t("hist.col.target") }),
           ),
         ),
@@ -526,6 +697,7 @@ function table(): HTMLElement {
         fk: "pg:prev",
         onClick: () => {
           st.offset = Math.max(0, st.offset - PAGE);
+          st.scrollToEntries = true;
           void loadPage();
         },
       }),
@@ -537,6 +709,7 @@ function table(): HTMLElement {
         fk: "pg:next",
         onClick: () => {
           st.offset += PAGE;
+          st.scrollToEntries = true;
           void loadPage();
         },
       }),
@@ -544,14 +717,68 @@ function table(): HTMLElement {
   );
 }
 
+function entriesCard(): HTMLElement {
+  // Nothing matches: there is nothing to export either.
+  const none = st.page?.total === 0;
+  const sep = select(
+    [
+      [",", t("hist.sepComma")],
+      [";", t("hist.sepSemicolon")],
+    ] as const,
+    st.separator,
+    (v) => {
+      st.separator = v;
+      try {
+        localStorage.setItem(SEP_KEY, v);
+      } catch {
+        /* storage unavailable: the choice lasts until the window closes */
+      }
+    },
+    // Sized like the small export buttons next to it.
+    { fk: "csvSep", label: t("hist.sepAria"), cls: "select-sm" },
+  );
+  sep.title = t("hist.sepTitle");
+  const entries = card(
+    {
+      title: t("hist.entries"),
+      icon: "gecmis",
+      desc: t("hist.entriesDesc"),
+      actions: [
+        sep,
+        button(t("hist.exportCsv"), {
+          kind: "ghost",
+          small: true,
+          icon: "download",
+          title: t("hist.exportCsvTitle"),
+          disabled: none,
+          onClick: () => void doExport("csv"),
+        }),
+        button("JSON", {
+          kind: "ghost",
+          small: true,
+          icon: "download",
+          title: t("hist.exportJsonTitle"),
+          disabled: none,
+          onClick: () => void doExport("json"),
+        }),
+      ],
+    },
+    st.exportMsg ? msgView(st.exportMsg) : null,
+    filterBar(),
+    h("div", { class: `hist-live${st.loading ? " loading" : ""}` }, table()),
+  );
+  entries.setAttribute("data-hist-entries", "");
+  return entries;
+}
+
 async function doExport(fmt: "csv" | "json") {
   try {
-    const path = await api.auditExport(currentFilter(), fmt);
+    const path = await api.auditExport(currentFilter(), fmt, st.separator);
     st.exportMsg = path
       ? { kind: "ok", key: "common.savedPath", vars: { path } }
       : { kind: "info", key: "hist.exportCancelled" };
   } catch (err) {
-    st.exportMsg = { kind: "error", raw: errText(err) };
+    st.exportMsg = { kind: "error", err };
   }
   rerender("gecmis");
 }
@@ -624,32 +851,7 @@ function render(): HTMLElement {
       h("span", { class: "range-note muted", text: t("hist.rangeNote") }),
     ),
     statsSection(),
-    card(
-      {
-        title: t("hist.entries"),
-        icon: "gecmis",
-        desc: t("hist.entriesDesc"),
-        actions: [
-          button(t("hist.exportCsv"), {
-            kind: "ghost",
-            small: true,
-            icon: "download",
-            title: t("hist.exportCsvTitle"),
-            onClick: () => void doExport("csv"),
-          }),
-          button("JSON", {
-            kind: "ghost",
-            small: true,
-            icon: "download",
-            title: t("hist.exportJsonTitle"),
-            onClick: () => void doExport("json"),
-          }),
-        ],
-      },
-      st.exportMsg ? msgView(st.exportMsg) : null,
-      filterBar(),
-      h("div", { class: `hist-live${st.loading ? " loading" : ""}` }, table()),
-    ),
+    entriesCard(),
     h(
       "div",
       { class: "danger-zone" },
@@ -662,6 +864,7 @@ function render(): HTMLElement {
       inlineConfirm({
         label: t("hist.clearBtn"),
         icon: "trash",
+        disabled: st.historyEmpty === true,
         question: t("hist.clearQ"),
         confirmLabel: t("hist.clearYes"),
         onConfirm: async () => {
@@ -671,7 +874,7 @@ function render(): HTMLElement {
             st.exportMsg = { kind: "ok", key: "hist.cleared" };
             await loadAll();
           } catch (err) {
-            st.exportMsg = { kind: "error", raw: errText(err) };
+            st.exportMsg = { kind: "error", err };
             rerender("gecmis");
           }
         },
