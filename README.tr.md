@@ -124,7 +124,8 @@ olmadığında ekranın üst kenarına çekilir.
   fazla DÜŞÜK (varsayılan) ya da ORTA riske kadar onay verebilir; istersen hiç veremez. **YÜKSEK ve KRİTİK
   asla sensiz onaylanmaz.**
 - **Geçmiş ve denetim kaydı.** Her izin isteği, riski, kararı ve kararı kimin verdiği: sen,
-  kısayol, toplu onay, kural, güvenilir proje, oturum izni, zaman aşımı ya da terminal. Arama,
+  kısayol, toplu onay, kural, güvenilir proje, oturum izni, zaman aşımı ya da istek geri
+  verildiyse terminal, Cursor veya Claude uygulaması. Arama,
   filtreler, grafikler, CSV ve JSON dışa aktarma.
 - **Gerektiğinde sessiz.** Rahatsız etme, sessiz saatler ve tam ekran bir uygulama öndeyken
   kendiliğinden sessizlik. İstekler yine sıraya girer; hiçbir şey açılmaz, ses çıkmaz.
@@ -426,7 +427,8 @@ Gizli bir ada neredeyse hiç kaynak harcamaz: animasyon döngüsü durur, imleç
   söyler; önce **Terminale bırak**, sonra Reddet gelir.
 - **Reddet** isteği geri çevirir ve Claude'a söyler; Claude başka bir yoldan devam eder. Yanındaki
   ok, Claude'a iletilen hazır gerekçeleri (Ayarlar → Kurallar'dan düzenlenir) ve **Reddet ve
-  Claude'u durdur**'u açar; bu ikincisi Claude'un turunu da bitirir, Claude seni bekler.
+  Claude'u durdur**'u açar; bu ikincisi Claude'un turunu da bitirir, Claude seni bekler. Codex ve
+  Cursor bir hook'tan durdurulamaz: onların isteklerinde bu düz bir rettir ve geçmiş bunu yazar.
 - **Bu oturumda … için tekrar sorma** yalnızca otomatik izin tavanının izin verdiği yerde çıkar:
   varsayılan tavanda DÜŞÜK için, *DÜŞÜK + ORTA* tavanında DÜŞÜK ve ORTA için; tavan kapalıyken hiç
   çıkmaz. Kutu neyi kapsadığını söyler — tam olarak bu komut, bu dosyadaki değişiklikler, bu adres
@@ -542,11 +544,11 @@ yayınlıyor, itiyor, oluşturuyor, güncelliyor, yüklüyor, ödüyor, dağıt�
 ya da SQL (`execute_sql` çağrısındaki `DROP TABLE` YÜKSEK). Nöbetçi'nin tanımadığı bir araç bütün
 argümanlarıyla gösterilir ve eşleştirilir.
 
-**Birleşimler** — aynı istekte bir sır ve dışarı giden bir yol varsa KRİTİK, sığması için
-kesilmek zorunda kalınan bir istek YÜKSEK. Bu ikisi kapatılamaz, onları oluşturan kategoriler
-kapatılsa bile; diğer bütün kategoriler **Ayarlar → Güvenlik → Risk kategorileri**'nden tek tek
-kapatılabilir. Aynı sayfada, her araç için bir isteği motorun yapacağı gibi puanlayan bir test
-alanı da var.
+**Birleşimler** — aynı istekte bir sır ve dışarı giden bir yol varsa KRİTİK, sığması için kesilmek
+zorunda kalınan bir istek YÜKSEK; motorun tamamını okuyamayacağı kadar karışık bir komut da YÜKSEK
+(hepsini kendin kontrol et). Bu üçü kapatılamaz, onları oluşturan kategoriler kapatılsa bile; diğer
+bütün kategoriler **Ayarlar → Güvenlik → Risk kategorileri**'nden tek tek kapatılabilir. Aynı
+sayfada, her araç için bir isteği motorun yapacağı gibi puanlayan bir test alanı da var.
 
 </details>
 
@@ -576,11 +578,15 @@ Desenler nasıl eşleşir:
 - **Glob** (`*` ve `?`) satır sonlarının da üstünden geçer; böylece komuta eklenen bir satır sonu
   bir yasak kuralını atlatamaz. Düzenleyici glob ve regex desenlerini kuralların kullandığı motorla
   denetler ve hatalı yeri gösterir.
-- **İzin veren ya da seviyeyi düşüren gevşek bir kural tek bir komutu kapsar.** *İle başlar*,
-  *içerir*, glob ya da boş desenle kurulan bir izin kuralı (ya da seviyeyi düşüren bir kural),
-  komut desenin kendisinin içerdiğinden fazla komut zincirliyorsa eşleşmez: satır sonu, `;`, `&&`,
-  `||`, `|`, `&`, ters tırnak ya da `$(`. *Tam eşit* ve regex desenleri tam olarak yazdıklarını
-  söyler; yasaklayan, her zaman sorduran ve seviyeyi yükselten kurallar her yerde eşleşir.
+- **İzin veren ya da seviyeyi düşüren bir kural tek bir komutu kapsar.** *İle başlar*, *içerir*,
+  glob ya da boş desenle kurulan bir izin kuralı (ya da seviyeyi düşüren bir kural), komut desenin
+  kendisinin içerdiğinden fazla komut çalıştırıyorsa eşleşmez: satır sonu, `;`, `&&`, `||`, `|`,
+  `&`, ters tırnak, `$(`, `<(` ve `>(` ya da PowerShell, fish ve zsh'in içinde komut çalıştırdığı
+  ayraçlar — `( )`, `@( )`, `{ }`, `=( )` ve glob niteleyicileri; böylece `npm test` yanında
+  `(iwr …)` taşıyamaz. Regex ile kurulan bir izin kuralı yalnızca eşleştiği kısmı kapsar, komutun
+  onun ötesinde çalıştırdığı hiçbir şeyi kapsamaz: `^git status`, `git status; rm -rf ~`'a izin
+  vermez. *Tam eşit* desenler tam olarak yazdıklarını söyler; yasaklayan, her zaman sorduran ve
+  seviyeyi yükselten kurallar her yerde eşleşir.
 - **Boş desen** o aracın her isteğiyle eşleşir ("MCP araçları için her seferinde sor" şablonu buna
   dayanır); her araç için boş desenli bir kuralı kaydetmeden önce düzenleyici seni uyarır.
 - **Bir yol, vardığı yer sayılır.** Nöbetçi bir yolun gerçekte nereye vardığını çıkarır: `..`, `.`,
@@ -591,11 +597,12 @@ Desenler nasıl eşleşir:
   aslında `/etc/x` olan `~/../../etc/x`'i kapsamaz. Nöbetçi'nin yerini bilemediği bir klasörün
   (başka bir kullanıcının `~bob`'u, `%APPDATA%`) üstüne tırmanan bir yol böyle bir kuralla asla
   geçmez. Yasaklayan, her zaman sorduran ve seviyeyi yükselten kuralların ise iki yazılıştan biriyle
-  eşleşmesi yeter; böylece klasörlerine tırmanarak giren bir yolu da yakalarlar ve projeye göre
-  yazılmış böyle bir kural (`src/secrets/*`) aynı dosyayı tam yoluyla yazıldığında da yakalar.
-  Göreli bir yol için "tekrar sorma" izni yalnızca o dosyayı kapsar, başka bir klasördeki aynı adı
-  değil; bir Glob isteği de klasörünün altına yazılmış deseniyle (`/work/app/src/**/*.rs`)
-  gösterilir ve eşleştirilir.
+  — ya da sistemin aynı dosya diye okuduğu `//etc/x`, `\\?\C:\x` veya sonunda nokta olan bir ad gibi
+  yazılışlardan biriyle — eşleşmesi yeter; böylece klasörlerine tırmanarak giren bir yolu da
+  yakalarlar ve projeye göre yazılmış böyle bir kural (`src/secrets/*`) aynı dosyayı tam yoluyla
+  yazıldığında da yakalar. Göreli bir yol için "tekrar sorma" izni yalnızca o dosyayı kapsar, başka
+  bir klasördeki aynı adı değil; bir Glob isteği de klasörünün altına yazılmış deseniyle
+  (`/work/app/src/**/*.rs`) gösterilir ve eşleştirilir.
 
 Şablonlar iyi bir başlangıç: `npm test`'e ve salt okuyan git komutlarına izin ver, `git push --force`
 ve paket yayınlamayı yasakla, Claude'u `.env` dosyalarından uzak tut, `rm -rf`'yi her zaman

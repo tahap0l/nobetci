@@ -125,7 +125,8 @@ needs you, it folds away into the top edge of the screen.
   own only up to LOW (the default), up to MEDIUM, or not at all. **HIGH and CRITICAL are never
   approved without you.**
 - **History and audit log.** Every permission request, its risk, the decision and who made it —
-  you, a hotkey, a batch, a rule, a trusted project, a session grant, a timeout or the terminal.
+  you, a hotkey, a batch, a rule, a trusted project, a session grant, a timeout, or the terminal,
+  Cursor or the Claude app when the request went back to them.
   Search, filters, charts, CSV and JSON export.
 - **Quiet when you need it.** Do not disturb, quiet hours, and automatic quiet while a full-screen
   app is in front. Requests still queue; nothing pops up or makes a sound.
@@ -423,7 +424,8 @@ the animation loop stops and the cursor poll parks.
   HIGH or CRITICAL card has no Allow: it says why, with **Hand to terminal** first, then Deny.
 - **Deny** refuses the request and tells Claude, which carries on another way. The arrow next to
   it opens ready-made reasons that are passed on to Claude (edit them in Settings → Rules) and
-  **Deny and stop Claude**, which also ends Claude's turn so it waits for you.
+  **Deny and stop Claude**, which also ends Claude's turn so it waits for you. Codex and Cursor
+  can't be stopped from a hook: for their requests it is a plain deny, and the history says so.
 - **Don't ask again this session for …** is offered only where the auto-allow ceiling allows it:
   LOW with the default ceiling, LOW and MEDIUM with *LOW + MEDIUM*, never with the ceiling off. The
   box says what it covers — this exact command, changes to this file, this address, or this tool
@@ -536,11 +538,11 @@ something; LOW otherwise. Its arguments are checked too: a command, a URL, a fil
 (`DROP TABLE` in an `execute_sql` call is HIGH). A tool Nöbetçi doesn't know is shown and matched
 with all of its arguments.
 
-**Combinations** — a secret and a way out in the same request is CRITICAL, and a request that had
-to be cut to fit is HIGH. These two can't be switched off, not even by switching off the
-categories that make them up; every other category can, in **Settings → Safety → Risk
-categories**. The same page has a tester that scores a request for any tool the way the engine
-would.
+**Combinations** — a secret and a way out in the same request is CRITICAL, a request that had to be
+cut to fit is HIGH, and so is a command too tangled for the engine to read in full (check all of it
+yourself). These three can't be switched off, not even by switching off the categories that make
+them up; every other category can, in **Settings → Safety → Risk categories**. The same page has a
+tester that scores a request for any tool the way the engine would.
 
 </details>
 
@@ -569,11 +571,14 @@ How patterns match:
 - **Glob** (`*` and `?`) crosses line breaks, so a newline in a command can't slip past a deny
   rule. The editor checks glob and regex patterns with the same engine the rules use, and shows
   where one fails.
-- **A loose rule that allows or lowers covers one command only.** With *starts with*, *contains*,
-  a glob or an empty pattern, an allow rule (or one that lowers the level) doesn't match when the
-  command chains more commands than the pattern itself does: a line break, `;`, `&&`, `||`, `|`,
-  `&`, backticks or `$(`. *Equals* and regex patterns mean exactly what they say, and deny,
-  always-ask and raising rules match anywhere.
+- **A rule that allows or lowers covers one command only.** With *starts with*, *contains*, a
+  glob or an empty pattern, an allow rule (or one that lowers the level) doesn't match when the
+  command runs more commands than the pattern itself does: a line break, `;`, `&&`, `||`, `|`, `&`,
+  backticks, `$(`, `<(` and `>(`, or the brackets PowerShell, fish and zsh run a command in — `( )`,
+  `@( )`, `{ }`, `=( )` and glob qualifiers — so `npm test` can't carry `(iwr …)` along. A regex
+  allow rule covers what it matches and nothing the command runs past it: `^git status` doesn't
+  allow `git status; rm -rf ~`. *Equals* patterns mean exactly what they say, and deny, always-ask
+  and raising rules match anywhere.
 - **An empty pattern matches everything** for its tool (the "ask every time for MCP tools"
   template relies on it); the editor warns you before you save one for every tool.
 - **A path counts where it leads.** Nöbetçi works out where a path really leads: `..`, `.`, `~` and
@@ -583,10 +588,12 @@ How patterns match:
   `Write /work/app/*` doesn't cover `/work/app/../../etc/hosts`, and `Write ~/*` doesn't cover
   `~/../../etc/x`, which is `/etc/x`. A path that climbs above a folder Nöbetçi can't place (another
   user's `~bob`, `%APPDATA%`) is never let through that way. Deny, always-ask and raising rules
-  match either spelling, so they also catch a path that climbs into their folder, and one written
-  from the project (`src/secrets/*`) catches the same file spelled in full. A "don't ask again"
-  grant for a relative path covers that one file, not the same name in another folder, and a Glob
-  request is shown and matched as its pattern under its folder (`/work/app/src/**/*.rs`).
+  match either spelling — and the ones the system reads as the same file, such as `//etc/x`,
+  `\\?\C:\x` or a name with a trailing dot — so they also catch a path that climbs into their
+  folder, and one written from the project (`src/secrets/*`) catches the same file spelled in full.
+  A "don't ask again" grant for a relative path covers that one file, not the same name in another
+  folder, and a Glob request is shown and matched as its pattern under its folder
+  (`/work/app/src/**/*.rs`).
 
 The templates are a good start: allow `npm test` and read-only git commands, forbid
 `git push --force` and package publishing, keep Claude away from `.env` files, make `rm -rf`

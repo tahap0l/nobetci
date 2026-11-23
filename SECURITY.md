@@ -134,16 +134,20 @@ deny.
 
 **Rules mean what they say.** A *starts with* pattern ends at a word boundary, glob patterns cross
 line breaks, and a loose pattern (*starts with*, *contains*, glob or empty) that allows or lowers a
-request doesn't match a command that chains more commands than the pattern itself — a line break,
-`;`, `&&`, `||`, `|`, `&`, backticks or `$(` — so `npm test` can't carry `rm -rf ~` behind it.
-Deny rules match anywhere. For a file path, an allow rule, a rule that lowers the level and a
-"don't ask again" grant have to match the path both as written and where it really leads once
-`..`, `.`, `~`, `$HOME` and relative parts are resolved — an allow rule for `/work/app/*` doesn't
-cover `/work/app/../../etc/hosts`, nor one for `~/*` cover `~/../../etc/x` — and a path that climbs
-above a folder Nöbetçi can't place (another user's `~bob`, `%APPDATA%`) never passes that way.
-Deny, always-ask and raising rules match the path as written or as resolved. The first rule that
-matches decides, except that one which matched a path only where it leads, and doesn't deny, never
-hides a deny rule further down: resolving a path can't turn your deny into a question.
+request doesn't match a command that runs more commands than the pattern itself — a line break, `;`,
+`&&`, `||`, `|`, `&`, backticks, `$(`, `<(`, `>(`, or the brackets PowerShell, fish and zsh run a
+command in: `( )`, `@( )`, `{ }`, `=( )` and glob qualifiers — so `npm test` can't carry `rm -rf ~`
+or `(iwr …)` along. A regex pattern that allows or lowers covers what it matches and nothing a
+command runs past it. Deny rules match anywhere. For a file path, an allow rule, a rule that lowers
+the level and a "don't ask again" grant have to match the path both as written and where it really
+leads once `..`, `.`, `~`, `$HOME` and relative parts are resolved — an allow rule for `/work/app/*`
+doesn't cover `/work/app/../../etc/hosts`, nor one for `~/*` cover `~/../../etc/x` — and a path that
+climbs above a folder Nöbetçi can't place (another user's `~bob`, `%APPDATA%`) never passes that
+way. Deny, always-ask and raising rules match the path as written or as resolved, and in the other
+spellings the system reads as the same file (`//etc/x`, `\\?\C:\x`, a name with a trailing dot or
+space). The first rule that matches decides, except that one which matched a path only where it
+leads, and doesn't deny, never hides a deny rule further down: resolving a path can't turn your deny
+into a question.
 
 **What you see is what runs.** The relay forwards every field of a permission request whole, up to
 64 KiB. Anything longer is cut, flagged and scored HIGH, with a finding telling you to review the
@@ -217,17 +221,17 @@ mouse button and whether it came from a real device:
   real click judged while a button map was changing under it backs no approval (click again).
 
 Nöbetçi also notes where each press landed. An approval made on the island is accepted only if the
-most recent press was physical, began after the card appeared, is fresh — released within 3
-seconds, or the hold time plus 3 seconds while still held — and landed on the Allow button. A card
-accepts no approval in its first 350 ms. A press is spent by the approval it backs, so one real
-click can't vouch for a second card waiting in the queue, and the second half of a double-click or
-the release of a hold meant for the previous card is ignored quietly. Otherwise the approval is
-refused, logged as suspicious, and the card itself says that something may have tried to approve
-on your behalf. On Windows and macOS, Rust measures the physical hold for HIGH and CRITICAL
-requests. If the mouse is released early or physical input cannot be verified, use the terminal
-to decide. The guard stops recording when no requests are waiting. **Settings → Safety** can turn
-off physical click verification for LOW and MEDIUM approvals. The health check shows whether the
-platform listener is active.
+most recent press was physical, began after the card appeared, is fresh — released within 3 seconds,
+or the hold time plus 3 seconds while still held — and landed on the Allow button, and no button a
+program pressed was still held down when it began. A card accepts no approval in its first 350 ms. A
+press is spent by the approval it backs, so one real click can't vouch for a second card waiting in
+the queue, and the second half of a double-click or the release of a hold meant for the previous
+card is ignored quietly. Otherwise the approval is refused, logged as suspicious, and the card
+itself says that something may have tried to approve on your behalf. On Windows and macOS, Rust
+measures the physical hold for HIGH and CRITICAL requests. If the mouse is released early or
+physical input cannot be verified, use the terminal to decide. The guard stops recording when no
+requests are waiting. **Settings → Safety** can turn off physical click verification for LOW and
+MEDIUM approvals. The health check shows whether the platform listener is active.
 
 **The allow hotkey is LOW-only.** Global hotkeys can be triggered by any program that fakes
 keystrokes. The allow hotkey is therefore not set by default, and even when it is, Rust refuses it
