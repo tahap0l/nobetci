@@ -292,6 +292,15 @@ const COMMAND: MockRule[] = [
     "Deletes through the GitHub API",
     /gh\s+api\b[^\n]*(-X|--method)\s+delete/i,
   ),
+  // risk.rs reads these from the parsed command (`shell::fakes_input`): --help
+  // and xdotool's read-only queries stay low there, which this pattern skips.
+  r(
+    "synthetic_input",
+    "high",
+    "Başka pencerelere sahte tıklama veya tuş gönderebilir (Nöbetçi'ye tıklayabilir, terminale yazabilir)",
+    "Can send fake clicks or keystrokes to other windows (could click Nöbetçi or type into the terminal)",
+    /\b(xte|ydotool|wtype)\b|\bxdotool\s+(click|key|type|mousemove|mousedown|mouseup|keydown|keyup)\b|\bxinput\s+(--)?(float|reattach|create-master|set-cp)\b|\[(system\.)?windows\.forms\.sendkeys\]::send/i,
+  ),
   r(
     "hidden_chars",
     "high",
@@ -556,6 +565,14 @@ const SYNTHETIC: [string, RiskLevel, Pair][] = [
     ["Claude Code'un korumalı alanı (sandbox) dışında çalışmak istiyor", "Asks to run outside Claude Code's sandbox"],
   ],
   ["replace_all", "low", ["Dosyadaki her geçişi değiştiriyor", "Replaces every occurrence in the file"]],
+  [
+    "unreadable",
+    "high",
+    [
+      "Tamamı okunamayacak kadar karışık — hepsini kendin kontrol et",
+      "Too tangled to read in full — check all of it yourself",
+    ],
+  ],
 ];
 
 /** The label of a finding that comes from the shape of a request. */
@@ -563,7 +580,7 @@ function synthLabel(id: string): Pair {
   return SYNTHETIC.find((s) => s[0] === id)?.[2] ?? [id, id];
 }
 
-const LOCKED = ["truncated", "secret_exfil"];
+const LOCKED = ["truncated", "secret_exfil", "unreadable"];
 
 function categories(): CategoryInfo[] {
   const out: CategoryInfo[] = [];
@@ -1154,7 +1171,10 @@ function makeHistory(s: Settings, lang: Lang): MockEntry[] {
       level,
       ...(engine && engine !== level ? { engineLevel: engine } : {}),
       labels: raw.findings.map((f) => f.label[lang === "tr" ? 0 : 1]),
-      ...(daysAgo < LABELS_ONLY_AFTER_DAYS ? { categories: raw.findings.map((f) => f.category) } : {}),
+      // Like audit.rs: no `categories` without findings (an empty list isn't written).
+      ...(daysAgo < LABELS_ONLY_AFTER_DAYS && raw.findings.length
+        ? { categories: raw.findings.map((f) => f.category) }
+        : {}),
       decision,
       by,
       rule: ev.rule ?? "",
@@ -1296,7 +1316,7 @@ function query(all: HistoryEntry[], f: AuditFilter): HistoryEntry[] {
 
 function stats(all: HistoryEntry[], days: number, dayStarts?: number[]): AuditStats {
   // Findings named in the UI language by their category where the entry kept
-  // it (what audit.rs should do for C-24), else as recorded.
+  // it (as audit.rs does for C-24), else as recorded.
   const named = new Map(categories().map((c) => [c.id, c.label] as const));
   // As audit.rs (C-18): the buckets are the local midnights the window sent,
   // when they are valid; otherwise days break at local midnight by today's UTC

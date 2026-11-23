@@ -20,7 +20,6 @@ import {
   type HealthReport as CoreHealthReport,
   type HookPreview as CoreHookPreview,
   type HookStatus as CoreHookStatus,
-  type RiskLevel,
 } from "../core/bridge";
 import type { RuleMode, Settings } from "../core/settings-model";
 import { localDayStarts } from "./days";
@@ -60,10 +59,7 @@ export type BootInfo = Omit<CoreBootInfo, "settingsLoadError" | "holdApprovals">
  * in the order of `labels`, which are kept in the language of the day they were
  * recorded (C-24); entries from before C-24 have labels only.
  */
-export type HistoryEntry = Omit<CoreAuditEntry, "engineLevel" | "categories"> & {
-  engineLevel?: RiskLevel;
-  categories?: string[];
-};
+export type HistoryEntry = CoreAuditEntry;
 
 export interface HistoryPage {
   entries: HistoryEntry[];

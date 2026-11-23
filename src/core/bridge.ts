@@ -180,10 +180,22 @@ export interface AuditEntry {
   tool: string;
   kind: string;
   target: string;
+  /** The level the request was decided at. */
   level: RiskLevel;
+  /** The risk engine's own level, only where a user rule changed it (C-22). */
+  engineLevel?: RiskLevel;
+  /** The findings as the card showed them, in the language of that day. */
   labels: string[];
+  /**
+   * The findings' category ids (`risk_categories`), one per label in the same
+   * order (C-24). Absent when there were no findings, and in older entries.
+   */
+  categories?: string[];
   decision: "allow" | "deny" | "none";
-  /** user, hotkey, rule, trusted, session, timeout, terminal, paused, busy, unseen, resolved */
+  /**
+   * user, hotkey, batch, rule, trusted, session, timeout, terminal, cursor,
+   * app, paused, busy, unseen, resolved or undelivered (pipe.rs).
+   */
   by: string;
   rule: string;
   message: string;
@@ -359,7 +371,11 @@ export const Bridge = {
    */
   islandMedia: (includeArtwork = false, explicit = false) =>
     call<IslandMedia>("island_media", { includeArtwork, explicit }),
-  /** `positionMs` goes as whole milliseconds: Rust takes an integer (shell-widgets#1). */
+  /**
+   * `positionMs` goes as whole milliseconds. Rust also takes a fraction and
+   * rounds it; a value that is not a number, is negative or is past any track
+   * makes it refuse the call (widgets.rs `seek_position`, shell-widgets#1).
+   */
   islandMediaControl: (source: string, action: MediaAction, positionMs?: number, explicit = false) =>
     call<boolean>("island_media_control", {
       source,
