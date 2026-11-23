@@ -9,9 +9,9 @@
 import { Bridge, IslandBridge, onEvent, type NotifyKind, type QuietReason, type RiskAssessment, type RiskLevel } from "../core/bridge";
 import { Sound } from "../core/sound";
 import {
-  DECISION_WINDOW_MS, LEVEL_ORDER, MAX_QUEUE, State, needsHold, type CallSignature, type Session,
+  DECISION_WINDOW_MS, LEVEL_ORDER, MAX_QUEUE, State, handBackTo, needsHold, type CallSignature, type Session,
 } from "../core/state";
-import { t } from "../i18n/island";
+import { placed, t } from "../i18n/island";
 import type { Island } from "./island";
 
 interface HookPayload {
@@ -281,7 +281,8 @@ export function registerHookHandlers(island: Island) {
         if (s && s.state === "approval" && !State.approvals.some((x) => x.sessionId === s.id)) {
           State.setState(s, "working");
         }
-        if (s) State.step(s, `${t("step.timeout")} · ${a.tool}`);
+        // What asks now: the terminal, Cursor's own prompt or the Claude app's dialog.
+        if (s) State.step(s, `${placed("step.timeout", handBackTo(s))} · ${a.tool}`);
         changed = true;
       }
     }

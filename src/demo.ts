@@ -279,6 +279,9 @@ export function runDemo(island: Island, name: string) {
   // A dark scheme like the framing page's, so the frame stays see-through.
   if (params.get("bg") === "none") document.documentElement.style.colorScheme = "dark";
   State.settings.hooksInstalled = name !== "empty";
+  // &holdApprovals=0: the island of a platform that cannot vouch for a hold
+  // (Linux, D23) — HIGH and CRITICAL cards offer the hand-off, not Allow.
+  if (params.get("holdApprovals") === "0") State.holdApprovals = false;
   // &still=1: every CSS animation at its end state, for screenshots.
   if (params.has("still")) {
     document.documentElement.dataset.still = "1";

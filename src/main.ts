@@ -34,6 +34,10 @@ async function main() {
     State.version = boot.version;
     setSystemLang(boot.systemLang);
     setPlatform(boot.platform);
+    // Where the click guard cannot vouch for a hold (Linux, D23), HIGH and
+    // CRITICAL requests are not allowed from the island (C-25). An older Rust
+    // that does not say goes by the platform.
+    State.holdApprovals = boot.holdApprovals ?? boot.platform !== "linux";
   }
   if (pickLang() !== getLang()) {
     setLang(pickLang());

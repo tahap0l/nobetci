@@ -825,6 +825,28 @@ mark.lvl-critical { background: #f4505e; }
   flex: none;
 }
 
+/* A request the island cannot allow on this platform (HIGH or CRITICAL on
+   Linux, D23): why, right above the hand-off that decides it instead. */
+.appr-terminal-only {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin-top: 8px;
+  padding: 7px 10px;
+  border: 1px solid rgba(156, 203, 255, 0.32);
+  border-radius: 10px;
+  background: rgba(59, 158, 255, 0.09);
+  color: #d4e6ff;
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+
+.appr-terminal-only svg {
+  flex: none;
+  margin-top: 1px;
+  color: #9ccbff;
+}
+
 .appr-status {
   margin-top: 8px;
   font-size: 11px;
@@ -2340,7 +2362,8 @@ mark.lvl-critical { background: #f4505e; }
 }
 .agenda-cancel:hover { color: var(--text); background: #ffffff18; }
 .agenda-editor-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
-.agenda-note { flex: 1; min-width: 0; overflow: hidden; color: #cfc8da; font-size: 10.5px; white-space: nowrap; text-overflow: ellipsis; }
+/* A refusal is a sentence or two: it wraps, never cut (C-23, live L-C). */
+.agenda-note { flex: 1; min-width: 0; color: #cfc8da; font-size: 10.5px; line-height: 1.25; overflow-wrap: anywhere; }
 .agenda-note.warn { color: var(--medium); }
 .agenda-note.error { color: #ff9aa4; }
 .agenda-save {
@@ -2467,6 +2490,8 @@ mark.lvl-critical { background: #f4505e; }
 .agenda-item:hover .agenda-remove, .agenda-remove:focus-visible { opacity: 1; }
 .agenda-remove:hover { background: #ff6b6b2a; color: #ffb3b3; }
 .agenda-empty { margin: auto; padding: 0 10px; color: #cfc8da; font-size: 11px; text-align: center; }
+/* agenda.json there but unreadable: not an empty day (C-23). */
+.agenda-empty.agenda-unreadable { color: #ffc2c8; line-height: 1.35; }
 
 /* Calendar: a week of day pills, with dots for agenda items. */
 .island-calendar { display: grid; grid-template-rows: auto 1fr; gap: 5px; }
@@ -2861,6 +2886,19 @@ mark.lvl-critical { background: #f4505e; }
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+/* What was written after the opening fence, on top of its block (island-ui#2). */
+.plan-code-block { margin: 4px 0; }
+.plan-code-block .plan-code { margin: 0; border-top-left-radius: 0; }
+.plan-code-info {
+  display: inline-block;
+  max-width: 100%;
+  padding: 1px 7px;
+  border-radius: 6px 6px 0 0;
+  background: rgba(255, 255, 255, 0.09);
+  color: #c9c2ff;
+  font: 10.5px/1.5 var(--mono);
+  overflow-wrap: anywhere;
+}
 .plan-empty { color: var(--muted); }
 
 /* The batch tray: what one click would allow, request by request (A-5). */
@@ -2876,16 +2914,24 @@ mark.lvl-critical { background: #f4505e; }
 .batch-head svg { flex: none; }
 .batch-title { flex: 1 1 auto; min-width: 0; }
 .btn-batch { flex: none; color: var(--low); border-color: rgba(52, 211, 153, 0.35); }
+/* Room for six one-line rows, the most that can wait (island-ui#1); longer
+   commands scroll, with the "there's more" cue. */
+.batch-box {
+  position: relative;
+  margin-top: 5px;
+}
 .batch-list {
   display: flex;
   flex-direction: column;
   gap: 1px;
-  margin-top: 5px;
-  max-height: 82px;
+  max-height: 128px;
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-width: thin;
 }
+.batch-box .more-cue { bottom: 3px; }
+/* Waits until the whole list has been on screen: it says so when clicked. */
+.btn-batch[aria-disabled="true"] { opacity: 0.6; }
 .batch-item {
   display: flex;
   align-items: baseline;

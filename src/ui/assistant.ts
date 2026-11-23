@@ -362,9 +362,14 @@ export function buildAssistant(actions: AssistantActions): ViewHost & {
     State.notify();
   };
 
+  /** The assistant is what the open island shows: only then does it take keys and send. */
+  const onScreen = () => State.mode === "expanded" && State.view === "assistant" && el.isConnected;
+
   const submit = async () => {
     const text = input.value.trim();
-    if (!text || busy) return;
+    // A draft nobody sees is never sent (C-20): a folded island may still hold
+    // the window's focus for a moment, and Enter meant for the terminal lands here.
+    if (!text || busy || !onScreen()) return;
     if (history[history.length - 1] !== text) history.push(text);
     if (history.length > 20) history.shift();
     historyAt = -1;
@@ -466,6 +471,12 @@ export function buildAssistant(actions: AssistantActions): ViewHost & {
     State.notify();
   });
   input.addEventListener("keydown", (e) => {
+    if (!onScreen()) {
+      // Folded or hidden: the box takes nothing, and lets go of the focus.
+      e.preventDefault();
+      input.blur();
+      return;
+    }
     if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
       e.preventDefault();
       void submit();
@@ -494,7 +505,7 @@ export function buildAssistant(actions: AssistantActions): ViewHost & {
   });
   // Esc anywhere in the assistant: first it closes the prompt library, then the
   // assistant itself (dashboard#18).
-  el.addEventListener("keydown", (e) => {
+  const escape = (e: KeyboardEvent) => {
     if (e.key !== "Escape" || e.isComposing || e.defaultPrevented) return;
     e.preventDefault();
     if (!library.hidden) {
@@ -503,6 +514,16 @@ export function buildAssistant(actions: AssistantActions): ViewHost & {
     } else {
       actions.back();
     }
+  };
+  el.addEventListener("keydown", escape);
+  // Esc while the assistant is up but nothing in it has the focus yet — just
+  // opened by its hotkey, the caret not in the box (C-20, live L-B test 11).
+  // A copy of the view built for another language has its own; this one goes
+  // quiet with its element.
+  document.addEventListener("keydown", (e) => {
+    if (!onScreen() || el.contains(e.target as Node)) return;
+    if ((e.target as Element | null)?.closest?.("input, textarea, select, [contenteditable]")) return;
+    escape(e);
   });
   send.addEventListener("click", () => void submit());
   copy.addEventListener("click", () => {

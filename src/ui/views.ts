@@ -12,10 +12,10 @@ import {
 } from "../core/bridge";
 import { Sound } from "../core/sound";
 import {
-  LEVEL_ORDER, SESSION_QUIET_MS, State, handBackTo, isPlainLow, needsHold,
+  LEVEL_ORDER, SESSION_QUIET_MS, State, handBackTo, isPlainLow, needsHold, terminalOnly,
   type Approval, type FlashTone, type IslandView, type Session, type SessionState,
 } from "../core/state";
-import { t } from "../i18n/island";
+import { placed, t } from "../i18n/island";
 import { HEADER_H, PANEL_H } from "../island/layout";
 import { clear, h, icon } from "./dom";
 import { LEVEL_LABEL } from "./labels";
@@ -560,7 +560,9 @@ function buildSession(actions: ViewActions): ViewHost {
       goBtn.style.display = s.parents.length ? "" : "none";
       goBtn.title = s.terminal ? t("sd.gotoTitle", { terminal: s.terminal }) : t("sd.gotoTitleAny");
 
-      const next = `${s.steps.length}:${State.lastStep(s)}:${s.tools}:${s.approved}:${s.denied}:${s.subagents.size}:${s.usage?.at ?? 0}:${State.limits?.at ?? 0}:${s.changes[0]?.t ?? 0}:${[...openDiffs].join("|")}`;
+      // Every step's text is in the key: an earlier one can change too (an answer
+      // that turned out undelivered, C-21).
+      const next = `${s.steps.length}:${s.steps.map((st) => st.text).join("\u0001")}:${s.tools}:${s.approved}:${s.denied}:${s.subagents.size}:${s.usage?.at ?? 0}:${State.limits?.at ?? 0}:${s.changes[0]?.t ?? 0}:${[...openDiffs].join("|")}`;
       if (next === key) return;
       key = next;
       const usage = usageView(s.usage, State.limits);
@@ -595,7 +597,12 @@ function buildSession(actions: ViewActions): ViewHost {
           .slice(-TIMELINE_ROWS)
           .reverse()
           .map((st) =>
-            h("li", {}, h("span", { class: "tl-time", text: clock(st.t) }), h("span", { class: "tl-text", text: st.text })),
+            h(
+              "li",
+              { title: st.title },
+              h("span", { class: "tl-time", text: clock(st.t) }),
+              h("span", { class: "tl-text", text: st.text }),
+            ),
           ),
       );
     },
@@ -650,6 +657,14 @@ const ARM_MS = 400;
 const SENDING_MS = 1500;
 /** The card's tallest: the island's cap (layout.ts) less the header and the gap under the card. */
 const CARD_MAX_H = PANEL_H - 8 - HEADER_H - 12;
+/** The strip at the bottom of the card's body that its "there's more" cue and fade take. */
+const BODY_CUE_ROOM = 32;
+/**
+ * The least a file's content or a plan keeps (about four lines) when the card is
+ * short of room: it gives way so the findings and the note below it stay in
+ * view. The command itself keeps its full height.
+ */
+const MIN_BOX_H = 72;
 
 /**
  * What would hide something on the card: runs of blank lines or spaces long
@@ -718,11 +733,15 @@ function appendRevealed(parent: Node, text: string) {
       parent.appendChild(document.createTextNode("\n"));
     } else if (run.includes("\n")) {
       // Keep one line break either side so the text stays readable, and say how
-      // many blank lines there were.
+      // many blank lines there were. The run ends with the next line's own
+      // indentation, which stays: the card keeps the code's shape (island-ui#4).
       const blank = Math.max(1, (run.match(/\n/g) ?? []).length - 1);
+      const indent = /[ \t]*$/.exec(run)?.[0] ?? "";
       parent.appendChild(document.createTextNode("\n"));
       parent.appendChild(hiddenMarker(t("ap.blankLines", { n: blank }), t("ap.hiddenChar")));
       parent.appendChild(document.createTextNode("\n"));
+      if (indent.length >= 40) parent.appendChild(hiddenMarker(t("ap.spaces", { n: indent.length }), t("ap.hiddenChar")));
+      else if (indent) parent.appendChild(document.createTextNode(indent));
     } else if (/^[ \t]{2,}$/.test(run)) {
       parent.appendChild(hiddenMarker(t("ap.spaces", { n: run.length }), t("ap.hiddenChar")));
     } else {
@@ -887,6 +906,14 @@ function editsOf(risk: RiskAssessment): NonNullable<RiskAssessment["edits"]> {
 /** Messages the island raises when Rust or the hotkey refuses something on the card (A-7). */
 const REFUSALS = ["fl.holdRequired", "fl.hotkeyLowOnly", "fl.noHotkey", "fl.answerOnCard"] as const;
 
+/**
+ * Whether "Deny and stop" can stop the agent that asked: Claude Code ends its
+ * turn on it; Codex and Cursor take only a plain deny (relay#1).
+ */
+export function canStop(a: Approval | null): boolean {
+  return !!a && !State.session(a.sessionId)?.agent;
+}
+
 /** When each waiting request arrived: the pager's order (the queue itself is reordered by it). */
 const arrival = new WeakMap<Approval, number>();
 let arrivals = 0;
@@ -918,13 +945,18 @@ function bringToFront(id: string) {
   State.notify();
 }
 
-/** The "↓ there's more" cue of a box that scrolls: shown while part of it is below. */
-function scrollCue(box: HTMLElement): { el: HTMLElement; update(): void } {
+/**
+ * The "↓ there's more" cue of a box that scrolls: shown while part of it is
+ * below — unless `covered` says another cue already says so in that spot (a
+ * box inside the card's body whose end sits under the body's own cue: one cue
+ * there, never two stacked).
+ */
+function scrollCue(box: HTMLElement, covered?: () => boolean): { el: HTMLElement; update(): void } {
   const cue = h("button", { class: "more-cue", type: "button", tabindex: -1, text: t("ap.overflow") });
   cue.hidden = true;
   const update = () => {
     const below = box.scrollHeight - box.clientHeight - box.scrollTop > 2;
-    cue.hidden = !below;
+    cue.hidden = !below || !!covered?.();
     box.classList.toggle("fade-end", below);
   };
   box.addEventListener("scroll", update, { passive: true });
@@ -957,10 +989,17 @@ function buildApproval(actions: ViewActions): ViewHost {
   const ruleNote = h("div", { class: "appr-rule" });
   const project = h("div", { class: "appr-project" });
   const kind = h("div", { class: "appr-kind" });
+  /**
+   * A box inside the body whose end is where the body's own "there's more" cue
+   * sits (or below it): that one cue speaks for both (live L-A: two cues stacked
+   * on a cut MultiEdit). Scrolling the body down brings the box's own back.
+   */
+  const underBodyCue = (box: HTMLElement) => () =>
+    !bodyCue.el.hidden && box.getBoundingClientRect().bottom > body.getBoundingClientRect().bottom - BODY_CUE_ROOM;
   const target = h("pre", { class: "appr-target" });
-  const targetCue = scrollCue(target);
+  const targetCue = scrollCue(target, underBodyCue(target));
   const preview = h("pre", { class: "appr-preview" });
-  const previewCue = scrollCue(preview);
+  const previewCue = scrollCue(preview, underBodyCue(preview));
   const previewBox = h("div", { class: "appr-box appr-preview-box" }, preview, previewCue.el);
   const findings = h("ul", { class: "appr-findings" });
   const standard = h(
@@ -981,18 +1020,39 @@ function buildApproval(actions: ViewActions): ViewHost {
   let planBox: HTMLElement | null = null;
   let planCue: ReturnType<typeof scrollCue> | null = null;
   let planText = "";
+  // The body moving decides again which of the cues inside it may show.
+  body.addEventListener(
+    "scroll",
+    () => {
+      targetCue.update();
+      previewCue.update();
+      planCue?.update();
+    },
+    { passive: true },
+  );
+  /**
+   * Answers being written on a question or a plan card, kept while another
+   * request is paged to and back (island-ui#3); dropped with the request.
+   */
+  const forms = new Map<string, QuestionForm>();
+  const planNotes = new Map<string, string>();
   /** The boxes' heights from the stylesheet, and whether new content needs them again. */
   const baseHeight = new Map<HTMLElement, number>();
   let refit = true;
 
   // ── Foot: the hints, or why something did not go through; the session grant
+  // A request this platform cannot let the island allow (HIGH or CRITICAL on
+  // Linux, D23): why, and where it is decided instead.
+  const terminalText = h("span");
+  const terminalNote = h("div", { class: "appr-terminal-only", role: "note" }, icon(ICON.terminal, 14), terminalText);
+  terminalNote.hidden = true;
   const status = h("div", { class: "appr-status", role: "status", "aria-live": "polite" });
   // Not a <label>: its pass-on click would be a second click the guard below
   // would have to tell apart. The text toggles the box itself.
   const rememberText = h("span", { id: "appr-remember-text" });
   const remember = h("input", { type: "checkbox", class: "check", "aria-labelledby": "appr-remember-text" }) as HTMLInputElement;
   const rememberRow = h("div", { class: "appr-remember", "data-decision": "modifier" }, remember, rememberText);
-  const foot = h("div", { class: "appr-foot" }, status, rememberRow);
+  const foot = h("div", { class: "appr-foot" }, terminalNote, status, rememberRow);
 
   // ── The decisions ────────────────────────────────────────────────────────────
   const holdFill = h("span", { class: "hold-fill" });
@@ -1042,12 +1102,15 @@ function buildApproval(actions: ViewActions): ViewHost {
   const batchTitle = h("span", { class: "batch-title" });
   const batchBtn = h("button", { class: "btn btn-small btn-batch", type: "button", "data-decision": "allow" });
   const batchList = h("div", { class: "batch-list" });
+  // Six one-line rows fit; longer commands scroll, with the cue, and the button
+  // waits until the list has been seen to its end (island-ui#1).
+  const batchCue = scrollCue(batchList);
   const batchNote = h("div", { class: "batch-note" });
   const batchRow = h(
     "div",
     { class: "appr-batch", role: "group" },
     h("div", { class: "batch-head" }, icon(ICON.shield, 13), batchTitle, batchBtn),
-    batchList,
+    h("div", { class: "batch-box" }, batchList, batchCue.el),
     batchNote,
   );
 
@@ -1076,6 +1139,10 @@ function buildApproval(actions: ViewActions): ViewHost {
   /** The low-risk requests the tray lists: exactly what its button allows. */
   let batchIds: string[] = [];
   let batchKey = "";
+  /** Every row of the tray's list has been on screen since it last changed. */
+  let batchSeen = true;
+  /** `State.holdApprovals` when the card on screen was laid out (it can change, C-25). */
+  let shownHolds = State.holdApprovals;
 
   // ── Hold to confirm ───────────────────────────────────────────────────────
   let holdStart = 0;
@@ -1129,6 +1196,15 @@ function buildApproval(actions: ViewActions): ViewHost {
   const ready = (control: HTMLElement | null) =>
     !!control && performance.now() >= armedAt && performance.now() >= (controlArmedAt.get(control) ?? 0);
 
+  /** `control` takes no press for a moment, and fades in meanwhile. */
+  const armControl = (c: HTMLElement) => {
+    controlArmedAt.set(c, performance.now() + ARM_MS);
+    if (press?.el === c) press = null;
+    restart(c, "arming");
+    window.clearTimeout(controlTimers.get(c));
+    controlTimers.set(c, window.setTimeout(() => c.classList.remove("arming"), ARM_MS));
+  };
+
   /**
    * A control that has appeared or moved since the last look takes no press
    * for a moment (approvals#2): a click aimed at what was under the pointer
@@ -1146,15 +1222,11 @@ function buildApproval(actions: ViewActions): ViewHost {
     if (!before || !shown) return;
     controls.forEach((c, i) => {
       if (keys[i] === before[i] || c.getBoundingClientRect().width === 0) return;
-      controlArmedAt.set(c, performance.now() + ARM_MS);
-      if (press?.el === c) press = null;
       if (c === allowBtn && holdStart) {
         holdReset();
         setNote(t("ap.holdMoved"), "warn", 4000);
       }
-      restart(c, "arming");
-      window.clearTimeout(controlTimers.get(c));
-      controlTimers.set(c, window.setTimeout(() => c.classList.remove("arming"), ARM_MS));
+      armControl(c);
     });
   };
 
@@ -1265,11 +1337,21 @@ function buildApproval(actions: ViewActions): ViewHost {
     return b;
   };
   const openMenu = () => {
+    // "Deny and stop" only where it can be carried out: Claude Code ends its
+    // turn on it, while Codex and Cursor can only be told "no" (their hook
+    // answers have no stop; relay#1).
+    const stoppable = canStop(shown);
+    const menuTitle = t(stoppable ? "ap.menuTitle" : "ap.menuTitleAgent");
+    denyMenu.setAttribute("aria-label", menuTitle);
     denyMenu.replaceChildren(
-      h("div", { class: "menu-title", text: t("ap.menuTitle") }),
+      h("div", { class: "menu-title", text: menuTitle }),
       ...State.settings.denyReasons.map((reason) => menuItem(reason, { message: reason })),
-      h("div", { class: "menu-sep", role: "separator" }),
-      menuItem(t("ap.denyStop"), { stop: true, message: t("ap.stopMessage") }, true),
+      ...(stoppable
+        ? [
+            h("div", { class: "menu-sep", role: "separator" }),
+            menuItem(t("ap.denyStop"), { stop: true, message: t("ap.stopMessage") }, true),
+          ]
+        : []),
     );
     // Never past the top of the screen (A-8): as tall as the room above the
     // button allows; the reasons scroll past that.
@@ -1406,6 +1488,7 @@ function buildApproval(actions: ViewActions): ViewHost {
     approvePlanBtn.title = planText ? "" : t("plan.approveEmpty");
   };
   feedback.addEventListener("input", () => {
+    if (shown?.kind === "plan") planNotes.set(shown.requestId, feedback.value);
     syncSpecial();
     State.notify();
   });
@@ -1469,6 +1552,12 @@ function buildApproval(actions: ViewActions): ViewHost {
       return;
     }
     if (v !== "act") return;
+    if (!batchSeen) {
+      // Part of what this click would allow has not been on screen yet.
+      setNote(t("ap.batchSeeAll"), "warn", 5000);
+      batchList.scrollBy({ top: Math.max(20, batchList.clientHeight * 0.8) });
+      return;
+    }
     // Exactly what the tray lists — and only while that is still what waits.
     if (batchable().map((a) => a.requestId).join("|") !== batchIds.join("|")) return;
     const ids = [...batchIds];
@@ -1476,8 +1565,31 @@ function buildApproval(actions: ViewActions): ViewHost {
     send("batch", () => actions.allowLow(anchor, ids));
   });
 
+  /** The button says when it waits for the rest of the list to be seen. */
+  const paintBatchButton = () => {
+    batchBtn.setAttribute("aria-disabled", String(!batchSeen));
+    batchBtn.title = batchSeen ? "" : t("ap.batchSeeAll");
+  };
+  /** The list has been seen to its end once it is scrolled there (or fits). */
+  const lookAtBatch = () => {
+    batchCue.update();
+    if (batchSeen || batchRow.hidden || batchList.scrollHeight - batchList.clientHeight - batchList.scrollTop > 2) return;
+    batchSeen = true;
+    paintBatchButton();
+  };
+  batchList.addEventListener("scroll", lookAtBatch, { passive: true });
+
   const renderBatch = (lows: Approval[], lowered: number) => {
-    batchIds = lows.map((a) => a.requestId);
+    const ids = lows.map((a) => a.requestId);
+    if (ids.join("|") !== batchIds.join("|")) {
+      // What the click covers changed: it has to be seen again, and the button
+      // takes no press for a moment — a click aimed at the old list must not
+      // allow a request that has just joined it (island-ui#1).
+      batchSeen = false;
+      paintBatchButton();
+      if (shown) armControl(batchBtn);
+    }
+    batchIds = ids;
     batchTitle.textContent = t("ap.batchTitle", { n: lows.length });
     batchBtn.textContent = t("ap.allowLow", { n: lows.length });
     batchList.replaceChildren(
@@ -1510,6 +1622,11 @@ function buildApproval(actions: ViewActions): ViewHost {
     const r = a.risk;
     const keys = State.settings.hotkeys;
     const hints: string[] = [];
+    // Decided elsewhere (D23): the note above says where; no hold to explain.
+    if (terminalOnly(a)) {
+      if (keys.deny) hints.push(t("ap.keyDeny", { key: keys.deny }));
+      return hints.join(" · ");
+    }
     if (needsHold(r.level)) hints.push(t("ap.holdHint", { s: (holdFor(r.level) / 1000).toFixed(1) }));
     else hints.push(t(r.level === "low" ? "ap.heuristic" : "ap.heuristicMedium"));
     if (keys.deny) hints.push(t("ap.keyDeny", { key: keys.deny }));
@@ -1598,15 +1715,19 @@ function buildApproval(actions: ViewActions): ViewHost {
     chip.className = `risk-chip kind-${a.kind}`;
     chip.textContent = t(a.kind === "question" ? "q.chip" : "plan.chip");
     whoTool.textContent = t(a.kind === "question" ? "q.title" : "plan.title");
-    feedback.value = "";
+    // What was being written for it before another request was paged to.
+    feedback.value = planNotes.get(a.requestId) ?? "";
     if (a.kind === "question") {
-      form = questionForm(a.input, {
-        changed: () => {
-          syncSpecial();
-          State.notify();
-        },
-        enter: () => setNote(t("q.enterHint"), "info", 5000),
-      });
+      form =
+        forms.get(a.requestId) ??
+        questionForm(a.input, {
+          changed: () => {
+            syncSpecial();
+            State.notify();
+          },
+          enter: () => setNote(t("q.enterHint"), "info", 5000),
+        });
+      forms.set(a.requestId, form);
       special.replaceChildren(form.el);
     } else {
       const plan = typeof a.input.plan === "string" ? a.input.plan : "";
@@ -1650,6 +1771,18 @@ function buildApproval(actions: ViewActions): ViewHost {
     termIcon.replaceChildren(icon(place === "terminal" ? ICON.terminal : ICON.window, 13));
     termLabel.textContent = t(place === "cursor" ? "ap.toCursor" : place === "app" ? "ap.toApp" : "ap.toTerminal");
     termBtn.title = t(place === "cursor" ? "ap.toCursorTitle" : place === "app" ? "ap.toAppTitle" : "ap.toTerminalTitle");
+    // The chevron says what its menu can do for this agent (no stop for Codex or Cursor).
+    const more = t(canStop(a) ? "ap.denyMore" : "ap.denyReason");
+    denyMore.title = more;
+    denyMore.setAttribute("aria-label", more);
+    // Where the island cannot allow it (D23), the hand-off is the way to approve
+    // it: the first, primary button, with the reason above it — and no Allow.
+    shownHolds = State.holdApprovals;
+    const handOffOnly = terminalOnly(a);
+    terminalNote.hidden = !handOffOnly;
+    if (handOffOnly) terminalText.textContent = placed("ap.terminalOnly", place);
+    termBtn.classList.toggle("btn-primary", handOffOnly);
+    termBtn.classList.toggle("btn-ghost", !handOffOnly);
     // The next request comes in with a short fade, so the hand-over is seen (approvals#12).
     if (handOver) {
       el.classList.remove("card-in");
@@ -1723,6 +1856,7 @@ function buildApproval(actions: ViewActions): ViewHost {
     const hold = needsHold(r.level);
     allowLabel.textContent = hold ? t("ap.holdAllow") : t("ap.allow");
     allowBtn.classList.toggle("needs-hold", hold);
+    allowBtn.hidden = handOffOnly;
     // A session grant is an automatic approval: offer it only where Rust would
     // honour one, and say what it covers — for a write, the file (A-6).
     remember.checked = false;
@@ -1748,16 +1882,23 @@ function buildApproval(actions: ViewActions): ViewHost {
     }
     let room = CARD_MAX_H - (el.offsetHeight - body.clientHeight + body.scrollHeight);
     if (room < -0.5) {
-      // Something else on the card grew: give room back, the last box first,
-      // never below its own height (only what was added moves, so a box being
-      // read keeps its scroll position).
-      for (const b of [...boxes].reverse()) {
-        const give = Math.min(b.offsetHeight - (baseHeight.get(b) ?? 0), -room);
-        if (give > 0.5) {
-          b.style.maxHeight = `${b.offsetHeight - give}px`;
-          room += give;
+      // Something else on the card grew, or it holds more than it has room for:
+      // give room back, the last box first — what was added first (so a box
+      // being read keeps its scroll position), then a file's content or a plan
+      // down to a few lines, so what is below it (the findings, the note) stays
+      // in view rather than under a second "there's more" (live L-A). The
+      // command keeps its own height.
+      for (const deep of [false, true]) {
+        for (const b of [...boxes].reverse()) {
+          if (room >= -0.5) break;
+          const base = baseHeight.get(b) ?? 0;
+          const floor = deep && b !== target ? Math.min(base, MIN_BOX_H) : base;
+          const give = Math.min(b.offsetHeight - floor, -room);
+          if (give > 0.5) {
+            b.style.maxHeight = `${b.offsetHeight - give}px`;
+            room += give;
+          }
         }
-        if (room >= -0.5) break;
       }
     } else {
       for (const b of boxes) {
@@ -1769,10 +1910,12 @@ function buildApproval(actions: ViewActions): ViewHost {
         room -= grow;
       }
     }
+    // The body's cue first: the boxes' own cues give way to it (`underBodyCue`).
+    bodyCue.update();
     targetCue.update();
     previewCue.update();
     planCue?.update();
-    bodyCue.update();
+    lookAtBatch();
   };
 
   return {
@@ -1794,6 +1937,17 @@ function buildApproval(actions: ViewActions): ViewHost {
         const handOver = shown !== null;
         shown = a;
         render(a, handOver);
+      } else if (shownHolds !== State.holdApprovals) {
+        // Rust said this platform cannot vouch for a hold (`terminal_only`):
+        // the same card, laid out without Allow.
+        render(a, false);
+      }
+      // Answers kept for requests that are gone go with them.
+      for (const id of [...forms.keys(), ...planNotes.keys()]) {
+        if (!State.approvals.some((x) => x.requestId === id)) {
+          forms.delete(id);
+          planNotes.delete(id);
+        }
       }
 
       // The queue: where this one is, and arrows to look at the others (A-5).
@@ -1810,13 +1964,13 @@ function buildApproval(actions: ViewActions): ViewHost {
       const lows = batchable();
       const lowered = State.approvals.filter((x) => x.kind === "permission" && x.risk.level === "low" && !isPlainLow(x)).length;
       const key = `${lows.map((x) => x.requestId).join("|")}#${a.requestId}#${lowered}`;
+      batchRow.hidden = lows.length < 2;
       if (key !== batchKey) {
         if (sending === "batch") endSending();
         batchKey = key;
         if (lows.length >= 2) renderBatch(lows, lowered);
         else batchIds = [];
       }
-      batchRow.hidden = lows.length < 2;
 
       const w = State.cardWarning && State.cardWarning.requestId === a.requestId ? State.cardWarning.text : "";
       if (w !== warningText) {

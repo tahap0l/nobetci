@@ -8,10 +8,10 @@ import { OwlGreeting } from "../baykus/greeting";
 import { Spring, Tracked, clamp } from "../core/anim";
 import { Bridge, IS_TAURI, IslandBridge, onEvent, type Anchor, type DecisionOptions, type InteractiveResponse } from "../core/bridge";
 import { Sound } from "../core/sound";
-import { State, handBackTo, isPlainLow, type FlashTone, type IslandMode, type IslandView } from "../core/state";
-import { t } from "../i18n/island";
+import { State, handBackTo, isPlainLow, type FlashTone, type IslandMode, type IslandView, type Step } from "../core/state";
+import { placed, t } from "../i18n/island";
 import { h } from "../ui/dom";
-import { buildCompact, buildViews, drawMinis, type ViewActions, type ViewHost } from "../ui/views";
+import { buildCompact, buildViews, canStop, drawMinis, type ViewActions, type ViewHost } from "../ui/views";
 import { IslandStateMachine } from "./fsm";
 import {
   COMPACT_CORNER, COMPACT_H, EXPANDED_CORNER, EXPANDED_W, GREETING_H, HIDDEN_W, HIT_MARGIN,
@@ -20,8 +20,18 @@ import {
 
 const modeOrder = (m: IslandMode) => (m === "hidden" ? 0 : m === "compact" ? 1 : 2);
 
+/** Which of a session's counters an answer added to (taken back when it never arrived). */
+type Counted = "approved" | "denied" | null;
+
 /** How often the island asks Rust whether it is quiet (quiet hours start and end on their own). */
 const QUIET_POLL_MS = 60_000;
+/**
+ * A blur this soon after the island gave the keyboard back is that hand-back
+ * itself (the window stops being focusable), not the user going elsewhere.
+ */
+const RELEASE_BLUR_MS = 400;
+/** Answered requests whose timeline line can still be corrected (C-21). */
+const ANSWERED_KEPT = 40;
 
 /** The mascot's position and size springs (Spring's defaults). */
 const OWL_RESPONSE = 0.5;
@@ -72,8 +82,19 @@ export class Island {
   private moodOverride: OwlMood | null = null;
   /** The island has the keyboard (the assistant's text box is up). */
   private keyboardOn = false;
+  /** When the island last gave the keyboard back (performance.now()). */
+  private keyboardOffAt = -Infinity;
   /** A text field on a card (the agenda) has the keyboard. */
   private typing = false;
+  /** The field that asked for the keyboard, focused again once the window has it (C-20). */
+  private typingField: HTMLElement | null = null;
+  /**
+   * The timeline line each answered request left, so an answer that never
+   * reached the agent can say so instead (C-21); and the ids Rust reported
+   * undelivered before the island had written that line.
+   */
+  private answered = new Map<string, { step: Step; sessionId: string; counted: Counted }>();
+  private undelivered = new Set<string>();
 
   /** A view asked for while the island was not open: opening it shows that one. */
   private requestedView: IslandView | null = null;
@@ -114,6 +135,33 @@ export class Island {
       void Bridge.toBuddy("buddy-mood", this.lastMood || State.mood);
       void Bridge.toBuddy("buddy-accent", this.lastAccent);
     });
+    // An answer sent from here never reached the agent: the request was over
+    // already (answered in the terminal, or the agent stopped waiting).
+    void onEvent<{ requestId?: string }>("approval-undelivered", (p) => {
+      if (typeof p?.requestId === "string") this.markUndelivered(p.requestId);
+    });
+  }
+
+  /**
+   * Says on the session's timeline that the answer to `requestId` did not
+   * arrive, in place of the decision it named (C-21). Rust may report it before
+   * the island has written that line: then the line says so when it is written.
+   */
+  markUndelivered(requestId: string) {
+    const done = this.answered.get(requestId);
+    if (!done) {
+      if (State.approvals.some((a) => a.requestId === requestId)) this.undelivered.add(requestId);
+      return;
+    }
+    this.answered.delete(requestId);
+    const { step, sessionId, counted } = done;
+    const tool = step.text.includes(" · ") ? step.text.slice(step.text.lastIndexOf(" · ")) : "";
+    step.text = `${t("out.undelivered")}${tool}`;
+    step.title = t("out.undeliveredTitle");
+    // Nothing was allowed or denied after all.
+    const s = State.session(sessionId);
+    if (s && counted) s[counted] = Math.max(0, s[counted] - 1);
+    State.notify();
   }
 
   /** A one-shot reaction, played by the island's mascot and the desktop one alike. */
@@ -294,6 +342,33 @@ export class Island {
   }
 
   /**
+   * Puts the caret back in the field that has the keyboard — the assistant's
+   * box, or the card field that asked for it — unless the focus is already in
+   * that view. Run once Rust has made the window the keyboard focus (C-20): a
+   * field focused before that shows no caret and takes no key on Linux.
+   */
+  private refocusField() {
+    if (!this.keyboardOn || State.mode !== "expanded") return;
+    const active = document.activeElement;
+    if (State.view === "assistant") {
+      if (!this.views.get("assistant")?.el.contains(active)) this.focusAssistant();
+    } else if (this.typing && this.typingField?.isConnected && (!active || active === document.body)) {
+      this.typingField.focus();
+    }
+  }
+
+  /**
+   * No field the island stops showing keeps the focus (C-20): with the window
+   * still focused, keys meant for the terminal would land in a hidden draft.
+   */
+  private releaseFields() {
+    this.typingField = null;
+    const active = document.activeElement as HTMLElement | null;
+    if (!active || active === document.body || !this.root.contains(active)) return;
+    if (active.isContentEditable || active.matches("input, textarea, select")) active.blur();
+  }
+
+  /**
    * The island takes the keyboard only while the assistant or a text field is
    * in use, and stays open meanwhile; anything else gives both back.
    */
@@ -302,7 +377,15 @@ export class Island {
     const on = State.mode === "expanded" && (State.view === "assistant" || this.typing);
     if (on === this.keyboardOn) return;
     this.keyboardOn = on;
-    void Bridge.islandKeyboard(on);
+    if (on) {
+      // Rust makes the window the keyboard focus (C-20); the field takes it
+      // once it has — here, and on the window's focus event.
+      void Bridge.islandKeyboard(true).then(() => this.refocusField());
+    } else {
+      this.keyboardOffAt = performance.now();
+      this.releaseFields();
+      void Bridge.islandKeyboard(false);
+    }
     if (!on) {
       this.moodOverride = null;
       this.dirty = true;
@@ -359,7 +442,14 @@ export class Island {
    */
   showApprovals() {
     this.fsm.pinned = true;
-    if (State.mode === "expanded" && State.view === "assistant") this.resumeAssistant = true;
+    // The assistant comes back after the card only if it was in use when the
+    // card came: it had the keyboard and the island the focus. If the user had
+    // already gone back to the terminal or the browser, taking the keyboard
+    // from them later would send their next keys into the assistant
+    // (island-ui#0). Asked before the card takes the keyboard back.
+    if (State.mode === "expanded" && State.view === "assistant") {
+      this.resumeAssistant = this.keyboardOn && document.hasFocus();
+    }
     if (State.mode === "expanded") this.setView("approval");
     else if (State.isQuiet) {
       State.view = "approval";
@@ -512,8 +602,9 @@ export class Island {
         void Bridge.approvalDecline(a.requestId, "paused");
         const s = State.session(a.sessionId);
         if (s) {
-          // Said on the session's timeline, so a request does not just vanish.
-          State.step(s, `${t("step.paused")} · ${a.tool}`);
+          // Said on the session's timeline, so a request does not just vanish —
+          // naming what asks instead (the terminal, Cursor, the Claude app).
+          State.step(s, `${placed("step.paused", handBackTo(s))} · ${a.tool}`);
           // The terminal has the question now; the row must not keep saying
           // "waiting for approval" for as long as the pause lasts.
           if (s.state === "approval") State.setState(s, "working");
@@ -540,21 +631,18 @@ export class Island {
         const denied = decision === "deny";
         Sound.play(denied ? "deny" : "allow");
         this.react(denied ? "deny" : "approve");
-        const s = State.session(a.sessionId);
-        if (s) {
-          if (denied) s.denied++;
-          else s.approved++;
-        }
+        // "Denied and stopped" only where the agent can be stopped: Codex and
+        // Cursor take a plain deny (relay#1), and the card does not offer it there.
         const note = denied
-          ? opts.stop
+          ? opts.stop && canStop(a)
             ? t("out.denyStopped")
-            : opts.message
+            : opts.message && !opts.stop
               ? t("out.deniedWhy", { why: opts.message })
               : t("out.denied")
           : opts.remember
             ? t("out.allowedRemember")
             : t("out.allowed");
-        this.finishApproval(requestId, note);
+        this.finishApproval(requestId, note, { counted: denied ? "denied" : "approved" });
       })
       .catch((err: unknown) => this.decisionFailed(requestId, err));
   }
@@ -569,15 +657,13 @@ export class Island {
         const back = response.kind === "revise";
         Sound.play(back ? "blip" : "allow");
         this.react(back ? "hoot" : "approve");
-        const s = State.session(a.sessionId);
-        if (s && !back) s.approved++;
         const note =
           response.kind === "answers"
             ? t("out.answered", { answer: Object.values(response.answers).join(" · ").slice(0, 80) })
             : back
               ? t("out.planRevise")
               : t("out.planApproved");
-        this.finishApproval(requestId, note);
+        this.finishApproval(requestId, note, { counted: back ? null : "approved" });
       })
       .catch((err: unknown) => this.decisionFailed(requestId, err));
   }
@@ -605,22 +691,31 @@ export class Island {
         if (!done.length) return;
         Sound.play("allow");
         this.react("approve");
-        for (const a of done) {
-          const s = State.session(a.sessionId);
-          if (s) s.approved++;
-          this.finishApproval(a.requestId, t("out.allowedBatch"));
-        }
+        for (const a of done) this.finishApproval(a.requestId, t("out.allowedBatch"), { counted: "approved" });
       })
       .catch((err: unknown) => this.decisionFailed(listedIds[0], err));
   }
 
   private decisionFailed(requestId: string, err: unknown) {
     const code = String(err).replace(/^Error:\s*/, "").trim();
+    const a = State.approvals.find((x) => x.requestId === requestId);
+    // What asks instead: the terminal, Cursor's own prompt or the Claude app.
+    const place = handBackTo(a && State.session(a.sessionId));
     switch (code) {
       case "not_pending":
-        // The relay already gave up; the terminal is asking instead.
-        this.finishApproval(requestId, t("out.fellBack"));
+        // The relay already gave up; the terminal (or Cursor, or the app) is asking instead.
+        this.finishApproval(requestId, placed("out.fellBack", place));
         return;
+      case "terminal_only":
+        // This platform cannot vouch for a hold (D23, C-25): Rust allows nothing
+        // that needs one from the island. The card loses its Allow and says
+        // where to decide; the request still waits there.
+        if (State.holdApprovals) {
+          State.holdApprovals = false;
+          void Bridge.log("terminal_only: this platform's island cannot allow HIGH or CRITICAL requests");
+        }
+        this.showApprovals();
+        break;
       case "too_soon":
         // The card had only just appeared: the click was meant for what was there
         // before (C-1). Nothing to say; the card stays.
@@ -656,7 +751,7 @@ export class Island {
         break;
       default:
         if (!IS_TAURI) {
-          this.finishApproval(requestId, t("out.fellBack"));
+          this.finishApproval(requestId, placed("out.fellBack", place));
           return;
         }
         this.flash(code, "error");
@@ -673,15 +768,28 @@ export class Island {
     this.finishApproval(requestId, t(place === "cursor" ? "out.toCursor" : place === "app" ? "out.toApp" : "out.toTerminal"));
   }
 
-  private finishApproval(requestId: string, note: string) {
+  /**
+   * The card is done: its line goes on the session's timeline. `sent`: an
+   * answer went to Rust, with the session counter it adds to; that line and
+   * that count are taken back if Rust reports it never arrived (C-21).
+   */
+  private finishApproval(requestId: string, note: string, sent?: { counted: Counted }) {
     const a = State.approvals.find((x) => x.requestId === requestId);
     State.removeApproval(requestId);
     if (State.cardWarning?.requestId === requestId) State.cardWarning = null;
     const s = a && State.session(a.sessionId);
     if (s) {
+      if (sent?.counted) s[sent.counted]++;
       State.step(s, `${note} · ${a.tool}`);
+      const step = s.steps[s.steps.length - 1];
+      if (sent && step) {
+        this.answered.set(requestId, { step, sessionId: s.id, counted: sent.counted });
+        // Only the latest answers can still turn out undelivered.
+        if (this.answered.size > ANSWERED_KEPT) this.answered.delete(this.answered.keys().next().value!);
+      }
       if (!State.approvals.some((x) => x.sessionId === s.id)) State.setState(s, "working");
     }
+    if (this.undelivered.delete(requestId)) this.markUndelivered(requestId);
     this.afterApprovalChange();
     State.notify();
   }
@@ -836,10 +944,25 @@ export class Island {
       const field = (e.target as Element | null)?.closest?.<HTMLElement>("[data-typing]");
       if (!field || this.typing || State.view === "assistant") return;
       this.typing = true;
+      this.typingField = field;
       this.fsm.pinned = true;
       this.syncKeyboard();
       window.setTimeout(() => field.focus(), 60);
     });
+    // A field the island does not show takes no key (C-20): the island folded
+    // or hidden, or the field's view not the one on screen. Enter in a draft
+    // nobody sees would send it; a key meant for the terminal would land in it.
+    const offScreen = (e: Event) => {
+      const field = (e.target as Element | null)?.closest?.<HTMLElement>("input, textarea, select, [contenteditable]");
+      if (!field) return;
+      const shown = State.mode === "expanded" && State.view !== "greeting" && this.views.get(State.view)?.el.contains(field);
+      if (shown) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      field.blur();
+    };
+    this.root.addEventListener("keydown", offScreen, true);
+    this.root.addEventListener("beforeinput", offScreen, true);
     this.islandEl.addEventListener("focusout", (e) => {
       if (!this.typing) return;
       const next = e.relatedTarget as Element | null;
@@ -854,6 +977,12 @@ export class Island {
     // The user went to another application.
     window.addEventListener("blur", () => {
       this.endTyping();
+      // Gone elsewhere while a card waits over the assistant: the assistant
+      // comes back after it without taking the keyboard (island-ui#0). A blur
+      // just after the island gave the keyboard back is that hand-back itself.
+      if (State.approvals.length && performance.now() - this.keyboardOffAt > RELEASE_BLUR_MS) {
+        this.resumeAssistant = false;
+      }
       // The assistant keeps its draft but no longer holds the island open: it
       // folds like any other view once the mouse is away.
       if (State.mode === "expanded" && State.view === "assistant" && !State.approvals.length) {
@@ -863,6 +992,9 @@ export class Island {
     });
     window.addEventListener("focus", () => {
       if (State.mode === "expanded" && State.view === "assistant") this.fsm.pinned = true;
+      // The window has the keyboard now (Rust gave it, C-20): the field that
+      // asked for it takes it, so the first key typed is not lost.
+      this.refocusField();
       if (performance.now() - this.quietAt > 5_000) void this.refreshQuiet();
     });
     document.addEventListener("visibilitychange", () => {
@@ -877,6 +1009,9 @@ export class Island {
     this.islandEl.addEventListener("mousedown", (e) => {
       Sound.resume();
       this.noteActivity();
+      // Only the main button opens the pill or pokes the mascot: a right-click
+      // or a middle-click on the pill does nothing (live L-B).
+      if (e.button !== 0) return;
       if (State.mode !== "expanded") {
         this.fsm.click();
         return;
