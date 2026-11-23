@@ -412,15 +412,32 @@ pub fn show(win: &WebviewWindow) {
     });
 }
 
-/// Lets the island take the keyboard (`on`) or go back to never taking focus.
+/// Windows: the window that was in front before the island took the
+/// keyboard (an HWND as a number; 0 = none).
+#[cfg(windows)]
+static BEFORE: std::sync::atomic::AtomicIsize = std::sync::atomic::AtomicIsize::new(0);
+
+/// Lets the island take the keyboard (`on`), remembering the window that was
+/// in front, or go back to never taking focus — and give that window the
+/// foreground again if the island still has it, so keys meant for it do not
+/// land in a field nobody sees (C-20).
 #[cfg(windows)]
 pub fn set_typing(win: &WebviewWindow, on: bool) {
     TYPING.store(on, Ordering::Relaxed);
+    let island = win.hwnd().map(|h| h.0 as isize).unwrap_or(0);
+    if on {
+        let front = win::foreground();
+        if front != 0 && front != island {
+            BEFORE.store(front, Ordering::Relaxed);
+        }
+    }
     change_flags(win, move |w| {
         let _ = w.set_focusable(on);
         if on {
             // The user just clicked the island, so Windows lets it come forward.
             let _ = w.set_focus();
+        } else {
+            win::give_back(BEFORE.swap(0, Ordering::Relaxed), island);
         }
     });
 }
@@ -435,13 +452,48 @@ pub fn set_typing(win: &WebviewWindow, on: bool) {
     }
 }
 
+/// Linux: the window that had the keyboard before the island took it.
+#[cfg(target_os = "linux")]
+static BEFORE: Mutex<Option<std::os::raw::c_ulong>> = Mutex::new(None);
+
+/// Linux (C-20): `on` makes the island focusable and focused and gives its web
+/// view GTK's focus too — a window that holds the X focus without a focus
+/// widget drops every key, so the assistant opened by its hotkey would take no
+/// typing until clicked. The window that had the keyboard is remembered.
+/// `!on` makes the island unfocusable again and, if it still holds the
+/// keyboard (X does not move it away from a window that stops accepting it),
+/// gives it back to that window through the window manager.
 #[cfg(target_os = "linux")]
 pub fn set_typing(win: &WebviewWindow, on: bool) {
     TYPING.store(on, Ordering::Relaxed);
-    let _ = win.set_focusable(on);
+    let island = island_xid(win);
     if on {
+        if let Some(active) = crate::x11::active_window().filter(|&w| Some(w) != island) {
+            *BEFORE.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = Some(active);
+        }
+        let _ = win.set_focusable(true);
         let _ = win.set_focus();
+        let webview: &tauri::Webview = win.as_ref();
+        let _ = webview.set_focus();
+    } else {
+        let _ = win.set_focusable(false);
+        let before = BEFORE.lock().unwrap_or_else(std::sync::PoisonError::into_inner).take();
+        if let Some(island) = island.filter(|&island| crate::x11::focus_within(island)) {
+            crate::x11::give_focus(before, island);
+        }
     }
+}
+
+/// Linux: the island's own X window, found once.
+#[cfg(target_os = "linux")]
+fn island_xid(win: &WebviewWindow) -> Option<std::os::raw::c_ulong> {
+    // Asked before taking the lock: window getters go through the main thread.
+    let title = win.title().unwrap_or_default();
+    let mut shape = SHAPE.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    if shape.xid.is_none() {
+        shape.xid = crate::x11::own_window(&title);
+    }
+    shape.xid
 }
 
 // ── Click-through and the cursor poll ────────────────────────────────────────

@@ -7,7 +7,9 @@
 //   * which top-level window belongs to a process (go to the session's window);
 //   * which device a mouse press came from (the click guard, `inputguard/x11.rs`);
 //   * whether a compositing manager runs, and if not, cuts the island's window
-//     down to the island (`island::fit_shape`).
+//     down to the island (`island::fit_shape`);
+//   * which window has the keyboard, so the island can give it back once the
+//     user is done typing into it (`island::set_typing`).
 //
 // libX11, libXi and libXfixes are loaded at run time (x11-dl), so a desktop
 // without them simply goes without these features instead of failing to start.
@@ -158,6 +160,13 @@ pub fn activate_pid(pids: &[u32]) -> bool {
     let Some(&(win, _)) = pids.iter().find_map(|pid| owned.iter().find(|(_, owner)| owner == pid)) else {
         return false;
     };
+    activate(&c, win);
+    true
+}
+
+/// Asks the window manager to make `win`, one of its client windows, the
+/// active one (`_NET_ACTIVE_WINDOW`): raised, and given the keyboard.
+fn activate(c: &Conn, win: c_ulong) {
     let mut event: xlib::XEvent = unsafe { std::mem::zeroed() };
     let msg = unsafe { &mut event.client_message };
     msg.type_ = xlib::ClientMessage;
@@ -177,7 +186,76 @@ pub fn activate_pid(pids: &[u32]) -> bool {
         );
         (c.x.XFlush)(c.dpy);
     }
-    true
+}
+
+/// The client window the window manager has active (`_NET_ACTIVE_WINDOW`),
+/// if it says.
+pub fn active_window() -> Option<c_ulong> {
+    let c = Conn::open()?;
+    c.longs(c.root(), "_NET_ACTIVE_WINDOW").first().copied().filter(|&win| win != 0)
+}
+
+/// Whether the keyboard focus is on `top` or a window inside it (GTK keeps
+/// the focus on a child window of its own).
+pub fn focus_within(top: c_ulong) -> bool {
+    let Some(c) = Conn::open() else { return false };
+    let (mut focus, mut revert): (c_ulong, c_int) = (0, 0);
+    unsafe { (c.x.XGetInputFocus)(c.dpy, &mut focus, &mut revert) };
+    // 0 is None and 1 PointerRoot: no window holds the keyboard.
+    let (root, mut win) = (c.root(), focus);
+    for _ in 0..32 {
+        if win == top {
+            return true;
+        }
+        if win <= 1 || win == root {
+            return false;
+        }
+        let (mut root_of, mut parent) = (0, 0);
+        let mut list: *mut c_ulong = std::ptr::null_mut();
+        let mut count: c_uint = 0;
+        if unsafe { (c.x.XQueryTree)(c.dpy, win, &mut root_of, &mut parent, &mut list, &mut count) } == 0 {
+            return false;
+        }
+        if !list.is_null() {
+            unsafe { (c.x.XFree)(list.cast()) };
+        }
+        win = parent;
+    }
+    false
+}
+
+/// Gives the keyboard back from `island` to `before`, the window that had it,
+/// through the window manager. When that window is gone, the window manager's
+/// topmost other window takes it (not a panel, the desktop or a minimised
+/// window, and none of Nöbetçi's); with no window manager, the keyboard
+/// follows the pointer again.
+pub fn give_focus(before: Option<c_ulong>, island: c_ulong) {
+    let Some(c) = Conn::open() else { return };
+    let root = c.root();
+    let clients = c.longs(root, "_NET_CLIENT_LIST");
+    let me = c_ulong::from(std::process::id());
+    let skip =
+        [c.atom("_NET_WM_WINDOW_TYPE_DOCK"), c.atom("_NET_WM_WINDOW_TYPE_DESKTOP"), c.atom("_NET_WM_STATE_HIDDEN")];
+    let target = before.filter(|win| *win != island && clients.contains(win)).or_else(|| {
+        c.longs(root, "_NET_CLIENT_LIST_STACKING").into_iter().rev().find(|&win| {
+            win != island
+                && c.longs(win, "_NET_WM_PID").first() != Some(&me)
+                && !c
+                    .longs(win, "_NET_WM_WINDOW_TYPE")
+                    .iter()
+                    .chain(&c.longs(win, "_NET_WM_STATE"))
+                    .any(|a| skip.contains(a))
+        })
+    });
+    match target {
+        Some(win) => activate(&c, win),
+        None if clients.is_empty() => unsafe {
+            // PointerRoot (1), with RevertToPointerRoot (1).
+            (c.x.XSetInputFocus)(c.dpy, 1, 1, xlib::CurrentTime);
+            (c.x.XFlush)(c.dpy);
+        },
+        None => {}
+    }
 }
 
 /// Whether a compositing manager runs on the default screen: it owns the
