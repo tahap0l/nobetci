@@ -9,7 +9,7 @@
 
 use super::resolve;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Dialect {
     /// Bash, sh, zsh — and cmd, whose few separators it shares.
     Posix,
@@ -50,33 +50,73 @@ pub struct Pipeline {
 }
 
 /// Deepest nesting followed (`$( )` in a `-c` string in an `eval`…). Real
-/// commands stay far below it; past it the rest is read as plain text.
+/// commands stay far below it; past it the rest is not read, and the reading
+/// says so (`Reading::partial`).
 const MAX_NEST: usize = 12;
 
 /// Characters a backslash escapes outside quotes. Before anything else the
 /// backslash is kept: `C:\Users` is a Windows path, not an escaped `U`.
 const ESCAPABLE: &str = " \t\"'\\$`;&|<>(){}[]#!*?~";
 
-pub fn parse(text: &str, dialect: Dialect) -> Vec<Pipeline> {
-    let mut out = Vec::new();
-    parse_into(text, dialect, 0, &mut out);
-    out
+/// The commands of a command line, and whether all of it could be read.
+pub struct Reading {
+    pub pipes: Vec<Pipeline>,
+    /// Some of it went unread: nested deeper than MAX_NEST, or handing over
+    /// more text than the reading's budget. What was not read cannot be
+    /// vouched for — the request needs a person (risk.rs `unreadable`).
+    pub partial: bool,
 }
 
-fn parse_into(text: &str, dialect: Dialect, depth: usize, out: &mut Vec<Pipeline>) {
-    if depth > MAX_NEST || text.trim().is_empty() {
+pub fn read(text: &str, dialect: Dialect) -> Reading {
+    // Every text handed over (`bash -c`, `eval`) is read once, and all of
+    // them together get a few times the command's own length: nesting
+    // `bash -c "$(…)"` used to hand the same inner text over again at every
+    // level, and 26 levels (344 bytes) took 13 GiB.
+    let mut st = ReadState {
+        seen: std::collections::HashSet::new(),
+        budget: text.len().saturating_mul(4).saturating_add(64 * 1024),
+        partial: false,
+    };
+    let mut out = Vec::new();
+    parse_into(text, dialect, 0, &mut out, &mut st);
+    Reading { pipes: out, partial: st.partial }
+}
+
+#[cfg(test)]
+pub fn parse(text: &str, dialect: Dialect) -> Vec<Pipeline> {
+    read(text, dialect).pipes
+}
+
+struct ReadState {
+    /// Texts already handed over and read, with their dialect.
+    seen: std::collections::HashSet<(String, Dialect)>,
+    /// Characters still to be read.
+    budget: usize,
+    partial: bool,
+}
+
+fn parse_into(text: &str, dialect: Dialect, depth: usize, out: &mut Vec<Pipeline>, st: &mut ReadState) {
+    if text.trim().is_empty() {
         return;
     }
+    if depth > MAX_NEST || text.len() > st.budget {
+        st.partial = true;
+        return;
+    }
+    st.budget -= text.len();
     let chars: Vec<char> = text.chars().collect();
     let start = out.len();
-    let mut p = Parser { c: &chars, i: 0, dialect, nest: depth };
+    let mut p = Parser { c: &chars, i: 0, dialect, nest: depth, cut: false };
     p.list(None, out);
+    st.partial |= p.cut;
     // Commands handed over as text run too: `bash -c "…"`, `eval …`,
-    // `ssh host …`, a here-document fed to a shell.
+    // `ssh host …`, a here-document fed to a shell. Each text once.
     let handed: Vec<(String, Dialect)> =
         out[start..].iter().flat_map(|pipe| pipe.stages.iter()).flat_map(|s| handed_over(s, dialect)).collect();
     for (text, d) in handed {
-        parse_into(&text, d, depth + 1, out);
+        if st.seen.insert((text.clone(), d)) {
+            parse_into(&text, d, depth + 1, out, st);
+        }
     }
 }
 
@@ -158,6 +198,8 @@ struct Parser<'a> {
     i: usize,
     dialect: Dialect,
     nest: usize,
+    /// Nesting went deeper than MAX_NEST: the rest was not read.
+    cut: bool,
 }
 
 impl Parser<'_> {
@@ -418,6 +460,7 @@ impl Parser<'_> {
             self.nest -= 1;
         } else {
             self.i = self.c.len();
+            self.cut = true;
         }
         b.started = true;
         b.word.extend(self.c[start..self.i.min(self.c.len())].iter());
@@ -686,6 +729,7 @@ fn is_dos_switch(arg: &str) -> bool {
 
 /// Programs whose switches start with `/`.
 const DOS: &[&str] = &[
+    "rmdir",
     "copy",
     "xcopy",
     "robocopy",
@@ -757,8 +801,28 @@ pub struct Written {
     pub raw: String,
     /// Made absolute against the folder the command runs in (`cd` followed).
     pub path: String,
-    /// Content goes there (`false`: only its permissions or attributes change).
-    pub content: bool,
+    pub how: How,
+}
+
+/// How a command touches a path.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum How {
+    /// Puts content there.
+    Content,
+    /// Puts content there under the name of what it copies: `cp settings.json
+    /// ~/.claude/` writes `~/.claude/settings.json`. The name may be the
+    /// relay's without the file being it (`cp target/…/nobetci-hook dist/`).
+    Named,
+    /// Changes only its permissions or attributes.
+    Meta,
+    /// Fills the folder with files it does not name: an archive unpacked
+    /// there, a folder's contents copied in. It may receive any file a folder
+    /// holds — in the home folder, every startup and settings file.
+    Into,
+    /// Makes, replaces, moves or removes the folder as a whole, with whatever
+    /// it holds: `rm -rf ~/.claude`, `mv /tmp/cfg ~/.claude` when there is no
+    /// ~/.claude yet, a folder copied there under its own name.
+    Whole,
 }
 
 /// What downloaders save: explicit files, names taken from the URL, and
@@ -959,7 +1023,191 @@ fn saves(s: &Simple, cmd: &Cmd) -> Option<Saved> {
 }
 
 /// Copy-like programs: the last argument is where the content goes.
-const COPIERS: &[&str] = &["cp", "copy", "install", "ln", "rsync", "scp", "ditto", "xcopy", "gcp", "pscp", "cpio"];
+const COPIERS: &[&str] = &["cp", "copy", "install", "ln", "rsync", "scp", "ditto", "xcopy", "gcp", "pscp"];
+
+/// Programs that move what they are handed: the last argument is where it goes.
+const MOVERS: &[&str] = &["mv", "move", "gmv", "move-item", "mi"];
+
+/// Options of a copy-like program that take a value: the value is neither
+/// what is copied nor where it goes.
+fn copy_options(name: &str) -> &'static [&'static str] {
+    match name {
+        "cp" | "gcp" | "ln" | "mv" | "gmv" => &["-t", "--target-directory", "-S", "--suffix"],
+        "install" => &["-t", "--target-directory", "-S", "--suffix", "-m", "--mode", "-o", "--owner", "-g", "--group"],
+        "rsync" => &[
+            "-e",
+            "--rsh",
+            "-f",
+            "--filter",
+            "--exclude",
+            "--include",
+            "--exclude-from",
+            "--include-from",
+            "--files-from",
+            "-B",
+            "--block-size",
+            "-T",
+            "--temp-dir",
+            "--partial-dir",
+            "--backup-dir",
+            "--compare-dest",
+            "--copy-dest",
+            "--link-dest",
+            "--log-file",
+            "--password-file",
+            "--chmod",
+            "--chown",
+            "-M",
+            "--remote-option",
+            "--suffix",
+            "--timeout",
+            "--port",
+        ],
+        "scp" | "pscp" => &["-i", "-P", "-o", "-F", "-c", "-l", "-S", "-J", "-D", "-X"],
+        "ditto" => &["--arch", "--bom"],
+        _ => &[],
+    }
+}
+
+/// The words that are neither options nor the values of the options in `valued`.
+fn operands<'a>(args: &'a [String], dos: bool, valued: &[&str]) -> Vec<&'a str> {
+    let mut out = Vec::new();
+    let mut only = false;
+    let mut i = 0;
+    while let Some(a) = args.get(i) {
+        i += 1;
+        if !only && a == "--" {
+            only = true;
+        } else if !only && valued.contains(&a.as_str()) {
+            i += 1;
+        } else if only || !(a.len() > 1 && a.starts_with('-') || dos && is_dos_switch(a)) {
+            out.push(a.as_str());
+        }
+    }
+    out
+}
+
+/// The last part of a path: what a file keeps as its name when it is copied
+/// into a folder. Empty for `.`, `x/.` and `x/` copied by rsync — the
+/// folder's contents, not the folder.
+fn last_part(path: &str) -> &str {
+    let trimmed = path.trim_end_matches(['/', '\\']);
+    let last = trimmed.rsplit(['/', '\\']).next().unwrap_or(trimmed);
+    if last == "." || last.is_empty() {
+        ""
+    } else {
+        last
+    }
+}
+
+/// Folders whose files are protected by where they lie (`.claude/settings.json`,
+/// `.git/hooks/…`, `~/.bashrc`): a file copied to one of them by its name
+/// alone lands inside it, whether or not the command ends it with a `/`.
+const KEPT_FOLDERS: &[&str] = &[
+    ".claude",
+    "claude",
+    ".codex",
+    ".cursor",
+    ".git",
+    "hooks",
+    ".husky",
+    ".ssh",
+    ".gnupg",
+    ".aws",
+    ".kube",
+    ".docker",
+    ".config",
+    "autostart",
+    "nobetci",
+    "bin",
+    "launchagents",
+    "launchdaemons",
+    "startup",
+];
+
+/// Whether a copy's destination is a folder the copies land in: written as a
+/// folder (`dir/`, `.`, `~`, `$HOME`), or one of KEPT_FOLDERS by name.
+fn into_folder_named(dest: &str) -> bool {
+    if dest.ends_with(['/', '\\']) {
+        return true;
+    }
+    let last = dest.rsplit(['/', '\\']).next().unwrap_or(dest).to_lowercase();
+    matches!(last.as_str(), "." | "..")
+        || last.starts_with('~') && !last.contains('.')
+        || last.starts_with('$') && !last.contains('.')
+        || last.starts_with('%') && last.ends_with('%')
+        || KEPT_FOLDERS.contains(&last.as_str())
+}
+
+/// A destination that is always there, so a folder copied or moved to it
+/// lands inside it and never takes its name: `.`, `..`, `~`, `$HOME`, `/`.
+fn always_there(dest: &str) -> bool {
+    let d = dest.trim_end_matches(['/', '\\']).to_ascii_lowercase();
+    matches!(d.as_str(), "" | "." | ".." | "~" | "$home" | "${home}" | "%userprofile%" | "$env:userprofile")
+}
+
+/// Where copies of `sources` land in `dest`: `dest` itself, each source's
+/// name inside it when `dest` is a folder (`How::Named`), and `dest` as a
+/// folder that receives unnamed files when a folder's contents are copied
+/// (`How::Into`: `cp -r x/. dest`, `rsync -a x/ dest`, `ditto x dest`). A
+/// folder (`folders`: a recursive copy, a move, a link) lands as a whole
+/// under its own name, and takes the destination's name when there is no
+/// such folder yet (`mv /tmp/cfg ~/.claude`): `How::Whole`.
+fn landed(found: &mut Vec<(String, How)>, dest: &str, sources: &[&str], folder: bool, contents: bool, folders: bool) {
+    found.push((dest.to_string(), How::Content));
+    let folder = folder || sources.len() > 1 || into_folder_named(dest);
+    let mut into = contents;
+    for src in sources {
+        match last_part(src) {
+            "" => into = true,
+            name if folder => {
+                let at = format!("{}/{name}", dest.trim_end_matches(['/', '\\']));
+                if folders {
+                    found.push((at.clone(), How::Whole));
+                }
+                found.push((at, How::Named));
+            }
+            _ => {}
+        }
+    }
+    if folders && sources.len() == 1 && !into && !dest.ends_with(['/', '\\']) && !always_there(dest) {
+        found.push((dest.to_string(), How::Whole));
+    }
+    if into {
+        found.push((dest.to_string(), How::Into));
+    }
+}
+
+/// A copy that takes folders with what they hold: `cp -r`, `cp -a`, `rsync
+/// -a`, `scp -r`, `ditto`, `xcopy /s`, `Copy-Item -Recurse`.
+fn copies_folders(name: &str, args: &[String]) -> bool {
+    let short = |c: char| args.iter().any(|a| short_group_has(a, c));
+    let long = |l: &str| args.iter().any(|a| a == l);
+    match name {
+        "cp" | "gcp" => short('r') || short('R') || short('a') || long("--recursive") || long("--archive"),
+        "rsync" => short('r') || short('a') || long("--recursive") || long("--archive"),
+        "scp" | "pscp" => short('r'),
+        "ditto" => true,
+        "xcopy" => args.iter().any(|a| matches!(a.to_ascii_lowercase().as_str(), "/s" | "/e")),
+        "copy-item" | "cpi" => args.iter().any(|a| ps_param(a, "recurse", 1)),
+        _ => false,
+    }
+}
+
+/// A copy that puts a folder's contents straight into its destination, not
+/// the folder itself: `cp -T`, `rsync` from `src/`, `ditto`, `xcopy /s`,
+/// `robocopy` (`landed` also sees `x/.`).
+fn copies_contents(name: &str, args: &[String], sources: &[&str]) -> bool {
+    match name {
+        "cp" | "gcp" => args
+            .iter()
+            .any(|a| a == "--no-target-directory" || a.starts_with('-') && !a.starts_with("--") && a.contains('T')),
+        "rsync" => sources.iter().any(|s| s.ends_with(['/', '\\'])),
+        "ditto" => true,
+        "xcopy" => args.iter().any(|a| matches!(a.to_ascii_lowercase().as_str(), "/s" | "/e")),
+        _ => false,
+    }
+}
 
 /// Programs that change or remove every path they are handed.
 const CHANGERS: &[&str] = &[
@@ -1021,7 +1269,7 @@ const PERMISSIONS: &[&str] = &[
 /// file — or hands the work to another program.
 static WRITES_IN_CODE: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
     regex::Regex::new(
-        r#"(?i)open\s*\([^)]*?,\s*(f?["'][^"']*[wax+]|mode\s*=)|\.write(_text|_bytes|lines)?\s*\(|\b(write|append)(file|filesync|_text|_bytes|alltext|allbytes|alllines)\b|createwritestream|\b(copyfile|copyfilesync|copytree|copy2|cpsync)\b|\b(rename|renamesync|replace|unlink|unlinksync|remove|rmtree|rmdir|rmdirsync|rmsync|chmod|chmodsync|symlink|symlinksync|truncate|truncatesync|move)\s*\(|\bshutil\.|\bos\.(remove|unlink|rename|replace|chmod|symlink|system|popen)\b|\bfs\.(promises\.)?(write|append|copy|cp|rename|rm|unlink|symlink|chmod|truncate|open)\w*|fileutils\.|\bfile\.(write|open|delete|rename|chmod)\b|\bio\.(write|binwrite)\b|\b(set|add)-content\b|\bout-file\b|\b(copy|move|remove|new|rename)-item\b|\[(system\.)?io\.file\]::|\bsubprocess\b|child_process|\bsystem\s*\(|\bexec\w*\s*\(|["']\s*\+?>{1,2}|>\s*["'$]"#,
+        r#"(?i)\bopen\s*\([^\n]*?,\s*(f?["'][rbtu]*[wax+][rbtwax+]*["']|mode\s*=\s*f?["'][^"']*[wax+])|\.write(_text|_bytes|lines)?\s*\(|\b(write|append)(file|filesync|_text|_bytes|alltext|allbytes|alllines)\b|createwritestream|\b(copyfile|copyfilesync|copytree|copy2|cpsync)\b|\b(rename|renamesync|replace|unlink|unlinksync|remove|rmtree|rmdir|rmdirsync|rmsync|chmod|chmodsync|symlink|symlinksync|truncate|truncatesync|move)\s*\(|\bshutil\.|\bos\.(remove|unlink|rename|replace|chmod|symlink|system|popen)\b|\bfs\.(promises\.)?(write|append|copy|cp|rename|rm|unlink|symlink|chmod|truncate|open)\w*|fileutils\.|\bfile\.(write|open|delete|rename|chmod)\b|\bio\.(write|binwrite)\b|\b(set|add)-content\b|\bout-file\b|\b(copy|move|remove|new|rename)-item\b|\[(system\.)?io\.file\]::|\bsubprocess\b|child_process|\bsystem\s*\(|\bexec\w*\s*\(|["']\s*\+?>{1,2}|>\s*["'$]"#,
     )
     .expect("bad pattern")
 });
@@ -1036,6 +1284,72 @@ fn quoted_paths(code: &str) -> Vec<String> {
         .map(|m| m.as_str().to_string())
         .filter(|s| s.contains(['/', '\\']) || s.starts_with('~'))
         .collect()
+}
+
+/// A protected place that code names by its parts rather than as one path:
+/// `os.path.join(home, '.claude', 'settings.json')`,
+/// `Path.home() / '.config' / 'nobetci'`, `Join-Path $env:APPDATA 'Nobetci'`.
+/// Spelled out the way the path rules know it.
+fn parts_paths(code: &str) -> Vec<String> {
+    let lower = code.to_lowercase();
+    let has = |w: &str| lower.contains(w);
+    let mut v = Vec::new();
+    if has(".claude") && (has("settings.json") || has("settings.local.json")) {
+        v.push("~/.claude/settings.json".to_string());
+    }
+    if (has(".codex") || has(".cursor")) && (has("hooks.json") || has("config.toml")) {
+        v.push("~/.codex/hooks.json".to_string());
+    }
+    let homes = [".config", ".local", "application support", "appdata", "applicationdata", "xdg_"];
+    if has("nobetci") && homes.iter().any(|h| has(h)) {
+        v.push("~/.config/nobetci/settings.json".to_string());
+    }
+    v
+}
+
+/// The paths code that writes may write to: its quoted paths and the places
+/// it names by their parts. Nothing when the code writes nothing.
+pub fn code_writes(code: &str) -> Vec<String> {
+    if !WRITES_IN_CODE.is_match(code) {
+        return Vec::new();
+    }
+    let mut v = quoted_paths(code);
+    v.extend(parts_paths(code));
+    v
+}
+
+/// The program an awk is handed on its command line (not `-f file`).
+fn awk_program(args: &[String]) -> Option<&str> {
+    let mut i = 0;
+    while let Some(a) = args.get(i) {
+        match a.as_str() {
+            "--" => return args.get(i + 1).map(String::as_str),
+            "-f" | "--file" => return None,
+            "-F" | "-v" | "-W" => i += 2,
+            a if a.len() > 1 && a.starts_with('-') => i += 1,
+            a => return Some(a),
+        }
+    }
+    None
+}
+
+/// The code a program runs from its command line, or from a here-document or
+/// here-string when it reads its program from standard input
+/// (`python3 - <<'EOF'`, `node <<EOF`). A shell's here-document is read as
+/// commands instead (`handed_over`).
+fn code_of(s: &Simple, cmd: &Cmd) -> Option<String> {
+    if let Some(code) = inline_code(cmd) {
+        return Some(code);
+    }
+    if SHELLS.contains(&cmd.name.as_str()) || !reads_program(cmd) {
+        return None;
+    }
+    let mut code = s.heredoc.clone();
+    for r in s.redirects.iter().filter(|r| r.op == "<<<") {
+        code.push('\n');
+        code.push_str(&r.target);
+    }
+    (!code.trim().is_empty()).then_some(code)
 }
 
 /// The code an interpreter is handed on its command line, if any.
@@ -1071,13 +1385,13 @@ fn inline_code(cmd: &Cmd) -> Option<String> {
     }
 }
 
-/// The paths a command writes to, as written; `true` when content goes there.
-fn written_by(s: &Simple, cmd: Option<&Cmd>) -> Vec<(String, bool)> {
-    let mut v: Vec<(String, bool)> = s
+/// The paths a command writes to, as written, and how.
+fn written_by(s: &Simple, cmd: Option<&Cmd>) -> Vec<(String, How)> {
+    let mut v: Vec<(String, How)> = s
         .redirects
         .iter()
         .filter(|r| matches!(r.op.as_str(), ">" | ">>" | ">|" | "&>" | "&>>" | "<>"))
-        .map(|r| (r.target.clone(), true))
+        .map(|r| (r.target.clone(), How::Content))
         .collect();
     let Some(cmd) = cmd else {
         v.retain(|(p, _)| !is_device(p));
@@ -1094,16 +1408,91 @@ fn written_by(s: &Simple, cmd: Option<&Cmd>) -> Vec<(String, bool)> {
             content.extend(ps_value(args, "filepath", 1).or_else(|| ps_value(args, "literalpath", 1)).map(String::from))
         }
         "mklink" => content.extend(pos.first().map(|p| p.to_string())),
-        "copy-item" | "cpi" => {
-            content.extend(ps_value(args, "destination", 1).or_else(|| pos.get(1).copied()).map(String::from))
+        "copy-item" | "cpi" | "move-item" | "mi" => {
+            let dest = ps_value(args, "destination", 1).or_else(|| pos.get(1).copied());
+            let src =
+                ps_value(args, "path", 1).or_else(|| ps_value(args, "literalpath", 1)).or_else(|| pos.first().copied());
+            let moves = matches!(name, "move-item" | "mi");
+            if moves {
+                content.extend(src.map(String::from));
+                v.extend(src.map(|p| (p.to_string(), How::Whole)));
+            }
+            if let Some(dest) = dest {
+                let folders = moves || copies_folders(name, args);
+                landed(&mut v, dest, &src.into_iter().collect::<Vec<_>>(), false, false, folders);
+            }
         }
-        "robocopy" => content.extend(pos.get(1).map(|p| p.to_string())),
-        n if COPIERS.contains(&n) => {
-            let dest = option_value(args, &["-t", "--target-directory"])
-                .or_else(|| (pos.len() >= 2).then(|| pos[pos.len() - 1]));
-            content.extend(dest.map(String::from));
+        "robocopy" => {
+            // `robocopy SRC DST [files…]`: the files land in DST; without
+            // them, everything in SRC does.
+            if let Some(dest) = pos.get(1) {
+                let files = pos.get(2..).unwrap_or(&[]);
+                let all = files.is_empty()
+                    || args.iter().any(|a| matches!(a.to_ascii_lowercase().as_str(), "/s" | "/e" | "/mir" | "/move"));
+                landed(&mut v, dest, files, true, all, true);
+            }
         }
-        n if CHANGERS.contains(&n) => content.extend(pos.iter().map(|p| p.to_string())),
+        "cpio" => {
+            // `cpio -i` unpacks into the folder it runs in; `cpio -p DIR` copies into DIR.
+            let short = |c: char| args.iter().any(|a| short_group_has(a, c));
+            if short('p') {
+                v.extend(pos.first().map(|d| (d.to_string(), How::Into)));
+            } else if short('i') || args.iter().any(|a| a == "--extract") {
+                v.push((".".into(), How::Into));
+            }
+        }
+        n if COPIERS.contains(&n) || MOVERS.contains(&n) => {
+            let ops = operands(args, DOS.contains(&n), copy_options(n));
+            let target = option_value(args, &["-t", "--target-directory"]);
+            let (sources, dest, folder): (Vec<&str>, Option<&str>, bool) = match target {
+                Some(t) => (ops.clone(), Some(t), true),
+                None if ops.len() >= 2 => (ops[..ops.len() - 1].to_vec(), ops.last().copied(), false),
+                // `ln -s /x/settings.json` links it into the folder it runs in.
+                None if n == "ln" && ops.len() == 1 => (ops.clone(), Some("."), true),
+                None => (Vec::new(), None, false),
+            };
+            let moves = MOVERS.contains(&n);
+            if moves {
+                // What is moved away is gone from where it was, folder and all.
+                content.extend(sources.iter().map(|p| p.to_string()));
+                v.extend(sources.iter().map(|p| (p.to_string(), How::Whole)));
+            }
+            if let Some(dest) = dest {
+                let contents = copies_contents(n, args, &sources);
+                let folders = moves || n == "ln" || copies_folders(n, args);
+                landed(&mut v, dest, &sources, folder, contents, folders);
+            }
+        }
+        "ren" | "rename" | "rename-item" | "rni" => {
+            // The new name is a name in the old one's folder.
+            content.extend(pos.iter().map(|p| p.to_string()));
+            let new = ps_value(args, "newname", 1).or_else(|| pos.get(1).copied());
+            if let (Some(old), Some(new)) = (pos.first(), new) {
+                if !new.contains(['/', '\\']) {
+                    let trimmed = old.trim_end_matches(['/', '\\']);
+                    if let Some(at) = trimmed.rfind(['/', '\\']) {
+                        content.push(format!("{}/{new}", &trimmed[..at]));
+                    }
+                }
+            }
+        }
+        n if CHANGERS.contains(&n) => {
+            content.extend(pos.iter().map(|p| p.to_string()));
+            // A folder removed with all it holds.
+            let short = |c: char| args.iter().any(|a| short_group_has(a, c));
+            let folders = match n {
+                "rm" => short('r') || short('R') || args.iter().any(|a| a == "--recursive"),
+                "rmdir" | "rd" | "del" | "erase" => {
+                    n == "rmdir" || args.iter().any(|a| a.eq_ignore_ascii_case("/s") || ps_param(a, "recurse", 1))
+                }
+                "remove-item" | "ri" => args.iter().any(|a| ps_param(a, "recurse", 1)),
+                "trash" | "trash-put" | "srm" | "wipe" => true,
+                _ => false,
+            };
+            if folders {
+                v.extend(pos.iter().map(|p| (p.to_string(), How::Whole)));
+            }
+        }
         n if PERMISSIONS.contains(&n) => meta.extend(pos.iter().map(|p| p.to_string())),
         "xattr" => {
             if args.iter().any(|a| a.starts_with('-') && a.contains(['w', 'd', 'c'])) {
@@ -1143,10 +1532,18 @@ fn written_by(s: &Simple, cmd: Option<&Cmd>) -> Vec<(String, bool)> {
                 }
                 content.extend(files.iter().map(|f| f.to_string()));
             }
+            // A one-liner or here-document that opens files for writing.
+            if matches!(name, "perl" | "ruby") {
+                content.extend(code_of(s, cmd).map(|code| code_writes(&code)).unwrap_or_default());
+            }
         }
-        "yq" | "awk" | "gawk" => {
+        "yq" | "awk" | "gawk" | "mawk" | "nawk" => {
             if args.iter().any(|a| a == "-i" || a == "--inplace" || a == "inplace") {
                 content.extend(pos.iter().skip(1).map(|p| p.to_string()));
+            }
+            // `print … > "file"` inside the program.
+            if name != "yq" {
+                content.extend(awk_program(args).map(code_writes).unwrap_or_default());
             }
         }
         "tar" | "bsdtar" | "gtar" => {
@@ -1154,12 +1551,35 @@ fn written_by(s: &Simple, cmd: Option<&Cmd>) -> Vec<(String, bool)> {
                 args.first().is_some_and(|a| !a.starts_with("--") && a.trim_start_matches('-').contains('x'))
                     || args.iter().any(|a| matches!(a.as_str(), "-x" | "--extract" | "--get"));
             if extracting {
-                content.extend(option_value(args, &["-C", "--directory"]).map(String::from));
+                let dir = option_value(args, &["-C", "--directory"]).unwrap_or(".");
+                v.push((dir.to_string(), How::Into));
             }
         }
-        "unzip" => content.extend(option_value(args, &["-d"]).map(String::from)),
+        "unzip" => {
+            let listing = args
+                .iter()
+                .any(|a| short_group_has(a, 'l') || short_group_has(a, 't') || short_group_has(a, 'p') || a == "-Z");
+            if !listing {
+                v.push((option_value(args, &["-d"]).unwrap_or(".").to_string(), How::Into));
+            }
+        }
         "7z" | "7za" | "7zr" => {
-            content.extend(args.iter().filter_map(|a| a.strip_prefix("-o")).filter(|d| !d.is_empty()).map(String::from))
+            if matches!(pos.first().copied(), Some("x" | "e")) {
+                let dir = args.iter().filter_map(|a| a.strip_prefix("-o")).find(|d| !d.is_empty()).unwrap_or(".");
+                v.push((dir.to_string(), How::Into));
+            }
+        }
+        // What `find … -delete` takes with everything below it, and `rimraf`.
+        "find" if args.iter().any(|a| a == "-delete") && !find_narrows(args) => {
+            let starts: Vec<&String> = args.iter().take_while(|a| !a.starts_with(['-', '(', '!'])).collect();
+            if starts.is_empty() {
+                v.push((".".into(), How::Whole));
+            }
+            v.extend(starts.into_iter().map(|a| (a.clone(), How::Whole)));
+        }
+        "rimraf" => v.extend(pos.iter().map(|p| (p.to_string(), How::Whole))),
+        "npx" | "bunx" | "pnpx" if pos.first().is_some_and(|w| w.split('@').next() == Some("rimraf")) => {
+            v.extend(pos[1..].iter().map(|p| (p.to_string(), How::Whole)))
         }
         "git" => {
             let mut i = 0;
@@ -1182,66 +1602,358 @@ fn written_by(s: &Simple, cmd: Option<&Cmd>) -> Vec<(String, bool)> {
         _ => {
             if let Some(saved) = saves(s, cmd) {
                 content.extend(saved.paths());
-            } else if let Some(code) = inline_code(cmd) {
-                if WRITES_IN_CODE.is_match(&code) {
-                    content.extend(quoted_paths(&code));
-                }
+            } else if let Some(code) = code_of(s, cmd) {
+                content.extend(code_writes(&code));
             }
         }
     }
-    v.extend(content.into_iter().map(|p| (p, true)));
-    v.extend(meta.into_iter().map(|p| (p, false)));
+    v.extend(content.into_iter().map(|p| (p, How::Content)));
+    v.extend(meta.into_iter().map(|p| (p, How::Meta)));
     let mut seen = std::collections::HashSet::new();
     v.retain(|w| !is_device(&w.0) && seen.insert(w.clone()));
     v
 }
 
+// ── Variables ─────────────────────────────────────────────────────────────────
+
+/// Variables earlier commands set: `D=~/.claude`, `export D=$HOME/.claude`,
+/// PowerShell's `$D = "$env:APPDATA\Nobetci"`. A value that grows past
+/// MAX_VALUE (`A=$A$A` again and again) is forgotten, not followed.
+#[derive(Default)]
+struct Vars(std::collections::HashMap<String, String>);
+
+const MAX_VARS: usize = 256;
+const MAX_VALUE: usize = 4096;
+/// Words a brace expands into before the rest is read as a pattern.
+const MAX_BRACES: usize = 64;
+
+fn is_name(name: &str) -> bool {
+    name.chars().next().is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+        && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+}
+
+impl Vars {
+    fn set(&mut self, name: &str, value: String) {
+        if value.len() > MAX_VALUE || self.0.len() >= MAX_VARS && !self.0.contains_key(name) {
+            self.0.remove(name);
+        } else {
+            self.0.insert(name.to_string(), value);
+        }
+    }
+
+    /// Records what a command that only assigns sets; true when it is one.
+    fn record(&mut self, words: &[String]) -> bool {
+        // PowerShell: `$D = value`, `$D=value`.
+        if let Some(rest) = words.first().and_then(|w| w.strip_prefix('$')) {
+            let value = match rest.split_once('=') {
+                Some((name, v)) if is_name(name) && words.len() == 1 => Some((name, v.to_string())),
+                None if is_name(rest) && words.get(1).is_some_and(|w| w == "=") => Some((rest, words[2..].join(" "))),
+                _ => None,
+            };
+            if let Some((name, value)) = value {
+                let value = self.expand(&value);
+                self.set(name, value);
+                return true;
+            }
+            return false;
+        }
+        // POSIX: `NAME=value …`, also after export, declare, local, readonly, typeset.
+        let mut i = 0;
+        if matches!(words.first().map(String::as_str), Some("export" | "declare" | "typeset" | "local" | "readonly")) {
+            i = 1;
+            while words.get(i).is_some_and(|w| w.starts_with('-')) {
+                i += 1;
+            }
+        }
+        let rest = words.get(i..).unwrap_or(&[]);
+        if rest.is_empty() || !rest.iter().all(|w| is_assignment(w) || i > 0 && is_name(w)) {
+            return false;
+        }
+        for w in rest.iter().filter(|w| is_assignment(w)) {
+            let (name, value) = w.split_once('=').unwrap_or((w, ""));
+            let value = self.expand(value);
+            match name.strip_suffix('+') {
+                Some(name) => {
+                    let old = self.0.get(name).cloned().unwrap_or_default();
+                    self.set(name, old + &value);
+                }
+                None => self.set(name, value),
+            }
+        }
+        true
+    }
+
+    /// `word` with the variables it uses put in: `$NAME`, `${NAME}`, and a
+    /// default for a variable never set (`${XDG_CONFIG_HOME:-$HOME/.config}`).
+    /// A variable never set stays as written: `$HOME` is a root the path
+    /// rules know.
+    fn expand(&self, word: &str) -> String {
+        self.expand_at(word, 0)
+    }
+
+    fn expand_at(&self, word: &str, depth: usize) -> String {
+        if depth > 4 || !word.contains('$') {
+            return word.to_string();
+        }
+        let mut out = String::new();
+        let mut rest = word;
+        while let Some(at) = rest.find('$') {
+            out.push_str(&rest[..at]);
+            let after = &rest[at + 1..];
+            if let Some(inner) = after.strip_prefix('{') {
+                // The matching brace, counting nested ones.
+                let mut level = 1;
+                let close = inner.char_indices().find_map(|(i, c)| {
+                    match c {
+                        '{' => level += 1,
+                        '}' => level -= 1,
+                        _ => {}
+                    }
+                    (level == 0).then_some(i)
+                });
+                let Some(close) = close else {
+                    out.push_str(&rest[at..]);
+                    return out;
+                };
+                let body = &inner[..close];
+                let name_len = body.find(|c: char| !(c.is_ascii_alphanumeric() || c == '_')).unwrap_or(body.len());
+                let (name, op) = body.split_at(name_len);
+                let keep = &rest[at..at + 2 + close + 1];
+                let default = op
+                    .strip_prefix(":-")
+                    .or_else(|| op.strip_prefix(":="))
+                    .or_else(|| op.strip_prefix('-'))
+                    .or_else(|| op.strip_prefix('='));
+                match (is_name(name).then(|| self.0.get(name)).flatten(), default) {
+                    _ if !is_name(name) => out.push_str(keep),
+                    (Some(value), _) if op.is_empty() || default.is_some() => out.push_str(value),
+                    (None, Some(default)) => out.push_str(&self.expand_at(default, depth + 1)),
+                    // `${NAME#…}`, `${NAME/…}` and the like, or a name never set.
+                    _ => out.push_str(keep),
+                }
+                rest = &inner[close + 1..];
+            } else {
+                let name_len = after.find(|c: char| !(c.is_ascii_alphanumeric() || c == '_')).unwrap_or(after.len());
+                let name = &after[..name_len];
+                match self.0.get(name).filter(|_| is_name(name)) {
+                    Some(value) => out.push_str(value),
+                    None => {
+                        out.push('$');
+                        out.push_str(name);
+                    }
+                }
+                rest = &after[name_len..];
+            }
+            if out.len() > MAX_VALUE * 2 {
+                return word.to_string();
+            }
+        }
+        out.push_str(rest);
+        out
+    }
+}
+
+/// `{a,b}` written out: `~/.claude/{settings.json,x}` is two paths. Past
+/// MAX_BRACES words, or in a word too long or too full of braces to be a
+/// path, each group stands for anything (`*`), which the path rules read as
+/// a pattern.
+fn braces(word: &str) -> Vec<String> {
+    /// Words longer than this, or with more braces, are not written out.
+    const LONGEST: usize = 1024;
+    const MOST_OPEN: usize = 16;
+    /// A brace group: where it opens and closes, and its alternatives.
+    type Group = (usize, usize, Vec<(usize, usize)>);
+    fn group(word: &str) -> Option<Group> {
+        let b = word.as_bytes();
+        for open in (0..b.len()).filter(|&i| b[i] == b'{' && (i == 0 || b[i - 1] != b'$')) {
+            let (mut level, mut start, mut alts) = (0usize, open + 1, Vec::new());
+            for (i, &c) in b.iter().enumerate().skip(open) {
+                match c {
+                    b'{' => level += 1,
+                    b'}' => {
+                        level -= 1;
+                        if level == 0 {
+                            alts.push((start, i));
+                            if alts.len() > 1 {
+                                return Some((open, i, alts));
+                            }
+                            break;
+                        }
+                    }
+                    b',' if level == 1 => {
+                        alts.push((start, i));
+                        start = i + 1;
+                    }
+                    _ => {}
+                }
+            }
+        }
+        None
+    }
+    if !word.contains('{') {
+        return vec![word.to_string()];
+    }
+    if word.len() > LONGEST || word.matches('{').count() > MOST_OPEN {
+        // From the first brace to the last, anything.
+        return match (word.find('{'), word.rfind('}')) {
+            (Some(open), Some(close)) if open < close => {
+                vec![word.to_string(), format!("{}*{}", &word[..open], &word[close + 1..])]
+            }
+            _ => vec![word.to_string()],
+        };
+    }
+    let mut done: Vec<String> = Vec::new();
+    let mut todo = vec![word.to_string()];
+    while let Some(w) = todo.pop() {
+        match group(&w) {
+            None => done.push(w),
+            Some(_) if done.len() + todo.len() >= MAX_BRACES => {
+                let mut wild = w.clone();
+                while let Some((open, close, _)) = group(&wild) {
+                    wild.replace_range(open..=close, "*");
+                }
+                done.push(wild);
+            }
+            Some((open, close, alts)) => {
+                for (from, to) in alts.into_iter().rev() {
+                    todo.push(format!("{}{}{}", &w[..open], &w[from..to], &w[close + 1..]));
+                }
+            }
+        }
+    }
+    done
+}
+
+/// A command with the variables it uses put in and its braces written out,
+/// when that changes anything. `budget` is what all the commands' expansions
+/// may still add up to; an error once it is spent (`walk` then says so).
+fn expanded(s: &Simple, vars: &Vars, budget: &mut usize) -> Result<Option<Simple>, ()> {
+    let busy = |w: &str| w.contains('$') || w.contains('{');
+    if !s.words.iter().any(|w| busy(w)) && !s.redirects.iter().any(|r| busy(&r.target)) {
+        return Ok(None);
+    }
+    let mut out = Simple { words: Vec::new(), redirects: Vec::new(), heredoc: s.heredoc.clone() };
+    let mut spend = |words: &[String]| -> Result<(), ()> {
+        let cost: usize = words.iter().map(String::len).sum();
+        *budget = budget.checked_sub(cost).ok_or(())?;
+        Ok(())
+    };
+    for w in &s.words {
+        let more = if busy(w) { braces(&vars.expand(w)) } else { vec![w.clone()] };
+        spend(&more)?;
+        out.words.extend(more);
+    }
+    for r in &s.redirects {
+        let targets = braces(&vars.expand(&r.target));
+        spend(&targets)?;
+        out.redirects.extend(targets.into_iter().map(|target| Redirect { op: r.op.clone(), target }));
+    }
+    Ok((out.words != s.words || out.redirects != s.redirects).then_some(out))
+}
+
+// ── Walking the commands ──────────────────────────────────────────────────────
+
 /// Walks the commands in order, following `cd`, `pushd` and `Set-Location`
-/// to know the folder each one runs in.
-fn walk<'a>(pipes: &'a [Pipeline], cwd: &str, mut f: impl FnMut(&str, &'a Simple, Option<Cmd<'a>>)) {
-    // Real commands change folder a handful of times; thousands of `cd`s are
-    // not one, and following them all would only cost time.
-    const MAX_CDS: usize = 64;
-    let mut dir = cwd.trim().to_string();
-    let mut stack: Vec<String> = Vec::new();
-    let mut cds = 0;
-    for s in pipes.iter().flat_map(|p| p.stages.iter()) {
-        let cmd = command(&s.words);
-        let next = match cmd.as_ref().map(|c| (c.name.as_str(), c.args)) {
-            Some(("cd" | "chdir" | "pushd" | "set-location" | "sl" | "push-location", args)) if cds < MAX_CDS => {
-                cds += 1;
+/// to know the folder each one runs in, and the variables earlier commands
+/// set. A command that uses a variable or a brace is seen twice: as written,
+/// and with them put in. True when something could not be followed: the
+/// folder (past a great many `cd`s) or the expansions (past a few times the
+/// command's own length) — `writes` reports it and the request needs a person.
+fn walk(pipes: &[Pipeline], cwd: &str, mut f: impl FnMut(&str, &Simple, Option<Cmd<'_>>, Option<&Simple>)) -> bool {
+    // Following a `cd` costs the length of the folders involved. Real
+    // commands change folder a handful of times; past this much work the
+    // folder is no longer known (None), and the reading says so instead of
+    // quietly staying where it was: 64 `cd .` used to hide a
+    // `cd ~/.claude` that came after them.
+    const CD_WORK: usize = 1 << 20;
+    let mut dir: Option<String> = Some(cwd.trim().to_string());
+    // The folder before the last change, for `cd -`.
+    let mut before: Option<Option<String>> = None;
+    let mut stack: Vec<Option<String>> = Vec::new();
+    let mut work = 0usize;
+    let mut lost = false;
+    let mut vars = Vars::default();
+    let size: usize = pipes.iter().flat_map(|p| &p.stages).flat_map(|s| &s.words).map(String::len).sum();
+    let mut budget = size.saturating_mul(4).saturating_add(64 * 1024);
+    let stages = pipes
+        .iter()
+        .flat_map(|p| p.stages.iter().enumerate().map(move |(i, s)| (s, i.checked_sub(1).map(|j| &p.stages[j]))));
+    for (s, prev) in stages {
+        let wide = match expanded(s, &vars, &mut budget) {
+            Ok(wide) => wide,
+            Err(()) => {
+                lost = true;
+                None
+            }
+        };
+        // A command that only assigns writes nothing, unless it redirects.
+        let assigns = vars.record(&s.words);
+        if assigns && s.redirects.is_empty() {
+            continue;
+        }
+        let here = dir.as_deref().unwrap_or("");
+        f(here, s, command(&s.words), prev);
+        if let Some(w) = &wide {
+            f(here, w, command(&w.words), prev);
+        }
+        let looked = wide.as_ref().unwrap_or(s);
+        let Some(cmd) = command(&looked.words).filter(|_| !assigns) else { continue };
+        match (cmd.name.as_str(), cmd.args) {
+            ("cd" | "chdir" | "pushd" | "set-location" | "sl" | "push-location", args) => {
                 let target = args
                     .iter()
                     .map(String::as_str)
                     .find(|a| *a == "-" || !(a.starts_with('-') && a.len() > 1 || a.eq_ignore_ascii_case("/d")));
-                if matches!(cmd.as_ref().map(|c| c.name.as_str()), Some("pushd" | "push-location")) {
-                    stack.push(dir.clone());
+                if matches!(cmd.name.as_str(), "pushd" | "push-location") {
+                    work += dir.as_ref().map_or(0, String::len);
+                    stack.push(dir.clone().filter(|_| work <= CD_WORK));
                 }
+                let old = dir.clone();
                 match target {
-                    None | Some("~") => Some("~".to_string()),
-                    Some("-") => None,
-                    Some(t) => Some(resolve(&dir, t)),
+                    None | Some("~") => dir = Some("~".to_string()),
+                    // Back where it was before the last change of folder.
+                    Some("-") => {
+                        if let Some(back) = before.take() {
+                            dir = back;
+                        }
+                    }
+                    // Where a rooted path leads does not depend on the folder.
+                    Some(t) if super::has_root(t) => {
+                        work += t.len();
+                        dir = Some(resolve("", t));
+                    }
+                    Some(t) => {
+                        work += dir.as_ref().map_or(0, String::len) + t.len();
+                        dir = match &dir {
+                            Some(d) if work <= CD_WORK => Some(resolve(d, t)),
+                            _ => None,
+                        };
+                    }
+                }
+                before = Some(old);
+            }
+            ("popd" | "pop-location", _) => {
+                if let Some(back) = stack.pop() {
+                    dir = back;
                 }
             }
-            Some(("popd" | "pop-location", _)) => stack.pop(),
-            _ => None,
-        };
-        f(&dir, s, cmd);
-        if let Some(d) = next {
-            dir = d;
+            _ => {}
         }
+        lost |= dir.is_none();
     }
+    lost
 }
 
-/// Every path the commands write to.
-pub fn writes(pipes: &[Pipeline], cwd: &str) -> Vec<Written> {
+/// Every path the commands write to, and whether the folder they run in was
+/// lost along the way (`walk`).
+pub fn writes(pipes: &[Pipeline], cwd: &str) -> (Vec<Written>, bool) {
     let mut out = Vec::new();
-    walk(pipes, cwd, |dir, s, cmd| {
-        for (raw, content) in written_by(s, cmd.as_ref()) {
-            out.push(Written { path: resolve(dir, &raw), raw, content });
+    let lost = walk(pipes, cwd, |dir, s, cmd, _| {
+        for (raw, how) in written_by(s, cmd.as_ref()) {
+            out.push(Written { path: resolve(dir, &raw), raw, how });
         }
     });
-    out
+    (out, lost)
 }
 
 /// Programs that only look: what they are handed is read, not changed.
@@ -1390,7 +2102,8 @@ const READERS: &[&str] = &[
 ];
 
 /// Programs whose writes `written_by` already knows; their other arguments
-/// are what they read.
+/// are what they read. Perl and Ruby are not among them: what a script they
+/// run does with a path cannot be told, and their one-liners are read as code.
 fn writes_known(cmd: &Cmd) -> bool {
     let n = cmd.name.as_str();
     COPIERS.contains(&n)
@@ -1404,11 +2117,10 @@ fn writes_known(cmd: &Cmd) -> bool {
                 | "copy-item"
                 | "cpi"
                 | "robocopy"
+                | "cpio"
                 | "xattr"
                 | "gio"
                 | "dd"
-                | "perl"
-                | "ruby"
                 | "tar"
                 | "bsdtar"
                 | "gtar"
@@ -1435,7 +2147,7 @@ fn writes_known(cmd: &Cmd) -> bool {
 /// hang on a fixed list of verbs.
 pub fn unknown_touch(pipes: &[Pipeline], cwd: &str, protected: &dyn Fn(&str) -> bool) -> Option<String> {
     let mut hit = None;
-    walk(pipes, cwd, |dir, s, cmd| {
+    walk(pipes, cwd, |dir, s, cmd, _| {
         let Some(cmd) = cmd else { return };
         if hit.is_some() || writes_known(&cmd) {
             return;
@@ -1604,21 +2316,61 @@ pub fn piped(pipes: &[Pipeline], want: Source) -> Option<String> {
 const ARCHIVES: &[&str] =
     &[".tar.gz", ".tgz", ".tar.xz", ".txz", ".tar.bz2", ".tbz2", ".tar.zst", ".tar", ".zip", ".7z", ".gz"];
 
+/// Programs that unpack an archive they are handed, from a file or a pipe.
+const UNPACKERS: &[&str] = &["tar", "bsdtar", "gtar", "unzip", "funzip", "7z", "7za", "7zr", "cpio"];
+
 /// A file saved by a downloader, then run — on the same line or a later one.
-/// Names are matched by file name; one the server chooses, or an archive,
-/// counts for whatever runs after it.
 pub fn fetched_then_run(pipes: &[Pipeline]) -> Option<String> {
+    saved_then_run(pipes, Source::Download)
+}
+
+/// A decoded blob written to a file, then run: `echo … | base64 -d > x.sh &&
+/// bash x.sh`.
+pub fn decoded_then_run(pipes: &[Pipeline]) -> Option<String> {
+    saved_then_run(pipes, Source::Decode)
+}
+
+/// What `want` produces, saved to a file and then run. Names are matched by
+/// file name; one the server chooses, an archive, or an archive unpacked
+/// straight from the pipe (`curl … | tar xz`) counts for whatever runs after it.
+fn saved_then_run(pipes: &[Pipeline], want: Source) -> Option<String> {
     let mut names: Vec<String> = Vec::new();
     let mut any = false;
-    for s in pipes.iter().flat_map(|p| p.stages.iter()) {
-        let Some(cmd) = command(&s.words) else { continue };
-        if (any || !names.is_empty()) && runs_one_of(&cmd, &names, any) {
-            return Some(s.text());
-        }
-        if let Some(saved) = saves(s, &cmd) {
-            any |= saved.any;
-            for path in saved.paths() {
-                let name = base_name(&path);
+    for pipe in pipes {
+        // The data flows on from its source to the stages after it.
+        let mut flowing = false;
+        for s in &pipe.stages {
+            let Some(cmd) = command(&s.words) else { continue };
+            if (any || !names.is_empty()) && runs_one_of(&cmd, &names, any) {
+                return Some(s.text());
+            }
+            let source = source_of(&cmd) == Some(want);
+            let mut saved: Vec<String> = Vec::new();
+            if want == Source::Download {
+                if let Some(files) = saves(s, &cmd) {
+                    any |= files.any;
+                    saved.extend(files.paths());
+                }
+            } else if source {
+                saved.extend(option_value(cmd.args, &["-o", "--output", "-out"]).map(String::from));
+                if cmd.name == "xxd" {
+                    saved.extend(positional(cmd.args, false).get(1).map(|p| p.to_string()));
+                }
+            }
+            if flowing || source {
+                if flowing && UNPACKERS.contains(&cmd.name.as_str()) {
+                    any = true;
+                }
+                if flowing && cmd.name == "tee" {
+                    saved.extend(positional(cmd.args, false).iter().map(|p| p.to_string()));
+                }
+                saved.extend(
+                    s.redirects.iter().filter(|r| matches!(r.op.as_str(), ">" | ">>" | ">|")).map(|r| r.target.clone()),
+                );
+            }
+            flowing |= source;
+            for path in saved.iter().filter(|p| !is_device(p)) {
+                let name = base_name(path);
                 any |= ARCHIVES.iter().any(|a| name.ends_with(a));
                 names.push(name);
             }
@@ -1655,10 +2407,14 @@ fn runs_one_of(cmd: &Cmd, names: &[String], any: bool) -> bool {
                 | "invoke-item"
                 | "ii"
                 | "open"
+                | "cmd"
         );
     if runner {
         let script = if matches!(n, "pwsh" | "powershell") {
             ps_value(cmd.args, "file", 1).or_else(|| pos.first().copied())
+        } else if n == "cmd" {
+            let at = cmd.args.iter().position(|a| matches!(a.to_ascii_lowercase().as_str(), "/c" | "/k"));
+            at.and_then(|i| cmd.args.get(i + 1)).map(String::as_str)
         } else {
             pos.first().copied()
         };
@@ -1704,10 +2460,347 @@ pub fn runs_rimraf(pipes: &[Pipeline]) -> Option<String> {
 /// Runs something as another user — `sudo`, `doas`, `pkexec`, `run0`, `su`,
 /// `gsudo` — however it is spelled (`/usr/bin/sudo`, inside `bash -c`).
 pub fn elevates(pipes: &[Pipeline]) -> Option<String> {
-    const ELEVATORS: &[&str] = &["sudo", "doas", "pkexec", "run0", "su", "gsudo"];
-    first(pipes, |_, c| {
-        ELEVATORS.contains(&c.name.as_str()) || c.wrappers.iter().any(|w| ELEVATORS.contains(&w.as_str()))
+    const ELEVATORS: &[&str] = &["sudo", "doas", "pkexec", "run0", "su", "gsudo", "runas"];
+    // In a script's code: `os.system("sudo …")`. A message that mentions
+    // sudo is not code (`git commit -m "…sudo…"`).
+    static IN_CODE: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
+        regex::Regex::new(r#"(?i)(^|[\s;&|(`'"/])(sudo|doas|pkexec|run0)(\.exe)?(\s|["'])"#).expect("bad pattern")
+    });
+    first(pipes, |s, c| {
+        ELEVATORS.contains(&c.name.as_str())
+            || c.wrappers.iter().any(|w| ELEVATORS.contains(&w.as_str()))
+            || code_of(s, c).is_some_and(|code| IN_CODE.is_match(&code))
     })
+}
+
+/// Runs Nöbetçi's uninstall command, `--remove-hooks` — the word itself, its
+/// quoting taken off (`--remove-ho''oks`) — handed to a program named
+/// nobetci…, to one named by a pattern or a variable (`/usr/bin/nob*`,
+/// `$N`), or to a launcher that starts one (`Start-Process nobetci
+/// -ArgumentList --remove-hooks`); or both words in a script's code. A message
+/// that mentions it is not running it (`git commit -m "… --remove-hooks …"`).
+pub fn unhooks(pipes: &[Pipeline]) -> Option<String> {
+    const LAUNCHERS: &[&str] =
+        &["start-process", "saps", "start", "open", "runas", "invoke-item", "ii", "wsl", "systemd-run", "gtk-launch"];
+    first(pipes, |s, c| {
+        if c.args.iter().any(|a| a == "--remove-hooks") {
+            let ours = |w: &str| base_name(w).starts_with("nobetci");
+            let word = c.word;
+            if ours(word) || word.contains(['*', '?', '[']) || word.starts_with(['$', '`']) {
+                return true;
+            }
+            if LAUNCHERS.contains(&c.name.as_str()) && c.args.iter().any(|a| ours(a)) {
+                return true;
+            }
+        }
+        code_of(s, c).is_some_and(|code| {
+            let code = code.to_lowercase();
+            code.contains("--remove-hooks") && code.contains("nobetci")
+        })
+    })
+}
+
+/// xdotool's commands that only look: where the pointer is, which window has
+/// the focus. Anything else it is handed — a key, a click, a window raised, a
+/// script file — acts.
+const XDOTOOL_LOOKS: &[&str] = &[
+    "search",
+    "getactivewindow",
+    "getwindowfocus",
+    "getwindowname",
+    "getwindowpid",
+    "getwindowgeometry",
+    "getwindowclassname",
+    "getdisplaygeometry",
+    "getmouselocation",
+    "get_desktop",
+    "get_desktop_for_window",
+    "get_desktop_viewport",
+    "get_num_desktops",
+    "sleep",
+    "help",
+    "version",
+];
+
+/// xdotool's commands that act on the screen or the keyboard.
+const XDOTOOL_ACTS: &[&str] = &[
+    "key",
+    "keydown",
+    "keyup",
+    "type",
+    "mousemove",
+    "mousemove_relative",
+    "click",
+    "mousedown",
+    "mouseup",
+    "windowactivate",
+    "windowfocus",
+    "windowraise",
+    "windowmap",
+    "windowunmap",
+    "windowmove",
+    "windowsize",
+    "windowminimize",
+    "windowkill",
+    "windowclose",
+    "windowquit",
+    "windowstate",
+    "set_window",
+    "set_desktop",
+    "set_desktop_for_window",
+    "set_desktop_viewport",
+    "set_num_desktops",
+    "behave",
+    "behave_screen_edge",
+    "exec",
+];
+
+/// Whether an xdotool command line acts — not only looks (`XDOTOOL_LOOKS`).
+fn xdotool_acts(args: &[String]) -> bool {
+    let words: Vec<String> = args.iter().map(|a| a.to_ascii_lowercase()).collect();
+    if words.iter().any(|w| XDOTOOL_ACTS.contains(&w.as_str())) {
+        return true;
+    }
+    // Its first word is a command, or a script it runs (`-` for its input).
+    match words.iter().find(|w| !w.starts_with('-') || w.as_str() == "-") {
+        Some(first) => !XDOTOOL_LOOKS.contains(&first.as_str()),
+        None => false,
+    }
+}
+
+/// Programs that fake input into other windows: clicks, keys, pointer moves.
+const INPUT_FAKERS: &[&str] = &[
+    "xte",
+    "ydotool",
+    "ydotoold",
+    "wtype",
+    "dotool",
+    "dotoolc",
+    "dotoold",
+    "xvkbd",
+    "evemu-event",
+    "evemu-play",
+    "xmacroplay",
+    "cliclick",
+    "autohotkey",
+    "autohotkey64",
+    "autohotkeyu64",
+    "autoit3",
+    "autoit3_x64",
+];
+
+/// Code that loads a way of faking input: XTest, uinput, an automation
+/// library, Windows' SendInput or SendKeys, AppleScript's System Events.
+static FAKES_IN_CODE: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
+    regex::Regex::new(
+        r"(?i)\bxtest\b|xtestfake\w*|libxtst|\buinput\b|pyautogui|pynput|pydirectinput|\brobotjs\b|@nut-tree|\bnut-js\b|\bautopy\b|x11::guitest|\bkeybd_event\b|\bmouse_event\b|\bsendinput\b|\bsendkeys\b|\bsendwait\b|system events[^\n]*\b(keystroke|key code|click)\b|\.keystroke\s*\(|\.keycode\s*\(",
+    )
+    .expect("bad pattern")
+});
+
+/// Starts a program that fakes input into other windows — or code that does,
+/// or lets one in (`xinput float`, `chmod` on /dev/uinput). Such a program
+/// can click Nöbetçi's Allow or type into the terminal. Its name in a
+/// message, a search or `--help` is not running it.
+pub fn fakes_input(pipes: &[Pipeline]) -> Option<String> {
+    first(pipes, |s, c| {
+        let ops = positional(c.args, false);
+        let help = || {
+            ops.iter().all(|a| matches!(*a, "help" | "version"))
+                && c.args
+                    .iter()
+                    .all(|a| matches!(a.as_str(), "--help" | "-h" | "--version" | "-V" | "help" | "version"))
+        };
+        let n = c.name.as_str();
+        let code = code_of(s, c).or_else(|| {
+            // C fed to a compiler on standard input.
+            (matches!(n, "gcc" | "cc" | "clang" | "tcc" | "g++" | "c++") && !s.heredoc.is_empty())
+                .then(|| s.heredoc.clone())
+        });
+        INPUT_FAKERS.contains(&n) && !help()
+            || n == "xdotool" && xdotool_acts(c.args)
+            || n == "xinput" && matches!(ops.first().copied(), Some("create-master" | "reattach" | "float" | "set-cp"))
+            || matches!(n, "nircmd" | "nircmdc")
+                && ops.first().is_some_and(|op| {
+                    matches!(
+                        op.to_ascii_lowercase().as_str(),
+                        "sendkeypress" | "sendkey" | "sendmouse" | "setcursor" | "setcursorwin" | "movecursor"
+                    )
+                })
+            || PERMISSIONS.contains(&n) && ops.iter().any(|p| p.trim_end_matches('/') == "/dev/uinput")
+            || n == "modprobe" && ops.contains(&"uinput")
+            || code.is_some_and(|code| FAKES_IN_CODE.is_match(&code))
+    })
+}
+
+/// What a command deletes with everything below it, as written: `rm -r`,
+/// `rmdir /s`, `Remove-Item -Recurse`, `rimraf`, `find … -delete`; and what
+/// `Get-ChildItem x | Remove-Item -Recurse` deletes — everything in `x`.
+fn wiped(cmd: &Cmd, prev: Option<&Simple>) -> Vec<String> {
+    let args = cmd.args;
+    let n = cmd.name.as_str();
+    let short = |c: char| args.iter().any(|a| a.starts_with('-') && !a.starts_with("--") && a[1..].contains(c));
+    let dos = |sw: &str| args.iter().any(|a| a.eq_ignore_ascii_case(sw));
+    let ops = || positional(args, DOS.contains(&n)).into_iter().map(String::from).collect::<Vec<_>>();
+    match n {
+        "rm" if short('r') || short('R') || args.iter().any(|a| a == "--recursive") => ops(),
+        "rmdir" | "rd" | "del" | "erase" if dos("/s") || args.iter().any(|a| ps_param(a, "recurse", 1)) => ops(),
+        "remove-item" | "ri" if args.iter().any(|a| ps_param(a, "recurse", 1)) => {
+            let ops = ops();
+            if !ops.is_empty() {
+                return ops;
+            }
+            // Fed by a listing: `Get-ChildItem $HOME | Remove-Item -Recurse`.
+            let Some(prev) = prev else { return Vec::new() };
+            let Some(list) = command(&prev.words) else { return Vec::new() };
+            if !matches!(list.name.as_str(), "get-childitem" | "gci" | "ls" | "dir" | "get-item" | "gi") {
+                return Vec::new();
+            }
+            let folder = positional(list.args, false).first().map_or(".".to_string(), |f| f.to_string());
+            vec![format!("{}/*", folder.trim_end_matches(['/', '\\']))]
+        }
+        "rimraf" => ops(),
+        "npx" | "bunx" | "pnpx" => {
+            let ops = ops();
+            if ops.first().is_some_and(|w| w.split('@').next() == Some("rimraf")) {
+                ops[1..].to_vec()
+            } else {
+                Vec::new()
+            }
+        }
+        "find" if args.iter().any(|a| a == "-delete") && !find_narrows(args) => {
+            args.iter().take_while(|a| !a.starts_with(['-', '(', '!'])).cloned().collect()
+        }
+        _ => Vec::new(),
+    }
+}
+
+/// `find` tests that pick some files rather than all: `-name '*.log'`. A
+/// pattern that matches everything (`-name '*'`) picks nothing out.
+pub const FIND_FILTERS: &[&str] = &[
+    "-name",
+    "-iname",
+    "-path",
+    "-ipath",
+    "-wholename",
+    "-regex",
+    "-iregex",
+    "-newer",
+    "-mtime",
+    "-mmin",
+    "-atime",
+    "-amin",
+    "-ctime",
+    "-cmin",
+    "-size",
+    "-user",
+    "-group",
+    "-perm",
+    "-empty",
+    "-uid",
+    "-gid",
+    "-links",
+];
+
+/// Whether a `find`'s words narrow what it finds (FIND_FILTERS).
+pub fn find_narrows<S: AsRef<str>>(words: &[S]) -> bool {
+    let words: Vec<&str> = words.iter().map(AsRef::as_ref).collect();
+    words.iter().enumerate().any(|(i, w)| {
+        let w = w.to_ascii_lowercase();
+        let everything =
+            |v: Option<&&str>| v.is_some_and(|v| matches!(v.trim_matches(['\'', '"']), "*" | ".*" | "*.*"));
+        FIND_FILTERS.contains(&w.as_str())
+            && !(matches!(w.as_str(), "-name" | "-iname" | "-path" | "-ipath" | "-wholename")
+                && everything(words.get(i + 1)))
+    })
+}
+
+/// What the commands delete with everything below it, made absolute against
+/// the folder each runs in, with the command's text.
+pub fn wipes(pipes: &[Pipeline], cwd: &str) -> Vec<(String, String)> {
+    let mut out = Vec::new();
+    walk(pipes, cwd, |dir, s, cmd, prev| {
+        if let Some(cmd) = cmd {
+            for target in wiped(&cmd, prev) {
+                out.push((resolve(dir, &target), s.text()));
+            }
+        }
+    });
+    out
+}
+
+/// A `find` that removes what it finds (`-delete`, `-exec rm …`).
+pub struct Sweep {
+    /// The folders it starts from, as written and made absolute.
+    pub starts: Vec<(String, String)>,
+    /// `-name`/`-iname` patterns a file must match; none when a test is
+    /// negated, which only widens what it takes.
+    pub names: Vec<String>,
+    /// `-path`/`-ipath`/`-wholename` patterns, likewise.
+    pub paths: Vec<String>,
+    pub text: String,
+}
+
+/// Every `find` that removes what it finds, with what it looks for:
+/// `find ~/.config -name settings.json -path '*nobetci*' -delete` takes
+/// Nöbetçi's settings without naming the folder.
+pub fn sweeps(pipes: &[Pipeline], cwd: &str) -> Vec<Sweep> {
+    const REMOVERS: &[&str] = &["rm", "shred", "unlink", "srm", "trash", "trash-put"];
+    let mut out = Vec::new();
+    walk(pipes, cwd, |dir, s, cmd, _| {
+        let Some(cmd) = cmd.filter(|c| c.name == "find") else { return };
+        let args = cmd.args;
+        let mut removes = args.iter().any(|a| a == "-delete");
+        let mut i = 0;
+        while i < args.len() {
+            if matches!(args[i].as_str(), "-exec" | "-execdir" | "-ok" | "-okdir") {
+                let rest = &args[i + 1..];
+                let end = rest.iter().position(|a| a == ";" || a == "+").unwrap_or(rest.len());
+                removes |= rest[..end].iter().any(|w| REMOVERS.contains(&base_name(w).as_str()));
+                i += end;
+            }
+            i += 1;
+        }
+        if !removes {
+            return;
+        }
+        let mut starts: Vec<(String, String)> =
+            args.iter().take_while(|a| !a.starts_with(['-', '(', '!'])).map(|a| (a.clone(), resolve(dir, a))).collect();
+        if starts.is_empty() {
+            starts.push((".".into(), resolve(dir, ".")));
+        }
+        let negated = args.iter().any(|a| a == "!" || a == "-not");
+        let values = |tests: &[&str]| -> Vec<String> {
+            if negated {
+                return Vec::new();
+            }
+            args.windows(2).filter(|w| tests.contains(&w[0].as_str())).map(|w| w[1].clone()).collect()
+        };
+        out.push(Sweep {
+            starts,
+            names: values(&["-name", "-iname"]),
+            paths: values(&["-path", "-ipath", "-wholename", "-iwholename"]),
+            text: s.text(),
+        });
+    });
+    out
+}
+
+/// Words joined as a shell reads them back: `["bash", "-c", "curl x | sh"]`
+/// is `bash -c 'curl x | sh'`.
+pub fn join_words<S: AsRef<str>>(words: &[S]) -> String {
+    words
+        .iter()
+        .map(|w| {
+            let w = w.as_ref();
+            if !w.is_empty() && w.chars().all(|c| c.is_alphanumeric() || "-_./=:@%+,~".contains(c)) {
+                w.to_string()
+            } else {
+                format!("'{}'", w.replace('\'', r"'\''"))
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 /// Commands handed over as text, to read as commands too.
@@ -1716,7 +2809,21 @@ fn handed_over(s: &Simple, dialect: Dialect) -> Vec<(String, Dialect)> {
     let Some(cmd) = command(&s.words) else { return v };
     let args = cmd.args;
     let n = cmd.name.as_str();
-    if SHELLS.contains(&n) {
+    if n == "find" {
+        // What `-exec … ;` runs for every file it finds.
+        let mut i = 0;
+        while i < args.len() {
+            if matches!(args[i].as_str(), "-exec" | "-execdir" | "-ok" | "-okdir") {
+                let rest = &args[i + 1..];
+                let end = rest.iter().position(|a| a == ";" || a == "+").unwrap_or(rest.len());
+                if end > 0 {
+                    v.push((join_words(&rest[..end]), Dialect::Posix));
+                }
+                i += end + 1;
+            }
+            i += 1;
+        }
+    } else if SHELLS.contains(&n) {
         match args.iter().position(|a| short_group_has(a, 'c')) {
             Some(i) => v.extend(args.get(i + 1).map(|t| (t.clone(), Dialect::Posix))),
             None if !s.heredoc.is_empty() => v.push((s.heredoc.clone(), Dialect::Posix)),
@@ -1848,15 +2955,23 @@ mod tests {
         assert_eq!(command(&words).unwrap().name, "command");
     }
 
+    /// What `cmd` writes from /home/dev/project, sorted, with how.
+    fn written(cmd: &str) -> Vec<(String, How)> {
+        let (mut v, lost) = writes(&parse(cmd, Dialect::Posix), "/home/dev/project");
+        assert!(!lost, "{cmd}");
+        v.sort_by(|a, b| (&a.path, a.how as u8).cmp(&(&b.path, b.how as u8)));
+        v.into_iter().map(|w| (w.path, w.how)).collect()
+    }
+
     #[test]
     fn writes_follow_cd_and_know_common_programs() {
         let w = |cmd: &str| -> Vec<String> {
-            writes(&parse(cmd, Dialect::Posix), "/home/dev/project").into_iter().map(|w| w.path).collect()
+            written(cmd).into_iter().filter(|(_, how)| *how == How::Content).map(|(p, _)| p).collect()
         };
         assert_eq!(w("cd ~/.claude && echo '{}' > settings.json"), vec!["~/.claude/settings.json"]);
         assert_eq!(w("cp a b c dist/"), vec!["/home/dev/project/dist/"]);
         assert_eq!(w("cp -t out a b"), vec!["/home/dev/project/out"]);
-        assert_eq!(w("mv a.txt ../b.txt"), vec!["/home/dev/project/a.txt", "/home/dev/b.txt"]);
+        assert_eq!(w("mv a.txt ../b.txt"), vec!["/home/dev/b.txt", "/home/dev/project/a.txt"]);
         assert_eq!(w("curl -fsSLo /tmp/i.sh https://x.test/i.sh"), vec!["/tmp/i.sh"]);
         assert_eq!(w("curl -O https://x.test/a/tool.sh?x=1"), vec!["/home/dev/project/tool.sh"]);
         assert_eq!(w("wget -qO- https://x.test/a"), Vec::<String>::new());
@@ -1872,9 +2987,93 @@ mod tests {
             "a one-liner that opens for writing"
         );
         assert!(w(r#"python3 -c "print(open('/home/dev/.bashrc').read())""#).is_empty());
-        assert_eq!(w("chmod +x run.sh"), vec!["/home/dev/project/+x", "/home/dev/project/run.sh"]);
-        assert!(!writes(&parse("chmod +x run.sh", Dialect::Posix), "/w").iter().any(|w| w.content));
+        assert_eq!(
+            written("chmod +x run.sh"),
+            vec![("/home/dev/project/+x".into(), How::Meta), ("/home/dev/project/run.sh".into(), How::Meta)]
+        );
         assert!(w("cat a | grep b > /dev/null; ls -la").is_empty());
+    }
+
+    #[test]
+    fn a_copy_into_a_folder_lands_under_its_own_name() {
+        let has = |cmd: &str, path: &str, how: How| written(cmd).contains(&(path.to_string(), how));
+        assert!(has("cp settings.json ~/.claude/", "~/.claude/settings.json", How::Named));
+        // A folder Claude Code, git or a shell keeps files in is a folder, slash or not.
+        assert!(has("mv /tmp/settings.json ~/.claude", "~/.claude/settings.json", How::Named));
+        assert!(has("cp -t ~/.claude /tmp/settings.json", "~/.claude/settings.json", How::Named));
+        assert!(has("install -m 644 /tmp/settings.json ~/.claude/", "~/.claude/settings.json", How::Named));
+        assert!(has("cp .bashrc .zshrc ~/", "~/.zshrc", How::Named));
+        assert!(has("rsync -a /tmp/x/ ~/.config/nobetci/", "~/.config/nobetci/", How::Into));
+        assert!(has("cp -r cfg/. ~/.claude/", "~/.claude/", How::Into));
+        assert!(has("tar xf cfg.tar -C ~/.claude", "~/.claude", How::Into));
+        assert!(has("unzip -o cfg.zip -d ~/.claude", "~/.claude", How::Into));
+        assert!(has("cd ~ && tar xzf dots.tgz", "~/", How::Into));
+        // A folder taken whole: moved in under a new name, moved away, removed.
+        assert!(has("mv /tmp/cfg ~/.claude", "~/.claude", How::Whole));
+        assert!(has("cp -r .claude ~/other/", "~/other/.claude", How::Whole));
+        assert!(has("mv ~/.claude ~/old", "~/.claude", How::Whole));
+        assert!(has("rm -rf ~/.claude", "~/.claude", How::Whole));
+        // Not a folder: a plain copy to a new name, a file into a folder that is always there.
+        assert!(!written("cp a.txt b.txt").iter().any(|(_, how)| matches!(how, How::Whole | How::Into)));
+        assert!(!has("mv notes.txt ~", "~", How::Whole));
+        assert!(!has("rm notes.txt", "/home/dev/project/notes.txt", How::Whole));
+        // Listing an archive writes nothing.
+        assert!(written("unzip -l a.zip").is_empty() && written("tar tzf a.tgz").is_empty());
+    }
+
+    #[test]
+    fn a_reading_says_when_it_could_not_read_everything() {
+        let deep = format!("{}x{}", "$(".repeat(20), ")".repeat(20));
+        assert!(read(&deep, Dialect::Posix).partial);
+        assert!(!read("bash -c 'echo $(date)' && eval \"ls -la\"", Dialect::Posix).partial);
+        // The same text handed over twice is read once.
+        let twice = read("bash -c 'rm -rf build'; bash -c 'rm -rf build'", Dialect::Posix);
+        let rms = twice.pipes.iter().flat_map(|p| &p.stages).filter(|s| s.words.first().is_some_and(|w| w == "rm"));
+        assert_eq!(rms.count(), 1);
+    }
+
+    #[test]
+    fn words_joined_read_back_as_they_were() {
+        let words = ["bash", "-c", "curl x | sh", "it's", "", "{}"];
+        let joined = join_words(&words);
+        assert_eq!(parse(&joined, Dialect::Posix)[0].stages[0].words, words);
+        // `find -exec` hands its command over, quoted as it was.
+        let all = words_of(r"find . -exec sh -c 'curl x | sh' \;");
+        assert!(
+            all.contains(&vec!["curl".to_string(), "x".into()]) && all.contains(&vec!["sh".to_string()]),
+            "{all:?}"
+        );
+    }
+
+    fn words_of(text: &str) -> Vec<Vec<String>> {
+        parse(text, Dialect::Posix).into_iter().flat_map(|p| p.stages).map(|s| s.words).collect()
+    }
+
+    #[test]
+    fn xdotool_acts_unless_it_only_looks() {
+        let acts = |line: &str| xdotool_acts(&line.split_whitespace().map(String::from).collect::<Vec<_>>());
+        for line in ["key ctrl+v", "mousemove 1 2 click 1", "search --name x windowactivate", "script.xdo", "-"] {
+            assert!(acts(line), "{line}");
+        }
+        for line in ["getwindowfocus -f", "search --name Nobetci", "getmouselocation --shell", "", "--version"] {
+            assert!(!acts(line), "{line}");
+        }
+    }
+
+    #[test]
+    fn variables_and_braces_are_written_out_within_bounds() {
+        let mut vars = Vars::default();
+        assert!(vars.record(&["D=~/.claude".to_string()]));
+        assert_eq!(vars.expand("$D/settings.json"), "~/.claude/settings.json");
+        assert_eq!(vars.expand("${XDG_CONFIG_HOME:-$HOME/.config}/x"), "$HOME/.config/x");
+        assert_eq!(vars.expand("$HOME/x"), "$HOME/x", "a variable never set stays as written");
+        assert_eq!(braces("a{b,c}d"), vec!["abd", "acd"]);
+        assert_eq!(braces("x"), vec!["x"]);
+        // Too many to write out: what lies between the braces may be anything.
+        let wide = braces(&"{a,b}".repeat(40));
+        assert!(wide.len() <= MAX_BRACES + 1 && wide.iter().any(|w| w.contains('*')), "{}", wide.len());
+        let long = format!("~/.claude/{}{{settings.json,x}}", "{".repeat(20));
+        assert!(braces(&long).iter().any(|w| w == "~/.claude/*"), "{:?}", braces(&long));
     }
 
     #[test]

@@ -122,7 +122,20 @@ struct Rule {
     tag: Tag,
     re: Regex,
     skip: Option<Skip>,
+    /// How many matches a skip may wave through before the next one counts
+    /// anyway. A skip that reads the command around a match costs that much
+    /// for every match; thousands of `--dry-run` publishes in one line are no
+    /// real command, and reading them all again and again took most of a
+    /// minute on 1 MiB.
+    skips: usize,
+    /// The rule knows a file by its name wherever it lies (the relay's name),
+    /// not by the folder it is in: it says nothing about the files a folder
+    /// receives (`check_receives`) or the names a pattern may stand for (`variants`).
+    anywhere: bool,
 }
+
+/// Matches a skip that reads around them may wave through (`Rule::skips`).
+const MAX_SKIPPED: usize = 256;
 
 impl Rule {
     fn label(&self) -> &'static str {
@@ -130,14 +143,32 @@ impl Rule {
     }
 
     fn find<'t>(&self, text: &'t str) -> Option<&'t str> {
-        match self.skip {
-            None => self.re.find(text).map(|m| m.as_str()),
-            Some(skip) => self.re.find_iter(text).find(|m| !skip(text, m.range())).map(|m| m.as_str()),
+        let Some(skip) = self.skip else { return self.re.find(text).map(|m| m.as_str()) };
+        for (n, m) in self.re.find_iter(text).enumerate() {
+            if n >= self.skips || !skip(text, m.range()) {
+                return Some(m.as_str());
+            }
         }
+        None
     }
 
+    /// Matches `skip` calls harmless are passed over, up to MAX_SKIPPED.
     fn except(mut self, skip: Skip) -> Self {
         self.skip = Some(skip);
+        self.skips = MAX_SKIPPED;
+        self
+    }
+
+    /// Like `except`, for a skip that looks only at the characters next to a
+    /// match: every match may be passed over (a document full of emoji).
+    fn except_each(mut self, skip: Skip) -> Self {
+        self.skip = Some(skip);
+        self.skips = usize::MAX;
+        self
+    }
+
+    fn anywhere(mut self) -> Self {
+        self.anywhere = true;
         self
     }
 }
@@ -155,7 +186,7 @@ type Label = (&'static str, &'static str);
 fn rule(category: &'static str, level: Level, (label_tr, label_en): Label, tag: Tag, pattern: &str) -> Rule {
     let re = Regex::new(&format!("(?i){}", ascii_boundaries(pattern)))
         .unwrap_or_else(|err| panic!("bad risk rule {label_en:?}: {err}"));
-    Rule { category, level, label_tr, label_en, tag, re, skip: None }
+    Rule { category, level, label_tr, label_en, tag, re, skip: None, skips: 0, anywhere: false }
 }
 
 // Labels a pattern and a reading of the command share, so the card shows one
@@ -193,6 +224,14 @@ const L_HIDDEN: Label = (
     "Görünmez veya yön değiştiren karakter içeriyor (gizleme)",
     "Contains invisible or direction-changing characters (obfuscation)",
 );
+const L_UNHOOK: Label = (
+    "Nöbetçi'nin hook'larını kaldırıyor (ajanlar ona sormayı bırakır)",
+    "Removes Nöbetçi's hooks (agents stop asking it)",
+);
+const L_FAKE_INPUT: Label = (
+    "Başka pencerelere sahte tıklama veya tuş gönderebilir (Nöbetçi'ye tıklayabilir, terminale yazabilir)",
+    "Can send fake clicks or keystrokes to other windows (could click Nöbetçi or type into the terminal)",
+);
 
 /// Categories a user has switched off in Settings.
 pub type Disabled = HashSet<String>;
@@ -217,10 +256,16 @@ const SYNTHETIC: &[(&str, Level, &str, &str)] = &[
         "Claude Code'un korumalı alanı (sandbox) dışında çalışmak istiyor",
     ),
     ("replace_all", Low, "Replaces every occurrence in the file", "Dosyadaki her geçişi değiştiriyor"),
+    (
+        "unreadable",
+        High,
+        "Too tangled to read in full — check all of it yourself",
+        "Tamamı okunamayacak kadar karışık — hepsini kendin kontrol et",
+    ),
 ];
 
 /// Never switchable: turning these off would hide exactly what they exist for.
-pub const LOCKED: &[&str] = &["truncated", "secret_exfil"];
+pub const LOCKED: &[&str] = &["truncated", "secret_exfil", "unreadable"];
 
 #[derive(Debug, Clone, Serialize)]
 pub struct CategoryInfo {
@@ -273,14 +318,14 @@ use Level::{Critical, High, Low, Medium};
 
 /// Home, a user's home, a drive or a system folder as the target of a recursive
 /// delete — `/home/dev` or `C:\Windows`, not `/home/dev/project`.
-const ROOTISH: &str = r#"["']?(/|/\*|~|~/|~/\*|~[a-z_][\w-]*/?|\$home/?|\$\{home\}/?|%userprofile%\\?|\$env:userprofile\\?|[a-z]:[\\/]?\*?|/c/?|/mnt/c/?|/(bin|boot|dev|etc|home|lib|lib64|opt|proc|root|sbin|srv|sys|usr|var|users|system|library|applications|private)/?\*?|/(home|users)/[^/\s"';&|]+/?\*?|[a-z]:[\\/](windows|users|program files( \(x86\))?|programdata)([\\/][^\\/\s"';&|]+)?[\\/]?\*?)["']?(\s|$|;|&|\|)"#;
+const ROOTISH: &str = r#"["']?(/|/\*|~|~/|~/\*|~/\.\*|~[a-z_][\w-]*/?|\$home"?/?\*?|\$\{home\}"?/?\*?|/[a-z]/users/[^/\s"';&|]+/?\*?|/mnt/[a-z]/users/[^/\s"';&|]+/?\*?|%userprofile%\\?|\$env:userprofile\\?|[a-z]:[\\/]?\*?|/c/?|/mnt/c/?|/(bin|boot|dev|etc|home|lib|lib64|opt|proc|root|sbin|srv|sys|usr|var|users|system|library|applications|private)/?\*?|/(home|users)/[^/\s"';&|]+/?\*?|[a-z]:[\\/](windows|users|program files( \(x86\))?|programdata)([\\/][^\\/\s"';&|]+)?[\\/]?\*?)["']?(\s|$|;|&|\|)"#;
 
 /// Nöbetçi's folders and installed programs on Windows, macOS and Linux, in the
 /// spellings a command or a path may use: `%APPDATA%\Nobetci`,
 /// `~/Library/Application Support/Nobetci`, `/Applications/Nobetci.app`,
 /// `~/.config/nobetci`, `$XDG_DATA_HOME/nobetci`, `~/.local/state/nobetci`,
 /// `/usr/bin/nobetci`.
-const SELF_DIRS: &str = r#"(?:(?:^|[\\/\s"'=:])(?:appdata[\\/]+(?:local|roaming)|%(?:local)?appdata%|\$env:(?:local)?appdata|\$\{?(?:local)?appdata\}?|program files(?: \(x86\))?|library[\\/]+application(?: |\\ |%20)support|\.config|\$\{?xdg_(?:config|data|state)_home\}?|\.local[\\/]+(?:share|state)|/usr(?:/local)?/(?:bin|lib|lib64|libexec)|/opt)[\\/]+nobetci(?:-hook)?(?:\.exe)?|(?:^|[\\/\s"'=:])applications[\\/]+nobetci\.app)(?:[\\/\s"';&|)]|$)"#;
+const SELF_DIRS: &str = r#"(?:(?:^|[\\/\s"'=:(])(?:appdata[\\/]+(?:local|roaming)|%(?:local)?appdata%|\$env:(?:local)?appdata|\$\{?(?:local)?appdata\}?|program files(?: \(x86\))?|library[\\/]+application(?: |\\ |%20)support|\.config|\$\{?xdg_(?:config|data|state)_home\}?|\.local[\\/]+(?:share|state)|/usr(?:/local)?/(?:bin|lib|lib64|libexec)|/opt)[\\/]+nobetci(?:-hook)?(?:\.exe)?|(?:^|[\\/\s"'=:(])applications[\\/]+nobetci\.app|(?:^|[\\/\s"'=:(])tmp[\\/]+nobetci-\d+|\[environment\]::getfolderpath\(\s*['"](?:local)?applicationdata['"]\s*\)\s*\+\s*['"][\\/]+nobetci|(?:join-path|\[(?:system\.)?io\.path\]::combine\()\s*(?:-path\s+)?["']?(?:\$env:(?:local)?appdata|%(?:local)?appdata%|\[environment\]::getfolderpath\(\s*['"](?:local)?applicationdata['"]\s*\))["']?\s*,?\s*(?:-childpath\s+)?["']?nobetci)(?:[\\/\s"',;&|)]|$)"#;
 
 /// Ways of putting something in a file that a pattern can see in front of the
 /// path; the reading of the command knows many more.
@@ -300,15 +345,6 @@ static COMMAND_RULES: LazyLock<Vec<Rule>> = LazyLock::new(|| {
         // front of one of Nöbetçi's folders; the reading of the command sees
         // every other way of writing there (`self_touched`).
         rule("nobetci_self", Critical, L_SELF, Tag::None, &format!(r"{WRITE_VERBS}[^\n;&|]*{SELF_DIRS}")),
-        // The uninstaller's command: it takes Nöbetçi out of Claude Code's,
-        // Codex's and Cursor's hooks without a preview.
-        rule(
-            "nobetci_unhook",
-            Critical,
-            ("Nöbetçi'nin hook'larını kaldırıyor (ajanlar ona sormayı bırakır)", "Removes Nöbetçi's hooks (agents stop asking it)"),
-            Tag::None,
-            r"(?s:nobetci.*--remove-hooks|--remove-hooks.*nobetci)",
-        ),
         rule(
             "nobetci_kill",
             High,
@@ -347,7 +383,7 @@ static COMMAND_RULES: LazyLock<Vec<Rule>> = LazyLock::new(|| {
             // Homebrew installs), `eval "$(curl …)"`, `bash <(curl …)`,
             // `source <(curl …)`, `bash <<< "$(curl …)"`.
             &format!(
-                r#"\b({SHELL_NAMES}|python[\d.]*|node|perl|ruby|php|pwsh|powershell)(\.exe)?\b[^\n]*?\s-[\w-]*[ce]\w*\s+["']?(\$\(|`)\s*((sudo|env)\s+)?(curl|wget|iwr|irm|invoke-webrequest|invoke-restmethod)\b|\beval\s+["']?(\$\(|`)\s*((sudo|env)\s+)?(curl|wget|iwr|irm)\b|(^|[\s;&|(`])({SHELL_NAMES}|source|\.|python[\d.]*|node|perl|ruby|php)(\s+-\S+)*\s+(<\s*)?<\(\s*((sudo|env)\s+)?(curl|wget)\b|\b({SHELL_NAMES}|python[\d.]*|node|perl|ruby|php)(\s+-\S+)*\s+<<<\s*["']?(\$\(|`)\s*(curl|wget)\b"#
+                r#"\b({SHELL_NAMES}|python[\d.]*|node|perl|ruby|php|pwsh|powershell|osascript)(\.exe)?\b[^\n]*?\s-[\w-]*[ce]\w*\s+["']?(\$\(|`)\s*((sudo|env)\s+)?(curl|wget|iwr|irm|invoke-webrequest|invoke-restmethod)\b|\beval\s+["']?(\$\(|`)\s*((sudo|env)\s+)?(curl|wget|iwr|irm)\b|(^|[\s;&|(`])({SHELL_NAMES}|source|\.|python[\d.]*|node|perl|ruby|php)(\s+-\S+)*\s+(<\s*)?<\(\s*((sudo|env)\s+)?(curl|wget)\b|\b({SHELL_NAMES}|python[\d.]*|node|perl|ruby|php)(\s+-\S+)*\s+<<<\s*["']?(\$\(|`)\s*(curl|wget)\b"#
             ),
         ),
         rule(
@@ -358,7 +394,7 @@ static COMMAND_RULES: LazyLock<Vec<Rule>> = LazyLock::new(|| {
             // PowerShell takes any unambiguous start of -EncodedCommand, and `/`
             // as well as `-`.
             &format!(
-                r#"(powershell|pwsh)(\.exe)?\b[^\n]*\s[-/]e(c|n(c(o(d(e(d(c(o(m(m(a(n(d)?)?)?)?)?)?)?)?)?)?)?)?)?\s+["']?[a-z0-9+/=]{{16,}}|\bbase64\s+(-\w+\s+)*(-\w*d\w*|--decode)\b[^|\n]*\|\s*((sudo|doas)\s+(-\S+\s+)*)?([^\s|;&]*[\\/])?(env\s+)?({SHELL_NAMES}|pwsh|powershell|iex)(\.exe)?(\s|$|[;&|)])|frombase64string[^\n]*(iex|invoke-expression)|\b(eval|({SHELL_NAMES}|python[\d.]*|node|perl|ruby|php)(\.exe)?\s+(-\S+\s+)*-[a-z]*[ce])\s+["']?(\$\(|`)[^\n]*\b(base64\s+(-\w+\s+)*(-\w*d\w*|--decode)|openssl\s+(base64|enc)\b[^\n]*\s-d|xxd\s+(-\w+\s+)*-\w*r)\b|\b(openssl\s+(base64|enc)\b[^|\n]*\s-d\b|xxd\s+(-\w+\s+)*-\w*r\w*)[^|\n]*\|\s*(sudo\s+)?([^\s|;&]*[\\/])?({SHELL_NAMES})(\s|$|[;&|)])"#
+                r#"(powershell|pwsh)(\.exe)?\b[^\n]*\s[-/]e(c|n(c(o(d(e(d(c(o(m(m(a(n(d)?)?)?)?)?)?)?)?)?)?)?)?)?\s+["']?[a-z0-9+/=]{{16,}}|\bbase64\s+(-\w+\s+)*(-\w*d\w*|--decode)\b[^|\n]*\|\s*((sudo|doas)\s+(-\S+\s+)*)?([^\s|;&]*[\\/])?(env\s+)?({SHELL_NAMES}|pwsh|powershell|iex)(\.exe)?(\s|$|[;&|)])|frombase64string[^\n]*(iex|invoke-expression)|\b(iex|invoke-expression)\b[^\n]*frombase64string|\b({SHELL_NAMES}|python[\d.]*|node|perl|ruby|php)(\s+-\S+)*\s+<<<\s*["']?(\$\(|`)[^\n]*\b(base64\s+(-\w+\s+)*(-\w*d\w*|--decode)|openssl\s+(base64|enc)\b[^\n]*\s-d|xxd\s+(-\w+\s+)*-\w*r)|(\bos\.(system|popen)|\bsubprocess\.\w+|\bexec|\beval|\bexecsync|\bspawnsync)\s*\(\s*[^\n]{{0,40}}?(b64decode|base64\.(b64)?decode|buffer\.from|\batob|frombase64string)\b|\b(eval|({SHELL_NAMES}|python[\d.]*|node|perl|ruby|php)(\.exe)?\s+(-\S+\s+)*-[a-z]*[ce])\s+["']?(\$\(|`)[^\n]*\b(base64\s+(-\w+\s+)*(-\w*d\w*|--decode)|openssl\s+(base64|enc)\b[^\n]*\s-d|xxd\s+(-\w+\s+)*-\w*r)\b|\b(openssl\s+(base64|enc)\b[^|\n]*\s-d\b|xxd\s+(-\w+\s+)*-\w*r\w*)[^|\n]*\|\s*(sudo\s+)?([^\s|;&]*[\\/])?({SHELL_NAMES})(\s|$|[;&|)])"#
             ),
         ),
         rule(
@@ -445,7 +481,8 @@ static COMMAND_RULES: LazyLock<Vec<Rule>> = LazyLock::new(|| {
             High,
             ("Zorla push: uzak geçmişi eziyor", "Force push: overwrites remote history"),
             Tag::None,
-            r"git\s+push\b[^\n]*(\s--force(-with-lease)?\b|\s-f\b|\s\+\S+)",
+            // `-f` alone or in a group (`-uf`, `-fu`), never past the command.
+            &format!(r"{GIT}push\b[^\n;&|]*(\s--force(-with-lease)?\b|\s-[a-z]*f[a-z]*\b|\s\+\S+)"),
         ),
         rule(
             "git_destructive",
@@ -488,7 +525,9 @@ static COMMAND_RULES: LazyLock<Vec<Rule>> = LazyLock::new(|| {
             High,
             L_PRIVILEGE,
             Tag::None,
-            r#"(^|[\s;&|(`'"/])(sudo|doas|pkexec|run0)(\.exe)?\s|\brunas(\.exe)?\s|start-process\b[^\n]*-verb\s+runas|\bgsudo\b|with\s+administrator\s+privileges|(^|[\s;&|(`'"])su(\s+(-\S*|[a-z_][\w-]*))*\s+-c\b"#,
+            // sudo, doas, pkexec, run0, su, gsudo and runas are read as commands
+            // (`shell::elevates`): the words in a message do not count.
+            r"start-process\b[^\n]*-verb\s+runas|with\s+administrator\s+privileges",
         ),
         rule(
             "persistence",
@@ -587,7 +626,16 @@ static COMMAND_RULES: LazyLock<Vec<Rule>> = LazyLock::new(|| {
             Tag::None,
             r"gh\s+api\b[^\n]*(-x|--method)\s*delete",
         ),
-        rule("hidden_chars", High, L_HIDDEN, Tag::None, HIDDEN).except(harmless_invisible),
+        // Faking input from PowerShell's own code — the reading of a command
+        // sees the programs and libraries (`shell::fakes_input`).
+        rule(
+            "synthetic_input",
+            High,
+            L_FAKE_INPUT,
+            Tag::None,
+            r"\[(system\.)?windows\.forms\.sendkeys\]::send(wait)?\b|\.sendkeys\s*\(|\[(system\.)?windows\.forms\.cursor\]::position\s*=|add-type\b[^\n]*\b(sendinput|keybd_event|mouse_event|setcursorpos)\b",
+        ),
+        rule("hidden_chars", High, L_HIDDEN, Tag::None, HIDDEN).except_each(harmless_invisible),
         // A dozen blank lines or a long run of blanks pushes the rest of a
         // command out of sight on a card — or a terminal prompt. Blank includes
         // the no-break and wide spaces, which look the same.
@@ -713,9 +761,17 @@ const DETECTORS: &[Detector] = &[
     Detector { category: "download_exec", level: Critical, label: L_DOWNLOAD_EXEC, find: piped_download },
     Detector { category: "encoded", level: Critical, label: L_ENCODED, find: piped_decode },
     Detector { category: "download_exec", level: High, label: L_DOWNLOAD_RUN, find: shell::fetched_then_run },
+    // `echo … | base64 -d > x.sh && bash x.sh`
+    Detector { category: "encoded", level: High, label: L_ENCODED, find: shell::decoded_then_run },
     Detector { category: "shutdown", level: High, label: L_SHUTDOWN, find: shell::powers_off },
     Detector { category: "recursive_delete", level: High, label: L_RECURSIVE, find: shell::runs_rimraf },
     Detector { category: "privilege", level: High, label: L_PRIVILEGE, find: shell::elevates },
+    // The uninstaller's command, run — not mentioned: it takes Nöbetçi out of
+    // Claude Code's, Codex's and Cursor's hooks without a preview.
+    Detector { category: "nobetci_unhook", level: Critical, label: L_UNHOOK, find: shell::unhooks },
+    // xdotool, ydotool, xte, `xinput float`, XTest or uinput in a script: they
+    // can click Nöbetçi's Allow or type into the terminal.
+    Detector { category: "synthetic_input", level: High, label: L_FAKE_INPUT, find: shell::fakes_input },
 ];
 
 // ── Invisible and blank characters ────────────────────────────────────────────
@@ -726,9 +782,10 @@ const DETECTORS: &[Detector] = &[
 /// Hangul and Khmer fillers, Mongolian selectors, zero-width characters and
 /// joiners, line and paragraph separators, bidi embeddings, overrides and
 /// isolates, invisible operators, the byte-order mark, interlinear annotations,
-/// shorthand and musical format characters, and tag characters. The card's
-/// own marker list (src/ui/views.ts) should reveal the same set.
-const HIDDEN: &str = r"[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F\x{AD}\x{34F}\x{61C}\x{115F}\x{1160}\x{17B4}\x{17B5}\x{180B}-\x{180F}\x{200B}-\x{200F}\x{2028}-\x{202E}\x{2060}-\x{2064}\x{2066}-\x{206F}\x{3164}\x{FEFF}\x{FFA0}\x{FFF9}-\x{FFFB}\x{1BCA0}-\x{1BCA3}\x{1D173}-\x{1D17A}\x{E0000}-\x{E007F}]|\r";
+/// shorthand and musical format characters, tag characters, and variation
+/// selectors (which can carry any bytes after any letter). The card's own
+/// marker list (src/ui/views.ts) reveals the same set.
+const HIDDEN: &str = r"[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F\x{AD}\x{34F}\x{61C}\x{115F}\x{1160}\x{17B4}\x{17B5}\x{180B}-\x{180F}\x{200B}-\x{200F}\x{2028}-\x{202E}\x{2060}-\x{2064}\x{2066}-\x{206F}\x{3164}\x{FE00}-\x{FE0F}\x{FEFF}\x{FFA0}\x{FFF9}-\x{FFFB}\x{1BCA0}-\x{1BCA3}\x{1D173}-\x{1D17A}\x{E0000}-\x{E007F}\x{E0100}-\x{E01EF}]|\r";
 
 /// What looks like a space: spaces and tabs, the no-break and wide spaces,
 /// the braille blank and the Hangul fillers.
@@ -745,23 +802,109 @@ fn is_hidden(c: char) -> bool {
     HIDDEN_RE.is_match(c.encode_utf8(&mut buf))
 }
 
+/// Emoji, by block — the card's list (src/ui/views.ts `PICTOGRAPH`): what a
+/// presentation selector may follow.
+fn is_pictograph(c: char) -> bool {
+    matches!(
+        c,
+        '\u{A9}'
+            | '\u{AE}'
+            | '\u{203C}'
+            | '\u{2049}'
+            | '\u{2122}'
+            | '\u{2139}'
+            | '\u{2194}'..='\u{21FF}'
+            | '\u{2300}'..='\u{23FF}'
+            | '\u{24C2}'
+            | '\u{25A0}'..='\u{27BF}'
+            | '\u{2900}'..='\u{297F}'
+            | '\u{2B00}'..='\u{2BFF}'
+            | '\u{3030}'
+            | '\u{303D}'
+            | '\u{3297}'
+            | '\u{3299}'
+            | '\u{1F000}'..='\u{1FAFF}'
+    )
+}
+
+/// The tag letters and digits a flag is spelled with (`gbeng`).
+fn is_tag_spec(c: char) -> bool {
+    matches!(c, '\u{E0030}'..='\u{E0039}' | '\u{E0061}'..='\u{E007A}')
+}
+
+/// Whether the tag character at `at` belongs to a well-formed flag: the black
+/// flag, two to seven tag letters or digits, and the cancel tag — England,
+/// Scotland, Wales. Anything else is text smuggled past the eye (a space, a
+/// capital, punctuation, a longer run, a run that never ends). Looks at no more
+/// than a flag's length either way, so a long run costs nothing extra.
+fn in_flag(text: &str, at: usize) -> bool {
+    const LONGEST: usize = 7;
+    // Back over the letters before this character to the flag.
+    let mut start = at;
+    let mut letters = 0;
+    let mut flag = false;
+    for c in text[..at].chars().rev() {
+        if is_tag_spec(c) && letters < LONGEST {
+            start -= c.len_utf8();
+            letters += 1;
+            continue;
+        }
+        flag = c == '\u{1F3F4}';
+        break;
+    }
+    if !flag {
+        return false;
+    }
+    // Forward from there: letters, then the cancel tag, with `at` among them.
+    let mut count = 0;
+    for (i, c) in text[start..].char_indices() {
+        if is_tag_spec(c) && count < LONGEST {
+            count += 1;
+            continue;
+        }
+        return c == '\u{E007F}' && (2..=LONGEST).contains(&count) && at <= start + i;
+    }
+    false
+}
+
+/// Letters a joiner may sit between: emoji (and their skin tones), and the
+/// scripts that join or part letters with one — Arabic and Persian, Syriac,
+/// the Indic scripts and Sinhala, Myanmar, Khmer, Mongolian. Not Latin,
+/// Greek or Cyrillic, where a joiner only hides a seam.
+fn joins(c: char) -> bool {
+    is_pictograph(c)
+        || matches!(
+            c,
+            '\u{0600}'..='\u{08FF}'
+                | '\u{0900}'..='\u{0DFF}'
+                | '\u{1000}'..='\u{109F}'
+                | '\u{1780}'..='\u{18AF}'
+                | '\u{A8E0}'..='\u{A8FF}'
+                | '\u{FB50}'..='\u{FDFF}'
+                | '\u{FE70}'..='\u{FEFE}'
+        )
+}
+
 /// Invisible characters with a job to do: a joiner inside an emoji sequence
-/// (man, U+200D, laptop: a programmer) or
-/// between letters of a script that needs it (Persian, Hindi), the tags of a
-/// flag emoji, the carriage return of a Windows line break.
+/// (man, U+200D, laptop: a programmer) or between letters of a script that
+/// needs it (Persian, Hindi), a presentation selector after an emoji or a
+/// keycap (a red heart, the keycap 1), the tags of a flag emoji, the carriage
+/// return of a Windows line break.
 fn harmless_invisible(text: &str, at: Range<usize>) -> bool {
     let Some(c) = text[at.clone()].chars().next() else { return false };
-    let before = text[..at.start].chars().next_back();
+    let mut back = text[..at.start].chars().rev();
+    let before = back.next();
     let after = text[at.end..].chars().next();
-    let visible = |c: Option<char>| c.is_some_and(|c| !c.is_ascii() && !c.is_whitespace() && !is_hidden(c));
+    let joined = |c: Option<char>| c.is_some_and(|c| joins(c) && !is_hidden(c));
     match c {
         '\r' => after == Some('\n'),
-        '\u{200C}' | '\u{200D}' => visible(before) && visible(after),
-        '\u{E0020}'..='\u{E007F}' => {
-            // A run of tags right after the black flag: England, Scotland, Wales.
-            let lead = text[..at.start].chars().rev().find(|c| !('\u{E0020}'..='\u{E007F}').contains(c));
-            lead == Some('\u{1F3F4}')
+        '\u{200C}' | '\u{200D}' => {
+            // A heart with its selector, then the joiner (U+2764 U+FE0F U+200D U+1F525).
+            let before = if matches!(before, Some('\u{FE0E}' | '\u{FE0F}')) { back.next() } else { before };
+            joined(before) && joined(after)
         }
+        '\u{FE0E}' | '\u{FE0F}' => before.is_some_and(|b| is_pictograph(b) || matches!(b, '0'..='9' | '#' | '*')),
+        '\u{E0020}'..='\u{E007F}' => in_flag(text, at.start),
         _ => false,
     }
 }
@@ -774,22 +917,39 @@ fn harmless_in_content(text: &str, at: Range<usize>) -> bool {
 
 // ── Skips ─────────────────────────────────────────────────────────────────────
 
-/// The command a match sits in, up to the next `;`, `&`, `|` or line break.
+/// How far `segment` looks either way of a match. A command longer than this
+/// is read as if it ended there: what lies further off can only make a skip
+/// say "harmless" less often.
+const SEGMENT_REACH: usize = 4096;
+
+/// The command a match sits in, up to the next `;`, `&`, `|` or line break,
+/// and no further than SEGMENT_REACH either way.
 fn segment(text: &str, at: Range<usize>) -> &str {
-    let start = text[..at.start].rfind([';', '&', '|', '\n']).map_or(0, |i| i + 1);
-    let end = text[at.end..].find([';', '&', '|', '\n']).map_or(text.len(), |i| at.end + i);
+    let mut lo = at.start.saturating_sub(SEGMENT_REACH);
+    while !text.is_char_boundary(lo) {
+        lo += 1;
+    }
+    let mut hi = (at.end + SEGMENT_REACH).min(text.len());
+    while !text.is_char_boundary(hi) {
+        hi -= 1;
+    }
+    let start = text[lo..at.start].rfind([';', '&', '|', '\n']).map_or(lo, |i| lo + i + 1);
+    let end = text[at.end..hi].find([';', '&', '|', '\n']).map_or(hi, |i| at.end + i);
     &text[start..end]
 }
 
-/// `--dry-run`, `git clean -n` and a draft release change nothing yet.
+/// `--dry-run`, `git clean -n` and a draft release change nothing yet. Each
+/// tool by its own options: `-n` is `--notes` to `gh release create` and
+/// `--no-interaction` to `poetry publish`, a dry run only to `git clean`.
 fn dry_run(text: &str, at: Range<usize>) -> bool {
     let cmd = segment(text, at.clone());
-    let clean = text[at].to_ascii_lowercase().contains("clean");
+    let what = text[at].to_ascii_lowercase();
+    let clean = what.contains("clean");
+    let release = what.contains("release");
     cmd.split_whitespace().any(|w| {
         w == "--dry-run"
-            || w == "-n" && !clean
             || clean && w.starts_with('-') && !w.starts_with("--") && w.contains('n')
-            || w == "--draft" && cmd.contains("release")
+            || release && matches!(w, "--draft" | "-d" | "--draft=true")
     })
 }
 
@@ -802,39 +962,27 @@ fn only_unstages(text: &str, at: Range<usize>) -> bool {
     staged && !worktree
 }
 
-/// `find ~ -name '*.log' -delete` deletes some files, not the folder.
+/// `find ~ -name '*.log' -delete` deletes some files, not the folder — unless
+/// the filter picks everything (`-name '*'`).
 fn find_has_filter(text: &str, at: Range<usize>) -> bool {
-    const FILTERS: &[&str] = &[
-        "-name",
-        "-iname",
-        "-path",
-        "-ipath",
-        "-wholename",
-        "-regex",
-        "-iregex",
-        "-newer",
-        "-mtime",
-        "-mmin",
-        "-atime",
-        "-amin",
-        "-ctime",
-        "-cmin",
-        "-size",
-        "-user",
-        "-group",
-        "-perm",
-        "-empty",
-        "-uid",
-        "-gid",
-        "-links",
-    ];
-    segment(text, at).split_whitespace().any(|w| FILTERS.contains(&w.to_ascii_lowercase().as_str()))
+    let words: Vec<&str> = segment(text, at).split_whitespace().collect();
+    shell::find_narrows(&words)
 }
 
 /// The whole word a match starts: `.env.local.example`, not just `.env.local`.
+/// A file name longer than a path can be is no template.
 fn names_a_template(text: &str, at: Range<usize>) -> bool {
-    let end =
-        text[at.end..].find(|c: char| c.is_whitespace() || "'\";&|)<>".contains(c)).map_or(text.len(), |i| at.end + i);
+    const LONGEST: usize = 512;
+    let mut end = text.len();
+    for (n, (i, c)) in text[at.end..].char_indices().enumerate() {
+        if c.is_whitespace() || "'\";&|)<>".contains(c) {
+            end = at.end + i;
+            break;
+        }
+        if n >= LONGEST {
+            return false;
+        }
+    }
     is_template(text[at.start..end].trim_matches(|c: char| c.is_whitespace() || "\\/'\"=@".contains(c)))
 }
 
@@ -842,14 +990,20 @@ fn names_a_template(text: &str, at: Range<usize>) -> bool {
 
 static WRITE_PATH_RULES: LazyLock<Vec<Rule>> = LazyLock::new(|| {
     vec![
+        // Its folders and installed programs…
+        rule("nobetci_self", Critical, L_SELF, Tag::None, SELF_DIRS),
+        // …and the relay's name, or the app's, wherever it lies.
         rule(
             "nobetci_self",
             Critical,
             L_SELF,
             Tag::None,
-            // Its folders, its installed programs, and the relay's name wherever it lies.
-            &format!(r"{SELF_DIRS}|(^|[\\/])nobetci-hook(\.exe)?[\\/]?$|(^|[\\/])nobetci[^\\/]*\.appimage$"),
-        ),
+            // The socket the relay reaches it by, wherever it fell back to
+            // (`/tmp/nobetci-1000/`, macOS's `$TMPDIR`): without it the relay
+            // finds no app and every agent stops asking.
+            r"(^|[\\/])nobetci-hook(\.exe)?[\\/]?$|(^|[\\/])nobetci[^\\/]*\.appimage$|(^|[\\/])nobetci\.sock$",
+        )
+        .anywhere(),
         rule(
             "claude_settings",
             Critical,
@@ -904,7 +1058,9 @@ static WRITE_PATH_RULES: LazyLock<Vec<Rule>> = LazyLock::new(|| {
                 "Shell profile or startup file (runs every time)",
             ),
             Tag::None,
-            r"(^|[\\/])\.(bashrc|bash_profile|bash_login|bash_logout|profile|zshrc|zprofile|zshenv|zlogin|zlogout|kshrc|mkshrc|cshrc|tcshrc|xprofile|xinitrc|xsession)$|profile\.ps1$|(^|[\\/])start menu[\\/]programs[\\/]startup([\\/]|$)|(^|[\\/])\.config[\\/]autostart([\\/]|$)|(^|[\\/])\.config[\\/]fish[\\/](config\.fish$|conf\.d[\\/])",
+            // PowerShell's `$PROFILE` (and `$PROFILE.CurrentUserAllHosts`), the
+            // files a shell's own startup files pull in, fish's functions.
+            r"(^|[\\/])\.(bashrc|bash_profile|bash_login|bash_logout|bash_aliases|profile|zshrc|zprofile|zshenv|zlogin|zlogout|kshrc|mkshrc|cshrc|tcshrc|xprofile|xinitrc|xsession)$|(^|[\\/])\.zshrc\.local$|(^|[\\/])\$profile(\.\w+)?$|profile\.ps1$|(^|[\\/])\.oh-my-zsh[\\/]custom[\\/]|(^|[\\/])start menu[\\/]programs[\\/]startup([\\/]|$)|(^|[\\/])\.config[\\/]autostart([\\/]|$)|(^|[\\/])\.config[\\/]fish[\\/](config\.fish$|conf\.d[\\/]|functions[\\/])",
         ),
         rule(
             "persistence",
@@ -971,7 +1127,7 @@ static CONTENT_RULES: LazyLock<Vec<Rule>> = LazyLock::new(|| {
             Tag::Secret,
             r"-----BEGIN ([A-Z]+ )?PRIVATE KEY-----",
         ),
-        rule("hidden_chars", High, L_HIDDEN, Tag::None, HIDDEN).except(harmless_in_content),
+        rule("hidden_chars", High, L_HIDDEN, Tag::None, HIDDEN).except_each(harmless_in_content),
         rule(
             "install_script",
             Medium,
@@ -1057,7 +1213,22 @@ struct Found {
     findings: Vec<Finding>,
     secret: bool,
     exfil: bool,
+    /// The reading of a command could not follow all of it: nested too
+    /// deep, too much handed over, or the folder it runs in lost. What it
+    /// did not see may be anything, so a person decides (`unreadable`).
+    unread: bool,
+    /// Names checked that the request did not spell out (`check_derived`).
+    derived: usize,
 }
+
+/// Names a request may be checked for beyond those it spells out — what
+/// patterns stand for, what folders may hold. Thousands of `find -delete`s
+/// or distinct patterns in one command are no real command; past this the
+/// rest is left to the person reading the card (`unreadable`).
+const MAX_DERIVED: usize = 8192;
+
+/// What working out the names one pattern may stand for costs, in derived checks.
+const PATTERN_COST: usize = 16;
 
 impl Found {
     fn add(&mut self, f: Finding, tag: Tag, off: &Disabled) {
@@ -1140,6 +1311,12 @@ fn split_root(path: &str) -> (&str, &str) {
         0
     };
     path.split_at(end)
+}
+
+/// Whether a path starts from a root of its own (`split_root`): where it leads
+/// does not depend on the folder it is read in.
+pub(crate) fn has_root(path: &str) -> bool {
+    !split_root(path.trim()).0.is_empty()
 }
 
 /// A root nothing climbs above: `/`, a network share's `//`, a drive's `C:`.
@@ -1397,9 +1574,11 @@ fn in_project(resolved: &str, cwd: &str, home: &str) -> bool {
 
 /// The rules for a path written to. A project's own files are not system files,
 /// even when the project lives under /usr or /opt (as in many containers).
-fn write_rules(resolved: &str, cwd: &str, home: &str) -> impl Iterator<Item = &'static Rule> + Clone {
+/// `by_place`: only the rules that know a file by the folder it lies in — for
+/// a name the command does not spell out itself (`check_derived`).
+fn write_rules(resolved: &str, cwd: &str, home: &str, by_place: bool) -> impl Iterator<Item = &'static Rule> + Clone {
     let inside = in_project(resolved, cwd, home);
-    WRITE_PATH_RULES.iter().filter(move |r| !(inside && r.category == "system_files"))
+    WRITE_PATH_RULES.iter().filter(move |r| !(inside && r.category == "system_files") && !(by_place && r.anywhere))
 }
 
 /// The spellings of a path the path rules look at: resolved, as written, and
@@ -1430,36 +1609,605 @@ fn scan_path<'r>(
     }
 }
 
-/// Reads a command as text and as commands; `cwd` is where it runs, `claude`
-/// Claude Code's configuration folder when $CLAUDE_CONFIG_DIR moves it.
-fn command_findings(
-    cmd: &str,
-    dialect: shell::Dialect,
-    cwd: &str,
-    (home, claude): (&str, Option<&str>),
-    off: &Disabled,
-    found: &mut Found,
-) {
+/// Where a request runs and whose files it may touch.
+#[derive(Clone, Copy)]
+struct Place<'a> {
+    cwd: &'a str,
+    home: &'a str,
+    /// Claude Code's configuration folder when $CLAUDE_CONFIG_DIR moves it.
+    claude: Option<&'a str>,
+}
+
+/// A write to `path` (resolved, where it leads): the write rules in every
+/// spelling, Claude Code's configuration folder, and every protected name the
+/// path may stand for — a Windows alias of it, a pattern, an 8.3 name
+/// (`variants`). `by_place` limits the rules to those that know a file by its
+/// folder: for a file copied into a folder under its own name, which may be
+/// the relay's name without being the relay (`cp target/…/nobetci-hook dist/`).
+fn check_write(raw: &str, path: &str, at: Place, by_place: bool, off: &Disabled, found: &mut Found) {
+    if path.is_empty() {
+        return;
+    }
+    scan_path(write_rules(path, at.cwd, at.home, by_place), raw, path, off, found);
+    config_dir_writes(path, at.home, at.claude, off, found);
+    if path.split('/').any(is_pattern) {
+        if found.derived >= MAX_DERIVED {
+            found.unread = true;
+            return;
+        }
+        found.derived += PATTERN_COST;
+    }
+    for name in variants(path, at.home) {
+        check_derived(raw, &name, at, off, found);
+    }
+}
+
+/// A name a write may reach without spelling it out: the rules that know a
+/// file by its folder, the finding shown on what the command wrote.
+fn check_derived(raw: &str, name: &str, at: Place, off: &Disabled, found: &mut Found) {
+    if is_template(name) {
+        return;
+    }
+    if found.derived >= MAX_DERIVED {
+        found.unread = true;
+        return;
+    }
+    found.derived += 1;
+    let shown = excerpt(raw);
+    let mut here = Found::default();
+    scan(write_rules(name, at.cwd, at.home, true), name, off, &mut here);
+    config_dir_writes(name, at.home, at.claude, off, &mut here);
+    for f in here.findings {
+        found.findings.push(Finding { excerpt: shown.clone(), ..f });
+    }
+    found.secret |= here.secret;
+    found.exfil |= here.exfil;
+}
+
+/// What a folder whose files the command does not name may get or lose —
+/// an archive unpacked there, a folder's contents copied in (`wide`), the
+/// folder made, replaced, removed or moved away as a whole: any file such a
+/// folder holds. Claude Code's settings in `.claude`, a hook in `.git/hooks`,
+/// Nöbetçi's own files, and the protected places further below it (`~/.config`
+/// holds Nöbetçi's settings; the home folder, everyone's). Files poured into
+/// the root of the system or of a drive may land in its system folders.
+fn check_receives(raw: &str, folder: &str, at: Place, wide: bool, off: &Disabled, found: &mut Found) {
+    let base = folder.trim_end_matches(['/', '\\']);
+    let mut probes: Vec<String> =
+        ["x", "settings.json", "settings.local.json", "hooks.json", "config.toml", "config", "hooks/x", "mcp.json"]
+            .iter()
+            .map(|name| format!("{base}/{name}"))
+            .collect();
+    probes.extend(protected_below(folder, at.home));
+    let n = norm(folder);
+    if wide && n.is_empty() && folder.starts_with(['/', '\\']) {
+        probes.push("/etc/x".into());
+    } else if wide && n.len() == 2 && n.ends_with(':') {
+        probes.push(format!("{n}/Windows/x"));
+    }
+    for probe in probes {
+        check_derived(raw, &probe, at, off, found);
+    }
+}
+
+/// Protected files in the home folder: every agent's settings and hooks,
+/// Nöbetçi's own files on each system, startup files and keys.
+const IN_HOME: &[&str] = &[
+    ".claude/settings.json",
+    ".claude/settings.local.json",
+    ".claude.json",
+    ".codex/hooks.json",
+    ".codex/config.toml",
+    ".cursor/hooks.json",
+    ".config/nobetci/settings.json",
+    ".local/share/nobetci/bin/nobetci-hook",
+    ".local/state/nobetci/nobetci.sock",
+    ".ssh/authorized_keys",
+    ".bashrc",
+    ".zshrc",
+    ".profile",
+    ".config/autostart/x.desktop",
+    "Library/Application Support/Nobetci/settings.json",
+    "Library/LaunchAgents/x.plist",
+    "AppData/Roaming/Nobetci/settings.json",
+    "AppData/Local/Nobetci/bin/nobetci-hook.exe",
+];
+
+/// The protected files of the home folder (IN_HOME) that lie below `folder`:
+/// all of them below `/` or `/home`, Nöbetçi's below `~/.config`.
+fn protected_below(folder: &str, home: &str) -> Vec<String> {
+    let f = norm(folder);
+    let h = resolve("", home);
+    let h = h.trim_end_matches('/');
+    let (home, f) = if !h.is_empty() && is_absolute(h) {
+        (h.to_string(), f)
+    } else if f == "~" || f.starts_with("~/") {
+        ("~".to_string(), f)
+    } else {
+        return Vec::new();
+    };
+    let root = f.is_empty() && folder.starts_with(['/', '\\']);
+    IN_HOME.iter().map(|p| format!("{home}/{p}")).filter(|p| root || norm(p).starts_with(&format!("{f}/"))).collect()
+}
+
+/// The home folder as `folder` reaches it, when `folder` is the home folder or
+/// one above it: `~`, `$HOME`, `/home/dev`, `/home`, `/`. "~" for a home
+/// folder that cannot be placed.
+fn home_at_or_below(folder: &str, home: &str) -> Option<String> {
+    let f = norm(folder);
+    let (root, rest) = split_root(&f);
+    let homeish = matches!(root, "~" | "$home" | "${home}" | "%userprofile%" | "$env:userprofile" | "$env:home");
+    if homeish && rest.trim_matches('/').is_empty() {
+        return Some(if home.trim().is_empty() { "~".into() } else { resolve("", home) });
+    }
+    let h = norm(&resolve("", home));
+    if h.is_empty() || !is_absolute(&h) {
+        return None;
+    }
+    let above = f == h || h.starts_with(&format!("{f}/")) || f.is_empty() && folder.starts_with(['/', '\\']);
+    above.then(|| resolve("", home))
+}
+
+/// Protected files below `start` that a sweep of it by name may reach: a
+/// project's own settings and hooks, and those of the home folder below it.
+fn swept(start: &str, home: &str) -> Vec<String> {
+    const IN_PROJECT: &[&str] =
+        &[".claude/settings.json", ".claude/settings.local.json", ".mcp.json", ".git/config", ".git/hooks/pre-commit"];
+    let base = start.trim_end_matches('/');
+    let mut out: Vec<String> = IN_PROJECT.iter().map(|p| format!("{base}/{p}")).collect();
+    out.extend(protected_below(start, home));
+    out
+}
+
+/// Windows spellings the file system reads as another name: the default data/// Windows spellings the file system reads as another name: the default data
+/// stream (`settings.json::$DATA`) and trailing dots and spaces
+/// (`Nobetci.\settings.json`, `settings.json.`). The path as Windows reads it,
+/// when that differs. Elsewhere these are other files; reading them as these
+/// only ever adds a finding.
+fn windows_alias(path: &str) -> Option<String> {
+    let mut changed = false;
+    let parts: Vec<&str> = path
+        .split('/')
+        .map(|part| {
+            let mut p = part;
+            if let Some(cut) =
+                p.len().checked_sub(7).filter(|&i| p.get(i..).is_some_and(|t| t.eq_ignore_ascii_case("::$data")))
+            {
+                p = &p[..cut];
+                changed = true;
+            }
+            if p.chars().any(|c| c != '.') {
+                let t = p.trim_end_matches(['.', ' ']);
+                if t.len() != p.len() && !t.is_empty() {
+                    p = t;
+                    changed = true;
+                }
+            }
+            p
+        })
+        .collect();
+    changed.then(|| parts.join("/"))
+}
+
+/// Names the path rules know by the folder they lie in: what a pattern or an
+/// 8.3 alias in a written path may stand for.
+const PLACE_NAMES: &[&str] = &[
+    "settings.json",
+    "settings.local.json",
+    "hooks.json",
+    "config.toml",
+    "config",
+    "mcp.json",
+    ".claude",
+    ".codex",
+    ".cursor",
+    ".git",
+    "hooks",
+    ".husky",
+    ".ssh",
+    "agents",
+    "commands",
+    "skills",
+    "plugins",
+    ".config",
+    ".local",
+    "share",
+    "state",
+    "nobetci",
+    "nobetci-hook",
+    "nobetci-hook.exe",
+    "nobetci.exe",
+    "nobetci.app",
+    "bin",
+    "appdata",
+    "roaming",
+    "local",
+    "library",
+    "application support",
+    "applications",
+    "launchagents",
+    "launchdaemons",
+    "autostart",
+    "systemd",
+    "user",
+    "fish",
+    "conf.d",
+    "functions",
+    ".oh-my-zsh",
+    "custom",
+];
+
+/// Startup and settings files that matter in the home folder itself.
+const HOME_NAMES: &[&str] = &[
+    ".bashrc",
+    ".bash_profile",
+    ".bash_login",
+    ".bash_logout",
+    ".bash_aliases",
+    ".profile",
+    ".zshrc",
+    ".zprofile",
+    ".zshenv",
+    ".zlogin",
+    ".zlogout",
+    ".zshrc.local",
+    ".kshrc",
+    ".cshrc",
+    ".tcshrc",
+    ".xprofile",
+    ".xinitrc",
+    ".xsession",
+    ".gitconfig",
+    ".claude.json",
+    ".mcp.json",
+];
+
+/// Whole names a written path may stand for, past those spelled out: the
+/// Windows alias, and for a part written as a pattern (`~/.claude/s*s.json`,
+/// `~/.config/nob*/settings.json`, a brace written out past its limit) or as
+/// an 8.3 alias (`NOBETC~1`, `SETTIN~1.JSO`), each protected name it can
+/// stand for. At most 64.
+fn variants(path: &str, home: &str) -> Vec<String> {
+    const MOST: usize = 64;
+    let mut out: Vec<String> = Vec::new();
+    let alias = windows_alias(path);
+    for spelled in std::iter::once(path).chain(alias.as_deref()) {
+        if alias.as_deref() == Some(spelled) {
+            out.push(spelled.to_string());
+        }
+        let parts: Vec<&str> = spelled.split('/').collect();
+        if !parts.iter().any(|p| is_pattern(p)) {
+            continue;
+        }
+        let mut prefixes: Vec<String> = vec![String::new()];
+        for (i, part) in parts.iter().enumerate() {
+            let mut next: Vec<String> = Vec::new();
+            for prefix in &prefixes {
+                let join = |name: &str| if i == 0 { name.to_string() } else { format!("{prefix}/{name}") };
+                if !is_pattern(part) {
+                    next.push(join(part));
+                    continue;
+                }
+                let at_home = home_at_or_below(prefix, home).is_some_and(|h| norm(&h) == norm(prefix))
+                    || matches!(norm(prefix).as_str(), "~" | "$home" | "${home}");
+                let names = PLACE_NAMES.iter().chain(if at_home { HOME_NAMES } else { &[] });
+                next.extend(names.filter(|name| part_matches(part, name)).map(|name| join(name)));
+            }
+            next.truncate(MOST);
+            prefixes = next;
+        }
+        out.extend(prefixes);
+    }
+    out.truncate(MOST);
+    out
+}
+
+/// A part of a path written as a pattern or an 8.3 alias.
+fn is_pattern(part: &str) -> bool {
+    part.contains(['*', '?', '[']) || short_name(part).is_some()
+}
+
+fn part_matches(part: &str, name: &str) -> bool {
+    match short_name(part) {
+        Some((base, ext)) => short_of(name, &base, &ext),
+        None => glob_matches(part, name),
+    }
+}
+
+/// An 8.3 alias (`NOBETC~1`, `SETTIN~1.JSO`): the first letters of a long
+/// name, and of its extension.
+fn short_name(part: &str) -> Option<(String, String)> {
+    let (stem, ext) = part.split_once('.').unwrap_or((part, ""));
+    let (base, num) = stem.rsplit_once('~')?;
+    let ok = (1..=6).contains(&base.len())
+        && (1..=6).contains(&num.len())
+        && num.bytes().all(|b| b.is_ascii_digit())
+        && ext.len() <= 3
+        && !ext.contains('.')
+        && !base.contains(['*', '?', '[']);
+    ok.then(|| (base.to_uppercase(), ext.to_uppercase()))
+}
+
+/// Whether Windows may give `name` the 8.3 alias `base~N.ext`: the start of
+/// its name without dots and spaces, and of its extension.
+fn short_of(name: &str, base: &str, ext: &str) -> bool {
+    let trimmed = name.trim_start_matches('.');
+    let (long_base, long_ext) = match trimmed.rfind('.') {
+        Some(i) => (&trimmed[..i], &trimmed[i + 1..]),
+        None => (trimmed, ""),
+    };
+    let squeeze = |s: &str| s.chars().filter(|c| !matches!(c, '.' | ' ')).collect::<String>().to_uppercase();
+    let long_ext: String = squeeze(long_ext).chars().take(3).collect();
+    squeeze(long_base).starts_with(base) && long_ext == ext
+}
+
+/// A shell pattern over one part of a path: `*`, `?` and `[…]`, any case.
+fn glob_matches(pattern: &str, name: &str) -> bool {
+    let p: Vec<char> = pattern.to_lowercase().chars().collect();
+    let n: Vec<char> = name.to_lowercase().chars().collect();
+    let (mut pi, mut ni) = (0, 0);
+    let mut star: Option<(usize, usize)> = None;
+    while ni < n.len() {
+        let step = match p.get(pi) {
+            Some('*') => {
+                star = Some((pi, ni));
+                pi += 1;
+                continue;
+            }
+            Some('?') => Some(pi + 1),
+            Some('[') => match class(&p, pi, n[ni]) {
+                Some((end, true)) => Some(end),
+                Some((_, false)) => None,
+                None => (n[ni] == '[').then_some(pi + 1),
+            },
+            Some(&c) => (c == n[ni]).then_some(pi + 1),
+            None => None,
+        };
+        match (step, star) {
+            (Some(next), _) => {
+                pi = next;
+                ni += 1;
+            }
+            (None, Some((sp, sn))) => {
+                pi = sp + 1;
+                ni = sn + 1;
+                star = Some((sp, sn + 1));
+            }
+            (None, None) => return false,
+        }
+    }
+    p[pi..].iter().all(|&c| c == '*')
+}
+
+/// A bracket expression at `at`: where it ends, and whether it takes `c`.
+/// None when it never closes (the `[` is a plain character then).
+fn class(p: &[char], at: usize, c: char) -> Option<(usize, bool)> {
+    let mut i = at + 1;
+    let negate = matches!(p.get(i), Some('!' | '^'));
+    if negate {
+        i += 1;
+    }
+    let first = i;
+    let mut hit = false;
+    while i < p.len() {
+        if p[i] == ']' && i > first {
+            return Some((i + 1, hit != negate));
+        }
+        if i + 2 < p.len() && p[i + 1] == '-' && p[i + 2] != ']' {
+            hit |= p[i] <= c && c <= p[i + 2];
+            i += 3;
+        } else {
+            hit |= p[i] == c;
+            i += 1;
+        }
+    }
+    None
+}
+
+/// Whether deleting `path` with everything below it deletes the root, a
+/// drive, a home folder or a system folder — wherever the command put it:
+/// `rm -rf ../..` from a project, `cd ~ && rm -rf *`, `rm -rf "$HOME"/*`,
+/// `Get-ChildItem $HOME | Remove-Item -Recurse`.
+fn wipes_everything(path: &str, home: &str) -> bool {
+    const SYSTEM: &[&str] = &[
+        "bin",
+        "boot",
+        "dev",
+        "etc",
+        "home",
+        "lib",
+        "lib64",
+        "opt",
+        "proc",
+        "root",
+        "sbin",
+        "srv",
+        "sys",
+        "usr",
+        "var",
+        "users",
+        "system",
+        "library",
+        "applications",
+        "private",
+    ];
+    let placed = leads_to(path, home).replace('\\', "/");
+    let absolute = placed.starts_with('/');
+    let mut p = placed.to_lowercase();
+    // A folder's contents are the folder: `~/*`, `/*`, `~/.*`.
+    for tail in ["/*", "/.*", "/*.*", "/.[!.]*"] {
+        if let Some(rest) = p.strip_suffix(tail) {
+            p = if rest.is_empty() { "/".into() } else { rest.to_string() };
+            break;
+        }
+    }
+    let p = norm(&p);
+    if p.is_empty() {
+        return absolute;
+    }
+    let (root, rest) = split_root(&p);
+    if matches!(root, "~" | "$home" | "${home}" | "%userprofile%" | "$env:userprofile" | "$env:home")
+        && rest.split('/').all(|part| part.is_empty() || part == "..")
+    {
+        return true;
+    }
+    let h = norm(&resolve("", home));
+    if !h.is_empty() && is_absolute(&h) && (p == h || h.starts_with(&format!("{p}/"))) {
+        return true;
+    }
+    let parts: Vec<&str> = p.split('/').filter(|s| !s.is_empty()).collect();
+    match parts.as_slice() {
+        // A drive, or WSL's view of one.
+        [d] if d.len() == 2 && d.ends_with(':') => true,
+        ["mnt", d] if d.len() == 1 => true,
+        [first, ..] if first.len() == 2 && first.ends_with(':') => {
+            matches!(
+                parts.get(1),
+                Some(&("windows" | "users" | "program files" | "program files (x86)" | "programdata"))
+            ) && parts.len() <= 3
+        }
+        ["mnt", d, "users" | "windows", ..] if d.len() == 1 => parts.len() <= 4,
+        ["home" | "users", _] if absolute => true,
+        [top] if absolute => SYSTEM.contains(top),
+        _ => false,
+    }
+}
+
+/// A download kept in a variable and then run as code: `$s = irm …; iex $s`,
+/// `s=$(curl -fsSL …); eval "$s"`, `bash -c "$s"`, `echo "$s" | sh`.
+fn runs_fetched_variable(cmd: &str) -> Option<String> {
+    static KEPT: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(
+            r#"(?i)(?-u:\b)([a-z_]\w{0,63})=["']?(\$\(|`)\s*((sudo|env|command)\s+)*(curl|wget)(\.exe)?(?-u:\b)|\$([a-z_]\w{0,63})\s*=\s*[^\n;]{0,120}?(?-u:\b)(iwr|irm|invoke-webrequest|invoke-restmethod|downloadstring|downloaddata|curl|wget)(?-u:\b)"#,
+        )
+        .expect("bad pattern")
+    });
+    let mut names: Vec<(String, usize)> = Vec::new();
+    for c in KEPT.captures_iter(cmd).take(16) {
+        if let Some(name) = c.get(1).or_else(|| c.get(7)) {
+            names.push((name.as_str().to_string(), c.get(0).map_or(0, |m| m.end())));
+        }
+    }
+    for (name, after) in names {
+        let var = format!(r#"\$\{{?{name}\b"#);
+        let pattern = format!(
+            r#"(?i)(?-u:\b)(iex|invoke-expression)(?-u:\b)[^\n;|]*{var}|\[scriptblock\]::create\(\s*{var}|(?-u:\b)eval\s+["']?{var}|(?-u:\b)({SHELL_NAMES}|python[\d.]*|node|perl|ruby|php|pwsh|powershell)(\.exe)?\s+(-\S+\s+)*-[a-z]*[ce][a-z]*\s+["']?{var}|{var}\}}?["']?(\.content)?\s*\|\s*((sudo|doas)\s+)?({SHELL_NAMES}|iex|invoke-expression|python[\d.]*|node|perl|ruby)(?-u:\b)|({SHELL_NAMES})\s+(-\S+\s+)*<<<\s*["']?{var}"#
+        );
+        let Ok(re) = Regex::new(&pattern) else { continue };
+        if let Some(m) = re.find(&cmd[after..]) {
+            return Some(m.as_str().to_string());
+        }
+    }
+    None
+}
+
+/// Files .NET calls in PowerShell write: `[IO.File]::WriteAllText("…", …)`,
+/// `[System.IO.File]::Copy("a", "…")`. The parser reads such a call as
+/// words of other commands; the paths it names are read here.
+fn dotnet_writes(cmd: &str) -> Vec<String> {
+    static CALL: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(
+            r#"(?i)\[(?:system\.)?io\.(file|directory)\]::(\w+)\s*\(\s*(?:"([^"\n]{1,512})"|'([^'\n]{1,512})')(?:\s*,\s*(?:"([^"\n]{1,512})"|'([^'\n]{1,512})'))?"#,
+        )
+        .expect("bad pattern")
+    });
+    let mut out = Vec::new();
+    for c in CALL.captures_iter(cmd).take(64) {
+        let method = c.get(2).map_or("", |m| m.as_str()).to_ascii_lowercase();
+        let first = c.get(3).or_else(|| c.get(4)).map(|m| m.as_str().to_string());
+        let second = c.get(5).or_else(|| c.get(6)).map(|m| m.as_str().to_string());
+        let writes =
+            ["write", "append", "create", "open", "delete", "replace", "setattributes", "encrypt", "move", "copy"];
+        if !writes.iter().any(|w| method.starts_with(w)) || method == "openread" || method == "opentext" {
+            continue;
+        }
+        out.extend(first);
+        // Copy and Move name the destination second; Replace, the file replaced.
+        if matches!(method.as_str(), "copy" | "move" | "replace") {
+            out.extend(second);
+        }
+    }
+    out
+}
+
+/// Reads a command as text and as commands; `at` is where it runs.
+fn command_findings(cmd: &str, dialect: shell::Dialect, at: Place, off: &Disabled, found: &mut Found) {
+    let Place { cwd, home, claude } = at;
     scan(&*COMMAND_RULES, cmd, off, found);
     config_dir_touch(cmd, home, claude, off, found);
-    let pipes = shell::parse(cmd, dialect);
+    let reading = shell::read(cmd, dialect);
+    let pipes = reading.pipes;
+    found.unread |= reading.partial;
     for d in DETECTORS {
         if let Some(text) = (d.find)(&pipes) {
             let label = i18n::pick(d.label.1, d.label.0);
             found.add(Finding { category: d.category, level: d.level, label, excerpt: excerpt(&text) }, Tag::None, off);
         }
     }
+    if let Some(text) = runs_fetched_variable(cmd) {
+        let label = i18n::pick(L_DOWNLOAD_EXEC.1, L_DOWNLOAD_EXEC.0);
+        let f = Finding { category: "download_exec", level: Critical, label, excerpt: excerpt(&text) };
+        found.add(f, Tag::None, off);
+    }
     // Where it writes meets the same rules as the Write tool: `cd ~/.claude`
     // then `> settings.json` is a write to Claude Code's settings, and the
     // shell's `~/../../etc` is /etc. A change of permissions only matters for
     // Nöbetçi's own files (`chmod -x` on its relay).
-    for w in shell::writes(&pipes, cwd) {
+    let (writes, lost) = shell::writes(&pipes, cwd);
+    found.unread |= lost;
+    for w in writes {
         let path = leads_to(&w.path, home);
-        if w.content {
-            scan_path(write_rules(&path, cwd, home), &w.raw, &path, off, found);
-            config_dir_writes(&path, home, claude, off, found);
-        } else {
-            scan_path(WRITE_PATH_RULES.iter().filter(|r| r.category == "nobetci_self"), &w.raw, &path, off, found);
+        match w.how {
+            shell::How::Meta => {
+                let own = WRITE_PATH_RULES.iter().filter(|r| r.category == "nobetci_self");
+                scan_path(own, &w.raw, &path, off, found);
+            }
+            shell::How::Content => check_write(&w.raw, &path, at, false, off, found),
+            shell::How::Named => check_write(&w.raw, &path, at, true, off, found),
+            shell::How::Into => check_receives(&w.raw, &path, at, true, off, found),
+            shell::How::Whole => check_receives(&w.raw, &path, at, false, off, found),
+        }
+    }
+    if dialect == shell::Dialect::PowerShell {
+        for raw in dotnet_writes(cmd) {
+            let path = leads_to(&resolve(cwd, &raw), home);
+            check_write(&raw, &path, at, false, off, found);
+        }
+    }
+    // A `find` that removes files by name below a folder holding protected
+    // ones: `find ~ -name settings.json -delete`.
+    // (Without a name it is a plain recursive delete, read with the others.)
+    for sweep in shell::sweeps(&pipes, cwd).into_iter().filter(|s| !s.names.is_empty() || !s.paths.is_empty()) {
+        if found.derived >= MAX_DERIVED {
+            found.unread = true;
+            break;
+        }
+        for (raw, start) in &sweep.starts {
+            let start = leads_to(start, home);
+            for probe in swept(&start, home) {
+                let rel = probe.get(start.trim_end_matches('/').len()..).unwrap_or("").trim_start_matches('/');
+                let file = probe.rsplit('/').next().unwrap_or("");
+                let spelled = [
+                    probe.clone(),
+                    rel.to_string(),
+                    format!("./{rel}"),
+                    format!("{}/{rel}", raw.trim_end_matches('/')),
+                ];
+                if sweep.names.iter().all(|n| glob_matches(n, file))
+                    && sweep.paths.iter().all(|p| spelled.iter().any(|s| glob_matches(p, s)))
+                {
+                    check_derived(&sweep.text, &probe, at, off, found);
+                }
+            }
+        }
+    }
+    // Deleting the root, a drive or a home folder, however the command gets
+    // there: `cd ~ && rm -rf *`, `rm -rf ../..`.
+    for (target, text) in shell::wipes(&pipes, cwd) {
+        if wipes_everything(&target, home) {
+            let label = i18n::pick(L_ROOT_DELETE.1, L_ROOT_DELETE.0);
+            let f = Finding { category: "root_delete", level: Critical, label, excerpt: excerpt(&text) };
+            found.add(f, Tag::None, off);
         }
     }
     // A program that is neither a known reader nor a known writer, handed one
@@ -1479,8 +2227,10 @@ fn command_findings(
 /// path (`…/nobetci-hook`), not as a bare word: `cargo test -p nobetci-hook`
 /// builds it, it does not touch the installed one.
 static SELF_TOUCH: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(&format!(r"(?i){SELF_DIRS}|[\\/]nobetci-hook(\.exe)?$|(^|[\\/])nobetci[^\\/\s]*\.appimage$"))
-        .expect("bad pattern")
+    Regex::new(&format!(
+        r"(?i){SELF_DIRS}|[\\/]nobetci-hook(\.exe)?$|(^|[\\/])nobetci[^\\/\s]*\.appimage$|[\\/]nobetci\.sock$"
+    ))
+    .expect("bad pattern")
 });
 
 // ── MCP tools ─────────────────────────────────────────────────────────────────
@@ -1731,75 +2481,277 @@ fn mcp_level(tool: &str) -> Level {
     level
 }
 
-const MCP_COMMAND_KEYS: &[&str] = &["command", "cmd", "script", "shell", "bash", "powershell"];
+/// Verbs of a tool named for looking that still save a file where it is
+/// told: what it downloads, exports or captures lands at the path it is handed.
+const MCP_SAVES: &[&str] = &[
+    "download",
+    "export",
+    "screenshot",
+    "snapshot",
+    "render",
+    "save",
+    "capture",
+    "dump",
+    "backup",
+    "pdf",
+    "print",
+    "record",
+    "extract",
+    "unzip",
+    "untar",
+    "unpack",
+    "clone",
+    "generate",
+];
+
+const MCP_COMMAND_KEYS: &[&str] =
+    &["command", "cmd", "script", "shell", "bash", "powershell", "commandline", "command_line", "cmdline"];
+/// Keys whose list of strings is a command and its arguments (`["bash", "-c", "…"]`).
+const MCP_ARGV_KEYS: &[&str] = &["args", "argv", "arguments"];
+/// Keys whose string is code to run: read as code and as the commands its
+/// string literals spell out (`os.system('curl x | sh')`).
+const MCP_CODE_KEYS: &[&str] = &["code", "source_code", "program"];
 const MCP_SQL_KEYS: &[&str] = &["sql", "statement", "statements", "migration", "query"];
 const MCP_URL_KEYS: &[&str] = &["url", "uri", "href", "endpoint", "webhook"];
+/// Keys that name where something is put, whatever the tool's name says:
+/// `fetch_url {save_to}` writes there.
+const MCP_WRITE_KEYS: &[&str] = &[
+    "destination",
+    "dest",
+    "new_path",
+    "newpath",
+    "to",
+    "output",
+    "output_path",
+    "outputpath",
+    "output_file",
+    "outputfile",
+    "output_dir",
+    "outputdir",
+    "save_to",
+    "saveto",
+    "save_path",
+    "savepath",
+    "download_path",
+    "downloadpath",
+];
 const MCP_PATH_KEYS: &[&str] = &[
     "path",
+    "paths",
     "file_path",
     "filepath",
+    "file_paths",
+    "filepaths",
     "file",
+    "files",
     "filename",
+    "file_name",
     "destination",
     "dest",
     "target",
     "target_path",
     "targetpath",
+    "target_file",
+    "targetfile",
     "new_path",
     "newpath",
     "old_path",
     "oldpath",
+    "source",
+    "src",
+    "from",
+    "to",
     "source_path",
     "sourcepath",
     "directory",
     "dir",
     "folder",
     "notebook_path",
+    // Serena, JetBrains, and the save-to keys of downloaders and exporters.
+    "relative_path",
+    "relativepath",
+    "pathinproject",
+    "path_in_project",
+    "absolute_path",
+    "absolutepath",
+    "output",
+    "output_path",
+    "outputpath",
+    "output_file",
+    "outputfile",
+    "output_dir",
+    "outputdir",
+    "save_to",
+    "saveto",
+    "save_path",
+    "savepath",
+    "download_path",
+    "downloadpath",
+    "location",
 ];
 
-struct McpContext<'a> {
-    /// The tool's name says it changes something: its paths are writes.
-    changes: bool,
-    /// The tool's name says it reads: a `query` is a search, not SQL.
-    reads: bool,
-    cwd: &'a str,
-    home: &'a str,
-    /// Claude Code's configuration folder when $CLAUDE_CONFIG_DIR moves it.
-    claude: Option<&'a str>,
+/// What an MCP tool's name says it does with the paths it is handed.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum PathUse {
+    /// Reads them (`read_file`, `list_directory`).
+    Read,
+    /// Writes them (`write_file`, `download_file`, `take_screenshot`).
+    Write,
+    /// Says neither: read as reads, and as writes where a write would take
+    /// Nöbetçi or an agent's settings out of the loop.
+    Unknown,
 }
 
-/// Reads what an MCP tool is handed, the way it would be read for Bash, Write
-/// or WebFetch: a shell command, SQL, a URL, a path it writes or reads.
+/// Rules a path handed to a tool that names no verb is checked against as a
+/// write: the places that switch the watchers off or run code at startup.
+const GUARDED: &[&str] =
+    &["nobetci_self", "claude_settings", "claude_hooks", "agent_hooks", "shell_profile", "git_hooks"];
+
+fn path_use(tool: &str, level: Level) -> PathUse {
+    let words = action_words(tool);
+    if level >= Medium || words.iter().any(|w| MCP_SAVES.contains(&w.as_str())) {
+        PathUse::Write
+    } else if words.first().is_some_and(|w| MCP_READ.contains(&w.as_str())) {
+        PathUse::Read
+    } else {
+        PathUse::Unknown
+    }
+}
+
+struct McpContext<'a> {
+    paths: PathUse,
+    /// The tool's name says it reads: a `query` is a search, not SQL…
+    reads: bool,
+    /// …unless the tool is a query tool (`query`, `run_sql`) and the query
+    /// starts the way SQL that changes data does.
+    sql_tool: bool,
+    at: Place<'a>,
+}
+
+/// SQL that changes or removes data or its shape, by its first word.
+fn starts_like_sql(text: &str) -> bool {
+    static FIRST: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"(?i)^\s*(\(\s*)*(drop|delete|truncate|alter|update|insert|create|grant|revoke|merge|replace|upsert|attach|detach|vacuum|rename|with)(?-u:\b)").expect("bad pattern")
+    });
+    FIRST.is_match(text)
+}
+
+/// A `file://` address as the path it names (`file:///C:/x` is `C:/x`).
+fn file_uri_path(uri: &str) -> Option<String> {
+    let rest = uri.get(..7).filter(|s| s.eq_ignore_ascii_case("file://")).map(|_| &uri[7..])?;
+    let rest = rest.strip_prefix("localhost").unwrap_or(rest);
+    let mut out: Vec<u8> = Vec::with_capacity(rest.len());
+    let bytes = rest.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        let hex = |b: u8| (b as char).to_digit(16);
+        match (bytes[i], bytes.get(i + 1).copied().and_then(hex), bytes.get(i + 2).copied().and_then(hex)) {
+            (b'%', Some(h), Some(l)) => {
+                out.push((h * 16 + l) as u8);
+                i += 3;
+            }
+            (b, _, _) => {
+                out.push(b);
+                i += 1;
+            }
+        }
+    }
+    let path = String::from_utf8_lossy(&out).into_owned();
+    let b = path.as_bytes();
+    Some(if b.len() > 2 && b[0] == b'/' && b[1].is_ascii_alphabetic() && b[2] == b':' {
+        path[1..].to_string()
+    } else {
+        path
+    })
+}
+
+/// The string literals of code, which may be commands it runs
+/// (`os.system('curl x | sh')`): the first 64, none longer than 4 KiB.
+fn code_literals(code: &str) -> Vec<&str> {
+    static LITERAL: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r#""((?:[^"\\\n]|\\.)*)"|'((?:[^'\\\n]|\\.)*)'|`([^`]*)`"#).expect("bad pattern"));
+    LITERAL
+        .captures_iter(code)
+        .filter_map(|c| c.get(1).or_else(|| c.get(2)).or_else(|| c.get(3)))
+        .map(|m| m.as_str())
+        .filter(|t| !t.trim().is_empty() && t.len() <= 4096)
+        .take(64)
+        .collect()
+}
+
+/// Reads what an MCP tool — or a tool the engine does not know — is handed,
+/// the way it would be read for Bash, Write or WebFetch: a shell command (a
+/// string, or a program and its arguments), code, SQL, a URL, a path it
+/// writes or reads.
 fn mcp_arguments(value: &Value, key: &str, cx: &McpContext, off: &Disabled, found: &mut Found, depth: usize) {
+    let at = cx.at;
     match value {
         Value::String(s) if !s.trim().is_empty() => {
             if MCP_COMMAND_KEYS.contains(&key) {
-                command_findings(s, shell::Dialect::Posix, cx.cwd, (cx.home, cx.claude), off, found);
-            } else if MCP_SQL_KEYS.contains(&key) && (key != "query" || !cx.reads) {
+                command_findings(s, shell::Dialect::Posix, at, off, found);
+            } else if MCP_CODE_KEYS.contains(&key) {
+                scan(&*COMMAND_RULES, s, off, found);
+                for text in code_literals(s) {
+                    command_findings(text, shell::Dialect::Posix, at, off, found);
+                }
+            } else if MCP_SQL_KEYS.contains(&key) && (key != "query" || !cx.reads || cx.sql_tool && starts_like_sql(s))
+            {
                 scan(&*COMMAND_RULES, s, off, found);
             }
-            if MCP_URL_KEYS.contains(&key) || s.starts_with("http://") || s.starts_with("https://") {
+            let path = file_uri_path(s);
+            if path.is_none() && (MCP_URL_KEYS.contains(&key) || s.starts_with("http://") || s.starts_with("https://"))
+            {
                 scan(&*WEB_RULES, s, off, found);
             }
-            if MCP_PATH_KEYS.contains(&key) {
-                let resolved = leads_to(&resolve(cx.cwd, s), cx.home);
-                if cx.changes {
-                    scan_path(write_rules(&resolved, cx.cwd, cx.home), s, &resolved, off, found);
-                    config_dir_writes(&resolved, cx.home, cx.claude, off, found);
-                    if outside(&resolved, cx.cwd, cx.home) {
+            let path = path.or_else(|| MCP_PATH_KEYS.contains(&key).then(|| s.clone()));
+            if let Some(path) = path {
+                let resolved = leads_to(&resolve(at.cwd, &path), at.home);
+                let paths = if MCP_WRITE_KEYS.contains(&key) { PathUse::Write } else { cx.paths };
+                if paths != PathUse::Write {
+                    scan_path(&*READ_PATH_RULES, &path, &resolved, off, found);
+                }
+                if paths == PathUse::Write {
+                    check_write(&path, &resolved, at, false, off, found);
+                    if outside(&resolved, at.cwd, at.home) {
                         found.synthetic("outside_project", Medium, excerpt(&resolved), off);
                     }
-                } else {
-                    scan_path(&*READ_PATH_RULES, s, &resolved, off, found);
+                } else if paths == PathUse::Unknown {
+                    let mut here = Found::default();
+                    check_write(&path, &resolved, at, false, off, &mut here);
+                    found.findings.extend(here.findings.into_iter().filter(|f| GUARDED.contains(&f.category)));
                 }
             }
         }
         Value::Array(items) if depth < 6 => {
+            // A program and its arguments: read back as one command.
+            let words: Vec<&str> = items.iter().filter_map(Value::as_str).collect();
+            if (MCP_ARGV_KEYS.contains(&key) || MCP_COMMAND_KEYS.contains(&key))
+                && words.len() == items.len()
+                && !words.is_empty()
+            {
+                command_findings(&shell::join_words(&words), shell::Dialect::Posix, at, off, found);
+            }
             for item in items {
                 mcp_arguments(item, key, cx, off, found, depth + 1);
             }
         }
         Value::Object(map) if depth < 6 => {
+            // `{"command": "bash", "args": ["-c", "…"]}`: the program and its arguments together.
+            let program = map
+                .iter()
+                .find(|(k, _)| {
+                    matches!(k.to_ascii_lowercase().as_str(), "command" | "cmd" | "executable" | "program" | "file")
+                })
+                .and_then(|(_, v)| v.as_str());
+            let args = map
+                .iter()
+                .find(|(k, _)| MCP_ARGV_KEYS.contains(&k.to_ascii_lowercase().as_str()))
+                .and_then(|(_, v)| v.as_array());
+            if let (Some(program), Some(args)) = (program, args) {
+                let mut words = vec![program];
+                words.extend(args.iter().filter_map(Value::as_str));
+                command_findings(&shell::join_words(&words), shell::Dialect::Posix, at, off, found);
+            }
             for (k, v) in map {
                 mcp_arguments(v, &k.to_ascii_lowercase(), cx, off, found, depth + 1);
             }
@@ -1940,6 +2892,7 @@ pub(crate) fn assess_at(
     let mut edits = Vec::new();
     let mut preview_before = None;
     let mut names = Vec::new();
+    let at = Place { cwd, home, claude };
 
     let (kind, target, preview) = if lower.starts_with("mcp__") {
         // Checked first: an MCP tool is an MCP tool whatever its arguments are
@@ -1964,15 +2917,20 @@ pub(crate) fn assess_at(
             }
         }
         // What it is handed still counts.
-        let reads = action_words(tool).first().is_some_and(|w| MCP_READ.contains(&w.as_str()));
-        let cx = McpContext { changes: level >= Medium, reads, cwd, home, claude };
+        let words = action_words(tool);
+        let reads = words.first().is_some_and(|w| MCP_READ.contains(&w.as_str()));
+        let sql_tool = words.iter().any(|w| matches!(w.as_str(), "query" | "queries" | "sql"));
+        let cx = McpContext { paths: path_use(tool, level), reads, sql_tool, at };
         mcp_arguments(input, "", &cx, off, &mut found, 0);
         // Every argument, whole: Allow authorises all of them, and a session
         // grant must match all of them.
         (Kind::Mcp, canonical(input), None)
-    } else if let Some(cmd) = str_field(input, "command") {
+    } else if let Some(cmd) = str_field(input, "command").filter(|_| matches!(lower.as_str(), "bash" | "powershell")) {
+        // Only the shell tools run their `command` as one: another tool's
+        // `command` (`SlashCommand`, a tool from a newer agent) is one of its
+        // arguments, read below with the rest.
         let dialect = if lower == "powershell" { shell::Dialect::PowerShell } else { shell::Dialect::Posix };
-        command_findings(cmd, dialect, cwd, (home, claude), off, &mut found);
+        command_findings(cmd, dialect, at, off, &mut found);
         if cmd.len() > 2000 {
             found.synthetic("long_command", Medium, String::new(), off);
         }
@@ -1985,8 +2943,7 @@ pub(crate) fn assess_at(
         let resolved = leads_to(&resolve(cwd, path), home);
         if !path.is_empty() {
             names = resolved_names(cwd, path, home);
-            scan_path(write_rules(&resolved, cwd, home), path, &resolved, off, &mut found);
-            config_dir_writes(&resolved, home, claude, off, &mut found);
+            check_write(path, &resolved, at, false, off, &mut found);
             if outside(&resolved, cwd, home) {
                 let label = i18n::pick("Writes outside the project folder", "Proje klasörü dışına yazıyor");
                 let f = Finding { category: "outside_project", level: Medium, label, excerpt: excerpt(&resolved) };
@@ -2027,7 +2984,7 @@ pub(crate) fn assess_at(
             }
         }
         (Kind::Read, path, None)
-    } else if let Some(url) = str_field(input, "url") {
+    } else if let Some(url) = str_field(input, "url").filter(|_| lower == "webfetch") {
         scan(&*WEB_RULES, url, off, &mut found);
         (Kind::Web, url.to_string(), None)
     } else if let Some(query) = str_field(input, "query").filter(|_| lower == "websearch") {
@@ -2035,7 +2992,10 @@ pub(crate) fn assess_at(
         (Kind::Web, query.to_string(), None)
     } else {
         // Whole, like the MCP arguments: the card must show what Allow covers,
-        // and deny rules match on all of it.
+        // and deny rules match on all of it. What it is handed is read as an
+        // MCP tool's would be: a command, a URL, a path.
+        let cx = McpContext { paths: PathUse::Unknown, reads: false, sql_tool: false, at };
+        mcp_arguments(input, "", &cx, off, &mut found, 0);
         let target = if input.is_null() { String::new() } else { canonical(input) };
         (Kind::Other, target, None)
     };
@@ -2047,8 +3007,13 @@ pub(crate) fn assess_at(
     if truncated {
         found.synthetic("truncated", High, String::new(), off);
     }
+    // The reading of a command gave up somewhere (nested too deep, too much
+    // handed over, the folder lost): what it did not read may be anything.
+    if found.unread {
+        found.synthetic("unreadable", High, String::new(), off);
+    }
 
-    let manual_review = kind == Kind::Other || target.trim().is_empty();
+    let manual_review = kind == Kind::Other || target.trim().is_empty() || found.unread;
     if manual_review {
         found.findings.push(Finding {
             category: "unrecognized_request",
@@ -2057,13 +3022,15 @@ pub(crate) fn assess_at(
             excerpt: String::new(),
         });
     }
+    // One finding per label, the highest: the same label may be found at two
+    // levels (an encoded command run at once, or saved and run).
+    found.findings.sort_by_key(|f| std::cmp::Reverse(f.level));
     let mut findings: Vec<Finding> = Vec::new();
     for f in found.findings {
         if !findings.iter().any(|x| x.label == f.label) {
             findings.push(f);
         }
     }
-    findings.sort_by_key(|f| std::cmp::Reverse(f.level));
     let level = findings.first().map(|f| f.level).unwrap_or(Low);
 
     Assessment {
@@ -2123,6 +3090,11 @@ mod tests {
             assert!(!rules.is_empty());
         }
         let _ = (&*HIDDEN_RE, &*SELF_TOUCH);
+        // Patterns built on first use, which a typo would otherwise turn into
+        // a panic in the middle of an approval.
+        let _ = (runs_fetched_variable("x"), dotnet_writes("x"), starts_like_sql("x"), code_literals("'x'"));
+        let pipes = shell::read("python3 -c 'x' && osascript -e 'x'", shell::Dialect::Posix).pipes;
+        let _ = (shell::elevates(&pipes), shell::fakes_input(&pipes), shell::code_writes("open('x','w')"));
     }
 
     #[test]
