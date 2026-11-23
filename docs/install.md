@@ -412,7 +412,10 @@ then `npm ci`, `npm test` and `npm run pack:mac` (→ `release/Nobetci-<version>
 On Linux: Rust, Node.js 22 or newer and the development packages listed in the
 [README](../README.md#build-from-source), then `npm ci`, `npm test` and `npm run pack:linux`.
 
-See [CONTRIBUTING.md](../CONTRIBUTING.md) for more.
+Build the app with these scripts, or with `npm run tauri build`. A plain `cargo build --release`
+makes a development build that loads its pages from a dev server at `http://localhost:1420` and,
+without one, shows only "Could not connect to localhost"; [CONTRIBUTING.md](../CONTRIBUTING.md#setting-up)
+shows how to build the app by hand. See [CONTRIBUTING.md](../CONTRIBUTING.md) for more.
 
 ## macOS
 

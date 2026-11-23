@@ -416,7 +416,11 @@ sonra `npm ci`, `npm test` ve `npm run pack:mac` (→ `release/Nobetci-<sürüm>
 Linux'ta: Rust, Node.js 22 ya da üstü ve [README](../README.tr.md#kaynaktan-derleme)'deki
 geliştirme paketleri; sonra `npm ci`, `npm test` ve `npm run pack:linux`.
 
-Ayrıntılar için [CONTRIBUTING.md](../CONTRIBUTING.md).
+Uygulamayı bu betiklerle ya da `npm run tauri build` ile derle. Yalnızca `cargo build --release`
+bir geliştirme derlemesi üretir: sayfalarını `http://localhost:1420` adresindeki geliştirme
+sunucusundan yükler, sunucu yoksa adada yalnızca "Could not connect to localhost" görünür.
+Uygulamayı elle nasıl derleyeceğin [CONTRIBUTING.md](../CONTRIBUTING.md#setting-up)'de (İngilizce)
+anlatılıyor. Ayrıntılar için [CONTRIBUTING.md](../CONTRIBUTING.md).
 
 ## macOS
 

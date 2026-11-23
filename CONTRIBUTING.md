@@ -64,6 +64,19 @@ A custom `CARGO_TARGET_DIR` (or a `target-dir` in a cargo config) works: the rel
 bundles wherever cargo put them. On a Mac, every bundle — not just `npm run pack:mac` — makes the
 disk image's background first, so a fresh clone can run `npm run tauri build` directly.
 
+`cargo build --release` on its own makes a *development* build of the app: without Tauri's
+`custom-protocol` feature the app loads its pages from the dev server at `http://localhost:1420`,
+and with no dev server running the island shows only "Could not connect to localhost". For a real
+app without an installer, run `npm run tauri build -- --no-bundle`, which builds the pages into
+`dist/` and turns the feature on, or do the same by hand:
+
+```sh
+npm run build                                                      # the relay, then the pages into dist/
+cargo build --release -p nobetci --features tauri/custom-protocol  # → target/release/nobetci
+```
+
+The `pack` scripts build the app the same way before they bundle it.
+
 ## Everyday commands
 
 | Command | What it does |
