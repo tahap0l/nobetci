@@ -73,7 +73,8 @@ sorular ya fark edilmeden bekler ya da refleksle onaylanır — üstelik termina
 
 Nöbetçi bu kararı her zaman görebileceğin tek bir yere taşır. Her isteği dikkatli bir gözden
 geçirici gibi okur, göze batanı ve nedenini söyler; tehlikeli olanlarda tek tıklama yetmez,
-butonu bilerek basılı tutman gerekir. Sana ihtiyaç olmadığında ekranın üst kenarına çekilir.
+butonu bilerek basılı tutman (Linux'ta ise terminalde cevap vermen) gerekir. Sana ihtiyaç
+olmadığında ekranın üst kenarına çekilir.
 
 ## Özellikler
 
@@ -101,7 +102,8 @@ butonu bilerek basılı tutman gerekir. Sana ihtiyaç olmadığında ekranın ü
   kesilmez.
 - **Tehlikeliye basılı tutarak izin.** YÜKSEK ve KRİTİK isteklerde "İzin ver" butonunu basılı
   tutman gerekir (varsayılan 1,2 sn ve 2,4 sn). Bu kural sadece arayüzde değil, Rust tarafında
-  uygulanır.
+  uygulanır. Linux'ta bir programın sahte tıklaması gerçeğinden ayırt edilemediği için bunlar
+  terminalde onaylanır: kartları **Terminale bırak** ve **Reddet** sunar.
 - **Kazara onay yok.** Yeni açılan bir kart bir an tıklama kabul etmez; böylece bir karta
   yönelik çift tıklama ya da basılı tutmanın bırakılışı sıradaki kartı onaylayamaz.
 - **Gerekçeyle reddet.** Claude gerekçeni okur ve başka bir yoldan devam eder; **Reddet ve
@@ -296,6 +298,12 @@ bulamaz (onun yerine oturumun klasörünü açar) ve tam ekranda sessizlik yerel
 fark etmez. Nöbetçi'nin senin için açtığı programlar — bağlantılar, VS Code, dosya yöneticisi — yine
 doğrudan Wayland'de açılır. Ayrıntılar [kurulum kılavuzunda](docs/kurulum.md#linux).
 
+**Linux'ta YÜKSEK ve KRİTİK istekler terminalde onaylanır.** X11, senin hesabınla çalışan her
+programın gerçek fare üzerinden tıklamasına izin verir ve böyle bir tıklamayı seninkinden ayıran
+hiçbir şey yoktur; bu yüzden ada orada yalnızca DÜŞÜK ve ORTA istekleri onaylar. YÜKSEK ya da
+KRİTİK bir kart nedenini söyler ve **Terminale bırak** (Cursor isteğinde **Cursor'a bırak**) ile
+**Reddet** sunar.
+
 ### Kaynaktan derleme
 
 [Rust](https://rustup.rs) (MSVC araç zinciriyle), Node.js 22 ya da üstü ve "Desktop development
@@ -414,7 +422,8 @@ Gizli bir ada neredeyse hiç kaynak harcamaz: animasyon döngüsü durur, imleç
   proje" ya da izin vermek isteyip tavana takılan bir kural gibi).
 - **İzin ver**, DÜŞÜK ve ORTA için tek tıklamadır. YÜKSEK ve KRİTİK'te buton **Basılı tut · İzin
   ver** olur: çubuk dolana kadar basılı tut. Onay gerçek bir fare tıklaması ister; Enter ya da
-  Boşluk tuşu yetmez.
+  Boşluk tuşu yetmez. Linux'ta YÜKSEK ya da KRİTİK bir kartta İzin ver yoktur: kart nedenini
+  söyler; önce **Terminale bırak**, sonra Reddet gelir.
 - **Reddet** isteği geri çevirir ve Claude'a söyler; Claude başka bir yoldan devam eder. Yanındaki
   ok, Claude'a iletilen hazır gerekçeleri (Ayarlar → Kurallar'dan düzenlenir) ve **Reddet ve
   Claude'u durdur**'u açar; bu ikincisi Claude'un turunu da bitirir, Claude seni bekler.
@@ -455,7 +464,8 @@ Gizli bir ada neredeyse hiç kaynak harcamaz: animasyon döngüsü durur, imleç
 | **YÜKSEK** | Bilinçli, görünür ya da geri alması zor. Basılı tutarak izin. | `rm -rf node_modules`, `git push --force`, `git reset --hard`, `npm publish`, `schtasks /create …`, `certutil -urlcache …`, `~/.ssh/id_rsa` ya da `.env` okumak, `.git/hooks/pre-commit` ya da `.mcp.json` yazmak, görünmez Unicode karakterleri |
 | **KRİTİK** | Geri dönüşü yok ya da klasik bir saldırı kalıbı. Daha uzun basılı tutma. | `curl … \| bash`, `irm … \| iex`, `powershell -enc …`, `Set-MpPreference -DisableRealtimeMonitoring $true`, `vssadmin delete shadows`, `rm -rf ~`, `gh repo delete`, `~/.claude/settings.json` yazmak, aynı istekte bir sırrı okuyup dışarı göndermek |
 
-İngilizce arayüzde seviyeler LOW, MEDIUM, HIGH ve CRITICAL olarak geçer.
+Linux'ta YÜKSEK ve KRİTİK istekler basılı tutmayla değil, terminalde onaylanır (bkz.
+[Linux](#linux)). İngilizce arayüzde seviyeler LOW, MEDIUM, HIGH ve CRITICAL olarak geçer.
 
 <details>
 <summary><b>Risk motoru neye bakar</b></summary>
@@ -481,7 +491,8 @@ Gizli bir ada neredeyse hiç kaynak harcamaz: animasyon döngüsü durur, imleç
   `crontab`, kullanıcı birimleri dahil systemd, LaunchAgents ve LaunchDaemons, oturum açma
   öğeleri); macOS karantina işaretini kaldırmak
   (`xattr -d`); macOS anahtar zincirini okumak (`security find-generic-password`,
-  `dump-keychain`); `mshta`, `regsvr32 /i:`, `certutil -urlcache`
+  `dump-keychain`); başka pencerelere sahte tıklama ya da tuş gönderen programlar (`xdotool`,
+  `ydotool`, `xte`, `xinput create-master`, XTest ya da uinput yükleyen bir betik); `mshta`, `regsvr32 /i:`, `certutil -urlcache`
   ya da `bitsadmin /transfer` gibi şüpheli yerleşik Windows araçları; PowerShell betik
   politikasını devre dışı bırakmak; kimlik ve sır dosyaları — bir programa `--env-file` ile
   yüklenen `.env` dahil (program yüklediğini ekrana yazdırabilir); bilinen veri sızdırma servisleri
@@ -645,7 +656,9 @@ ve okuyabileceğin gerekçelerdir.
 Özen gösterdiği şeyler: kart tam olarak neyin çalışacağını gösterir; YÜKSEK ve KRİTİK onaylar
 Rust'ın zorladığı bir basılı tutma ister; onaylar "İzin ver" butonunun üzerinde yapılmış fiziksel
 bir fare tıklamasından gelmelidir — bir tıklama, bir onay, az önce açılmış bir kartta asla — yani
-bir betik ajan adına "İzin ver"e basamaz; relay ile uygulama sadece senin hesabının açabildiği bir
+bir betik ajan adına "İzin ver"e basamaz (Linux'ta X11 bir programın gerçek fare üzerinden
+tıklamasına izin verdiği için bu denetim orada yalnızca bir yavaşlatıcıdır; YÜKSEK ve KRİTİK
+istekler orada terminalde onaylanır); relay ile uygulama sadece senin hesabının açabildiği bir
 named pipe (Windows) ya da Unix soketi (macOS, Linux) üzerinden konuşur ve relay karşı uçtaki
 uygulamanın senin hesabınla çalıştığını denetler; Nöbetçi'nin kendi dosyalarını değiştirmek,
 relay'ini değiştirmek ya da hook'larını kaldırmak her sistemde KRİTİK sayılır; geçmiş sırları
@@ -689,7 +702,8 @@ silmeden önce aynı komutu çalıştır (ya da bağlantıları Ayarlar'dan kald
 olarak durur; tam ekranda sessizlik çalışır; **Pencereye git** belirli bir pencereyi değil oturumun
 uygulamasını öne getirir. Linux'ta ada X11'de (bir bileşikleştiriciyle) ya da XWayland üzerinden
 Wayland'de çalışır; Wayland'de genel kısayollar, **Pencereye git** ve tam ekranda sessizlik yalnız
-X11 pencerelerini görür. Medya kartı MPRIS destekleyen her oynatıcıyla çalışır.
+X11 pencerelerini görür. Medya kartı MPRIS destekleyen her oynatıcıyla çalışır. Linux'ta YÜKSEK ve
+KRİTİK istekler adada değil, terminalde onaylanır.
 
 **macOS neden açmayı reddediyor?**
 Sürümler henüz Apple tarafından onaylanmıyor (notarize edilmiyor). SHA-256'yı doğrula, sonra bir
@@ -709,7 +723,8 @@ bulur; bulamazsa proje klasörünü açar.
 
 **Claude kendi isteklerini Nöbetçi üzerinden onaylayabilir mi?**
 Ada üzerinden hayır: onaylar fiziksel bir tıklamadan gelmeli, izin kısayolu varsayılan olarak
-kapalı ve sadece DÜŞÜK risk için, YÜKSEK ve KRİTİK ise basılı tutma istiyor. Ama onaylanmış bir
+kapalı ve sadece DÜŞÜK risk için, YÜKSEK ve KRİTİK ise basılı tutma istiyor — Linux'ta, bir program
+gerçek fare üzerinden tıklayabildiği için, bunlar adada hiç onaylanamıyor. Ama onaylanmış bir
 komutun başlattığı her şey senin yetkilerinle çalışır ve örneğin Claude Code'un ayarlarını,
 Nöbetçi'nin kendi ayarlarını değiştirebilir ya da hook'larını kaldırabilir — tam da bu yüzden böyle
 istekler KRİTİK sayılır. Ayrıntılar [tehdit modelinde](SECURITY.md).

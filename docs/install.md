@@ -133,8 +133,8 @@ in the Claude desktop app — which never runs `PermissionRequest` — every app
    before.
 3. The island opens with an **approval card**: the whole command, its risk level and the reasons.
 4. Click **Allow** as usual. For HIGH and CRITICAL requests, keep the button pressed until the bar
-   fills. A card that has only just appeared ignores clicks for a moment, so a stray double-click
-   can't approve it.
+   fills (on Linux those are approved in the terminal instead: see [Linux](#linux)). A card that
+   has only just appeared ignores clicks for a moment, so a stray double-click can't approve it.
 
 You can also type a command into **Settings → Safety → Try the risk engine** to see how it's scored,
 without running anything.
@@ -610,9 +610,15 @@ chmod +x Nobetci-x.y.z-linux-amd64.AppImage
 - **The island doesn't take the keyboard.** Clicking it leaves your terminal focused; only its text
   boxes (the assistant, the session search, the agenda, and the answer and note boxes on question
   and plan cards) take the keyboard, while you type in them.
+- **HIGH and CRITICAL are approved in the terminal.** X11 lets any program running as you click
+  through the real mouse, and nothing in such a click tells it from yours, so the island never
+  approves a HIGH or CRITICAL request on Linux. Its card says why and offers **Hand to terminal**
+  (**Hand to Cursor** for a Cursor request) and **Deny**: answer in the terminal, or in Cursor.
+  LOW and MEDIUM requests are approved on the island as everywhere else.
 - **The click guard** reads XInput2 raw events and asks the X server about the device behind every
   press: clicks from an XTEST device — what `xdotool` and similar tools use, including one a
-  program adds later — are refused.
+  program adds later — are refused. It can't catch a program that presses through the real mouse
+  device, which is why it only guards LOW and MEDIUM approvals here.
 - **Go to window** asks the window manager to raise the window that belongs to the session's
   process chain.
 - **The media card** works with every MPRIS player — Spotify, VLC, Firefox, Chromium, mpv with
@@ -638,7 +644,8 @@ on XWayland and sees only what X11 shows it:
   remote-desktop prompt; wlroots compositors (sway, Hyprland, river…) let any program inject
   through their virtual-pointer protocol, and there the guard can't tell such a click from yours.
 
-Logging in to an X11 session (where your desktop offers one) avoids all four.
+Logging in to an X11 session (where your desktop offers one) avoids all four. HIGH and CRITICAL
+requests are approved in the terminal on X11 too.
 
 ### Update
 
@@ -699,6 +706,9 @@ command.
 - **Start at login turned itself off.** Nöbetçi checks `~/.config/autostart/Nobetci.desktop` at
   every start; if your desktop's autostart settings removed it, the switch in **Settings →
   General** turns off to match. Switch it on again there.
+- **A HIGH or CRITICAL card has no Allow button.** That is on purpose on Linux (see
+  [What's different on Linux](#whats-different-on-linux)): choose **Hand to terminal** and answer
+  in the terminal, or deny the request.
 - **Approval refused: not a physical click.** Remote-desktop tools and `xdotool` send XTEST
   clicks, which the guard refuses. Use the real mouse, or switch off **Settings → Safety →
   Physical click guard** (LOW and MEDIUM only). If you swapped the mouse buttons (left-handed,

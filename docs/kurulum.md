@@ -135,8 +135,8 @@ hiç çalıştırmayan Claude masaüstü uygulamasında da bütün onayları o t
 2. Claude'dan izin gerektiren bir şey iste, örneğin önceden izin vermediğin bir komutu çalıştırmasını.
 3. Ada bir **onay kartıyla** açılır: komutun tamamı, risk seviyesi ve gerekçeler.
 4. **İzin ver**'e normal şekilde tıkla. YÜKSEK ve KRİTİK isteklerde butonu çubuk dolana kadar basılı
-   tut. Yeni açılmış bir kart bir an tıklama kabul etmez; böylece kazara yapılan bir çift tıklama onu
-   onaylayamaz.
+   tut (Linux'ta bunlar terminalde onaylanır: bkz. [Linux](#linux)). Yeni açılmış bir kart bir an
+   tıklama kabul etmez; böylece kazara yapılan bir çift tıklama onu onaylayamaz.
 
 İstersen **Ayarlar → Güvenlik → Risk motorunu dene** bölümüne bir komut yazıp nasıl
 puanlandığını hiçbir şey çalıştırmadan görebilirsin.
@@ -614,9 +614,15 @@ chmod +x Nobetci-x.y.z-linux-amd64.AppImage
 - **Ada klavyeyi almaz.** Ona tıklamak terminalini odakta bırakır; klavyeyi yalnızca yazı kutuları
   (asistan, oturum araması, ajanda ve soru ile plan kartlarındaki cevap ve not kutuları), sen
   içlerine yazarken alır.
+- **YÜKSEK ve KRİTİK terminalde onaylanır.** X11, senin hesabınla çalışan her programın gerçek fare
+  üzerinden tıklamasına izin verir ve böyle bir tıklamayı seninkinden ayıran hiçbir şey yoktur; bu
+  yüzden ada Linux'ta YÜKSEK ya da KRİTİK bir isteği asla onaylamaz. Kartı nedenini söyler ve
+  **Terminale bırak** (Cursor isteğinde **Cursor'a bırak**) ile **Reddet** sunar: cevabı terminalde
+  ya da Cursor'da ver. DÜŞÜK ve ORTA istekler her yerde olduğu gibi adada onaylanır.
 - **Tıklama koruması** XInput2 ham olaylarını okur ve her basışta arkasındaki aygıtı X sunucusuna
   sorar: XTEST aygıtından gelen tıklamalar — `xdotool` gibi araçların kullandığı, bir programın
-  sonradan eklediği dahil — reddedilir.
+  sonradan eklediği dahil — reddedilir. Gerçek fare aygıtı üzerinden basan bir programı
+  yakalayamaz; bu yüzden burada yalnızca DÜŞÜK ve ORTA onayları korur.
 - **Pencereye git**, pencere yöneticisinden oturumun süreç zincirine ait pencereyi öne getirmesini
   ister.
 - **Medya kartı** MPRIS destekleyen her oynatıcıyla çalışır — Spotify, VLC, Firefox, Chromium,
@@ -643,7 +649,8 @@ XWayland'de çalışır ve yalnızca X11'in ona gösterdiğini görür:
   river…) ise sanal işaretçi protokolleriyle her programın girdi üretmesine izin verir ve orada
   koruma böyle bir tıklamayı seninkinden ayıramaz.
 
-Masaüstün sunuyorsa bir X11 oturumuyla giriş yapmak bu dördünü de ortadan kaldırır.
+Masaüstün sunuyorsa bir X11 oturumuyla giriş yapmak bu dördünü de ortadan kaldırır. YÜKSEK ve
+KRİTİK istekler X11'de de terminalde onaylanır.
 
 ### Güncelleme
 
@@ -704,6 +711,9 @@ hook hatası bildirir, Cursor da her kabuk ve MCP komutunu engeller.
 - **Oturum açınca başlat kendiliğinden kapandı.** Nöbetçi her açılışta
   `~/.config/autostart/Nobetci.desktop` dosyasına bakar; masaüstünün otomatik başlatma ayarları onu
   kaldırdıysa **Ayarlar → Genel**'deki anahtar da buna uyup kapanır. Oradan yeniden aç.
+- **YÜKSEK ya da KRİTİK bir kartta İzin ver düğmesi yok.** Linux'ta bu bilerek böyle (bkz.
+  [Linux'ta neler farklı](#linuxta-neler-farklı)): **Terminale bırak**'ı seçip terminalde cevap ver
+  ya da isteği reddet.
 - **Onay reddedildi: fiziksel tıklama değil.** Uzak masaüstü araçları ve `xdotool` XTEST
   tıklamaları gönderir; koruma bunları reddeder. Gerçek fareyi kullan ya da **Ayarlar → Güvenlik →
   Fiziksel tıklama koruması**'nı kapat (yalnızca DÜŞÜK ve ORTA için). Fare düğmelerini yer

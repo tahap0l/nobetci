@@ -37,8 +37,9 @@ There is no bug bounty.
 Report privately anything that breaks one of the promises below, for example:
 
 - something other than you approving a request: synthetic input getting past the click guard, the
-  hold being bypassed, a HIGH or CRITICAL request approved automatically or through the allow
-  hotkey or a batch;
+  hold being bypassed, a HIGH or CRITICAL request approved automatically, through the allow hotkey
+  or a batch, or on the island at all on Linux (a program clicking LOW or MEDIUM through the real
+  mouse on Linux is the known limit [described below](#what-it-does-not-protect-against));
 - the card showing something different from what will run (rendering tricks, truncation,
   invisible characters that aren't revealed);
 - text from a request being interpreted as HTML or script in the island or the settings window;
@@ -111,12 +112,16 @@ It assumes the following can be hostile:
 reasons behind it, and the parts of the command that triggered a finding are highlighted. HIGH and
 CRITICAL requests need the Allow button to be held down: 1.2 s and 2.4 s by default. The holds can
 be changed, but Rust clamps them so they can't drop below 0.4 s, and the CRITICAL hold is never
-shorter than the HIGH one.
+shorter than the HIGH one. On Linux, HIGH and CRITICAL requests can't be approved on the island
+at all: they are approved in the terminal (see the click guard below).
 
 **The hold is enforced in Rust.** The decision handler in `src-tauri/src/pipe.rs` refuses a plain
 "allow" for a HIGH or CRITICAL request; the island sends the confirmed form only after a completed
-hold. A bug in the front end can't turn a click into an approval of a risky request. There is no
-"always allow" anywhere — not in the app, and not in what the relay understands.
+hold. A bug in the front end can't turn a click into an approval of a risky request. Where the
+click guard can't vouch for a hold — on Linux — the same handler refuses every approval of a HIGH
+or CRITICAL request from the island, click, hold or key alike (`terminal_only`): the request stays
+waiting until you deny it or hand it to the terminal. There is no "always allow" anywhere — not in
+the app, and not in what the relay understands.
 
 **Nothing HIGH or CRITICAL is approved automatically.** Rules, trusted projects and "don't ask
 again in this session" grants are capped in Rust (`src-tauri/src/rules.rs`). The auto-allow
@@ -189,14 +194,22 @@ mouse button and whether it came from a real device:
   a program post mouse events or press other apps' buttons once you've granted it Accessibility
   access.
 - **Linux:** a thread reads XInput2 raw button events on the root window (no grab) and, at every
-  press, asks the X server about the device it came from. XTEST input — what `xdotool` and other
-  programs fake clicks with — always comes from an XTEST device, including the one a program gets
-  by adding a master pointer of its own later; such a press, or one from a device the server no
-  longer knows, counts as synthetic. Pressing the button through the accessibility bus (AT-SPI)
-  makes no mouse event at all. Nöbetçi asks for XInput 2.2, so it also sees the release while the
-  island's own toolkit holds the pointer, and Rust measures the hold. It follows the button maps
-  (`xinput set-button-map`, or `xmodmap -e 'pointer = 3 2 1'` for a left-handed mouse), so the press
-  it records is the one that acts as the primary click.
+  press, asks the X server about the device it came from. That catches the usual way to fake a
+  click: `xdotool`, `xte` and most other tools use XTEST's core request, which presses through an
+  XTEST device — including the one a program gets by adding a master pointer of its own later —
+  and such a press, or one from a device the server no longer knows, counts as synthetic. Pressing
+  the button through the accessibility bus (AT-SPI) makes no mouse event at all. What the guard
+  can't tell: XTEST can also press *through a device the program names*, the real mouse included
+  (XInput 1's `XOpenDevice`, then `XTestFakeDeviceButtonEvent`), and such a press names the real
+  mouse as its source, with nothing in it to set it apart from a hand on that mouse. So on Linux
+  the guard is a speed bump for LOW and MEDIUM approvals, not a proof, and **HIGH and CRITICAL
+  requests are never approved on the island**: their card explains why and offers **Hand to
+  terminal** (**Hand to Cursor** in Cursor) and **Deny**, and Rust refuses any approval of them from
+  the island. Nöbetçi asks for XInput 2.2, so it also sees the release while the island's own
+  toolkit holds the pointer. The guard follows the button maps (`xinput set-button-map`, or
+  `xmodmap -e 'pointer = 3 2 1'` for a left-handed mouse), so the press it records is the one that
+  acts as the primary click; a press a program makes counts as synthetic whatever its button, and a
+  real click judged while a button map was changing under it backs no approval (click again).
 
 Nöbetçi also notes where each press landed. An approval made on the island is accepted only if the
 most recent press was physical, began after the card appeared, is fresh — released within 3
@@ -205,11 +218,11 @@ accepts no approval in its first 350 ms. A press is spent by the approval it bac
 click can't vouch for a second card waiting in the queue, and the second half of a double-click or
 the release of a hold meant for the previous card is ignored quietly. Otherwise the approval is
 refused, logged as suspicious, and the card itself says that something may have tried to approve
-on your behalf. Rust measures the physical hold for HIGH and CRITICAL requests. If the mouse is
-released early or physical input cannot be verified, use the terminal to decide. The guard stops
-recording when no requests are waiting. **Settings → Safety** can turn off physical click
-verification for LOW and MEDIUM approvals. The health check shows whether the platform listener is
-active.
+on your behalf. On Windows and macOS, Rust measures the physical hold for HIGH and CRITICAL
+requests. If the mouse is released early or physical input cannot be verified, use the terminal
+to decide. The guard stops recording when no requests are waiting. **Settings → Safety** can turn
+off physical click verification for LOW and MEDIUM approvals. The health check shows whether the
+platform listener is active.
 
 **The allow hotkey is LOW-only.** Global hotkeys can be triggered by any program that fakes
 keystrokes. The allow hotkey is therefore not set by default, and even when it is, Rust refuses it
@@ -353,10 +366,16 @@ pressing.
   Clicks that macOS itself makes on your behalf — Mouse Keys, for instance — look like hardware,
   and a program with Accessibility access can switch such features on; that access already means
   broad control over your Mac, so keep the list short.
+- On Linux, any program running as you can press a button through the real mouse device (XTEST
+  aimed at that device, as above), and the guard can't tell that click from yours. That is why
+  HIGH and CRITICAL requests are approved in the terminal there; a LOW or MEDIUM approval on the
+  island is only as safe as the programs you run. An agent's request to run a program that fakes
+  input — `xdotool`, `ydotool`, `xte`, `xinput create-master`, a script that loads XTest or
+  uinput — is scored HIGH.
 - On Linux under Wayland, input the compositor itself injects reaches XWayland as ordinary pointer
   input. GNOME and KDE inject only after a remote-desktop prompt, but wlroots compositors (sway,
   Hyprland, river…) let any program inject through their virtual-pointer protocol, and the guard
-  can't tell such a click from yours there.
+  can't tell such a click from yours there either.
 - On some Windows laptops, precision touchpads report presses without a device handle, as
   `SendInput` does, so the guard refuses them; the log notes each such press. Use a mouse, or turn
   the guard off for LOW and MEDIUM.

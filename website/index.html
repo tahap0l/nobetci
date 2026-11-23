@@ -131,7 +131,7 @@
             <article class="tile tile-wide reveal">
               <span class="tile-icon ic-amber"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21.5s7.5-3.6 7.5-9.6V5.5L12 2.8 4.5 5.5v6.4c0 6 7.5 9.6 7.5 9.6zM12 8v4.5M12 16v.1"/></svg></span>
               <h3 data-i18n="f1Title">Riski ve nedenini anla</h3>
-              <p data-i18n="f1Text">İzin kartı komutun, dosya yolunun ya da bağlantının tamamını gösterir; riskli parçaları işaretler, nedenlerini sıralar. Yüksek riskte izin vermek için düğmeyi basılı tutman gerekir ve yalnızca gerçek bir fare tıklaması sayılır.</p>
+              <p data-i18n="f1Text">İzin kartı komutun, dosya yolunun ya da bağlantının tamamını gösterir; riskli parçaları işaretler, nedenlerini sıralar. Yüksek riskte izin vermek için düğmeyi basılı tutman gerekir ve yalnızca gerçek bir fare tıklaması sayılır; Linux'ta yüksek ve kritik istekler terminalde onaylanır.</p>
               <div class="tile-shot"><img src="/shots/tr/critical.webp" data-shot="critical" alt="Kritik riskli bir komutu, riskli bölümlerini ve dört bulguyu gösteren onay kartı" data-i18n-alt="altCritical" width="1440" height="920" loading="lazy" decoding="async" /></div>
             </article>
             <article class="tile tile-third reveal">
@@ -321,7 +321,7 @@
               <span class="yours" data-i18n="yours">Senin sistemin</span>
               <span class="os-logo"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3c-2.2 0-3.2 1.8-3.2 4 0 1.6-.6 2.7-1.6 4.2C6 13 5 15 5.6 17c.4 1.4 1.8 2.4 3 2.6M12 3c2.2 0 3.2 1.8 3.2 4 0 1.6.6 2.7 1.6 4.2 1.2 1.8 2.2 3.8 1.6 5.8-.4 1.4-1.8 2.4-3 2.6M9 20.5c1 .6 2 .8 3 .8s2-.2 3-.8M10.5 7.5h.01M13.5 7.5h.01M10.8 9.6s.6.6 1.2.6 1.2-.6 1.2-.6"/></svg></span>
               <h3>Linux</h3>
-              <p data-i18n="linuxReq">x86-64; X11 ya da XWayland üzerinden Wayland, pencere bileşikleştiricisi açık. Debian ve Ubuntu için .deb, her dağıtım için AppImage.</p>
+              <p data-i18n="linuxReq">x86-64; X11 ya da XWayland üzerinden Wayland, pencere bileşikleştiricisi açık. Debian ve Ubuntu için .deb, her dağıtım için AppImage. Yüksek ve kritik istekler terminalde onaylanır.</p>
               <span class="files">.deb · .AppImage · x86-64</span>
               <span class="go"><span data-i18n="get">İndir</span> →</span>
             </a>
@@ -339,7 +339,7 @@
           <div class="faq">
             <details class="reveal"><summary data-i18n="q1">Nöbetçi kapalıysa ajanım takılır mı?</summary><p data-i18n="a1">Hayır. Uygulama kapalıysa köprü hiçbir şey yapmadan çıkar ve Claude Code her zamanki gibi terminalde sorar. Açıkken bile bir isteğe yalnızca belirli bir süre bekler.</p></details>
             <details class="reveal"><summary data-i18n="q2">Verilerim bir yere gönderiliyor mu?</summary><p data-i18n="a2">Hayır. Hesap, telemetri ya da analiz yok. Ağa yalnızca senin açtığın şeyler çıkar: Mesaj Atölyesi'nde ya da asistanın Burada sor seçeneğinde seçtiğin sağlayıcı ve şehir seçtiysen hava durumu. Asistan bir web uygulamasını ya da bağlantısıyla bir masaüstü uygulamasını açtığında mesajın, adresin içinde o servise gider ve hemen cevaplanabilir.</p></details>
-            <details class="reveal"><summary data-i18n="q3">Yüksek riskli bir komut kendiliğinden onaylanabilir mi?</summary><p data-i18n="a3">Hayır. Kurallar, güvenilen projeler ve oturum izinleri en fazla orta riske kadar otomatik izin verebilir. Yüksek ve kritik istekler her zaman basılı tutmayla, gerçek bir tıklamayla onaylanır.</p></details>
+            <details class="reveal"><summary data-i18n="q3">Yüksek riskli bir komut kendiliğinden onaylanabilir mi?</summary><p data-i18n="a3">Hayır. Kurallar, güvenilen projeler ve oturum izinleri en fazla orta riske kadar otomatik izin verebilir. Yüksek ve kritik istekler her zaman basılı tutmayla, gerçek bir tıklamayla onaylanır; Linux'ta ise, bir programın sahte tıklaması gerçeğinden ayırt edilemediği için, adada değil terminalde onaylanır.</p></details>
             <details class="reveal"><summary data-i18n="q4">Claude masaüstü uygulamasıyla da çalışıyor mu?</summary><p data-i18n="a4">Evet. Uygulamanın Code sekmesindeki Claude Code oturumları terminaldekiler gibi izlenir, izin istekleri de adaya gelir; ada her oturumun nerede çalıştığını yazar. Normal sohbet bölümü izlenmez.</p></details>
             <details class="reveal"><summary data-i18n="q6">Codex ve Cursor ile de çalışıyor mu?</summary><p data-i18n="a6">Evet, ayarlardan bağladığında: Codex ve Cursor oturumları, gönderdiğin mesajlar ve desteklenen izin istekleri adada görünür. Ne kadarının desteklendiği her ajanın hook'larına bağlı; risk incelemesinin tamamı Claude Code içindir.</p></details>
             <details class="reveal"><summary data-i18n="q5">Ücretli mi?</summary><p data-i18n="a5">Hayır. Nöbetçi ücretsiz ve MIT lisanslı açık kaynak bir projedir.</p></details>

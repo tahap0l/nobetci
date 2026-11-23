@@ -75,8 +75,8 @@ exactly the same.
 
 Nöbetçi moves that decision to one place you can always see. It reads each request the way a
 careful reviewer would, tells you what stands out and why, and makes the dangerous ones take a
-deliberate press-and-hold instead of a click. When nothing needs you, it folds away into the top
-edge of the screen.
+deliberate press-and-hold instead of a click (on Linux, an answer in the terminal). When nothing
+needs you, it folds away into the top edge of the screen.
 
 ## Features
 
@@ -102,7 +102,9 @@ edge of the screen.
   of blank lines or spaces are collapsed into markers like `⟦40 blank lines⟧`, and a request too
   long to carry whole is flagged and scored HIGH — never silently cut.
 - **Press and hold for the dangerous ones.** HIGH and CRITICAL requests need the Allow button held
-  down (1.2 s and 2.4 s by default). The rule is enforced in Rust, not just in the UI.
+  down (1.2 s and 2.4 s by default). The rule is enforced in Rust, not just in the UI. On Linux,
+  where a program's fake click can't be told from a real one, they are approved in the terminal
+  instead: their card offers **Hand to terminal** and **Deny**.
 - **No approval by accident.** A card that has just appeared ignores clicks for a moment, so a
   double-click, or the release of a hold, meant for one card can't approve the next one.
 - **Deny with a reason.** Claude reads your reason and carries on another way; **Deny and stop
@@ -295,6 +297,11 @@ the session's folder instead), and quiet in full screen doesn't notice native Wa
 Programs Nöbetçi opens for you — links, VS Code, the file manager — still start natively on
 Wayland. The [installation guide](docs/install.md#linux) has the details.
 
+**On Linux, HIGH and CRITICAL requests are approved in the terminal.** X11 lets any program running
+as you click through the real mouse, and nothing in such a click tells it from yours, so the island
+approves only LOW and MEDIUM requests there. A HIGH or CRITICAL card says why and offers **Hand to
+terminal** (**Hand to Cursor** for a Cursor request) and **Deny**.
+
 ### Build from source
 
 You need [Rust](https://rustup.rs) with the MSVC toolchain, Node.js 22 or newer, and the
@@ -412,7 +419,8 @@ the animation loop stops and the cursor poll parks.
 - **The findings** list every reason with its level, plus any rule or project note ("Strict
   project", or a rule that wanted to allow the request but hit the ceiling).
 - **Allow** is a click for LOW and MEDIUM. For HIGH and CRITICAL it reads **Hold · Allow**: keep
-  it pressed until the bar fills. Approvals take a real mouse click, not Enter or Space.
+  it pressed until the bar fills. Approvals take a real mouse click, not Enter or Space. On Linux a
+  HIGH or CRITICAL card has no Allow: it says why, with **Hand to terminal** first, then Deny.
 - **Deny** refuses the request and tells Claude, which carries on another way. The arrow next to
   it opens ready-made reasons that are passed on to Claude (edit them in Settings → Rules) and
   **Deny and stop Claude**, which also ends Claude's turn so it waits for you.
@@ -452,7 +460,8 @@ the animation loop stops and the cursor poll parks.
 | **HIGH** | Deliberate, visible or hard to undo. Press and hold to allow. | `rm -rf node_modules`, `git push --force`, `git reset --hard`, `npm publish`, `schtasks /create …`, `certutil -urlcache …`, reading `~/.ssh/id_rsa` or `.env`, writing `.git/hooks/pre-commit` or `.mcp.json`, invisible Unicode characters |
 | **CRITICAL** | Irreversible, or a classic attack shape. A longer hold. | `curl … \| bash`, `irm … \| iex`, `powershell -enc …`, `Set-MpPreference -DisableRealtimeMonitoring $true`, `vssadmin delete shadows`, `rm -rf ~`, `gh repo delete`, writing `~/.claude/settings.json`, reading a secret and sending it out in the same request |
 
-The Turkish UI calls the levels DÜŞÜK, ORTA, YÜKSEK and KRİTİK.
+On Linux, HIGH and CRITICAL requests are approved in the terminal instead of with a hold (see
+[Linux](#linux)). The Turkish UI calls the levels DÜŞÜK, ORTA, YÜKSEK and KRİTİK.
 
 <details>
 <summary><b>What the risk engine looks for</b></summary>
@@ -475,7 +484,9 @@ The Turkish UI calls the levels DÜŞÜK, ORTA, YÜKSEK and KRİTİK.
   `su`, `runas`, `gsudo` and AppleScript's `with administrator privileges`; persistence (scheduled
   tasks, Run keys, services, startup folders, cron and `crontab`, systemd units including user
   ones, LaunchAgents and LaunchDaemons, login items); removing the macOS quarantine flag (`xattr -d`);
-  reading the macOS keychain (`security find-generic-password`, `dump-keychain`); suspicious
+  reading the macOS keychain (`security find-generic-password`, `dump-keychain`); programs that
+  fake clicks or keystrokes in other windows (`xdotool`, `ydotool`, `xte`, `xinput create-master`,
+  a script that loads XTest or uinput); suspicious
   built-in Windows tools such as `mshta`,
   `regsvr32 /i:`, `certutil -urlcache` or `bitsadmin /transfer`; bypassing the PowerShell
   execution policy; credential and secret files, including a `.env` loaded into a program with
@@ -637,7 +648,9 @@ reasons you can read.
 What it takes care of: the card shows exactly what will run; HIGH and CRITICAL approvals need a
 hold that Rust enforces; approvals must come from a physical mouse click on the Allow button
 itself — one click, one approval, never on a card that has only just appeared — so a script
-can't press Allow on the agent's behalf; the relay and the app talk over a named pipe (Windows)
+can't press Allow on the agent's behalf (on Linux, where X11 lets a program click through the real
+mouse, that check is only a speed bump, so HIGH and CRITICAL are approved in the terminal there);
+the relay and the app talk over a named pipe (Windows)
 or a Unix socket (macOS, Linux) that only your account can open, and the relay checks that the
 app on the other end runs as you; a request to change Nöbetçi's own files, swap its relay or
 remove its hooks is CRITICAL on every system; the history masks secrets, and its CSV export is
@@ -682,7 +695,8 @@ Both, yes. On macOS 11 or later the island sits below the menu bar as a panel th
 focus, quiet in full screen works, and **Go to window** brings the session's app to the front
 rather than one particular window. On Linux the island runs on X11 (with a compositor) or,
 through XWayland, on Wayland, where global shortcuts, **Go to window** and quiet in full screen
-only see X11 windows; the media card works with every MPRIS player.
+only see X11 windows; the media card works with every MPRIS player. On Linux, HIGH and CRITICAL
+requests are approved in the terminal rather than on the island.
 
 **Why does macOS refuse to open it?**
 Releases aren't notarized by Apple yet. Check the SHA-256, then open it once through **System
@@ -702,7 +716,8 @@ opens the project folder if it can't find one.
 
 **Could Claude approve its own requests through Nöbetçi?**
 Not through the island: approvals must come from a physical click, the allow hotkey is off by
-default and LOW-only, and HIGH and CRITICAL need a hold. But whatever an approved command starts
+default and LOW-only, and HIGH and CRITICAL need a hold — on Linux, where a program could click
+through the real mouse, they can't be approved on the island at all. But whatever an approved command starts
 runs with your rights and could, for instance, edit Claude Code's settings, rewrite Nöbetçi's
 own settings or remove its hooks — which is exactly why such requests are scored CRITICAL. The
 [threat model](SECURITY.md) has the details.
