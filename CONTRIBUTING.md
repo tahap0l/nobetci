@@ -176,13 +176,20 @@ README image in English and Turkish into `docs/media/en/` and `docs/media/tr/`. 
 Linux, point `NOBETCI_EDGE` at Edge, Chrome or Chromium. Text is set in the system font, so
 regenerate every image on the same system to keep them alike, and at the same scale: the README
 shows them at 2× (`NOBETCI_SCALE=2`), and an image taken at 1× next to them looks blurred and
-sits at a different height. The island demos are held still (`&still=1`) and Settings is captured
-with reduced motion, so nothing is caught half-faded:
+sits at a different height.
+
+Each image is taken once its page is ready, not after a fixed time: the script talks to the browser
+through its DevTools pipe (`--remote-debugging-pipe`, no extra packages), waits for the load event,
+the fonts and every animation that ends, and keeps capturing until two captures in a row are the
+same picture — about six seconds an image. So that the same code gives the same pictures on any
+day, the island demos are held still (`&still=1`), pages are captured with reduced motion (the
+mascot lineups excepted), the page's clock shows 24 November 2026, 09:41 UTC until the page has
+loaded and stops 3.5 s later, `Math.random` is seeded, and the text caret is hidden:
 
 ```powershell
 npm run dev                                  # terminal 1
 $env:NOBETCI_SCALE = "2"                     # terminal 2 (sh: export NOBETCI_SCALE=2)
-npm run screenshots                          # everything
+npm run screenshots                          # every README image
 node scripts/screenshots.mjs tr critical     # just some languages and images
 ```
 
