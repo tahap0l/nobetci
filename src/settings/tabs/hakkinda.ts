@@ -2,7 +2,7 @@
 // reset, licence.
 
 import { h } from "../../ui/dom";
-import { api, errText } from "../api";
+import { api, errCode, errText } from "../api";
 import { t, type MsgKey } from "../i18n";
 import { icon, owlMark, type IconName } from "../icons";
 import { app, refreshBadges, rerender, type Tab } from "../nav";
@@ -12,9 +12,20 @@ import { openWizard } from "../wizard";
 
 /**
  * Ours are re-translated on render, and so are Rust's coded errors (a file that
- * isn't Nöbetçi's settings, say); Rust's own wording is shown as it came.
+ * isn't Nöbetçi's settings, say); Rust's own wording is shown as it came. With
+ * both a key and an error, the key's sentence carries the error's text as {why}.
  */
-let message: { kind: "ok" | "error" | "info"; key?: MsgKey; path?: string; err?: unknown } | null = null;
+let message: { kind: "ok" | "error" | "info" | "warn"; key?: MsgKey; path?: string; err?: unknown } | null = null;
+
+/**
+ * A reset or an import whose save failed is still in effect: Rust applies the
+ * settings (and tells every window) before it writes them. Only a save error
+ * means that; anything else (not a Nöbetçi file, unreadable JSON) changed nothing.
+ */
+function appliedButUnsaved(err: unknown): boolean {
+  const code = errCode(err)?.code;
+  return code === "save_failed" || code === "settings_unreadable";
+}
 
 function promise(ic: IconName, title: string, text: string): HTMLElement {
   return h(
@@ -27,7 +38,8 @@ function promise(ic: IconName, title: string, text: string): HTMLElement {
 
 function messageView(): HTMLElement | null {
   if (!message) return null;
-  const text = message.key ? t(message.key, { path: message.path ?? "" }) : errText(message.err);
+  const why = message.err === undefined ? "" : errText(message.err);
+  const text = message.key ? t(message.key, { path: message.path ?? "", why }) : why;
   return notice(message.kind, h("span", { class: "verbatim", text }));
 }
 
@@ -122,7 +134,11 @@ function render(): HTMLElement {
                 message = { kind: "ok", key: "about.imported" };
               } else message = { kind: "info", key: "about.importCancelled" };
             } catch (err) {
-              message = { kind: "error", err };
+              // In effect but not saved: the settings-changed Rust sent first has
+              // already put them on screen.
+              message = appliedButUnsaved(err)
+                ? { kind: "warn", key: "about.importUnsaved", err }
+                : { kind: "error", err };
             }
             rerender("hakkinda");
           },
@@ -135,12 +151,17 @@ function render(): HTMLElement {
           confirmLabel: t("about.resetYes"),
           onConfirm: async () => {
             await flush();
-            const s = await api.settingsReset();
-            if (s) {
-              replaceAll(s);
+            try {
+              replaceAll(await api.settingsReset());
               refreshBadges();
               message = { kind: "ok", key: "about.resetDone" };
-            } else message = { kind: "error", key: "about.resetFailed" };
+            } catch (err) {
+              // A failed save still leaves the defaults in effect (Rust applies
+              // first); anything else reset nothing.
+              message = appliedButUnsaved(err)
+                ? { kind: "warn", key: "about.resetUnsaved", err }
+                : { kind: "error", key: "about.resetFailed", err };
+            }
             rerender("hakkinda");
           },
         }),

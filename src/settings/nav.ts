@@ -42,6 +42,12 @@ export const app = {
   systemLang: "en" as "tr" | "en",
   hooksLost: false,
   fullscreenSupported: true,
+  /**
+   * The island may approve HIGH and CRITICAL with a hold. Not on Linux, where a
+   * program's fake click can't be told from a real one: there those requests
+   * are approved in the terminal (D23, C-25), and hold times do nothing.
+   */
+  holdApprovals: true,
 };
 
 let impl = {

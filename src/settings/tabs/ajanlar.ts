@@ -31,6 +31,8 @@ interface ProviderState {
   healthFailed: boolean;
   busy: boolean;
   message: Message | null;
+  /** Reads of the status in flight: only the newest one lands. */
+  seq: number;
 }
 
 const fresh = (provider: AgentProvider, tab: TabId): ProviderState => ({
@@ -43,6 +45,7 @@ const fresh = (provider: AgentProvider, tab: TabId): ProviderState => ({
   healthFailed: false,
   busy: false,
   message: null,
+  seq: 0,
 });
 
 const desktop = fresh("codex", "chatgpt");
@@ -52,8 +55,27 @@ function providerTitle(provider: AgentProvider): string {
   return t(provider === "codex" ? "agents.codex" : "agents.cursor");
 }
 
+/** What a message or a health report was about: the connection as it was read then. */
+function statusKey(s: AgentHookStatus | null): string {
+  return s ? JSON.stringify([s.installed, s.stale, s.hookReady, s.events]) : "";
+}
+
+/**
+ * Reads the connection again. When it changed meanwhile (the hooks were removed
+ * with `nobetci --remove-hooks`, or edited by hand), the last message and
+ * health report describe a connection that is gone: "Connected." next to a
+ * "Not connected" pill. They are dropped.
+ */
 async function refresh(state: ProviderState) {
-  state.status = await api.agentHooksStatus(state.provider);
+  const my = ++state.seq;
+  const status = await api.agentHooksStatus(state.provider);
+  if (my !== state.seq) return;
+  if (state.loaded && statusKey(status) !== statusKey(state.status)) {
+    state.message = null;
+    state.health = null;
+    state.healthFailed = false;
+  }
+  state.status = status;
   state.loaded = true;
 }
 
@@ -93,6 +115,8 @@ async function openPreview(state: ProviderState, install: boolean) {
     danger: !install,
     apply: (fingerprint) => api.agentHooksApply(state.provider, install, fingerprint),
     onApplied: async (backup) => {
+      // Read the new state first: the message below is about it.
+      await refresh(state);
       state.health = null;
       state.healthFailed = false;
       const key: MsgKey = install
@@ -103,7 +127,6 @@ async function openPreview(state: ProviderState, install: boolean) {
           ? "agents.removed"
           : "agents.removedNoBackup";
       state.message = { ok: true, text: () => t(key, { backup: backup ?? "" }) };
-      await refresh(state);
       rerender(state.tab);
     },
     again: () => void openPreview(state, install),

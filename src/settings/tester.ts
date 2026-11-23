@@ -21,7 +21,7 @@ export function toolHint(tool: TesterTool): { label: string; placeholder: string
     case "Write":
       return { label: t("tester.tool.write"), placeholder: t("tester.ph.write") };
     case "Edit":
-      return { label: t("tester.tool.edit"), placeholder: "C:\\src\\app\\.github\\workflows\\ci.yml" };
+      return { label: t("tester.tool.edit"), placeholder: t("tester.ph.edit") };
     case "Read":
       return { label: t("tester.tool.read"), placeholder: t("tester.ph.read") };
     case "WebFetch":

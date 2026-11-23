@@ -13,12 +13,14 @@ import {
   IS_TAURI,
   onEvent,
   type AgentProvider,
+  type AuditEntry as CoreAuditEntry,
   type AuditFilter,
   type AuditStats,
   type BootInfo as CoreBootInfo,
   type HealthReport as CoreHealthReport,
   type HookPreview as CoreHookPreview,
   type HookStatus as CoreHookStatus,
+  type RiskLevel,
 } from "../core/bridge";
 import type { RuleMode, Settings } from "../core/settings-model";
 import { localDayStarts } from "./days";
@@ -42,7 +44,31 @@ export type HealthReport = Omit<CoreHealthReport, "statusLine"> & { statusLine?:
  * Rust's own words (localised): what failed, which values kept their defaults
  * when only some could be read, where a copy of the file is, what to do.
  */
-export type BootInfo = Omit<CoreBootInfo, "settingsLoadError"> & { settingsLoadError?: string | null };
+export type BootInfo = Omit<CoreBootInfo, "settingsLoadError" | "holdApprovals"> & {
+  settingsLoadError?: string | null;
+  /**
+   * Whether the island may approve a request that needs a hold (HIGH and
+   * CRITICAL). False on Linux, where those are approved in the terminal (D23,
+   * C-25). Absent from older builds.
+   */
+  holdApprovals?: boolean;
+};
+
+/**
+ * A history entry as audit.rs writes it. `engineLevel`: the risk engine's own
+ * level, present when a rule changed it (C-22). `categories`: the findings' ids,
+ * in the order of `labels`, which are kept in the language of the day they were
+ * recorded (C-24); entries from before C-24 have labels only.
+ */
+export type HistoryEntry = Omit<CoreAuditEntry, "engineLevel" | "categories"> & {
+  engineLevel?: RiskLevel;
+  categories?: string[];
+};
+
+export interface HistoryPage {
+  entries: HistoryEntry[];
+  total: number;
+}
 
 /**
  * `gitBashOnly` (Windows only): no spelling of the relay's path runs in both
@@ -81,6 +107,14 @@ const settingsCommands = {
   saveSettings: (settings: Settings) => invokeOrThrow<Settings>("save_settings", { settings }),
   boot: () => Bridge.boot() as Promise<BootInfo | null>,
   hooksStatus: () => Bridge.hooksStatus() as Promise<HookStatus | null>,
+  /** A page of the history; null outside Nöbetçi or when Rust fails (logged). */
+  auditQuery: (filter: AuditFilter) => Bridge.auditQuery(filter) as Promise<HistoryPage | null>,
+  /**
+   * Back to the defaults. Rust puts them in effect (and says so with
+   * `settings-changed`) before it saves them, so a failed save rejects with
+   * `save_failed: …` or `settings_unreadable` while the defaults already apply.
+   */
+  settingsReset: () => invokeOrThrow<Settings>("settings_reset"),
   /**
    * Totals for the last `days` days in per-day buckets (C-18): `dayStarts` are
    * the local midnights, days + 1 of them, oldest first (days.ts). Rust buckets
@@ -115,10 +149,8 @@ type BridgeUsed = Pick<
   typeof Bridge,
   | "openLocation"
   | "rulesTest"
-  | "auditQuery"
   | "pickFolder"
   | "auditProjects"
-  | "settingsReset"
   | "settingsImport"
   | "settingsExport"
   | "saveOpenAiKey"

@@ -18,9 +18,19 @@ let healthRunning = false;
 /**
  * Text is a function so the message follows a language switch. `rust` marks
  * text Rust wrote in the old language: it is dropped on a switch instead.
+ * `installed`: what a "written" / "removed" message says the hooks are now; a
+ * status read later that disagrees (hooks removed outside this window) drops it.
  */
-let message: { kind: "ok" | "error"; text: () => string; rust?: boolean } | null = null;
+let message: { kind: "ok" | "error"; text: () => string; rust?: boolean; installed?: boolean } | null = null;
 let busy = false;
+
+/** The message and the health report describe hooks as they no longer are: drop them. */
+function dropStale() {
+  const hs = cache.hookStatus;
+  if (!hs) return;
+  if (message?.installed !== undefined && message.installed !== hs.installed) message = null;
+  if (health && health.installed !== hs.installed) health = null;
+}
 
 async function refresh() {
   await loadHookStatus();
@@ -101,7 +111,7 @@ export async function openPreview(install: boolean, hooks: PreviewHooks = {}): P
         : backup
           ? "claude.removed"
           : "claude.removedNoBackup";
-      message = { kind: "ok", text: () => t(key, { backup: backup ?? "" }) };
+      message = { kind: "ok", text: () => t(key, { backup: backup ?? "" }), installed: install };
       // The old report described the hooks as they were.
       health = null;
       if (install) app.hooksLost = false;
@@ -216,6 +226,27 @@ function approvalGaps(): { permission: boolean; preTool: boolean } {
   return { permission: !ev.has("PermissionRequest"), preTool: !ev.has("PreToolUse") };
 }
 
+/**
+ * Whether a health report is all good — what the checklist's head says, and
+ * what ticks the wizard's Health step: the hooks, the relay, the round trip,
+ * the click guard, and both routes approvals take (PermissionRequest and
+ * PreToolUse selected).
+ */
+export function healthPasses(r: HealthReport): boolean {
+  const gaps = approvalGaps();
+  return (
+    r.relayExists &&
+    r.installed &&
+    !r.eventsMissing.length &&
+    !r.stale &&
+    r.roundtripMs != null &&
+    r.inputGuard &&
+    !gaps.permission &&
+    !gaps.preTool &&
+    !r.error
+  );
+}
+
 /** The ✓/✗ checklist for a health report; `error` is Rust's own text, shown as is. */
 export function healthView(r: HealthReport): HTMLElement {
   const line = (state: "ok" | "bad" | "note", title: string, detail?: string | Node) =>
@@ -235,15 +266,7 @@ export function healthView(r: HealthReport): HTMLElement {
   // every approval in the Claude desktop app come through PreToolUse.
   const gaps = approvalGaps();
   const routes = !gaps.permission && !gaps.preTool;
-  const pass =
-    r.relayExists &&
-    r.installed &&
-    !r.eventsMissing.length &&
-    !r.stale &&
-    r.roundtripMs != null &&
-    r.inputGuard &&
-    routes &&
-    !r.error;
+  const pass = healthPasses(r);
   return h(
     "div",
     { class: `health ${pass ? "pass" : "fail"}` },
@@ -393,6 +416,7 @@ function eventsCard(): HTMLElement {
 }
 
 function render(): HTMLElement {
+  dropStale();
   const hs = cache.hookStatus;
   const installed = !!hs?.installed;
   const noRelay = relayMissing();

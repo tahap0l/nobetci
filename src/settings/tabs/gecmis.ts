@@ -4,12 +4,12 @@
 // Every string in an entry may have been chosen by a hostile prompt: it is only
 // ever set as textContent.
 
-import type { AuditEntry, AuditFilter, AuditPage, AuditStats, RiskLevel } from "../../core/bridge";
+import type { AuditFilter, AuditStats, RiskLevel } from "../../core/bridge";
 import { locale } from "../../i18n/core";
 import { h } from "../../ui/dom";
-import { api, errText, type CsvSeparator } from "../api";
+import { api, errText, type CsvSeparator, type HistoryEntry, type HistoryPage } from "../api";
 import { SERIES, dailyChart, dailyTable, legend, rankList, riskBar } from "../charts";
-import { BY_KEYS, byLabel, decisionLabel } from "../data";
+import { BY_KEYS, byLabel, cache, decisionLabel, findingLabel, findingLabels, loadCategories } from "../data";
 import { countedFrom, localDayStarts } from "../days";
 import { t, type MsgKey } from "../i18n";
 import { icon } from "../icons";
@@ -26,6 +26,7 @@ import {
   iconButton,
   inlineConfirm,
   levelChip,
+  levelLabel,
   notice,
   pushLayer,
   row,
@@ -56,7 +57,7 @@ function storedSeparator(): CsvSeparator {
 const st = {
   range: "30" as Range,
   stats: null as AuditStats | null,
-  page: null as AuditPage | null,
+  page: null as HistoryPage | null,
   loading: false,
   filter: {
     text: "",
@@ -108,7 +109,7 @@ function currentFilter(since = rangeBounds().since): AuditFilter {
 }
 
 /** An empty page with no filter: is the history empty, or only this range? */
-async function checkEmpty(page: AuditPage | null) {
+async function checkEmpty(page: HistoryPage | null) {
   if (!page) return;
   if (page.total > 0) st.historyEmpty = false;
   else if (!filterActive()) st.historyEmpty = ((await api.auditQuery({ limit: 1 }))?.total ?? 1) === 0;
@@ -126,6 +127,8 @@ async function loadAll(withProjects = true) {
     api.auditStats(Number(st.range), starts),
     api.auditQuery({ ...currentFilter(since), limit: PAGE, offset: st.offset }),
     withProjects || !allProjects ? api.auditProjects() : Promise.resolve(allProjects),
+    // Findings are named by their category in the UI language (C-24).
+    loadCategories(),
   ]);
   if (my !== st.statsSeq) return;
   st.stats = stats;
@@ -221,12 +224,59 @@ function asLevel(l: string): RiskLevel {
   return l === "medium" || l === "high" || l === "critical" ? l : "low";
 }
 
+const RANK: Record<RiskLevel, number> = { low: 0, medium: 1, high: 2, critical: 3 };
+
+/** The risk engine's own level when a rule changed it (C-22), else null. */
+function engineOf(e: HistoryEntry): RiskLevel | null {
+  if (!e.engineLevel) return null;
+  const engine = asLevel(e.engineLevel);
+  return engine === asLevel(e.level) ? null : engine;
+}
+
+function engineTitle(e: HistoryEntry, engine: RiskLevel): string {
+  return t("hist.engineLevelTitle", { engine: levelLabel(engine), level: levelLabel(asLevel(e.level)) });
+}
+
+/**
+ * The tool as the table names it. An MCP tool reads "server › tool" (the
+ * island's wording) instead of `mcp__server__tool`, and when even that is too
+ * long for its half of the cell the server's name gives way before the tool's.
+ */
+function toolChip(tool: string): HTMLElement {
+  if (!tool.startsWith("mcp__")) return h("span", { class: "t-tool", text: tool });
+  const rest = tool.slice(5);
+  const cut = rest.indexOf("__");
+  const server = cut < 0 ? rest : rest.slice(0, cut);
+  const name = cut < 0 ? "" : rest.slice(cut + 2) || "?";
+  return h(
+    "span",
+    { class: "t-tool t-mcp" },
+    h("span", { class: "t-srv", text: server }),
+    name ? h("span", { class: "t-act", text: ` › ${name}` }) : null,
+  );
+}
+
+/**
+ * Top findings in the UI language (C-24). Rust names each finding it can by its
+ * category in the language of the day; an id that comes through as it is gets
+ * its label here, and labels that turn out the same are counted together.
+ */
+function topFindings(s: AuditStats | null): [string, number][] {
+  const merged = new Map<string, number>();
+  for (const [key, n] of s?.topLabels ?? []) {
+    const id = cache.categories?.some((c) => c.id === key) ? key : undefined;
+    const label = findingLabel(id, key);
+    merged.set(label, (merged.get(label) ?? 0) + n);
+  }
+  return [...merged.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], locale()));
+}
+
 /** Rust's note that stands in for a missing target, or "". Only a request too
  *  large to read (pipe.rs `too_long`) has one: it was never scored, so it has no
  *  kind and no target, and with no answer (decision none) its message is
  *  Nöbetçi's note on why. Any other message is what Claude was told, or a note
  *  on the decision, never a target: only the drawer shows it, under its label. */
-function oversizeNote(e: AuditEntry): string {
+function oversizeNote(e: HistoryEntry): string {
   return !e.target && !e.kind && e.decision === "none" ? e.message : "";
 }
 
@@ -279,9 +329,13 @@ function openDetail(index: number) {
   fact(t("hist.f.session"), e.session, true);
   fact(t("hist.f.id"), e.id, true);
 
+  // Named in the UI language where the entry kept its finding ids (C-24); older
+  // entries keep the words of the day they were recorded.
+  const names = findingLabels(e);
   const labels = h("ul", { class: "findings" });
-  for (const l of e.labels) labels.append(h("li", {}, h("span", { class: "f-label", text: l })));
-  if (!e.labels.length) labels.append(h("li", { class: "f-none" }, h("span", { text: t("hist.noFindings") })));
+  for (const l of names) labels.append(h("li", {}, h("span", { class: "f-label", text: l })));
+  if (!names.length) labels.append(h("li", { class: "f-none" }, h("span", { text: t("hist.noFindings") })));
+  const engine = engineOf(e);
 
   const prev = iconButton("left", t("hist.prev"), () => openDetail(index - 1), { disabled: index === 0 });
   const next = iconButton("right", t("hist.next"), () => openDetail(index + 1), {
@@ -315,6 +369,15 @@ function openDetail(index: number) {
         "div",
         { class: "eval-head" },
         levelChip(asLevel(e.level)),
+        // A rule changed the level: what the risk engine itself found (C-22).
+        engine
+          ? h(
+              "span",
+              { class: "engine-level", title: engineTitle(e, engine) },
+              h("span", { class: "muted", text: t("hist.engineLevel") }),
+              levelChip(engine, true),
+            )
+          : null,
         decisionChip(e.decision),
         h("span", { class: "muted", text: byLabel(e.by) }),
       ),
@@ -427,7 +490,7 @@ function statsSection(): HTMLElement {
         s ? riskBar(s) : h("p", { class: "muted", text: "…" }),
       ),
       card({ title: t("hist.projects"), icon: "folder" }, rankList(s?.topProjects ?? [], t("hist.noRecords"))),
-      card({ title: t("hist.topFindings"), icon: "warn" }, rankList(s?.topLabels ?? [], t("hist.noFindings"))),
+      card({ title: t("hist.topFindings"), icon: "warn" }, rankList(topFindings(s), t("hist.noFindings"))),
       card({ title: t("hist.tools"), icon: "claude" }, rankList(s?.topTools ?? [], t("hist.noRecords"), true)),
     ),
   );
@@ -535,22 +598,46 @@ function table(): HTMLElement {
     );
   }
   const tbody = h("tbody", {});
-  page.entries.forEach((e: AuditEntry, i) => {
+  page.entries.forEach((e: HistoryEntry, i) => {
     const note = oversizeNote(e);
+    const level = asLevel(e.level);
+    const engine = engineOf(e);
+    const by = byLabel(e.by);
+    // The whole tool name and target on hover; the cell shows what fits.
+    const full = [e.tool, (e.target || note).slice(0, 400)].filter(Boolean).join("\n");
     const tr = h(
       "tr",
       { tabindex: "0", "data-fk": `hrow:${e.id}` },
       h("td", { class: "t-when", title: fullWhen(e.ts), text: when(e.ts) }),
       h("td", { class: "t-proj", title: e.cwd, text: e.project || "—" }),
-      h("td", {}, levelChip(asLevel(e.level), true)),
-      h("td", {}, decisionChip(e.decision)),
-      h("td", { class: "t-by", text: byLabel(e.by) }),
+      // A rule moved the level: an arrow says which way, the title from what (C-22).
+      h(
+        "td",
+        { class: "t-risk", title: engine ? engineTitle(e, engine) : undefined },
+        levelChip(level, true),
+        engine
+          ? h("span", {
+              class: "t-moved",
+              role: "img",
+              text: RANK[level] < RANK[engine] ? "↓" : "↑",
+              "aria-label": engineTitle(e, engine),
+            })
+          : null,
+      ),
+      // Who decided rides with the decision: the target gets the room (and the
+      // columns stay the same below 920 px, where only the "by" part gives way).
+      h(
+        "td",
+        { class: "t-dec", title: `${decisionLabel(e.decision)} · ${by}` },
+        decisionChip(e.decision),
+        h("span", { class: "t-by", text: by }),
+      ),
       // The target; for a request too large to read, Rust's note on why there is
       // none. A message to Claude never shows here (see oversizeNote).
       h(
         "td",
-        { class: "t-target", title: (e.target || note).slice(0, 400) || undefined },
-        e.tool ? h("span", { class: "t-tool", text: e.tool }) : null,
+        { class: "t-target", title: full || undefined },
+        e.tool ? toolChip(e.tool) : null,
         e.target
           ? h("span", { class: "mono", text: e.target })
           : note
@@ -587,8 +674,7 @@ function table(): HTMLElement {
             h("th", { text: t("hist.col.time") }),
             h("th", { text: t("hist.col.project") }),
             h("th", { text: t("hist.col.risk") }),
-            h("th", { text: t("hist.col.decision") }),
-            h("th", { text: t("hist.col.by") }),
+            h("th", { text: t("hist.col.decisionBy") }),
             h("th", { text: t("hist.col.target") }),
           ),
         ),

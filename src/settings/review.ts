@@ -103,15 +103,20 @@ export function reviewDialog(o: ReviewOptions): ModalHandle {
     }
   });
 
-  const backupLine = o.preview.backup
-    ? h(
-        "div",
-        { class: "backup-line" },
-        icon("copy", 15),
-        h("span", { text: t("claude.backupFirst") }),
-        h("code", { class: "mono", text: o.preview.backup }),
-      )
-    : h("div", { class: "backup-line" }, icon("file", 15), h("span", { text: t("review.noBackup") }));
+  // Said as Rust will do it: a dated backup of the file as it is, or none
+  // because there is no file yet. With nothing to change nothing is written,
+  // so there is no backup either (Rust sends null then too) and no line.
+  const backupLine = nothing
+    ? null
+    : o.preview.backup
+      ? h(
+          "div",
+          { class: "backup-line" },
+          icon("copy", 15),
+          h("span", { text: t("claude.backupFirst") }),
+          h("code", { class: "mono", text: o.preview.backup }),
+        )
+      : h("div", { class: "backup-line" }, icon("file", 15), h("span", { text: t("review.noBackup") }));
 
   const m = modal({
     title: o.title,
@@ -129,7 +134,7 @@ export function reviewDialog(o: ReviewOptions): ModalHandle {
       ),
       nothing ? notice("info", t("claude.noChange")) : diff,
       backupLine,
-      notice("info", t("claude.fileChangedNote")),
+      nothing ? null : notice("info", t("claude.fileChangedNote")),
     ],
     status,
     foot: [button(t("common.cancel"), { kind: "subtle", onClick: () => m.close() }), confirm],
