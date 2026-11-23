@@ -161,6 +161,9 @@ const tr = {
   "ap.toCursor": "Cursor'a bırak",
   "ap.toCursorTitle": "Kararı Cursor'da ver",
   "ap.menuTitle": "Claude'a gerekçeyle reddet",
+  // Codex and Cursor: a reason, but no stop (their hook answers have none; relay#1).
+  "ap.menuTitleAgent": "Ajana gerekçeyle reddet",
+  "ap.denyReason": "Gerekçeyle reddet",
   "ap.stopMessage": "Kullanıcı Nöbetçi üzerinden durdurdu.",
   "ap.denyStop": "Reddet ve Claude'u durdur",
   "ap.session": "Oturum",
@@ -175,6 +178,12 @@ const tr = {
   "ap.holdAllow": "Basılı tut · İzin ver",
   "ap.allow": "İzin ver",
   "ap.overflow": "↓ devamı var — kaydır",
+  // D23: where a program's click cannot be told from a hand's (Linux), a request
+  // that needs a hold is approved where the hand-off sends it.
+  "ap.terminalOnly": "Linux'ta bir programın sahte tıklaması gerçek tıklamadan ayırt edilemiyor; YÜKSEK ve KRİTİK istekleri terminalde onayla.",
+  "ap.terminalOnly.cursor": "Linux'ta bir programın sahte tıklaması gerçek tıklamadan ayırt edilemiyor; YÜKSEK ve KRİTİK istekleri Cursor'da onayla.",
+  "ap.terminalOnly.app": "Linux'ta bir programın sahte tıklaması gerçek tıklamadan ayırt edilemiyor; YÜKSEK ve KRİTİK istekleri Claude uygulamasında onayla.",
+  "ap.batchSeeAll": "Önce listenin tamamını kaydırıp gör: bu tık listedeki her isteğe izin verir.",
 
   // Compact
   "cp.quiet": "Sessiz",
@@ -211,7 +220,11 @@ const tr = {
   "step.subStart": "+ alt-agent başladı",
   "step.subStop": "• alt-agent bitti",
   "step.timeout": "⏱ Karar verilmedi — terminale düştü",
+  "step.timeout.cursor": "⏱ Karar verilmedi — artık Cursor soruyor",
+  "step.timeout.app": "⏱ Karar verilmedi — artık Claude uygulaması soruyor",
   "step.paused": "⏸ Duraklatıldı — karar terminale bırakıldı",
+  "step.paused.cursor": "⏸ Duraklatıldı — karar Cursor'a bırakıldı",
+  "step.paused.app": "⏸ Duraklatıldı — karar Claude uygulamasına bırakıldı",
   "step.autoAllow": "✓ Otomatik izin ({who}) · {target}",
   "step.autoDeny": "⛔ Otomatik ret ({who}) · {target}",
   "who.trusted": "güvenilir proje",
@@ -247,6 +260,12 @@ const tr = {
   "out.toCursor": "Cursor'a bırakıldı",
   "out.toApp": "Claude uygulamasına bırakıldı",
   "out.fellBack": "Terminale düştü",
+  "out.fellBack.cursor": "Cursor'a düştü",
+  "out.fellBack.app": "Claude uygulamasına düştü",
+  // C-21: the answer was sent, but the request was already over (answered in the
+  // terminal, or the agent stopped waiting): it never arrived.
+  "out.undelivered": "Ulaşmadı",
+  "out.undeliveredTitle": "Cevap gönderildi ama istek çoktan bitmişti; ajana ulaşmadı.",
 
   // Greeting
   "greet.text": "Nöbetteyim!",
@@ -293,6 +312,11 @@ const tr = {
   "use.tomorrow": "yarın",
   "use.cost": "Bu oturum yaklaşık ${usd}",
   "use.short": "limit %{pct}",
+
+  // The focus timer's end, in the pill and as a desktop notification.
+  "focus.doneTitle": "Odak süresi doldu",
+  "focus.doneBody": "{n} dakikalık odak bitti. Kısa bir mola ver.",
+  "focus.doneBody#one": "1 dakikalık odak bitti. Kısa bir mola ver.",
 };
 
 const en: { [K in keyof typeof tr]: string } = {
@@ -446,6 +470,8 @@ const en: { [K in keyof typeof tr]: string } = {
   "ap.toCursor": "Hand to Cursor",
   "ap.toCursorTitle": "Decide in Cursor instead",
   "ap.menuTitle": "Deny and tell Claude why",
+  "ap.menuTitleAgent": "Deny and tell the agent why",
+  "ap.denyReason": "Deny with a reason",
   "ap.stopMessage": "Stopped by the user through Nöbetçi.",
   "ap.denyStop": "Deny and stop Claude",
   "ap.session": "Session",
@@ -460,6 +486,10 @@ const en: { [K in keyof typeof tr]: string } = {
   "ap.holdAllow": "Hold · Allow",
   "ap.allow": "Allow",
   "ap.overflow": "↓ there's more — scroll",
+  "ap.terminalOnly": "On Linux, Nöbetçi can't tell a program's fake click from a real one, so HIGH and CRITICAL requests are approved in the terminal.",
+  "ap.terminalOnly.cursor": "On Linux, Nöbetçi can't tell a program's fake click from a real one, so HIGH and CRITICAL requests are approved in Cursor.",
+  "ap.terminalOnly.app": "On Linux, Nöbetçi can't tell a program's fake click from a real one, so HIGH and CRITICAL requests are approved in the Claude app.",
+  "ap.batchSeeAll": "Scroll through the whole list first: this click allows every request on it.",
 
   "cp.quiet": "Quiet",
   "cp.waitingOne": "Needs approval — click",
@@ -493,7 +523,11 @@ const en: { [K in keyof typeof tr]: string } = {
   "step.subStart": "+ subagent started",
   "step.subStop": "• subagent finished",
   "step.timeout": "⏱ No decision — handed to the terminal",
+  "step.timeout.cursor": "⏱ No decision — Cursor asks you instead",
+  "step.timeout.app": "⏱ No decision — the Claude app asks you instead",
   "step.paused": "⏸ Paused — decision handed to the terminal",
+  "step.paused.cursor": "⏸ Paused — decision handed to Cursor",
+  "step.paused.app": "⏸ Paused — decision handed to the Claude app",
   "step.autoAllow": "✓ Auto-allowed ({who}) · {target}",
   "step.autoDeny": "⛔ Auto-denied ({who}) · {target}",
   "who.trusted": "trusted project",
@@ -528,6 +562,10 @@ const en: { [K in keyof typeof tr]: string } = {
   "out.toCursor": "Handed to Cursor",
   "out.toApp": "Handed to the Claude app",
   "out.fellBack": "Fell back to the terminal",
+  "out.fellBack.cursor": "Fell back to Cursor",
+  "out.fellBack.app": "Fell back to the Claude app",
+  "out.undelivered": "Not delivered",
+  "out.undeliveredTitle": "The answer was sent, but the request was already over; it never reached the agent.",
 
   "greet.text": "On watch!",
 
@@ -573,6 +611,28 @@ const en: { [K in keyof typeof tr]: string } = {
   "use.tomorrow": "tomorrow",
   "use.cost": "This session about ${usd}",
   "use.short": "limit {pct}%",
+
+  "focus.doneTitle": "Focus time is up",
+  "focus.doneBody": "Your {n}-minute focus run is over. Take a short break.",
+  "focus.doneBody#one": "Your 1-minute focus run is over. Take a short break.",
 };
 
 export const t = defineMessages(tr, en);
+
+/** Where a request goes when the island does not decide it (`handBackTo` in state.ts). */
+export type HandBackPlace = "terminal" | "cursor" | "app";
+
+const PLACED = {
+  "step.timeout": { terminal: "step.timeout", cursor: "step.timeout.cursor", app: "step.timeout.app" },
+  "step.paused": { terminal: "step.paused", cursor: "step.paused.cursor", app: "step.paused.app" },
+  "out.fellBack": { terminal: "out.fellBack", cursor: "out.fellBack.cursor", app: "out.fellBack.app" },
+  "ap.terminalOnly": { terminal: "ap.terminalOnly", cursor: "ap.terminalOnly.cursor", app: "ap.terminalOnly.app" },
+} as const satisfies Record<string, Record<HandBackPlace, keyof typeof tr>>;
+
+/**
+ * A note that names what takes a request over: the terminal, Cursor's own
+ * prompt, or the Claude app's own dialog — never "the terminal" for the latter two.
+ */
+export function placed(key: keyof typeof PLACED, place: HandBackPlace): string {
+  return t(PLACED[key][place]);
+}

@@ -51,6 +51,13 @@ export interface BootInfo {
   platform: "windows" | "macos" | "linux";
   /** Whether "quiet in full screen" can work here (not on macOS yet). */
   fullscreenSupported: boolean;
+  /**
+   * Whether the island may approve a request that needs a hold (HIGH,
+   * CRITICAL): false where the click guard cannot tell a program's click from a
+   * hand's (Linux, D23). Rust then refuses any island allow for such a request
+   * with `terminal_only` (C-25). Absent from older builds.
+   */
+  holdApprovals?: boolean;
 }
 
 export interface HookStatus {
@@ -64,6 +71,12 @@ export interface HookStatus {
   stale: boolean;
   /** settings.json has someone else's status line; Nöbetçi leaves it alone. */
   foreignStatusLine?: boolean;
+  /**
+   * Windows only: no spelling of the relay's path runs in both Git Bash and
+   * PowerShell, so the hooks run only where Claude Code uses Git Bash
+   * (hooks.rs `git_bash_only`).
+   */
+  gitBashOnly?: boolean;
 }
 
 export interface HookPreview {
@@ -244,7 +257,8 @@ export type InteractiveResponse =
 
 export type Anchor = { x: number; y: number; w: number; h: number };
 
-export type NotifyKind = "approval" | "finished" | "error" | "waiting";
+/** `focus`: a focus timer run ended (gated by Rust like the others: toasts on, not quiet). */
+export type NotifyKind = "approval" | "finished" | "error" | "waiting" | "focus";
 export type QuietReason = "dnd" | "hours" | "fullscreen" | null;
 
 // ── Commands ──────────────────────────────────────────────────────────────────
@@ -345,11 +359,21 @@ export const Bridge = {
    */
   islandMedia: (includeArtwork = false, explicit = false) =>
     call<IslandMedia>("island_media", { includeArtwork, explicit }),
+  /** `positionMs` goes as whole milliseconds: Rust takes an integer (shell-widgets#1). */
   islandMediaControl: (source: string, action: MediaAction, positionMs?: number, explicit = false) =>
-    call<boolean>("island_media_control", { source, action, positionMs: positionMs ?? null, explicit }),
+    call<boolean>("island_media_control", {
+      source,
+      action,
+      positionMs: positionMs == null || !Number.isFinite(positionMs) ? null : Math.max(0, Math.round(positionMs)),
+      explicit,
+    }),
   islandWeather: (cityId: string) => call<IslandWeather>("island_weather", { cityId }),
   islandStats: () => call<IslandStats>("island_stats"),
-  agendaList: () => call<AgendaItem[]>("agenda_list"),
+  /**
+   * The agenda. Rejects with `agenda_unreadable` when agenda.json is there but
+   * cannot be read (C-23): that is not an empty day.
+   */
+  agendaList: () => callOrThrow<AgendaItem[]>("agenda_list"),
   agendaPut: (item: AgendaItem) => callOrThrow<AgendaItem[]>("agenda_put", { item }),
   agendaDelete: (id: string) => callOrThrow<AgendaItem[]>("agenda_delete", { id }),
   boot: () => call<BootInfo>("boot"),

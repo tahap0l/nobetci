@@ -5,6 +5,7 @@ import { WEATHER_CITIES } from "../core/island-widgets";
 import { Sound } from "../core/sound";
 import { State } from "../core/state";
 import { getLang } from "../i18n/core";
+import { t } from "../i18n/island";
 import { h, icon } from "./dom";
 import { weatherIcon, weatherLabel } from "./weather-icon";
 
@@ -192,6 +193,7 @@ function checkFocusEnd() {
     armFocusEnd(); // early: the clock moved
     return;
   }
+  const minutes = Math.round(focusLength / 60_000);
   focusUntil = 0;
   focusRemaining = 0;
   focusLength = 0;
@@ -201,9 +203,13 @@ function checkFocusEnd() {
   Sound.play("finish");
   focusReact?.("happy");
   if (!State.isQuiet) {
-    State.flash = { text: local("⏱ Odak süresi doldu", "⏱ Focus time is up"), tone: "ok", until: Date.now() + 6_000 };
+    State.flash = { text: `⏱ ${t("focus.doneTitle")}`, tone: "ok", until: Date.now() + 6_000 };
     window.setTimeout(() => State.notify(), 6_100);
   }
+  // A desktop notification too, for someone away from the island: Rust shows
+  // it unless notifications are off or it is quiet, or the open island already
+  // shows it (dashboard#5, P2 handoff).
+  void Bridge.notify("focus", t("focus.doneTitle"), t("focus.doneBody", { n: minutes }), State.mode === "expanded");
   State.notify();
 }
 
@@ -403,6 +409,8 @@ function buildAgenda(openDay: { day: string }) {
     note.textContent = error || (pastTime()
       ? local("Bu saat geçti: hatırlatma gelmez.", "That time has passed: no reminder.")
       : clock.value ? local("O saatte hatırlatırım.", "I'll remind you then.") : "");
+    // The note wraps (a refusal is a sentence or two); the whole of it on hover too.
+    note.title = note.textContent ?? "";
   };
 
   function openEditor(item: AgendaItem | null) {
@@ -463,13 +471,23 @@ function buildAgenda(openDay: { day: string }) {
     title.title = new Intl.DateTimeFormat(getLang(), { dateStyle: "full" }).format(parseDay(openDay.day));
     const items = Agenda.on(openDay.day);
     const open = items.filter((i) => !i.done).length;
-    count.classList.toggle("error", !!countNote);
-    count.textContent = countNote || (items.length
-      ? local(`${open} açık · ${items.length - open} bitti`, `${open} open · ${items.length - open} done`)
-      : local("Boş gün", "Nothing planned"));
+    // agenda.json is there but cannot be read (C-23): not an empty day.
+    const unreadable = Agenda.unreadable();
+    count.classList.toggle("error", !!countNote || unreadable);
+    count.textContent = countNote || (unreadable
+      ? local("agenda.json okunamadı — dosyayı kontrol et", "Couldn't read agenda.json — check the file")
+      : items.length
+        ? local(`${open} açık · ${items.length - open} bitti`, `${open} open · ${items.length - open} done`)
+        : local("Boş gün", "Nothing planned"));
+    count.title = count.textContent ?? "";
     list.replaceChildren(...(items.length
       ? items.map(row)
-      : [h("li", { class: "agenda-empty", text: local("Ekle'ye bas, yaz, Enter ile kaydet. Saat verirsen hatırlatırım.", "Press Add, type, save with Enter. Give it a time and I'll remind you.") })]));
+      : unreadable
+        ? [h("li", { class: "agenda-empty agenda-unreadable", role: "alert", text: local(
+          "Nöbetçi agenda.json dosyasını okuyamıyor; okuyabilene kadar üzerine hiçbir şey yazmaz. Dosyanın iznini ya da içeriğini kontrol et — düzelince ajandan burada görünür.",
+          "Nöbetçi can't read agenda.json, and won't write over it until it can. Check the file's permissions or contents — once it can be read, your agenda shows up here.",
+        ) })]
+        : [h("li", { class: "agenda-empty", text: local("Ekle'ye bas, yaz, Enter ile kaydet. Saat verirsen hatırlatırım.", "Press Add, type, save with Enter. Give it a time and I'll remind you.") })]));
     // An item changed elsewhere while being edited here: let go of the old copy.
     if (editing && !Agenda.all().some((i) => i.id === editing!.id)) closeEditor();
   }
@@ -997,8 +1015,10 @@ export function buildWidgets(view: "overview" | "empty", openSettings: (tab: str
     }
   }
   const seek = (ms: number) => {
-    if (!snapshot || !currentMedia?.canSeek) return;
-    const target = Math.max(0, Math.min(snapshot.duration - 1_000, ms));
+    if (!snapshot || !currentMedia?.canSeek || !Number.isFinite(ms)) return;
+    // Whole milliseconds: a click lands between them, and Rust reads the
+    // position as an integer — a fraction was refused outright (shell-widgets#1).
+    const target = Math.round(Math.max(0, Math.min(snapshot.duration - 1_000, ms)));
     snapshot = { ...snapshot, position: target, at: Date.now() };
     drawProgress();
     void send("seek", target);
@@ -1112,6 +1132,8 @@ export function buildWidgets(view: "overview" | "empty", openSettings: (tab: str
     focus.refresh(shown && page() === "media");
     drawProgress();
     if (!shown) return;
+    // An agenda.json that could not be read is asked for again while its card shows (C-23).
+    if (page() === "agenda") Agenda.recheck();
     if (wake === undefined) {
       wake = window.setTimeout(() => {
         wake = undefined;

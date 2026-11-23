@@ -218,11 +218,16 @@ function emphasis(text: string, i: number): { node: Node; end: number } | null {
   return null;
 }
 
-/** A link is shown as its text and where it points; nothing on the card opens it. */
-function linkText(label: string, url: string): Node[] {
+/**
+ * A link is shown as its text and where it points — and its title, as written:
+ * "Approve plan" sends the plan back whole, so nothing in it may be left off
+ * the card (island-ui#2). Nothing on the card opens it.
+ */
+function linkText(label: string, url: string, title = ""): Node[] {
   const nodes: Node[] = [];
+  const target = [url, title].filter(Boolean).join(" ");
   if (label && label !== url) nodes.push(h("span", { class: "plan-link" }, ...inline(label)), document.createTextNode(" "));
-  if (url) nodes.push(h("span", { class: "plan-url", text: label && label !== url ? `(${url})` : url }));
+  if (target) nodes.push(h("span", { class: "plan-url", text: label && label !== url ? `(${target})` : target }));
   return nodes.length ? nodes : [document.createTextNode(label)];
 }
 
@@ -260,10 +265,10 @@ function inline(text: string): Node[] {
       continue;
     }
     if (c === "[" || (c === "!" && text[i + 1] === "[")) {
-      const m = /^!?\[([^\]]*)\]\(\s*<?([^)\s>]*)>?(?:\s+(?:"[^"]*"|'[^']*'))?\s*\)/.exec(text.slice(i));
+      const m = /^!?\[([^\]]*)\]\(\s*<?([^)\s>]*)>?(?:\s+("[^"]*"|'[^']*'))?\s*\)/.exec(text.slice(i));
       if (m) {
         flush();
-        out.push(...linkText(m[1], m[2]));
+        out.push(...linkText(m[1], m[2], m[3] ?? ""));
         i += m[0].length;
         continue;
       }
@@ -361,16 +366,20 @@ export function planView(markdown: string): HTMLElement {
     const indent = indentOf(raw);
     const line = raw.trim();
 
-    const fence = /^(`{3,}|~{3,})/.exec(line);
+    const fence = /^(`{3,}|~{3,})(.*)$/.exec(line);
     if (fence) {
       const close = new RegExp(`^[ \\t]*${fence[1][0] === "`" ? "`" : "~"}{${fence[1].length},}[ \\t]*$`);
       const body: string[] = [];
       let j = i + 1;
       for (; j < lines.length && !close.test(lines[j]); j++) body.push(lines[j]);
       const pre = h("pre", { class: "plan-code", text: body.join("\n") });
+      // What follows the fence ("bash", or anything else written there) is part
+      // of the plan too: shown on the block, never dropped (island-ui#2).
+      const info = fence[2].trim();
+      const block = info ? h("div", { class: "plan-code-block" }, h("span", { class: "plan-code-info", text: info }), pre) : pre;
       // Indented under a list item, the code belongs to that item.
       leave(indent);
-      (lists.length && top().item ? top().item! : root).append(pre);
+      (lists.length && top().item ? top().item! : root).append(block);
       i = j;
       para = quote = null;
       blank = false;
@@ -415,19 +424,24 @@ export function planView(markdown: string): HTMLElement {
       const align = cellsOf(rule).map((c) =>
         c.startsWith(":") && c.endsWith(":") ? "center" : c.endsWith(":") ? "right" : "",
       );
+      const rows: string[][] = [];
+      let j = i + 2;
+      for (; j < lines.length && lines[j].trim() && lines[j].includes("|"); j++) rows.push(cellsOf(lines[j]));
+      // Every cell is shown, a row longer than the header's too: a cell left
+      // off would be plan text the card hides but "Approve plan" sends
+      // (island-ui#2). The header gets empty cells for the extra columns.
+      const columns = Math.max(head.length, ...rows.map((r) => r.length));
       const row = (cells: string[], tag: "th" | "td") =>
         h(
           "tr",
           {},
-          ...head.map((_, k) => {
+          ...Array.from({ length: columns }, (_, k) => {
             const cell = h(tag, {}, ...inline(cells[k] ?? ""));
             if (align[k]) cell.style.textAlign = align[k];
             return cell;
           }),
         );
-      const tbody = h("tbody");
-      let j = i + 2;
-      for (; j < lines.length && lines[j].trim() && lines[j].includes("|"); j++) tbody.append(row(cellsOf(lines[j]), "td"));
+      const tbody = h("tbody", {}, ...rows.map((r) => row(r, "td")));
       lists = [];
       root.append(h("div", { class: "plan-table" }, h("table", {}, h("thead", {}, row(head, "th")), tbody)));
       i = j - 1;

@@ -5,6 +5,7 @@
 // Permission requests queue up instead of bouncing to the terminal.
 
 import type { OwlMood } from "../baykus/owl";
+import type { HandBackPlace } from "../i18n/island";
 import type { QuietReason, RiskAssessment, RiskLevel } from "./bridge";
 import { DEFAULT_SETTINGS, type Settings } from "./settings-model";
 
@@ -27,6 +28,8 @@ export interface Step {
   /** ms since epoch */
   t: number;
   text: string;
+  /** More about it, on hover. */
+  title?: string;
 }
 
 export interface Session {
@@ -162,12 +165,21 @@ export function isPlainLow(a: Approval): boolean {
 }
 
 /**
+ * A request this island cannot allow at all (D23, C-25): it needs a hold, and
+ * the platform cannot vouch for one. Rust refuses any allow for it with
+ * `terminal_only`; the card offers the hand-off and Deny instead.
+ */
+export function terminalOnly(a: Approval): boolean {
+  return a.kind === "permission" && needsHold(a.risk.level) && !State.holdApprovals;
+}
+
+/**
  * Where a request goes when the island hands it back: Cursor shows its own
  * prompt (the relay answers "ask", D3), a session of the Claude desktop app
  * asks in the app's window, anything else in its terminal. The card's button
  * and the note the hand-off leaves on the session both follow this.
  */
-export function handBackTo(s: Session | undefined): "cursor" | "app" | "terminal" {
+export function handBackTo(s: Session | undefined): HandBackPlace {
   if (s?.agent === "Cursor") return "cursor";
   if (s?.terminal === "Claude") return "app";
   return "terminal";
@@ -194,6 +206,13 @@ class AppState {
 
   settings: Settings = { ...DEFAULT_SETTINGS };
   version = "";
+  /**
+   * Whether this platform can vouch that a hold on Allow was a hand (boot's
+   * `holdApprovals`, C-25). Where it cannot — Linux, where a program can click
+   * through the real mouse (D23) — a request that needs a hold (HIGH, CRITICAL)
+   * offers no Allow on the island: it is decided where the hand-off sends it.
+   */
+  holdApprovals = true;
 
   /** Cursor in window-logical pixels. */
   mouse = { x: 0, y: 0 };

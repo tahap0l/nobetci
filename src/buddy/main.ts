@@ -7,8 +7,9 @@
 // its wings, letting go lands it.
 //
 // Like the island it draws only while something moves: once it has nodded off
-// (two minutes of calm) the frame loop stops and costs nothing. With the
-// system's "reduce motion" setting the engine keeps still, so the loop also
+// (two minutes of calm, or as soon as the island itself sleeps or Nöbetçi is
+// paused) the frame loop stops and costs nothing until something stirs it. With
+// the system's "reduce motion" setting the engine keeps still, so the loop also
 // stops whenever nothing changes.
 
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -27,8 +28,12 @@ const DOZE_MS = 120_000;
 /**
  * A single click waits this long for a second one before it counts as a poke:
  * the two presses of a double click (which opens the island) are not pokes.
+ * As long as the systems' own double-click time (500 ms on Windows and macOS,
+ * 400 ms in GTK), so a double click at the usual pace never pokes first.
  */
-const POKE_DELAY_MS = 320;
+const POKE_DELAY_MS = 500;
+/** A double click this soon after a poke played was meant as one: no frown then. */
+const POKE_REGRET_MS = 900;
 /**
  * The mascot's width as a share of the window's; the rest is room for badges and
  * sparkles. The window itself is sized by the `buddySize` setting.
@@ -48,6 +53,12 @@ let last = 0;
 let carried = false;
 let landing: number | null = null;
 let dozeTimer: number | null = null;
+/**
+ * It has nodded off: nothing is left to wait for, so no timer and no frame
+ * until something stirs it (mascots-buddy#0 — a doze check that kept coming
+ * back redrew the sleeping mascot about 15 times a second, forever).
+ */
+let asleep = false;
 
 function size() {
   body = Math.round(window.innerWidth * BODY_SHARE);
@@ -60,7 +71,18 @@ function size() {
 /** Wakes the mascot up: something happened. */
 function stir() {
   lastStir = performance.now();
+  asleep = false;
   owl.setMood(islandMood === "sleeping" ? "idle" : islandMood);
+  wake();
+}
+
+/**
+ * Nods off now: the loop draws it closing its eyes, then stops. (The margin
+ * covers a frame whose time stamp is a little older than this call.)
+ */
+function doze() {
+  if (asleep || carried) return;
+  lastStir = Math.min(lastStir, performance.now() - DOZE_MS - 1_000);
   wake();
 }
 
@@ -82,10 +104,11 @@ function mayDoze(): boolean {
 
 /**
  * A still mascot (reduced motion) stops its loop while awake: come back when it
- * is time to nod off, so it still falls asleep after two calm minutes.
+ * is time to nod off, so it still falls asleep after two calm minutes. Once it
+ * sleeps there is nothing to come back for.
  */
 function scheduleDoze() {
-  if (dozeTimer != null || !mayDoze() || carried) return;
+  if (dozeTimer != null || asleep || !mayDoze() || carried) return;
   const left = DOZE_MS - (performance.now() - lastStir);
   dozeTimer = window.setTimeout(() => {
     dozeTimer = null;
@@ -96,7 +119,10 @@ function scheduleDoze() {
 function frame(now: number) {
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
-  if (mayDoze() && !carried && now - lastStir > DOZE_MS) owl.setMood("sleeping");
+  if (!asleep && mayDoze() && !carried && now - lastStir > DOZE_MS) {
+    asleep = true;
+    owl.setMood("sleeping");
+  }
 
   owl.flight += ((carried ? 1 : 0) - owl.flight) * Math.min(1, dt * 10);
   if (owl.flight < 0.01) owl.flight = 0;
@@ -154,6 +180,8 @@ canvas.addEventListener("pointerup", () => {
 // A click that was not a drag pokes the mascot, unless it was half of a double
 // click: the poke waits a moment and a second click cancels it.
 let pokeTimer: number | null = null;
+/** When the last poke played (performance.now()), to take its frown back. */
+let pokedAt = -Infinity;
 function cancelPoke() {
   if (pokeTimer == null) return;
   window.clearTimeout(pokeTimer);
@@ -165,6 +193,7 @@ canvas.addEventListener("click", (e) => {
   if (e.detail > 1) return; // the second (or third) press of a double click
   pokeTimer = window.setTimeout(() => {
     pokeTimer = null;
+    pokedAt = performance.now();
     owl.poke();
     stir();
   }, POKE_DELAY_MS);
@@ -182,9 +211,15 @@ canvas.addEventListener("wheel", (e) => {
 }, { passive: false });
 
 // A double click opens the island — on the waiting card, if there is one — and
-// the mascot waves to say so.
+// the mascot waves to say so. A double click slower than the poke's wait (a
+// system set to a long double-click time) let the first press poke already:
+// its frown gives way to a smile (M-16, mascots-buddy#1).
 canvas.addEventListener("dblclick", () => {
   cancelPoke();
+  if (performance.now() - pokedAt < POKE_REGRET_MS) {
+    pokedAt = -Infinity;
+    owl.triggerEmote("happy");
+  }
   owl.wave();
   stir();
   void Bridge.buddyOpenIsland();
@@ -215,6 +250,28 @@ function applySettings(s: Settings) {
   stir();
 }
 
+let settle: number | null = null;
+
+/** The island's mood (`buddy-mood`). */
+function islandSays(mood: OwlMood) {
+  islandMood = mood;
+  // The island lets "finished" and "error" fade after a few seconds; so do we,
+  // even if the island itself has folded away and stopped looking.
+  if (settle != null) window.clearTimeout(settle);
+  settle =
+    mood === "finished" || mood === "error"
+      ? window.setTimeout(() => {
+          settle = null;
+          islandMood = "idle";
+          stir();
+        }, 6500)
+      : null;
+  // The island nodding off — or Nöbetçi paused — is no news to wake up for: the
+  // mascot nods off with it and stops drawing.
+  if (mood === "sleeping") doze();
+  else stir();
+}
+
 async function main() {
   // No webview context menu or reload keys in the app window (D12).
   if (IS_TAURI) guardWebview();
@@ -230,22 +287,7 @@ async function main() {
   const boot = await Bridge.boot();
   if (boot) applySettings(boot.settings);
   await onEvent<Settings>("settings-changed", applySettings);
-  let settle: number | null = null;
-  await onEvent<OwlMood>("buddy-mood", (mood) => {
-    islandMood = mood;
-    // The island lets "finished" and "error" fade after a few seconds; so do we,
-    // even if the island itself has folded away and stopped looking.
-    if (settle != null) window.clearTimeout(settle);
-    settle =
-      mood === "finished" || mood === "error"
-        ? window.setTimeout(() => {
-            settle = null;
-            islandMood = "idle";
-            stir();
-          }, 6500)
-        : null;
-    stir();
-  });
+  await onEvent<OwlMood>("buddy-mood", islandSays);
   await onEvent<OwlEmote>("buddy-emote", (emote) => {
     stir();
     owl.triggerEmote(emote);
@@ -269,10 +311,7 @@ async function main() {
     // `nobetciBuddy.mood("danger")` / `.emote("approve")` in the console stand in.
     (window as unknown as { nobetciBuddy: unknown }).nobetciBuddy = {
       owl,
-      mood: (m: OwlMood) => {
-        islandMood = m;
-        stir();
-      },
+      mood: islandSays,
       emote: (e: OwlEmote) => {
         stir();
         owl.triggerEmote(e);
