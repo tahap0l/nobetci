@@ -65,9 +65,10 @@ const MIN_FIELD_LEN: usize = 256;
 /// at least this much while a request is made to fit.
 const KEEP_TOP_LEVEL: usize = 4096;
 /// The fields the app reads first. From a line too large to take, it still tells
-/// the history what the request was, from whatever came before the cut
-/// (`too_long` in src-tauri/src/pipe.rs), so these go at the front.
-const LEAD_KEYS: &[&str] = &["hook_event_name", "session_id", "cwd", "tool_name", "agent_name"];
+/// the history what the request was — and what asked instead of it: Cursor, the
+/// Claude app or the terminal — from whatever came before the cut (`too_long`
+/// in src-tauri/src/pipe.rs), so these go at the front.
+const LEAD_KEYS: &[&str] = &["hook_event_name", "session_id", "cwd", "tool_name", "agent_name", "entrypoint"];
 
 mod browser;
 #[cfg(target_os = "linux")]
@@ -100,7 +101,7 @@ fn main() {
     let event_arg = if provider == "claude" { first } else { args.next().unwrap_or_default() };
     // The event as named on the command line, for input that cannot be read.
     let named = event_name(&provider, &event_arg).to_string();
-    let Some((payload, event, gated)) = read_event(&provider, event_arg) else {
+    let Some((payload, event, gated)) = read_event(&provider, event_arg, &Context::from_env()) else {
         // Nothing to relay, so nothing is decided either.
         finish(no_decision_json(&provider, &named))
     };
@@ -184,6 +185,9 @@ fn output_json(provider: &str, event: &str, answer: &str) -> Option<String> {
     }
 }
 
+/// Codex's PermissionRequest answer: allow, or deny with its message. "Deny and
+/// stop" becomes a plain deny here — Codex fails a hook answer that asks to
+/// interrupt, so the stop is left out (the app records that it was not sent).
 fn codex_decision_json(event: &str, answer: &str) -> Option<String> {
     if event != "PermissionRequest" {
         return None;
@@ -205,6 +209,9 @@ fn codex_decision_json(event: &str, answer: &str) -> Option<String> {
     )
 }
 
+/// Cursor's permission answer: allow, or deny with the message for the user and
+/// the agent. Its answer has no way to end the agent's turn, so "Deny and stop"
+/// is a plain deny here too.
 fn cursor_decision_json(event: &str, answer: &str) -> Option<String> {
     if event == "UserPromptSubmit" {
         return Some(serde_json::json!({ "continue": true }).to_string());
@@ -385,9 +392,38 @@ fn interactive_tool(tool: &str) -> bool {
     matches!(tool, "AskUserQuestion" | "ExitPlanMode")
 }
 
+/// What the relay takes from its environment: where the session runs. Read once,
+/// in `main`, and handed down, so nothing else — no test either — depends on the
+/// variables of the process that runs it (a test run from the Claude desktop
+/// app's Code tab inherits CLAUDE_CODE_ENTRYPOINT=claude-desktop).
+#[derive(Default)]
+struct Context {
+    term_program: String,
+    wt_session: String,
+    vscode_pid: String,
+    /// `CLAUDE_CODE_ENTRYPOINT`: the CLI, the VS Code extension or the Code tab
+    /// of the Claude desktop app ("claude-desktop").
+    entrypoint: String,
+    /// The working folder, for an event that names none.
+    cwd: Option<String>,
+}
+
+impl Context {
+    fn from_env() -> Self {
+        let var = |name: &str| std::env::var(name).unwrap_or_default();
+        Context {
+            term_program: var("TERM_PROGRAM"),
+            wt_session: var("WT_SESSION"),
+            vscode_pid: var("VSCODE_PID"),
+            entrypoint: var("CLAUDE_CODE_ENTRYPOINT"),
+            cwd: std::env::current_dir().ok().map(|dir| dir.to_string_lossy().to_string()),
+        }
+    }
+}
+
 /// Reads stdin and returns the payload to forward, the event name, and whether it
 /// is a `PreToolUse` gated as a permission request (see `desktop_gate`).
-fn read_event(provider: &str, arg_event: String) -> Option<(String, String, bool)> {
+fn read_event(provider: &str, arg_event: String, context: &Context) -> Option<(String, String, bool)> {
     let mut raw = Vec::new();
     if std::io::stdin().read_to_end(&mut raw).is_err() || raw.is_empty() {
         return None;
@@ -408,19 +444,20 @@ fn read_event(provider: &str, arg_event: String) -> Option<(String, String, bool
     .any(|e| arg_event == *e || peek.contains(&format!("\"{e}\"")))
         || peek.contains("\"AskUserQuestion\"")
         || peek.contains("\"ExitPlanMode\"")
-        || (std::env::var("CLAUDE_CODE_ENTRYPOINT").as_deref() == Ok(DESKTOP_ENTRYPOINT)
-            && (arg_event == "PreToolUse" || peek.contains("\"PreToolUse\"")));
+        || (context.entrypoint == DESKTOP_ENTRYPOINT && (arg_event == "PreToolUse" || peek.contains("\"PreToolUse\"")));
     let parents = wants_parents.then(|| os::ancestors(12));
-    prepare(&raw, provider, arg_event, parents)
+    prepare(&raw, provider, arg_event, parents, context)
 }
 
 /// Turns the raw hook JSON into the line sent over the pipe. Split from
-/// `read_event` so it can be tested without stdin or a real environment.
+/// `read_event` so it can be tested without stdin or a real environment: what
+/// the environment says comes in as `context`.
 fn prepare(
     raw: &[u8],
     provider: &str,
     arg_event: String,
     parents: Option<Vec<(u32, String)>>,
+    context: &Context,
 ) -> Option<(String, String, bool)> {
     // Some shells hand us a UTF-8 BOM; serde_json would choke on it.
     let raw = raw.strip_prefix(&[0xEF, 0xBB, 0xBF]).unwrap_or(raw);
@@ -493,23 +530,22 @@ fn prepare(
 
     let cwd_missing = map.get("cwd").and_then(|v| v.as_str()).map(str::is_empty).unwrap_or(true);
     if cwd_missing {
-        if let Ok(cwd) = std::env::current_dir() {
-            map.insert("cwd".into(), serde_json::Value::String(cwd.to_string_lossy().to_string()));
+        if let Some(cwd) = &context.cwd {
+            map.insert("cwd".into(), serde_json::Value::String(cwd.clone()));
         }
     }
 
     // Which terminal the session runs in — context only, never a filter.
     // `entrypoint` says which Claude Code it is: the CLI, the VS Code extension
     // or the Code tab of the Claude desktop app ("claude-desktop").
-    for (key, var) in [
-        ("term_program", "TERM_PROGRAM"),
-        ("wt_session", "WT_SESSION"),
-        ("vscode_pid", "VSCODE_PID"),
-        ("entrypoint", "CLAUDE_CODE_ENTRYPOINT"),
+    for (key, value) in [
+        ("term_program", &context.term_program),
+        ("wt_session", &context.wt_session),
+        ("vscode_pid", &context.vscode_pid),
+        ("entrypoint", &context.entrypoint),
     ] {
         if !map.contains_key(key) {
-            let value = std::env::var(var).unwrap_or_default();
-            map.insert(key.into(), serde_json::Value::String(value));
+            map.insert(key.into(), serde_json::Value::String(value.clone()));
         }
     }
 
@@ -707,7 +743,7 @@ fn status_line() {
     let _ = std::io::stdin().take(1 << 20).read_to_end(&mut raw);
     let raw = raw.strip_prefix(&[0xEF, 0xBB, 0xBF]).unwrap_or(&raw);
     let data: serde_json::Value = serde_json::from_slice(raw).unwrap_or(serde_json::Value::Null);
-    if let Some(line) = status_payload(&data) {
+    if let Some(line) = status_payload(&data, &Context::from_env().entrypoint) {
         let (tx, rx) = mpsc::channel::<()>();
         std::thread::spawn(move || {
             let _ = talk(&line, false);
@@ -722,7 +758,8 @@ fn status_line() {
 }
 
 /// The few fields of the status line input the island uses, as a hook event.
-fn status_payload(data: &serde_json::Value) -> Option<String> {
+/// `entrypoint`: the session's CLAUDE_CODE_ENTRYPOINT (`Context`).
+fn status_payload(data: &serde_json::Value, entrypoint: &str) -> Option<String> {
     let session = data.get("session_id")?.as_str()?;
     let number = |path: &[&str]| -> serde_json::Value {
         let mut v = data;
@@ -760,7 +797,7 @@ fn status_payload(data: &serde_json::Value) -> Option<String> {
         "cost_usd": number(&["cost", "total_cost_usd"]),
         "five_hour": window("five_hour"),
         "seven_day": window("seven_day"),
-        "entrypoint": std::env::var("CLAUDE_CODE_ENTRYPOINT").unwrap_or_default(),
+        "entrypoint": entrypoint,
     });
     // A handful of short strings: capped, the line is always a fraction of a frame.
     truncate_strings(&mut payload, MAX_FIELD_LEN);
@@ -889,7 +926,8 @@ mod tests {
     /// Runs a hook payload through `prepare` and the app's frame rules, and
     /// returns what the app would read.
     fn through_the_app(raw: &serde_json::Value, provider: &str) -> (serde_json::Value, String) {
-        let (line, event, _) = prepare(raw.to_string().as_bytes(), provider, String::new(), None).unwrap();
+        let (line, event, _) =
+            prepare(raw.to_string().as_bytes(), provider, String::new(), None, &Context::default()).unwrap();
         let frame = app_frame(line.as_bytes()).expect("the app takes the frame");
         assert_eq!(frame.len() + 1, line.len(), "one frame, ended by its newline");
         (serde_json::from_slice(&frame).unwrap(), event)
@@ -970,7 +1008,7 @@ mod tests {
         assert_eq!(event_name("codex", "PermissionRequest"), "PermissionRequest");
         // Unparseable input, such as a lone surrogate serde_json refuses.
         let lone = br#"{"hook_event_name":"beforeShellExecution","command":"echo \ud83d"}"#;
-        assert!(prepare(lone, "cursor", "beforeShellExecution".into(), None).is_none());
+        assert!(prepare(lone, "cursor", "beforeShellExecution".into(), None, &Context::default()).is_none());
     }
 
     #[test]
@@ -1010,7 +1048,7 @@ mod tests {
             let (sent, _) = through_the_app(&raw, provider);
             assert!(sent["hook_event_name"].is_string(), "{raw}");
         }
-        let status = status_payload(&serde_json::json!({ "session_id": "s", "cwd": "/w" })).unwrap();
+        let status = status_payload(&serde_json::json!({ "session_id": "s", "cwd": "/w" }), "").unwrap();
         assert!(app_frame(status.as_bytes()).is_ok());
         assert!(app_frame(&b"{}"[..]).is_err(), "the rule the bridge once broke");
     }
@@ -1099,7 +1137,8 @@ mod tests {
             "session_id": "s1", "cwd": "/w", "hook_event_name": "PermissionRequest",
             "tool_input": { "rows": vec![12345; 200_000] }, "tool_name": "mcp__db__insert",
         });
-        let (line, _, _) = prepare(raw.to_string().as_bytes(), "claude", String::new(), None).unwrap();
+        let (line, _, _) =
+            prepare(raw.to_string().as_bytes(), "claude", String::new(), None, &Context::default()).unwrap();
         assert!(line.len() > MAX_FRAME + 1);
         assert!(app_frame(line.as_bytes()).is_err(), "refused by the app");
         assert!(
@@ -1164,7 +1203,7 @@ mod tests {
             "tool_input": { "command": command },
         })
         .to_string();
-        let (line, event, _) = prepare(raw.as_bytes(), "claude", String::new(), None).unwrap();
+        let (line, event, _) = prepare(raw.as_bytes(), "claude", String::new(), None, &Context::default()).unwrap();
         assert_eq!(event, "PermissionRequest");
         let sent: serde_json::Value = serde_json::from_str(&line).unwrap();
         assert_eq!(sent["tool_input"]["command"].as_str().unwrap(), command);
@@ -1207,7 +1246,7 @@ mod tests {
             "workspace_roots": ["C:/work/project"]
         })
         .to_string();
-        let (line, event, _) = prepare(raw.as_bytes(), "cursor", String::new(), None).unwrap();
+        let (line, event, _) = prepare(raw.as_bytes(), "cursor", String::new(), None, &Context::default()).unwrap();
         let payload: serde_json::Value = serde_json::from_str(&line).unwrap();
         assert_eq!(event, "UserPromptSubmit");
         assert_eq!(payload["agent_name"], "Cursor");
@@ -1224,7 +1263,7 @@ mod tests {
             "tool_input": { "command": "x".repeat(MAX_APPROVAL_FIELD_LEN + 10) },
         })
         .to_string();
-        let (line, _, _) = prepare(raw.as_bytes(), "claude", String::new(), None).unwrap();
+        let (line, _, _) = prepare(raw.as_bytes(), "claude", String::new(), None, &Context::default()).unwrap();
         let sent: serde_json::Value = serde_json::from_str(&line).unwrap();
         assert_eq!(sent[TRUNCATED_FLAG], serde_json::Value::Bool(true));
     }
@@ -1237,7 +1276,7 @@ mod tests {
             "tool_input": { "command": "y".repeat(5000) },
         })
         .to_string();
-        let (line, _, _) = prepare(raw.as_bytes(), "claude", String::new(), None).unwrap();
+        let (line, _, _) = prepare(raw.as_bytes(), "claude", String::new(), None, &Context::default()).unwrap();
         let sent: serde_json::Value = serde_json::from_str(&line).unwrap();
         assert!(sent["tool_input"]["command"].as_str().unwrap().len() <= MAX_FIELD_LEN + 4);
     }
@@ -1246,7 +1285,7 @@ mod tests {
     fn the_process_chain_is_attached_when_given() {
         let raw = br#"{"hook_event_name":"SessionStart","cwd":"C:/w"}"#;
         let chain = vec![(10, "claude.exe".to_string()), (9, "pwsh.exe".to_string())];
-        let (line, _, _) = prepare(raw, "claude", String::new(), Some(chain)).unwrap();
+        let (line, _, _) = prepare(raw, "claude", String::new(), Some(chain), &Context::default()).unwrap();
         let sent: serde_json::Value = serde_json::from_str(&line).unwrap();
         assert_eq!(sent["nobetci_parents"][0]["name"], "claude.exe");
         assert_eq!(sent["nobetci_parents"][1]["pid"], 9);
@@ -1264,7 +1303,7 @@ mod tests {
     fn a_bom_and_argv_event_are_handled() {
         let mut raw = vec![0xEF, 0xBB, 0xBF];
         raw.extend_from_slice(br#"{"cwd":"C:/w"}"#);
-        let (_, event, _) = prepare(&raw, "claude", "Stop".into(), None).unwrap();
+        let (_, event, _) = prepare(&raw, "claude", "Stop".into(), None, &Context::default()).unwrap();
         assert_eq!(event, "Stop");
     }
 
@@ -1300,7 +1339,7 @@ mod tests {
             "tool_input": { "command": "rm -rf build" },
         })
         .to_string();
-        let (line, event, gated) = prepare(raw.as_bytes(), "claude", String::new(), None).unwrap();
+        let (line, event, gated) = prepare(raw.as_bytes(), "claude", String::new(), None, &Context::default()).unwrap();
         assert!(gated);
         assert_eq!(event, "PermissionRequest");
         let sent: serde_json::Value = serde_json::from_str(&line).unwrap();
@@ -1310,9 +1349,93 @@ mod tests {
 
         // The same event from the terminal is only displayed.
         let cli = raw.replace(DESKTOP_ENTRYPOINT, "cli");
-        let (_, event, gated) = prepare(cli.as_bytes(), "claude", String::new(), None).unwrap();
+        let (_, event, gated) = prepare(cli.as_bytes(), "claude", String::new(), None, &Context::default()).unwrap();
         assert!(!gated);
         assert_eq!(event, "PreToolUse");
+    }
+
+    #[test]
+    fn the_session_s_surroundings_come_from_the_context_never_the_environment() {
+        // relay#0: whatever CLAUDE_CODE_ENTRYPOINT the test run itself has (the
+        // Claude desktop app's Code tab sets claude-desktop), a PreToolUse is
+        // gated by the context handed in, and nothing else.
+        let raw = serde_json::json!({
+            "hook_event_name": "PreToolUse", "session_id": "s", "cwd": "/w", "permission_mode": "default",
+            "tool_name": "Bash", "tool_input": { "command": "rm -rf build" },
+        })
+        .to_string();
+        let (line, event, gated) = prepare(raw.as_bytes(), "claude", String::new(), None, &Context::default()).unwrap();
+        assert_eq!((event.as_str(), gated), ("PreToolUse", false));
+        let sent: serde_json::Value = serde_json::from_str(&line).unwrap();
+        assert_eq!(sent["entrypoint"], "");
+        let desktop = Context {
+            entrypoint: DESKTOP_ENTRYPOINT.into(),
+            term_program: "vscode".into(),
+            cwd: Some("/elsewhere".into()),
+            ..Context::default()
+        };
+        let (line, event, gated) = prepare(raw.as_bytes(), "claude", String::new(), None, &desktop).unwrap();
+        assert_eq!((event.as_str(), gated), ("PermissionRequest", true));
+        let sent: serde_json::Value = serde_json::from_str(&line).unwrap();
+        assert_eq!(
+            (sent["entrypoint"].as_str(), sent["term_program"].as_str()),
+            (Some("claude-desktop"), Some("vscode"))
+        );
+        assert_eq!(sent["cwd"], "/w", "the event's own folder wins");
+        // An event that names no folder takes the context's.
+        let bare = br#"{"hook_event_name":"Stop","session_id":"s"}"#;
+        let (line, _, _) = prepare(bare, "claude", String::new(), None, &desktop).unwrap();
+        assert!(line.contains(r#""cwd":"/elsewhere""#), "{line}");
+        // What the event itself says about its entrypoint is kept.
+        let (_, _, gated) = prepare(
+            raw.replace("\"permission_mode\"", "\"entrypoint\":\"cli\",\"permission_mode\"").as_bytes(),
+            "claude",
+            String::new(),
+            None,
+            &desktop,
+        )
+        .unwrap();
+        assert!(!gated, "the event's own entrypoint wins");
+    }
+
+    #[test]
+    fn the_entrypoint_goes_up_front_for_a_frame_too_large_to_read() {
+        // The app records a refused frame from its first megabyte: it must see
+        // what would ask instead (the Claude app, not the terminal).
+        let raw = serde_json::json!({
+            "session_id": "s1", "cwd": "/w", "hook_event_name": "PermissionRequest",
+            "tool_input": { "rows": vec![12345; 200_000] }, "tool_name": "mcp__db__insert",
+        });
+        let desktop = Context { entrypoint: DESKTOP_ENTRYPOINT.into(), ..Context::default() };
+        let (line, _, _) = prepare(raw.to_string().as_bytes(), "claude", String::new(), None, &desktop).unwrap();
+        assert!(line.len() > MAX_FRAME, "too large: the app refuses it");
+        let head = &line[..200];
+        assert!(head.contains(r#""entrypoint":"claude-desktop""#), "{head}");
+    }
+
+    #[test]
+    fn deny_and_stop_reaches_codex_and_cursor_as_a_plain_deny() {
+        // relay#1: neither host can be stopped from a hook. Codex fails a hook
+        // answer that sets `interrupt`, and Cursor's permission answer has no
+        // field to end the turn; both get the deny and its words, nothing more —
+        // whatever an older app sends.
+        let stop =
+            r#"{"behavior":"deny","message":"Stopped by the user through Nöbetçi.","interrupt":true,"stop":true}"#;
+        let codex: serde_json::Value =
+            serde_json::from_str(&codex_decision_json("PermissionRequest", stop).unwrap()).unwrap();
+        assert_eq!(
+            codex,
+            serde_json::json!({ "hookSpecificOutput": { "hookEventName": "PermissionRequest",
+                "decision": { "behavior": "deny", "message": "Stopped by the user through Nöbetçi." } } })
+        );
+        let cursor: serde_json::Value =
+            serde_json::from_str(&cursor_decision_json("PermissionRequest", stop).unwrap()).unwrap();
+        let keys: Vec<&str> = cursor.as_object().unwrap().keys().map(String::as_str).collect();
+        assert_eq!(cursor["permission"], "deny");
+        assert!(keys.iter().all(|k| ["permission", "user_message", "agent_message"].contains(k)), "{keys:?}");
+        // Claude Code, the one host that can be stopped, is.
+        let claude: serde_json::Value = serde_json::from_str(&decision_json(stop).unwrap()).unwrap();
+        assert_eq!(claude["continue"], false);
     }
 
     #[test]
@@ -1344,15 +1467,15 @@ mod tests {
             "tool_input": { "questions": [{ "question": "Which?", "header": "H", "options": [{ "label": "A" }] }] },
         })
         .to_string();
-        let (line, event, gated) = prepare(raw.as_bytes(), "claude", String::new(), None).unwrap();
+        let (line, event, gated) = prepare(raw.as_bytes(), "claude", String::new(), None, &Context::default()).unwrap();
         assert!(gated);
         assert_eq!(event, "PermissionRequest");
         assert!(line.contains("\"nobetci_via\":\"PreToolUse\""));
         let plan = raw.replace("AskUserQuestion", "ExitPlanMode");
-        assert!(prepare(plan.as_bytes(), "claude", String::new(), None).unwrap().2);
+        assert!(prepare(plan.as_bytes(), "claude", String::new(), None, &Context::default()).unwrap().2);
         // Other tools in the terminal are only displayed.
         let read = raw.replace("AskUserQuestion", "Read");
-        assert!(!prepare(read.as_bytes(), "claude", String::new(), None).unwrap().2);
+        assert!(!prepare(read.as_bytes(), "claude", String::new(), None, &Context::default()).unwrap().2);
     }
 
     #[test]
@@ -1384,7 +1507,7 @@ mod tests {
                 "lines": [" keep", "-old", "+new", "+more"] }] },
         })
         .to_string();
-        let (line, _, _) = prepare(from_patch.as_bytes(), "claude", String::new(), None).unwrap();
+        let (line, _, _) = prepare(from_patch.as_bytes(), "claude", String::new(), None, &Context::default()).unwrap();
         let v: serde_json::Value = serde_json::from_str(&line).unwrap();
         let c = &v["nobetci_change"];
         assert_eq!(c["file"], "/w/a.rs");
@@ -1398,13 +1521,13 @@ mod tests {
             "tool_response": { "type": "create", "filePath": "/w/new.md" },
         })
         .to_string();
-        let (line, _, _) = prepare(from_input.as_bytes(), "claude", String::new(), None).unwrap();
+        let (line, _, _) = prepare(from_input.as_bytes(), "claude", String::new(), None, &Context::default()).unwrap();
         let v: serde_json::Value = serde_json::from_str(&line).unwrap();
         assert_eq!(v["nobetci_change"]["added"], 3);
         assert_eq!(v["nobetci_change"]["created"], true);
 
         let read = from_input.replace("\"Write\"", "\"Read\"");
-        let (line, _, _) = prepare(read.as_bytes(), "claude", String::new(), None).unwrap();
+        let (line, _, _) = prepare(read.as_bytes(), "claude", String::new(), None, &Context::default()).unwrap();
         assert!(!line.contains("nobetci_change"));
     }
 
@@ -1419,11 +1542,12 @@ mod tests {
             "rate_limits": { "five_hour": { "used_percentage": 41.0, "resets_at": 1700000000 } },
         });
         assert_eq!(status_text(&data), "Nöbetçi · Opus · ctx 23% · 5h 41%");
-        let sent: serde_json::Value = serde_json::from_str(&status_payload(&data).unwrap()).unwrap();
+        let sent: serde_json::Value = serde_json::from_str(&status_payload(&data, "cli").unwrap()).unwrap();
         assert_eq!(sent["hook_event_name"], "StatusLine");
+        assert_eq!(sent["entrypoint"], "cli");
         assert_eq!(sent["five_hour"]["used"], 41.0);
         assert!(sent["seven_day"]["used"].is_null());
         assert_eq!(status_text(&serde_json::json!({})), "Nöbetçi");
-        assert!(status_payload(&serde_json::json!({})).is_none());
+        assert!(status_payload(&serde_json::json!({}), "").is_none());
     }
 }
