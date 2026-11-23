@@ -171,10 +171,18 @@ geri getirmez.
 Yeni sürümün kurulum programını indirip (parmak izini doğrulayarak) çalıştırman yeterli. Güncelleme
 sırasında Nöbetçi kapanır; kurulum bitince yeniden aç.
 
-Kurulu sürümün üstüne başka bir sürüm kurmak — daha yeni ya da daha eski — kaldırma değil
-güncellemedir: ayarların, ajandan ve geçmişin, Claude Code, Codex ve Cursor hook'ların ve **Windows
-açılınca başlat** hangi sürümden güncellersen güncelle korunur. Bunları yalnızca, zaten kurulu olan
-sürümü yeniden çalıştırdığında kurulum programının gösterdiği sayfada kaldırmayı seçmek siler.
+Kurulu sürümün üstüne başka bir sürüm kurmak kaldırma değil güncellemedir: ayarların, ajandan ve
+geçmişin, Claude Code, Codex ve Cursor hook'ların ve **Windows açılınca başlat** hangi sürümden
+güncellersen güncelle korunur. Çalıştırdığın kurulum programı 2.4.1'den yeniyse daha eski bir
+sürüme dönerken de böyledir. Bunları yalnızca, zaten kurulu olan sürümü yeniden çalıştırdığında
+kurulum programının gösterdiği sayfada kaldırmayı seçmek siler.
+
+2.4.1 ve önceki sürümlerin kurulum programları bunu bilmez. Bunlardan birine dönüp her şeyi korumak
+için gösterdiği sayfada **Kaldırma işlemini gerçekleştirme**'yi seç. Önceden seçili gelen **Yükleme
+yapmadan önce kaldırın** ise hook'ları ve **Windows açılınca başlat**'ı kaldırır (**Uygulama
+verilerini sil** kutusunu işaretlemedikçe ayarların, ajandan ve geçmişin kalır): ardından hook'ları
+**Ayarlar → Claude Code**, **ChatGPT** ve **Diğer ajanlar**'dan yeniden kur ve **Windows açılınca
+başlat**'ı yeniden aç.
 
 Yeni bir sürüm hook'ların ihtiyacını değiştirirse **Ayarlar → Claude Code** (ya da **ChatGPT**,
 **Diğer ajanlar**) bağlantının güncel olmadığını söyler; farkı inceleyip orada güncelle.
@@ -460,8 +468,8 @@ olanları anlatır.
    xattr -dr com.apple.quarantine /Applications/Nobetci.app
    ```
 
-   (Bir ajan bu komutu çalıştırmak isterse Nöbetçi onu YÜKSEK sayar — burada az önce doğruladığın
-   bir uygulama için bunu yapan sensin.)
+   (Bir ajan bu komutu çalıştırmak isterse Nöbetçi onu KRİTİK sayar, çünkü Nöbetçi'nin kendi
+   uygulamasını değiştirir — burada az önce doğruladığın bir uygulama için bunu yapan sensin.)
 4. macOS sorduğunda bildirimlere izin ver. Sonradan **Sistem Ayarları → Bildirimler**'den
    değiştirebilirsin.
 

@@ -167,10 +167,18 @@ next to the file; a reset leaves your hooks alone and doesn't bring the setup wi
 Download the new installer (check its fingerprint) and run it. Nöbetçi closes during the update;
 start it again when the installer is done.
 
-Installing another version over the current one — newer or older — is an update, not an
-uninstall: your settings, agenda and history, your Claude Code, Codex and Cursor hooks and
-**Start with Windows** are all kept, whichever version you update from. Only choosing to uninstall,
-on the page the installer shows when you run the version you already have, removes them.
+Installing another version over the current one is an update, not an uninstall: your settings,
+agenda and history, your Claude Code, Codex and Cursor hooks and **Start with Windows** are all
+kept, whichever version you update from. That holds for going back to an older version too, as
+long as the installer you run is newer than 2.4.1. Only choosing to uninstall, on the page the
+installer shows when you run the version you already have, removes them.
+
+The installers of 2.4.1 and earlier don't know this. To go back to one of them and keep
+everything, choose **Do not uninstall** on the page it shows. Its preselected choice, **Uninstall
+before installing**, removes the hooks and **Start with Windows** (your settings, agenda and history
+stay unless you tick **Delete the application data**): install the hooks again afterwards in
+**Settings → Claude Code**, **ChatGPT** and **Other agents**, and switch **Start with Windows** back
+on.
 
 If a new version changes what the hooks need, **Settings → Claude Code** (or **ChatGPT**, **Other
 agents**) says the connection is out of date; review the diff and update it there.
@@ -456,8 +464,8 @@ way on a Mac. This section covers what's different.
    xattr -dr com.apple.quarantine /Applications/Nobetci.app
    ```
 
-   (When an agent asks to run this, Nöbetçi scores it HIGH — here it's you, for an app you've
-   just verified.)
+   (When an agent asks to run this, Nöbetçi scores it CRITICAL, because it changes Nöbetçi's own
+   app — here it's you, for an app you've just verified.)
 4. Allow notifications when macOS asks. You can change it later in **System Settings →
    Notifications**.
 

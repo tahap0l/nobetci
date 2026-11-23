@@ -750,8 +750,10 @@ Cursor keep working, and a message says which entries to delete by hand.
 
 Your preferences and agenda (`%APPDATA%\Nobetci`) and history (`%LOCALAPPDATA%\Nobetci\audit.jsonl`)
 stay, so a reinstall picks up where you left off. Tick **Delete the application data** in the
-uninstaller to remove them too. Installing a newer (or older) version over the current one is an
-update, not an uninstall: hooks, **Start with Windows** and data all stay.
+uninstaller to remove them too. Installing a newer version over the current one — or an older one
+with an installer newer than 2.4.1 — is an update, not an uninstall: hooks, **Start with Windows**
+and data all stay. To go back to 2.4.1 or earlier and keep them, choose **Do not uninstall** on the
+page its installer shows ([details](docs/install.md#8-update)).
 
 ### macOS
 
@@ -794,9 +796,9 @@ npm run pack:linux   # the .deb and the AppImage, into release/
 With the dev server running:
 
 - `http://127.0.0.1:1420/?demo=critical` shows the island with fake sessions and requests. Other
-  demos: `low`, `write`, `hidden`, `deny-menu`, `batch`, `question`, `plan`, `overview`,
-  `session`, `assistant`, `compact`, `empty`, `tour`, `mascots`, `reactions`. Add `&theme=wolf`
-  (or another mascot) to see it on the island.
+  demos: `low`, `medium`, `write`, `hidden`, `deny-menu`, `batch`, `question`, `plan`, `overview`,
+  `session`, `assistant`, `compact`, `empty`, `tour`, `mascots`, `reactions`, `installer-art`.
+  Add `&theme=wolf` (or another mascot) to see it on the island.
 - `http://127.0.0.1:1420/settings.html?tab=kurallar` opens Settings with mock data. Tabs:
   `genel`, `claude`, `chatgpt`, `ajanlar`, `prompts`, `guvenlik`, `kurallar`, `bildirimler`,
   `gecmis`, `hakkinda`, plus `hosgeldin` for the welcome wizard.

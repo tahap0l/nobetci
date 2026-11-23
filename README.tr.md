@@ -757,9 +757,11 @@ Hook'lar kaldırılamazsa relay ve kayıt dosyası yerinde kalır; böylece Clau
 
 Tercihlerin ve ajandan (`%APPDATA%\Nobetci`) ve geçmişin (`%LOCALAPPDATA%\Nobetci\audit.jsonl`)
 yerinde kalır; yeniden kurarsan kaldığın yerden devam edersin. Bunları da silmek için kaldırma
-programında **Uygulama verilerini sil** kutusunu işaretle. Kurulu sürümün üstüne daha yeni (ya da
-daha eski) bir sürüm kurmak kaldırma değil güncellemedir: hook'lar, **Windows açılınca başlat** ve
-veriler kalır.
+programında **Uygulama verilerini sil** kutusunu işaretle. Kurulu sürümün üstüne daha yeni bir
+sürüm — ya da 2.4.1'den yeni bir kurulum programıyla daha eski bir sürüm — kurmak kaldırma değil
+güncellemedir: hook'lar, **Windows açılınca başlat** ve veriler kalır. 2.4.1'e ya da daha eskisine
+dönüp bunları korumak için onun kurulum programının gösterdiği sayfada **Kaldırma işlemini
+gerçekleştirme**'yi seç ([ayrıntılar](docs/kurulum.md#8-güncelleme)).
 
 ### macOS
 
@@ -801,9 +803,9 @@ npm run pack:linux   # .deb ve AppImage, release/ klasörüne
 Geliştirme sunucusu çalışırken:
 
 - `http://127.0.0.1:1420/?demo=critical` adayı sahte oturumlar ve isteklerle gösterir. Diğer
-  demolar: `low`, `write`, `hidden`, `deny-menu`, `batch`, `question`, `plan`, `overview`,
-  `session`, `assistant`, `compact`, `empty`, `tour`, `mascots`, `reactions`. Adada başka bir
-  maskotu görmek için `&theme=wolf` (ya da başka bir maskot) ekle.
+  demolar: `low`, `medium`, `write`, `hidden`, `deny-menu`, `batch`, `question`, `plan`,
+  `overview`, `session`, `assistant`, `compact`, `empty`, `tour`, `mascots`, `reactions`,
+  `installer-art`. Adada başka bir maskotu görmek için `&theme=wolf` (ya da başka bir maskot) ekle.
 - `http://127.0.0.1:1420/settings.html?tab=kurallar` Ayarlar'ı sahte verilerle açar. Sekmeler:
   `genel`, `claude`, `chatgpt`, `ajanlar`, `prompts`, `guvenlik`, `kurallar`, `bildirimler`,
   `gecmis`, `hakkinda`; hoş geldin sihirbazı için `hosgeldin`.

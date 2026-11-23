@@ -106,11 +106,12 @@ runs `cargo audit` whenever the Rust dependencies change and once a week.
 **In the browser** (`npm run dev`, or `npx vite` without Rust):
 
 - `/?demo=critical` shows the island with fake sessions and requests. The other demos are `low`,
-  `write`, `hidden` (whitespace obfuscation), `deny-menu`, `batch`, `question`, `plan`,
-  `overview`, `session`, `assistant`, `compact`, `empty`, `tour`, `mascots` (all seven mascots side
-  by side) and `reactions`. `&theme=wolf` (or any other mascot) picks the mascot, `&media=1`
-  fills the media card (`&media=art` with artwork), and `&still=1` holds the scene still for
-  screenshots.
+  `medium` (a MEDIUM card that a rule wanted to allow), `write`, `hidden` (whitespace obfuscation),
+  `deny-menu`, `batch`, `question`, `plan`, `overview`, `session`, `assistant`, `compact`, `empty`,
+  `tour`, `mascots` (all seven mascots side by side), `reactions` and `installer-art` (the Windows
+  installer's pictures, which `scripts/installer-art.mjs` captures). `&theme=wolf` (or any other
+  mascot) picks the mascot, `&media=1` fills the media card (`&media=art` with artwork), and
+  `&still=1` holds the scene still for screenshots.
 - `/settings.html?tab=kurallar` opens Settings with mock data. Tabs: `genel`, `claude`, `chatgpt`,
   `ajanlar`, `prompts`, `guvenlik`, `kurallar`, `bildirimler`, `gecmis`, `hakkinda`, plus
   `hosgeldin` for the welcome wizard. The mock in `src/settings/mock.ts` takes extra switches to
