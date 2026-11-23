@@ -424,11 +424,11 @@ Gizli bir ada neredeyse hiç kaynak harcamaz: animasyon döngüsü durur, imleç
 - **İzin ver**, DÜŞÜK ve ORTA için tek tıklamadır. YÜKSEK ve KRİTİK'te buton **Basılı tut · İzin
   ver** olur: çubuk dolana kadar basılı tut. Onay gerçek bir fare tıklaması ister; Enter ya da
   Boşluk tuşu yetmez. Linux'ta YÜKSEK ya da KRİTİK bir kartta İzin ver yoktur: kart nedenini
-  söyler; önce **Terminale bırak**, sonra Reddet gelir.
+  söyler; önce **Terminale bırak** (Cursor'da **Cursor'a bırak**), sonra Reddet gelir.
 - **Reddet** isteği geri çevirir ve Claude'a söyler; Claude başka bir yoldan devam eder. Yanındaki
   ok, Claude'a iletilen hazır gerekçeleri (Ayarlar → Kurallar'dan düzenlenir) ve **Reddet ve
   Claude'u durdur**'u açar; bu ikincisi Claude'un turunu da bitirir, Claude seni bekler. Codex ve
-  Cursor bir hook'tan durdurulamaz: onların isteklerinde bu düz bir rettir ve geçmiş bunu yazar.
+  Cursor bir hook'tan durdurulamaz; bu yüzden onların kartları yalnızca gerekçeleri sunar.
 - **Bu oturumda … için tekrar sorma** yalnızca otomatik izin tavanının izin verdiği yerde çıkar:
   varsayılan tavanda DÜŞÜK için, *DÜŞÜK + ORTA* tavanında DÜŞÜK ve ORTA için; tavan kapalıyken hiç
   çıkmaz. Kutu neyi kapsadığını söyler — tam olarak bu komut, bu dosyadaki değişiklikler, bu adres

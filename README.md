@@ -421,11 +421,12 @@ the animation loop stops and the cursor poll parks.
   project", or a rule that wanted to allow the request but hit the ceiling).
 - **Allow** is a click for LOW and MEDIUM. For HIGH and CRITICAL it reads **Hold · Allow**: keep
   it pressed until the bar fills. Approvals take a real mouse click, not Enter or Space. On Linux a
-  HIGH or CRITICAL card has no Allow: it says why, with **Hand to terminal** first, then Deny.
+  HIGH or CRITICAL card has no Allow: it says why, with **Hand to terminal** (**Hand to Cursor**
+  for Cursor) first, then Deny.
 - **Deny** refuses the request and tells Claude, which carries on another way. The arrow next to
   it opens ready-made reasons that are passed on to Claude (edit them in Settings → Rules) and
   **Deny and stop Claude**, which also ends Claude's turn so it waits for you. Codex and Cursor
-  can't be stopped from a hook: for their requests it is a plain deny, and the history says so.
+  can't be stopped from a hook, so their cards offer the reasons without it.
 - **Don't ask again this session for …** is offered only where the auto-allow ceiling allows it:
   LOW with the default ceiling, LOW and MEDIUM with *LOW + MEDIUM*, never with the ceiling off. The
   box says what it covers — this exact command, changes to this file, this address, or this tool
