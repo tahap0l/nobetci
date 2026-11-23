@@ -3744,6 +3744,8 @@ mod tests {
     }
 
     /// A request run in /home/dev/app by a user whose home is /home/dev.
+    /// Only the Unix-path test below uses it.
+    #[cfg(not(windows))]
     fn at_app(tool: &str, input: Value) -> Assessment {
         assess_in(tool, &input, "/home/dev/app", false, &Disabled::new(), "/home/dev")
     }
