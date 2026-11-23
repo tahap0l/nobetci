@@ -20,6 +20,7 @@ import { app, go, rerender, type Tab, type TabId } from "../nav";
 import { settings, update } from "../store";
 import { applySettingsTheme } from "../theme";
 import { button, card, fmtMinutes, fmtNum, fmtPct, row, segmented, select, slider, toast, toggle } from "../ui";
+import { clockText, noQuietHours } from "./bildirimler";
 
 let week: AuditStats | null = null;
 let loading = false;
@@ -74,13 +75,16 @@ function hookTile(): HTMLElement {
 function glance(): HTMLElement {
   const s = settings();
   const activeRules = s.rules.filter((r) => r.enabled).length;
+  // Equal ends are no quiet hours at all (D1), as the Notifications tab says.
   const quiet = s.dnd
     ? t("genel.glance.dndOn")
-    : s.quietEnabled
-      ? t("genel.glance.quietHours", { from: s.quietFrom, to: s.quietTo })
-      : s.soundEnabled
-        ? t("genel.glance.soundOn", { pct: fmtPct(s.soundVolume, 1) })
-        : t("genel.glance.soundOff");
+    : s.quietEnabled && noQuietHours(s.quietFrom, s.quietTo)
+      ? t("genel.glance.quietNone")
+      : s.quietEnabled
+        ? t("genel.glance.quietHours", { from: clockText(s.quietFrom), to: clockText(s.quietTo) })
+        : s.soundEnabled
+          ? t("genel.glance.soundOn", { pct: fmtPct(s.soundVolume, 1) })
+          : t("genel.glance.soundOff");
   return h(
     "div",
     { class: "glance-grid", role: "group", "aria-label": t("genel.glance.aria") },

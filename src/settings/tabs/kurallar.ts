@@ -307,13 +307,14 @@ function cleanPath(raw: string): string {
   }
 }
 
-/** Native folder picker that fills `input` (and fires its input and change handlers). */
-async function pickInto(input: HTMLInputElement): Promise<void> {
+/** Native folder picker that fills `input` (and fires its input and change handlers); true when a folder was picked. */
+async function pickInto(input: HTMLInputElement): Promise<boolean> {
   const picked = await api.pickFolder(input.value.trim() || undefined);
-  if (!picked) return;
+  if (!picked) return false;
   input.value = picked;
   input.dispatchEvent(new Event("input", { bubbles: true }));
   input.dispatchEvent(new Event("change", { bubbles: true }));
+  return true;
 }
 
 function pickButton(input: HTMLInputElement): HTMLButtonElement {
@@ -513,6 +514,37 @@ function inside(path: string, folder: string): boolean {
   const p = normPath(path);
   const f = normPath(folder);
   return !!f && (p === f || p.startsWith(`${f}/`));
+}
+
+/** Tools whose target is a file path: rules.rs matches those where the path really leads. */
+const PATH_TOOLS = new Set(["write", "edit", "multiedit", "notebookedit", "read", "notebookread", "ls", "glob", "grep"]);
+
+function toolSpecs(tool: string): string[] {
+  return tool
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+/** The rule is about file paths: it names a path tool, or (for any tool) its pattern reads as a path. */
+function pathRule(tool: string, pattern: string): boolean {
+  const p = pattern.trim();
+  if (!p) return false;
+  const specs = toolSpecs(tool);
+  if (specs.some((s) => PATH_TOOLS.has(s))) return true;
+  const anyTool = !specs.length || specs.includes("*");
+  return anyTool && /^(~|\.{1,2}[\\/]|[a-z]:[\\/]|[\\/]|\$home\b|\$\{home\}|%userprofile%)/i.test(p);
+}
+
+/** The rule names file-path tools only: it never sees a command, so the chain check (rules.rs) passes it by. */
+function pathToolsOnly(tool: string): boolean {
+  const specs = toolSpecs(tool);
+  return specs.length > 0 && specs.every((s) => PATH_TOOLS.has(s));
+}
+
+/** What Rust calls a rule: its name, or its pattern when unnamed. */
+function reportedName(r: UserRule): string {
+  return r.name.trim() || r.pattern.trim();
 }
 
 function openEditor(original: UserRule, index: number) {
@@ -723,7 +755,18 @@ function openEditor(original: UserRule, index: number) {
       if (folder && !inside(cwd, folder)) why.push(t("editor.whyFolder"));
       if (!why.length) why.push(t("editor.whyPattern"));
     }
-    const earlier = matched && draft.enabled && full.rule && full.rule !== PROBE ? full.rule : null;
+    const other = matched && draft.enabled && full.rule && full.rule !== PROBE ? full.rule : null;
+    // Another rule decided. Usually it comes first; the one exception (rules.rs
+    // `deciding_rule`) is a deny rule further down, when this rule matched a
+    // path only where it leads: say which, by their places in the list.
+    let decidedBy: HTMLElement | null = null;
+    if (other) {
+      const rules = draftRules();
+      const at = rules.findIndex((r) => r.name === PROBE);
+      const places = rules.flatMap((r, j) => (j !== at && r.enabled && reportedName(r) === other ? [j] : []));
+      const below = places.length > 0 && places.every((j) => j > at);
+      decidedBy = notice("warn", t(below ? "editor.below" : "editor.earlier", { name: other }));
+    }
     return h(
       "div",
       { class: "rule-test-res" },
@@ -735,7 +778,7 @@ function openEditor(original: UserRule, index: number) {
         !matched ? h("span", { class: "muted", text: `— ${why.join(", ")}` }) : null,
         matched && !draft.enabled ? h("span", { class: "muted", text: t("editor.butDisabled") }) : null,
       ),
-      earlier ? notice("warn", t("editor.earlier", { name: earlier })) : null,
+      decidedBy,
       h("div", { class: "rt-caption", text: t("editor.result") }),
       evaluationView(named(full), { compact: true }),
       cwd ? null : h("p", { class: "fine", text: t("tester.noCwd") }),
@@ -784,7 +827,10 @@ function openEditor(original: UserRule, index: number) {
     // pattern), so it says what that means for its action.
     actionNote.replaceChildren();
     const everything = !draft.pattern.trim() && (!draft.tool.trim() || draft.tool.trim() === "*");
-    const loose = !draft.pattern.trim() || (draft.mode !== "exact" && draft.mode !== "regex");
+    // The chain check is about commands (rules.rs `command_of`): a Write or Read
+    // rule has none to chain.
+    const loose =
+      (!draft.pattern.trim() || (draft.mode !== "exact" && draft.mode !== "regex")) && !pathToolsOnly(draft.tool);
     const chainNote = h("p", { class: "fine", text: t("editor.chainNote") });
     const a = draft.action;
     if (a === "allow") {
@@ -804,6 +850,13 @@ function openEditor(original: UserRule, index: number) {
       if (a === "low" || a === "medium") actionNote.append(notice("info", t("editor.rescoreNote")));
       if (everything) actionNote.append(notice("warn", t("editor.rescoreEverything", { level: levelLabel(a) })));
       else if (loose && (a === "low" || a === "medium")) actionNote.append(chainNote);
+    }
+    // On a file path the matching is lopsided (rules.rs `covers`): a rule that
+    // lets a request through or lowers its risk applies only where the path
+    // really leads; one that denies, asks or raises catches it however spelled.
+    if (pathRule(draft.tool, draft.pattern)) {
+      const loosens = a === "allow" || a === "low" || a === "medium";
+      actionNote.append(h("p", { class: "fine", text: t(loosens ? "editor.pathLoose" : "editor.pathCatch") }));
     }
     msgField.hidden = a !== "deny";
     runTest();
@@ -987,46 +1040,90 @@ async function pickProject() {
 
 /**
  * A row's path while it is being typed. It takes effect only when it is
- * finished (Enter, leaving the field, a folder pick), never letter by letter:
- * a trusted row retyped from scratch would otherwise trust "C:\Users\" for as
- * long as you paused there.
+ * finished (Enter, leaving the field, a folder pick, leaving the tab or the
+ * window), never letter by letter: a trusted row retyped from scratch would
+ * otherwise trust "C:\Users\" for as long as you paused there.
+ *
+ * The draft belongs to the row by the path it had (`from`; an empty, new row
+ * by its place), not by its place alone: a row removed above it, or an Undo,
+ * must not hand it to another folder. A redraw (an Undo bar running out, a
+ * change from the island, a save landing) rebuilds the field from it.
  */
-let pathDraft: { index: number; value: string } | null = null;
+let pathDraft: { index: number; from: string; value: string } | null = null;
 
-function commitPath(i: number, el: HTMLInputElement) {
-  pathDraft = null;
+/** The row the draft belongs to now, or -1 when that row is gone. */
+function draftRow(): number {
+  const d = pathDraft;
+  if (!d) return -1;
+  const projects = settings().projects;
+  if (d.from) return projects.findIndex((p) => p.path === d.from);
+  return projects[d.index]?.path === "" ? d.index : -1;
+}
+
+/**
+ * Stores `raw` as row `i`'s path (trimmed, unquoted) unless another row has it
+ * already; returns what the field should show afterwards.
+ */
+function commitPath(i: number, raw: string): string {
+  if (pathDraft && draftRow() === i) pathDraft = null;
   const current = settings().projects[i];
-  if (!current) return;
-  const clean = cleanPath(el.value);
+  if (!current) return raw;
+  const clean = cleanPath(raw);
   if (clean && duplicatePath(clean, i)) {
-    el.value = current.path;
     toast(t("proj.duplicate"), "info");
-    return;
+    return current.path;
   }
-  if (clean !== el.value) {
-    el.value = clean;
-    toast(t("proj.cleaned"), "info");
-  }
-  if (current.path === clean) return;
-  update((x) => {
-    if (x.projects[i]) x.projects[i].path = clean;
-  });
+  if (clean !== raw) toast(t("proj.cleaned"), "info");
+  if (current.path !== clean)
+    update((x) => {
+      if (x.projects[i]) x.projects[i].path = clean;
+    });
+  return clean;
+}
+
+/** Settles a draft whose field is gone (the tab or the window was left mid-typing). */
+function commitPathDraft() {
+  const d = pathDraft;
+  if (!d) return;
+  const i = draftRow();
+  pathDraft = null;
+  if (i >= 0) commitPath(i, d.value);
 }
 
 function projectsCard(): HTMLElement {
   const projects = settings().projects;
   const list = h("div", { class: "proj-list" });
+  const drafted = draftRow();
   projects.forEach((p, i) => {
+    const settle = (el: HTMLInputElement) => {
+      const shown = commitPath(i, el.value);
+      if (el.value !== shown) el.value = shown;
+    };
     const pathIn = textInput({
-      value: pathDraft?.index === i ? pathDraft.value : p.path,
+      value: drafted === i && pathDraft ? pathDraft.value : p.path,
       mono: true,
       placeholder: t("proj.pathPh"),
       label: t("proj.pathAria"),
       fk: `proj-path:${i}`,
-      onInput: (v) => (pathDraft = { index: i, value: v }),
-      onChange: (_v, el) => commitPath(i, el),
-      onEnter: (_v, el) => commitPath(i, el),
+      onInput: (v) => {
+        const from = pathDraft && draftRow() === i ? pathDraft.from : (settings().projects[i]?.path ?? p.path);
+        pathDraft = { index: i, from, value: v };
+      },
+      onEnter: (_v, el) => settle(el),
     });
+    // Leaving the field stores the path. A field a redraw took away was not
+    // left by the user: Chromium fires its change as it goes, WebKit nothing at
+    // all. So the store waits a turn and only counts a field still on the page;
+    // the draft lives on in the field drawn in its place, whose own blur stores
+    // it (its value was set by script, so it would fire no change). Nor is the
+    // window losing focus a leave (the field keeps it: switching to a file
+    // manager to look up the rest of the path must not trust "C:\Users\").
+    const leave = () =>
+      window.setTimeout(() => {
+        if (pathIn.isConnected && document.activeElement !== pathIn) settle(pathIn);
+      }, 0);
+    pathIn.addEventListener("change", leave);
+    pathIn.addEventListener("blur", leave);
     if (focusNewProject && i === projects.length - 1) {
       focusNewProject = false;
       window.setTimeout(() => pathIn.focus(), 0);
@@ -1038,7 +1135,16 @@ function projectsCard(): HTMLElement {
         h(
           "div",
           { class: "proj-path" },
-          iconButton("folder", t("proj.pick"), () => void pickInto(pathIn), { fk: `proj-pick:${i}` }),
+          // A picked folder is a finished path: stored at once, focus or not.
+          iconButton(
+            "folder",
+            t("proj.pick"),
+            () =>
+              void pickInto(pathIn).then((picked) => {
+                if (picked && pathIn.isConnected) settle(pathIn);
+              }),
+            { fk: `proj-pick:${i}` },
+          ),
           pathIn,
         ),
         segmented(
@@ -1070,6 +1176,9 @@ function projectsCard(): HTMLElement {
             // one this list was drawn from may be an older copy.
             const live = settings().projects[i];
             if (!live) return;
+            // A path half-typed into the row being removed goes with it (Undo
+            // brings back the row as it was stored).
+            if (pathDraft && draftRow() === i) pathDraft = null;
             const removed: ProjectPolicy = { ...live };
             if (projectUndo) window.clearTimeout(projectUndo.timer);
             update((x) => x.projects.splice(i, 1));
@@ -1249,6 +1358,8 @@ export const kurallarTab: Tab = {
   subtitle: () => t("rules.subtitle"),
   icon: "kurallar",
   render,
+  // Leaving the tab (or the window, main.ts) mid-typing leaves the field too.
+  onHide: commitPathDraft,
   onShow: () => {
     if (!recentFolders) void loadRecent();
     if (!devDone) {

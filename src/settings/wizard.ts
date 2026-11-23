@@ -15,7 +15,15 @@ import { icon, owlMark, type IconName } from "./icons";
 import { languagePicker } from "./lang";
 import { devParam, go } from "./nav";
 import { settings, update } from "./store";
-import { checkHealth, gitBashNote, healthRunningView, healthView, hooksLost, openPreview } from "./tabs/claude";
+import {
+  checkHealth,
+  gitBashNote,
+  healthPasses,
+  healthRunningView,
+  healthView,
+  hooksLost,
+  openPreview,
+} from "./tabs/claude";
 import { ceilingControl, guardControls, holdControls } from "./tabs/guvenlik";
 import { button, holdKeyboard, kbd, notice, pushLayer } from "./ui";
 
@@ -385,19 +393,9 @@ function completed(s: Step): boolean {
       return w.seen.has("welcome");
     case "connect":
       return !!hs?.installed && !hs.stale;
-    case "health": {
-      const r = w.health;
-      return (
-        !!r &&
-        r.installed &&
-        r.relayExists &&
-        !r.stale &&
-        !r.eventsMissing.length &&
-        r.roundtripMs != null &&
-        r.inputGuard &&
-        !r.error
-      );
-    }
+    case "health":
+      // Ticked only when the step itself says "All good" (the same test).
+      return !!w.health && healthPasses(w.health);
     case "safety":
       return w.seen.has("safety");
     case "done":

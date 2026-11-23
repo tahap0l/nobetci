@@ -124,10 +124,11 @@ function keyFromCode(code: string): string | null {
   if (m) return m[1];
   if (/^F([1-9]|1\d|2[0-4])$/.test(code)) return code;
   if (/^Numpad(\d|Add|Subtract|Multiply|Divide|Decimal|Enter)$/.test(code)) return code;
+  // No Tab: it moves the focus, here and in every other app, so it is never a
+  // shortcut (Tab and Shift+Tab leave the recorder instead).
   const named = [
     "Space",
     "Enter",
-    "Tab",
     "Backspace",
     "Delete",
     "Insert",
@@ -163,6 +164,22 @@ function modsOf(e: KeyboardEvent): string[] {
   );
 }
 
+/**
+ * Ends the recording in progress, if any. A redraw (a save landing, a change
+ * from the island or the tray) or leaving the tab replaces the button: its
+ * window-wide key listener must go with it, or it would keep eating keys and
+ * record the next chord typed anywhere as a global shortcut.
+ */
+let stopRecording: (() => void) | null = null;
+/** The shortcut being recorded. */
+let recording: keyof Hotkeys | null = null;
+/**
+ * The recording a redraw cut off: the button drawn in place of the old one takes
+ * it up, with a listener of its own (the hotkey status a save brings back redraws
+ * the tab about half a second after a recording, which must not cancel the next).
+ */
+let resumeRecording: keyof Hotkeys | null = null;
+
 function recorder(action: keyof Hotkeys, label: string): HTMLElement {
   const value = settings().hotkeys[action];
   const btn = h("button", {
@@ -185,6 +202,10 @@ function recorder(action: keyof Hotkeys, label: string): HTMLElement {
     if (onKey) window.removeEventListener("keydown", onKey, true);
     onKey = null;
     window.removeEventListener("mousedown", outside, true);
+    if (stopRecording === stop) {
+      stopRecording = null;
+      recording = null;
+    }
     paintIdle();
   };
   const outside = (e: MouseEvent) => {
@@ -197,8 +218,10 @@ function recorder(action: keyof Hotkeys, label: string): HTMLElement {
     stop();
     rerender("bildirimler");
   };
-  btn.addEventListener("click", () => {
+  const start = () => {
     if (onKey) return;
+    // One recorder at a time.
+    stopRecording?.();
     err.textContent = "";
     // The layout may have changed since the last recording.
     void loadLayoutMap();
@@ -208,6 +231,10 @@ function recorder(action: keyof Hotkeys, label: string): HTMLElement {
       h("span", { class: "rec-help", text: t("hk.recHelp") }),
     );
     onKey = (e: KeyboardEvent) => {
+      // A redraw took this button away: the key is not ours to take.
+      if (!btn.isConnected) return stop();
+      // Tab and Shift+Tab move on, as they would anywhere else.
+      if (e.key === "Tab" && !e.ctrlKey && !e.altKey && !e.metaKey) return stop();
       e.preventDefault();
       e.stopPropagation();
       const mods = modsOf(e);
@@ -222,18 +249,27 @@ function recorder(action: keyof Hotkeys, label: string): HTMLElement {
         err.textContent = t("hk.badKey", { key: e.key });
         return;
       }
-      if (!mods.length && !/^F\d+$/.test(key)) {
+      // Shift alone would fire on every capital letter typed anywhere: F-keys
+      // aside, a shortcut needs Ctrl, Alt or Super (⌃, ⌥ or ⌘).
+      if (!e.ctrlKey && !e.altKey && !e.metaKey && !/^F\d+$/.test(key)) {
         err.textContent = t("hk.needMod");
         return;
       }
       set([...mods, key].join("+"));
     };
+    stopRecording = stop;
+    recording = action;
     window.addEventListener("keydown", onKey, true);
     window.setTimeout(() => {
       if (onKey) window.addEventListener("mousedown", outside, true);
     }, 0);
-  });
+  };
+  btn.addEventListener("click", start);
   paintIdle();
+  if (resumeRecording === action) {
+    resumeRecording = null;
+    start();
+  }
   return h(
     "div",
     { class: "rec-wrap" },
@@ -311,6 +347,16 @@ function at(min: number): Date {
 function fmtClock(min: number): string {
   if (!twelveHour()) return hhmm(min);
   return new Intl.DateTimeFormat(locale(), { hour: "numeric", minute: "2-digit" }).format(at(min));
+}
+
+/** A stored "HH:MM" in the UI language's clock, as this tab shows it (General's summary too). */
+export function clockText(stored: string): string {
+  return fmtClock(toMin(stored));
+}
+
+/** Equal ends are an empty window: Rust's quiet::in_window is never true for it (D1). */
+export function noQuietHours(from: string, to: string): boolean {
+  return toMin(from) === toMin(to);
 }
 
 /** Axis label for a whole hour (0…24): "06" / "6 AM"; the day's end reads 24 or 12 AM. */
@@ -422,6 +468,10 @@ function quietSummary(fromHhmm: string, toHhmm: string): HTMLElement {
 
 function render(): HTMLElement {
   const s = settings();
+  // The recorder being drawn over is gone, and its key listener with it; the
+  // recording itself goes on in the button drawn in its place.
+  resumeRecording = recording;
+  stopRecording?.();
 
   const soundList = h("div", { class: `sound-list${s.soundEnabled ? "" : " dim"}` });
   for (const name of SOUNDS) {
@@ -507,7 +557,7 @@ function render(): HTMLElement {
     paintQuiet();
   });
 
-  return h(
+  const view = h(
     "div",
     { class: "tab-body" },
     card(
@@ -633,6 +683,9 @@ function render(): HTMLElement {
     ),
     hotkeysCard(),
   );
+  // Taken up by its recorder above; never by a later redraw.
+  resumeRecording = null;
+  return view;
 }
 
 export const bildirimlerTab: Tab = {
@@ -642,6 +695,7 @@ export const bildirimlerTab: Tab = {
   icon: "bildirimler",
   render,
   onShow: () => void loadStatuses(),
+  onHide: () => stopRecording?.(),
   // Registration errors are Rust's text: fetch them again in the new language.
   onLang: () => {
     statuses = null;

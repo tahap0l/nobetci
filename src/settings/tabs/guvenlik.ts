@@ -11,7 +11,7 @@ import { api } from "../api";
 import { cache, ceilingLabel, loadCategories } from "../data";
 import { t, tn } from "../i18n";
 import { icon } from "../icons";
-import { devParam, rerender, type Tab } from "../nav";
+import { app, devParam, rerender, type Tab } from "../nav";
 import { settings, update } from "../store";
 import { TESTER_TOOLS, buildInput, evaluationView, toolHint, type TesterTool } from "../tester";
 import {
@@ -136,8 +136,13 @@ function holdDemo(level: "high" | "critical"): HTMLElement {
 /**
  * The two hold sliders (critical can never be shorter than high), with try-it
  * buttons. `onChange` runs after a hold time changed (the tab repaints its ladder).
+ *
+ * On Linux the island never approves HIGH or CRITICAL (D23, C-25): there is
+ * no hold to time or to try, so this says where they are approved instead.
  */
 export function holdControls(onChange?: () => void): HTMLElement {
+  if (!app.holdApprovals)
+    return notice("info", h("strong", { text: t("guv.terminalOnly") }), " ", t("guv.terminalOnlyHow"));
   const s = settings();
   const crit = slider({
     value: s.holdCriticalMs / 1000,
@@ -579,7 +584,8 @@ function testerCard(): HTMLElement {
 
 function holdCard(): HTMLElement {
   return card(
-    { title: t("guv.holdTitle"), icon: "hand", desc: t("guv.holdDesc") },
+    // On Linux the card's body says it all (holdControls).
+    { title: t("guv.holdTitle"), icon: "hand", desc: app.holdApprovals ? t("guv.holdDesc") : undefined },
     holdControls(() => paintLadder()),
   );
 }

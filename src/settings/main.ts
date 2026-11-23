@@ -6,7 +6,7 @@ import "./settings.css";
 import { IS_TAURI, type QuietReason } from "../core/bridge";
 import { DEFAULT_SETTINGS, type Settings } from "../core/settings-model";
 import { guardWebview } from "../core/webview";
-import { onLangChange, setPlatform } from "../i18n/core";
+import { getPlatform, onLangChange, setPlatform } from "../i18n/core";
 import { h } from "../ui/dom";
 import { api, initApi, type SettingsWarning } from "./api";
 import { cache, loadHookStatus } from "./data";
@@ -110,6 +110,10 @@ const closeBtn = h(
 );
 
 function closeWindow() {
+  // The window is only hidden: what the visible tab holds open (a folder path
+  // being typed, a shortcut being recorded) is settled first, so the save
+  // below takes it along. Shown again, the tab's onShow runs as usual.
+  TABS[active].onHide?.();
   void flush();
   void api.closeSettingsWindow();
   if (api.mock) toast(t("shell.previewClose"), "info");
@@ -460,6 +464,9 @@ async function start() {
   app.fullscreenSupported = boot?.fullscreenSupported ?? true;
   loadError = boot?.settingsLoadError ?? null;
   if (boot?.platform) setPlatform(boot.platform);
+  // Rust says whether the island may approve a hold; a build that doesn't say
+  // follows D23 by platform. The Linux wording (`key@linux`) says the same.
+  app.holdApprovals = boot?.holdApprovals ?? getPlatform() !== "linux";
   initLanguage(app.systemLang);
 
   installKeyboardTraps();
@@ -521,7 +528,15 @@ async function start() {
 
   // The window is hidden, not closed: refresh what may have changed meanwhile.
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState !== "visible") return;
+    if (document.visibilityState !== "visible") {
+      // Hidden from elsewhere (the tray, the title bar, minimised): save what is
+      // saved, but leave the tab as it is. A hidden window keeps its fields, so
+      // a folder path half typed is still there, unsaved, when it comes back:
+      // minimising to look up the rest of the path must not trust "C:\Users\".
+      // Esc and the Close button (closeWindow) do settle it.
+      void flush();
+      return;
+    }
     void refreshQuiet();
     void loadHookStatus().then(paintBadges);
     TABS[active].onShow?.();

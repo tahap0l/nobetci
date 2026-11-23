@@ -58,8 +58,8 @@ const M = {
   "genel.assistant.title": ["Asistan", "Assistant"],
   "genel.assistant.apps": ["Yüklü uygulamaları kullan", "Use installed apps"],
   "genel.assistant.appsHint": [
-    "ChatGPT, Claude, Perplexity ya da Copilot bilgisayarında yüklüyse mesajın tarayıcı yerine o uygulamada açılır. Uygulama mesajı yalnızca kutuya yazar; göndermek senin elinde.",
-    "If ChatGPT, Claude, Perplexity or Copilot is installed, your message opens in that app instead of the browser. The app only fills in the box; sending is up to you.",
+    "ChatGPT, Claude, Perplexity ya da Copilot bilgisayarında yüklüyse mesajın tarayıcı yerine o uygulamada açılır. Claude uygulaması mesajı yalnızca kutuya yazar, göndermek sana kalır; ChatGPT ve Perplexity açılır açılmaz gönderebilir. Mesajı alamayan bir uygulama için mesaj panoya kopyalanır.",
+    "If ChatGPT, Claude, Perplexity or Copilot is installed, your message opens in that app instead of the browser. The Claude app only fills in the box, so you send it; ChatGPT and Perplexity may send it as soon as they open. For an app that can't take the message, it is copied for you to paste.",
   ],
   "genel.buddy.reset": ["Konumu sıfırla", "Reset position"],
   "genel.buddy.resetHint": [
@@ -147,6 +147,9 @@ const M = {
   "by.resolved": ["Başka yerde yanıtlandı", "Answered elsewhere"],
   // Answered in Nöbetçi, but the request had already ended: Claude Code never got it.
   "by.undelivered": ["Ulaşmadı", "Not delivered"],
+  // Handed back to, or fell back on, the agent's own prompt instead of the terminal.
+  "by.cursor": ["Cursor", "Cursor"],
+  "by.app": ["Claude uygulaması", "Claude app"],
   "policy.trusted": ["Güvenilir", "Trusted"],
   "policy.normal": ["Normal", "Normal"],
   "policy.strict": ["Sıkı", "Strict"],
@@ -237,6 +240,7 @@ const M = {
   "genel.glance.off": ["Kapalı", "Off"],
   "genel.glance.dndOn": ["Rahatsız etme açık", "Do not disturb is on"],
   "genel.glance.quietHours": ["Sessiz {from}–{to}", "Quiet {from}–{to}"],
+  "genel.glance.quietNone": ["Sessiz saat yok (başlangıç = bitiş)", "No quiet hours (start = end)"],
   "genel.glance.soundOn": ["Sesler açık · {pct}", "Sound on · {pct}"],
   "genel.glance.soundOff": ["Sesler kapalı", "Sound off"],
   "genel.glance.week": ["Son 7 gün", "Last 7 days"],
@@ -310,7 +314,10 @@ const M = {
   "agents.testCodexWaiting": ["Bu açılışta henüz Codex olayı alınmadı. Yeni bir yerel oturumda mesaj gönder ve testi yeniden çalıştır.", "No Codex event has arrived since Nöbetçi started. Send a message in a new local session and run the check again."],
   "agents.testFailed": ["Bağlantı testi sonuç vermedi.", "The connection test returned no result."],
   "agents.testUpdate": ["Hook kayıtlarının güncellenmesi gerekiyor.", "The hook entries need an update."],
-  "agents.cursorApproval": ["Cursor'ın komut ve MCP istekleri Nöbetçi'ye gelir. Nöbetçi yanıt vermezse işlem güvenlik için reddedilir. Cursor'ın onay moduna göre kendi onay penceresi ayrıca çıkabilir.", "Cursor shell and MCP requests are routed through Nöbetçi. If Nöbetçi cannot respond, the action is denied for safety. Cursor's own approval mode may still show an additional prompt."],
+  "agents.cursorApproval": [
+    "Cursor'ın komut ve MCP istekleri Nöbetçi'ye gelir. Nöbetçi karar vermezse (kapalıysa, duraklatılmışsa, süre dolduysa ya da isteği Cursor'a bıraktıysan) Cursor sana kendisi sorar. İşlemi yalnızca relay hiç çalışamazsa Cursor engeller. Cursor'ın onay moduna göre kendi onay penceresi ayrıca çıkabilir.",
+    "Cursor's shell and MCP requests come to Nöbetçi. When Nöbetçi gives no decision (it's closed or paused, the request timed out, or you handed it to Cursor), Cursor asks you itself. Cursor blocks the action only if the relay can't run at all. Cursor's own approval mode may still show its prompt as well.",
+  ],
   "agents.codex": ["ChatGPT Work (Yerel) ve Codex", "ChatGPT Work (Local) and Codex"],
   "agents.cursor": ["Cursor", "Cursor"],
   "agents.statusInstalled": ["Hook kayıtları var", "Hook entries present"],
@@ -358,7 +365,10 @@ const M = {
   "agents.reviewInstall": ["Ajan bağlantısını incele", "Review agent connection"],
   "agents.reviewRemove": ["Ajan bağlantısını kaldırmayı incele", "Review connection removal"],
   "agents.reviewUpdate": ["Bağlantı güncellemesini incele", "Review the connection update"],
-  "agents.installText": ["Görüntülenen değişiklik ayar dosyana yazılacak. Önce tarihli yedek alınır; diğer ayarlar korunur.", "The changes shown here will be written to the settings file. A dated backup is made first, and other settings are preserved."],
+  "agents.installText": [
+    "Görüntülenen değişiklik ayar dosyana yazılacak; diğer ayarlar olduğu gibi kalır.",
+    "The changes shown here will be written to the settings file; your other settings stay as they are.",
+  ],
   "agents.removeText": ["Sadece Nöbetçi'nin hook girdileri kaldırılır.", "Only Nöbetçi hook entries will be removed."],
   "agents.backup": ["Tarihli yedek: ", "Dated backup: "],
   "agents.confirmInstall": ["Onayla ve bağla", "Approve and connect"],
@@ -656,6 +666,10 @@ const M = {
     "Otomatik izin sınırı, basılı tutma, tıklama koruması, risk kategorileri",
     "Auto-allow limit, hold to approve, click guard, risk categories",
   ],
+  "guv.subtitle@linux": [
+    "Otomatik izin sınırı, terminalde onay, tıklama koruması, risk kategorileri",
+    "Auto-allow limit, approving in the terminal, click guard, risk categories",
+  ],
   "guv.group.command": ["Komutlar", "Commands"],
   "guv.group.write": ["Dosya yazma", "File writes"],
   "guv.group.read": ["Dosya okuma", "File reads"],
@@ -666,11 +680,12 @@ const M = {
     "A rule or trusted project may approve it on its own",
   ],
   "guv.rung.hold": ["Her zaman sen · {d} basılı tut", "Always you · hold for {d}"],
+  "guv.rung.hold@linux": ["Her zaman sen · terminalde", "Always you · in the terminal"],
   "guv.rung.you": ["Her zaman sen karar verirsin", "Always your call"],
   "guv.ceilingTitle": ["Otomatik izin tavanı", "Auto-allow ceiling"],
   "guv.ceilingDesc": [
-    "Bir kuralın, güvenilir projenin ya da “bu oturumda sorma” izninin kendiliğinden onaylayabileceği en yüksek risk.",
-    "The highest risk a rule, a trusted project or a “don't ask again this session” grant may approve on its own.",
+    "Bir kuralın, güvenilir projenin ya da “bu oturumda sorma” izninin kendiliğinden onaylayabileceği en yüksek risk. Bir dosya yolu için bu izin yalnızca o dosyayı, yolun gerçekten gittiği yerde kapsar.",
+    "The highest risk a rule, a trusted project or a “don't ask again this session” grant may approve on its own. For a file path, such a grant covers that one file, where the path really leads.",
   ],
   "guv.ceilingFine": [
     "YÜKSEK ve KRİTİK istekler hiçbir ayarla kendiliğinden onaylanmaz; bu sınır Rust tarafında uygulanır. Kurallar ise her seviyede reddedebilir.",
@@ -686,6 +701,16 @@ const M = {
     "Try it by holding down the mouse or trackpad button. On the island too, HIGH and CRITICAL requests can only be approved by holding, never from the keyboard.",
   ],
   "guv.holdTitle": ["Basılı tutarak onay", "Press and hold to approve"],
+  "guv.holdTitle@linux": ["YÜKSEK ve KRİTİK: terminalde", "HIGH and CRITICAL: in the terminal"],
+  // D23 / C-25: the island's own wording, word for word.
+  "guv.terminalOnly": [
+    "Linux'ta bir programın sahte tıklaması gerçek tıklamadan ayırt edilemiyor; YÜKSEK ve KRİTİK istekleri terminalde onayla.",
+    "On Linux, Nöbetçi can't tell a program's fake click from a real one, so HIGH and CRITICAL requests are approved in the terminal.",
+  ],
+  "guv.terminalOnlyHow": [
+    "Adadaki kart bu isteklerde Reddet'i ve “Terminale bırak”ı sunar (Cursor ve Claude uygulaması için “Cursor'a bırak”, “Claude'a bırak”). DÜŞÜK ve ORTA istekler adada onaylanmaya devam eder.",
+    "For these requests the island's card offers Deny and “Hand to terminal” (“Hand to Cursor” or “Hand to Claude” for those apps). LOW and MEDIUM requests are still approved on the island.",
+  ],
   "guv.holdDesc": [
     "YÜKSEK ve KRİTİK isteklerde “İzin ver” bir süre basılı tutulmalı. Düz bir tıklama ya da kısayol bu istekleri onaylayamaz.",
     "For HIGH and CRITICAL requests, “Allow” has to be held down for a moment. A plain click or a hotkey can't approve them.",
@@ -703,13 +728,17 @@ const M = {
     "Approvals must come from a real mouse or trackpad click. Clicks another program posts (CGEvent) or a press through the accessibility interface (AXPress) are refused, and the island warns you.",
   ],
   "guv.guardDesc@linux": [
-    "Onaylar gerçek bir fare tıklamasından gelmeli. Sanal aygıtlardan (XTEST, xdotool) gelen ya da başka bir programın ürettiği tıklamalar reddedilir ve ada seni uyarır.",
-    "Approvals must come from a real mouse click. Clicks from virtual devices (XTEST, xdotool) or generated by another program are refused, and the island warns you.",
+    "Onaylar gerçek bir fare tıklamasından gelmeli. Linux'ta koruma sanal aygıtlardan gelen tıklamaları (xdotool gibi XTEST araçları) reddeder ve ada seni uyarır; ama bir program gerçek farenin üzerinden de sahte tıklama üretebilir. Bu yüzden koruma DÜŞÜK ve ORTA istekler için bir engeldir; YÜKSEK ve KRİTİK istekler terminalde onaylanır.",
+    "Approvals must come from a real mouse click. On Linux the guard refuses clicks from virtual devices (XTEST tools such as xdotool) and the island warns you, but a program can still fake a click through the real mouse. So the guard is a speed bump for LOW and MEDIUM requests, and HIGH and CRITICAL ones are approved in the terminal.",
   ],
   "guv.guardRow": ["Düşük ve orta riskte fiziksel tıklamayı doğrula", "Verify physical clicks for low and medium risk"],
   "guv.guardRowHint": [
     "Açık kalması önerilir: kötü niyetli bir program “İzin ver”e senin yerine basamaz.",
     "Keep it on: a malicious program can't press “Allow” for you.",
+  ],
+  "guv.guardRowHint@linux": [
+    "Açık kalması önerilir: xdotool gibi araçlar “İzin ver”e senin yerine basamaz.",
+    "Keep it on: tools such as xdotool can't press “Allow” for you.",
   ],
   "guv.guardA11y": [
     "Ekran klavyesi, sesle kontrol gibi erişilebilirlik ya da uzaktan kontrol araçlarıyla veya dokunmatik ekrandan onaylıyorsan bunu kapatman gerekebilir.",
@@ -718,6 +747,10 @@ const M = {
   "guv.guardOff": [
     "Kapalıyken düşük ve orta riskli istekleri başka bir program onaylayabilir. Yüksek ve kritik riskte fiziksel basılı tutma gerekir.",
     "While it's off, another program could approve low and medium risk requests. High and critical risk still require a physical hold.",
+  ],
+  "guv.guardOff@linux": [
+    "Kapalıyken düşük ve orta riskli istekleri başka bir program onaylayabilir. YÜKSEK ve KRİTİK istekler yine yalnızca terminalde onaylanır.",
+    "While it's off, another program could approve low and medium risk requests. HIGH and CRITICAL ones are still approved only in the terminal.",
   ],
   "guv.catTitle": ["Risk kategorileri", "Risk categories"],
   "guv.catDesc": [
@@ -784,6 +817,9 @@ const M = {
   "tester.ph.write@mac": ["/Users/sen/.claude/settings.json", "/Users/you/.claude/settings.json"],
   "tester.ph.write@linux": ["/home/sen/.claude/settings.json", "/home/you/.claude/settings.json"],
   "tester.ph.read": ["C:\\Users\\sen\\.ssh\\id_ed25519", "C:\\Users\\you\\.ssh\\id_ed25519"],
+  "tester.ph.edit": ["C:\\src\\uygulama\\.github\\workflows\\ci.yml", "C:\\src\\app\\.github\\workflows\\ci.yml"],
+  "tester.ph.edit@mac": ["/Users/sen/src/uygulama/.github/workflows/ci.yml", "/Users/you/src/app/.github/workflows/ci.yml"],
+  "tester.ph.edit@linux": ["/home/sen/src/uygulama/.github/workflows/ci.yml", "/home/you/src/app/.github/workflows/ci.yml"],
   "tester.ph.read@mac": ["/Users/sen/.ssh/id_ed25519", "/Users/you/.ssh/id_ed25519"],
   "tester.ph.read@linux": ["/home/sen/.ssh/id_ed25519", "/home/you/.ssh/id_ed25519"],
   "tester.sample.env": [".env oku", "read .env"],
@@ -799,6 +835,7 @@ const M = {
     "No obvious risk signs. LOW doesn't mean “safe”.",
   ],
   "tester.holdHint": ["basılı tutarak onay", "needs press-and-hold"],
+  "tester.holdHint@linux": ["terminalde onaylanır", "approved in the terminal"],
 
   // ── Kurallar ────────────────────────────────────────────────────────────────
   "rules.title": ["Kurallar", "Rules"],
@@ -937,6 +974,19 @@ const M = {
     "Önce “{name}” kuralı eşleşiyor; ilk eşleşen kazandığı için bu kural uygulanmaz. Sırasını yukarı taşı.",
     "“{name}” matches first, and the first match wins — this rule never gets a turn. Move it up.",
   ],
+  // The one exception to "first match wins" (rules.rs deciding_rule).
+  "editor.below": [
+    "Aşağıdaki “{name}” reddetme kuralı karar veriyor: bu kural yalnızca yolun gittiği yerle eşleşti.",
+    "A deny rule further down, “{name}”, decides: this rule matched only where the path leads.",
+  ],
+  "editor.pathLoose": [
+    "Bir dosya yolunda bu kural yalnızca yolun gerçekten gittiği yerde geçerli: önce “..”, “.”, “~”, $HOME, %USERPROFILE% ve göreli yazımlar çözülür. “Write /p/*”, /p/../etc/x'i kapsamaz; “~/*” de ~/../../etc/x'i kapsamaz. Projeye göre yazılmış bir desen (“src/*”) oradaki dosyaları göreli de tam yolla da yazılsa yakalar.",
+    "On a file path, this rule applies only where the path really leads: “..”, “.”, “~”, $HOME, %USERPROFILE% and relative forms are resolved first. “Write /p/*” doesn't cover /p/../etc/x, and “~/*” doesn't cover ~/../../etc/x. A pattern written relative to the project (“src/*”) matches files there whether the request spells them relatively or in full.",
+  ],
+  "editor.pathCatch": [
+    "Bir dosya yolunda bu kural, klasörüne giden yolu nasıl yazılırsa yazılsın yakalar: “..”, “~” ya da proje klasörüne göre. Oturum /work/app'te çalışırken “src/secrets/*”, /work/app/src/secrets/a'yı da yakalar.",
+    "On a file path, this rule catches a path that leads into its folder however it is spelled: with “..”, “~” or relative to the project. While the session works in /work/app, “src/secrets/*” also catches /work/app/src/secrets/a.",
+  ],
   "editor.result": ["Sonuç (tüm kurallarınla birlikte):", "Result (with all your rules):"],
   "editor.regexBad": [
     "Geçersiz desen: {err}. Bozuk bir desen hiçbir şeyle eşleşmez.",
@@ -1050,6 +1100,10 @@ const M = {
     "Kural yanlış alarmı sakinleştirebilir, ama KRİTİK bir bulgu en az YÜKSEK kalır — yine basılı tutman gerekir. Motorun YÜKSEK ya da KRİTİK bulduğu istek, seviyesi düşürülse de otomatik onaylanmaz.",
     "A rule can calm a false alarm, but a CRITICAL finding stays at least HIGH — it still needs a press-and-hold. A request the engine found HIGH or CRITICAL is never approved automatically, even when lowered.",
   ],
+  "editor.rescoreNote@linux": [
+    "Kural yanlış alarmı sakinleştirebilir, ama KRİTİK bir bulgu en az YÜKSEK kalır — Linux'ta bu terminalde onaylanır. Motorun YÜKSEK ya da KRİTİK bulduğu istek, seviyesi düşürülse de otomatik onaylanmaz.",
+    "A rule can calm a false alarm, but a CRITICAL finding stays at least HIGH — on Linux that is approved in the terminal. A request the engine found HIGH or CRITICAL is never approved automatically, even when lowered.",
+  ],
   "editor.denyNote": [
     "Reddetme her seviyede çalışır; istek sana hiç gelmez, Claude aşağıdaki mesajı alır.",
     "Deny works at every level: the request never reaches you, and Claude gets the message below.",
@@ -1075,6 +1129,10 @@ const M = {
   "proj.strictText": [
     "Her şey bir seviye yüksek sayılır: ORTA → YÜKSEK, YÜKSEK → KRİTİK (basılı tutma gerekir).",
     "Everything counts one level higher: MEDIUM → HIGH, HIGH → CRITICAL (so it needs a hold).",
+  ],
+  "proj.strictText@linux": [
+    "Her şey bir seviye yüksek sayılır: ORTA → YÜKSEK, YÜKSEK → KRİTİK (bunlar Linux'ta terminalde onaylanır).",
+    "Everything counts one level higher: MEDIUM → HIGH, HIGH → CRITICAL (on Linux those are approved in the terminal).",
   ],
   "proj.pathPh": ["C:\\Users\\sen\\projeler\\uygulama", "C:\\Users\\you\\projects\\app"],
   "proj.pathPh@mac": ["/Users/sen/projeler/uygulama", "/Users/you/projects/app"],
@@ -1172,16 +1230,16 @@ const M = {
   "hk.recHelp": ["Esc iptal · ⌫ temizler", "Esc cancels · ⌫ clears"],
   "hk.badKey": ["“{key}” tuşu kullanılamaz.", "The “{key}” key can't be used."],
   "hk.needMod": [
-    "En az bir değiştirici tuş gerekir (Ctrl, Alt, Shift ya da Win) — yoksa yazarken tetiklenir.",
-    "Add at least one modifier (Ctrl, Alt, Shift or Win) — otherwise it fires while you type.",
+    "Ctrl, Alt ya da Win tuşlarından biri gerekir (Shift tek başına yetmez) — yoksa yazarken tetiklenir.",
+    "Add Ctrl, Alt or Win (Shift alone isn't enough) — otherwise it fires while you type.",
   ],
   "hk.needMod@mac": [
-    "En az bir değiştirici tuş gerekir (⌃, ⌥, ⇧ ya da ⌘) — yoksa yazarken tetiklenir.",
-    "Add at least one modifier (⌃, ⌥, ⇧ or ⌘) — otherwise it fires while you type.",
+    "⌃, ⌥ ya da ⌘ tuşlarından biri gerekir (⇧ tek başına yetmez) — yoksa yazarken tetiklenir.",
+    "Add ⌃, ⌥ or ⌘ (⇧ alone isn't enough) — otherwise it fires while you type.",
   ],
   "hk.needMod@linux": [
-    "En az bir değiştirici tuş gerekir (Ctrl, Alt, Shift ya da Super) — yoksa yazarken tetiklenir.",
-    "Add at least one modifier (Ctrl, Alt, Shift or Super) — otherwise it fires while you type.",
+    "Ctrl, Alt ya da Super tuşlarından biri gerekir (Shift tek başına yetmez) — yoksa yazarken tetiklenir.",
+    "Add Ctrl, Alt or Super (Shift alone isn't enough) — otherwise it fires while you type.",
   ],
   "hk.clear": ["Kısayolu kaldır", "Remove shortcut"],
   "hk.same": ["“{name}” ile aynı", "Same as “{name}”"],
@@ -1191,6 +1249,10 @@ const M = {
   "hk.allowWarn": [
     "her program klavye vuruşu taklit edebilir ve Nöbetçi bunları gerçeğinden ayıramaz. Bu yüzden bu kısayol sadece DÜŞÜK riskli istekleri onaylar; ORTA, YÜKSEK ve KRİTİK için tıklaman gerekir.",
     "any program can fake keystrokes, and Nöbetçi can't tell them from real ones. That's why this shortcut only approves LOW-risk requests — MEDIUM and above need a click.",
+  ],
+  "hk.allowWarn@linux": [
+    "her program klavye vuruşu taklit edebilir ve Nöbetçi bunları gerçeğinden ayıramaz. Bu yüzden bu kısayol sadece DÜŞÜK riskli istekleri onaylar; ORTA için tıklaman gerekir, YÜKSEK ve KRİTİK istekler terminalde onaylanır.",
+    "any program can fake keystrokes, and Nöbetçi can't tell them from real ones. That's why this shortcut only approves LOW-risk requests: MEDIUM needs a click, and HIGH and CRITICAL ones are approved in the terminal.",
   ],
   "hk.title": ["Kısayollar", "Shortcuts"],
   "hk.desc": [
@@ -1306,6 +1368,12 @@ const M = {
   "hist.f.message": ["Claude'a mesaj", "Message to Claude"],
   // No answer reached Claude Code (decision "none"): the message is Nöbetçi's note on why.
   "hist.f.note": ["Not", "Note"],
+  // C-22: a rule changed the level the risk engine found; both are shown.
+  "hist.engineLevel": ["Risk motoru:", "Risk engine:"],
+  "hist.engineLevelTitle": [
+    "Bir kural, risk motorunun bulduğu seviyeyi değiştirdi: {engine} → {level}.",
+    "A rule changed the level the risk engine found: {engine} → {level}.",
+  ],
   "hist.f.duration": ["Süre", "Took"],
   "hist.f.session": ["Oturum", "Session"],
   "hist.f.id": ["Kimlik", "ID"],
@@ -1372,8 +1440,8 @@ const M = {
   "hist.col.time": ["Zaman", "Time"],
   "hist.col.project": ["Proje", "Project"],
   "hist.col.risk": ["Risk", "Risk"],
-  "hist.col.decision": ["Karar", "Decision"],
-  "hist.col.by": ["Karar veren", "Decided by"],
+  // The decision column also names who decided (the target gets the room).
+  "hist.col.decisionBy": ["Karar · kim", "Decision · by"],
   "hist.col.target": ["Araç · hedef", "Tool · target"],
   "hist.pager": ["{from}–{to} / {total} kayıt", "{from}–{to} of {total}"],
   "hist.prevPage": ["Önceki", "Previous"],
@@ -1488,7 +1556,15 @@ const M = {
     "Varsayılan ayarlara dönüldü. Hook'lar yerinde kaldı.",
     "Back to the defaults. Your hooks were left in place.",
   ],
-  "about.resetFailed": ["Sıfırlanamadı.", "Couldn't reset."],
+  "about.resetFailed": ["Sıfırlanamadı. {why}", "Couldn't reset. {why}"],
+  "about.resetUnsaved": [
+    "Şimdilik sıfırlandı: varsayılanlar Nöbetçi yeniden başlayana kadar geçerli, ama kaydedilmedi. {why}",
+    "Reset for now: the defaults are in effect until Nöbetçi restarts, but they weren't saved. {why}",
+  ],
+  "about.importUnsaved": [
+    "Şimdilik içe aktarıldı: bu ayarlar Nöbetçi yeniden başlayana kadar geçerli, ama kaydedilmedi. {why}",
+    "Imported for now: these settings are in effect until Nöbetçi restarts, but they weren't saved. {why}",
+  ],
   "about.license": ["Lisans", "License"],
   "about.lic1a": [
     "MIT lisansı. Pencere, named pipe ve hook kurulum altyapısı ",
@@ -1534,6 +1610,10 @@ const M = {
   "wz.welcome.b2": [
     "Her izin isteğini risk analiziyle getirir; YÜKSEK ve KRİTİK istekler ancak basılı tutarak onaylanır.",
     "Brings you every permission request with a risk analysis. HIGH and CRITICAL ones need a deliberate press-and-hold.",
+  ],
+  "wz.welcome.b2@linux": [
+    "Her izin isteğini risk analiziyle getirir; Linux'ta YÜKSEK ve KRİTİK istekler, sahte bir tıklamanın onaylayamayacağı terminalde onaylanır.",
+    "Brings you every permission request with a risk analysis. On Linux, HIGH and CRITICAL ones are approved in the terminal, where a faked click can't approve them.",
   ],
   "wz.welcome.b3": [
     "Telemetri yok. Mesaj Atölyesi'nde yerel modeli kullanabilir; istersen açıkça OpenAI API'sini seçebilirsin.",
@@ -1612,6 +1692,10 @@ const M = {
   "wz.tip.hold": [
     "Riskli bir isteği onaylamak için “İzin ver”i dolana kadar basılı tut.",
     "To approve a risky request, press and hold “Allow” until it fills.",
+  ],
+  "wz.tip.hold@linux": [
+    "YÜKSEK ve KRİTİK istekleri terminalde onayla: karttaki “Terminale bırak” onları oraya gönderir.",
+    "Approve HIGH and CRITICAL requests in the terminal: “Hand to terminal” on the card sends them there.",
   ],
   "wz.tip.rules": [
     "Sık onayladığın komutlar için Ayarlar → Kurallar'da kural yaz.",

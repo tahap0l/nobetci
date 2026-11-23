@@ -10,18 +10,21 @@
 //
 // Dev URL switches: ?lang=tr|en (UI language), ?sys=tr|en (Windows language the
 // mock reports), ?fresh=1 (not onboarded yet: the wizard opens),
-// ?platform=macos|linux (the wording of another OS). Failure switches, to see
-// every error path without a broken machine: ?relay=missing, ?previewError=1
-// (settings.json is not valid JSON), ?noFile=1 (no settings.json yet, so no
-// backup), ?foreignStatus=1 (someone else's status line), ?loadError=1 (the app's
-// own settings file was unreadable at start) or =partial (only some values
-// were), ?saveError=unreadable|failed, ?autostartFail=1 (a `settings-warning`
-// after changing autostart), ?importBad=1, ?gitBash=1 (Windows: hooks written
-// for Git Bash only).
-// In the console: __mockStale() makes the next hook write fail as a stale preview.
+// ?platform=macos|linux (the wording of another OS; on Linux the island also
+// approves no hold, D23). Failure switches, to see every error path without a
+// broken machine: ?relay=missing, ?previewError=1 (settings.json is not valid
+// JSON), ?noFile=1 (no settings.json yet, so no backup), ?foreignStatus=1
+// (someone else's status line), ?loadError=1 (the app's own settings file was
+// unreadable at start) or =partial (only some values were),
+// ?saveError=unreadable|failed (as in Rust, a save, reset or import takes
+// effect first and then fails to be written), ?autostartFail=1 (a
+// `settings-warning` after changing autostart), ?importBad=1, ?gitBash=1
+// (Windows: hooks written for Git Bash only). A hook preview with nothing to
+// change says "No change." and has no backup, as hooks.rs does.
+// In the console: __mockStale() makes the next hook write fail as a stale preview;
+// __mockRemoveHooks() removes every hook connection behind the window's back.
 
 import type {
-  AuditEntry,
   AuditFilter,
   AuditStats,
   AgentHookStatus,
@@ -37,7 +40,15 @@ import { ALL_EVENTS, DEFAULT_SETTINGS, type RuleMode, type Settings, type UserRu
 import { getLang, type Lang } from "../i18n/core";
 // The preview shows the version being built, so screenshots never carry a stale one.
 import { version } from "../../package.json";
-import type { Api, CsvSeparator, HealthReport, HookPreview, HookStatus, StatusLineOwner } from "./api";
+import type {
+  Api,
+  CsvSeparator,
+  HealthReport,
+  HistoryEntry,
+  HookPreview,
+  HookStatus,
+  StatusLineOwner,
+} from "./api";
 import { validDayStarts } from "./days";
 
 type Group = CategoryInfo["group"];
@@ -927,6 +938,9 @@ function evaluate(tool: string, input: Record<string, unknown>, cwd: string, s: 
     a.level = byRank(RANK[a.level] + 1);
     note = L(["Sıkı proje: risk bir seviye yükseltildi.", "Strict project: risk raised one level."]);
   }
+  // The engine's own level, a strict project's bump included, before a rule
+  // re-scores it (rules.rs `engine_level`, C-2 / C-22).
+  a.engineLevel = a.level;
   const cap = s.autoAllowMax === "low" ? 0 : s.autoAllowMax === "medium" ? 1 : -1;
   // As in Rust: what the engine itself found high or critical is never
   // approved automatically, even after a rule re-scores it.
@@ -1055,8 +1069,17 @@ const SAMPLES: [string, string, Record<string, unknown>, number][] = [
   [P.ml, "Bash", { command: 'echo "<img src=x onerror=alert(1)>" > report.html' }, 1],
 ];
 
-/** History as stored by the mock: finding labels stay bilingual until read. */
-type MockEntry = Omit<AuditEntry, "labels" | "message"> & { labels: Pair[]; message: Pair | string };
+/**
+ * History as audit.rs stores it: finding labels in the language of the day the
+ * entry was recorded (here: the language the window starts in), next to their
+ * category ids (C-24) — except entries from before that, which have labels
+ * only — and the engine's own level when a rule changed it (C-22). Nöbetçi's
+ * notes stay bilingual until read.
+ */
+type MockEntry = Omit<HistoryEntry, "message"> & { message: Pair | string };
+
+/** Entries older than this many days were "recorded before C-24": labels only. */
+const LABELS_ONLY_AFTER_DAYS = 20;
 
 /** `lang`: the language Claude wrote its question in (user data, like a real history's). */
 function makeHistory(s: Settings, lang: Lang): MockEntry[] {
@@ -1098,7 +1121,8 @@ function makeHistory(s: Settings, lang: Lang): MockEntry[] {
     const raw = assessRaw(tool, input, cwd, new Set(s.disabledCategories));
     const ev = evaluate(tool, input, cwd, s);
     const level = ev.assessment.level;
-    let decision: AuditEntry["decision"];
+    const engine = ev.assessment.engineLevel;
+    let decision: HistoryEntry["decision"];
     let by: string;
     let ms: number;
     if (ev.outcome !== "ask") {
@@ -1128,7 +1152,9 @@ function makeHistory(s: Settings, lang: Lang): MockEntry[] {
       kind: raw.kind,
       target: raw.target,
       level,
-      labels: raw.findings.map((f) => f.label),
+      ...(engine && engine !== level ? { engineLevel: engine } : {}),
+      labels: raw.findings.map((f) => f.label[lang === "tr" ? 0 : 1]),
+      ...(daysAgo < LABELS_ONLY_AFTER_DAYS ? { categories: raw.findings.map((f) => f.category) } : {}),
       decision,
       by,
       rule: ev.rule ?? "",
@@ -1218,8 +1244,8 @@ function makeHistory(s: Settings, lang: Lang): MockEntry[] {
   return out;
 }
 
-function localise(e: MockEntry): AuditEntry {
-  return { ...e, labels: e.labels.map(L), message: typeof e.message === "string" ? e.message : L(e.message) };
+function localise(e: MockEntry): HistoryEntry {
+  return { ...e, message: typeof e.message === "string" ? e.message : L(e.message) };
 }
 
 const RANK_STR: Record<string, number> = { low: 0, medium: 1, high: 2, critical: 3 };
@@ -1236,9 +1262,18 @@ function fold(s: string): string {
     .replace(/\u0131/g, "i");
 }
 
-function query(all: AuditEntry[], f: AuditFilter): AuditEntry[] {
+/** A unified diff that adds or removes a line (not just its --- / +++ header). */
+function changes(diffText: string): boolean {
+  return diffText
+    .split("\n")
+    .some((l) => (l.startsWith("+") && !l.startsWith("+++")) || (l.startsWith("-") && !l.startsWith("---")));
+}
+
+function query(all: HistoryEntry[], f: AuditFilter): HistoryEntry[] {
   const text = fold((f.text ?? "").trim());
   const project = (f.project ?? "").trim().toLowerCase();
+  // A finding is found by its name in the UI language too (audit.rs, C-24).
+  const named = new Map(categories().map((c) => [c.id, fold(c.label)] as const));
   return all
     .filter(
       (e) =>
@@ -1253,12 +1288,16 @@ function query(all: AuditEntry[], f: AuditFilter): AuditEntry[] {
           fold(e.project).includes(text) ||
           fold(e.tool).includes(text) ||
           fold(e.rule).includes(text) ||
-          e.labels.some((l) => fold(l).includes(text))),
+          e.labels.some((l) => fold(l).includes(text)) ||
+          (e.categories ?? []).some((id) => named.get(id)?.includes(text))),
     )
     .reverse();
 }
 
-function stats(all: AuditEntry[], days: number, dayStarts?: number[]): AuditStats {
+function stats(all: HistoryEntry[], days: number, dayStarts?: number[]): AuditStats {
+  // Findings named in the UI language by their category where the entry kept
+  // it (what audit.rs should do for C-24), else as recorded.
+  const named = new Map(categories().map((c) => [c.id, c.label] as const));
   // As audit.rs (C-18): the buckets are the local midnights the window sent,
   // when they are valid; otherwise days break at local midnight by today's UTC
   // offset. The labels are the last `days` calendar dates either way.
@@ -1319,7 +1358,15 @@ function stats(all: AuditEntry[], days: number, dayStarts?: number[]): AuditStat
     if (["user", "hotkey", "batch"].includes(e.by)) waits.push(e.ms);
     projects.set(e.project, (projects.get(e.project) ?? 0) + 1);
     tools.set(e.tool, (tools.get(e.tool) ?? 0) + 1);
-    for (const l of e.labels) labels.set(l, (labels.get(l) ?? 0) + 1);
+    // Each finding once per entry, by id only when there is one per label (audit.rs findings_now).
+    const ids = e.categories && e.categories.length === e.labels.length ? e.categories : null;
+    const seen = new Set<string>();
+    e.labels.forEach((recorded, i) => {
+      const l = (ids && named.get(ids[i])) || recorded;
+      if (seen.has(l)) return;
+      seen.add(l);
+      labels.set(l, (labels.get(l) ?? 0) + 1);
+    });
   }
   const top = (m: Map<string, number>): [string, number][] =>
     [...m.entries()]
@@ -1402,6 +1449,19 @@ export function createMockApi(): Api {
   /** The next hook write fails as if the file changed after the preview. */
   let staleNext = false;
   const backupPath = (file: string) => (noFile ? null : `${file}.nobetci-2026-10-01-1432.bak`);
+  /** ?saveError=…: what Rust's settings save answers after it has applied the settings. */
+  const throwSaveError = () => {
+    if (saveError === "unreadable") throw new Error("settings_unreadable");
+    if (saveError === "failed") throw new Error(`save_failed: ${L(["disk dolu", "the disk is full"])}`);
+  };
+  /**
+   * A preview as hooks.rs Change::new makes it: with nothing to change, nothing
+   * is rewritten, so the diff is Rust's "No change." and there is no backup.
+   */
+  const preview = (diffText: string, settingsPath: string, fingerprint: string): HookPreview =>
+    changes(diffText)
+      ? { diff: diffText, backup: backupPath(settingsPath), settingsPath, fingerprint }
+      : { diff: L(["Değişiklik yok.", "No change."]), backup: null, settingsPath, fingerprint };
   const invalidJson = () =>
     new Error(
       L([
@@ -1481,6 +1541,21 @@ export function createMockApi(): Api {
       "afterMCPExecution",
       "afterAgentResponse",
     ],
+  };
+  /** What connecting (or removing) an agent would change in its hooks.json. */
+  const agentDiff = (provider: AgentProvider, install: boolean): string => {
+    const status = agentStatus(provider);
+    const settingsPath = status.settingsPath;
+    const lines = [`--- ${settingsPath}`, `+++ ${settingsPath} (Nöbetçi)`, "@@ hooks @@", '   "hooks": {'];
+    for (const ev of AGENT_EVENTS[provider]) {
+      const entry = `     "${ev}": [{ "command": "nobetci-hook ${provider} ${ev}" }],`;
+      const has = status.installed && !status.stale;
+      if (install && !has) lines.push(`+${entry.slice(1)}`);
+      else if (!install && status.installed) lines.push(`-${entry.slice(1)}`);
+      else lines.push(entry);
+    }
+    lines.push("   }");
+    return lines.join("\n");
   };
 
   let settings: Settings = sanitize({
@@ -1653,12 +1728,14 @@ export function createMockApi(): Api {
       platform,
       fullscreenSupported: true,
       settingsLoadError: loadProblem(),
+      // D23 / C-25: the island approves no hold on Linux.
+      holdApprovals: platform !== "linux",
     }),
     saveSettings: async (s: Settings) => {
       await delay(60);
-      if (saveError === "unreadable") throw new Error("settings_unreadable");
-      if (saveError === "failed") throw new Error(`save_failed: ${L(["disk dolu", "the disk is full"])}`);
       const autostartChanged = s.autostart !== settings.autostart;
+      // As lib.rs apply_settings: the settings take effect and every window is
+      // told before the file is written; a failed write rejects after that.
       settings = sanitize(s);
       emit("settings-changed", settings);
       if (autostartChanged && autostartFail) {
@@ -1667,6 +1744,7 @@ export function createMockApi(): Api {
           detail: L(["kayıt defterine yazılamadı", "couldn't write the login item"]),
         });
       }
+      throwSaveError();
       return clone(settings);
     },
     quietState: async () => (settings.dnd ? "dnd" : null),
@@ -1687,17 +1765,7 @@ export function createMockApi(): Api {
       const status = agentStatus(provider);
       if (install && relayMissing) throw new Error("relay_missing");
       if (previewError) throw invalidJson();
-      const settingsPath = status.settingsPath;
-      const lines = [`--- ${settingsPath}`, `+++ ${settingsPath} (Nöbetçi)`, "@@ hooks @@", '   "hooks": {'];
-      for (const ev of AGENT_EVENTS[provider]) {
-        const entry = `     "${ev}": [{ "command": "nobetci-hook ${provider} ${ev}" }],`;
-        const has = status.installed && !status.stale;
-        if (install && !has) lines.push(`+${entry.slice(1)}`);
-        else if (!install && status.installed) lines.push(`-${entry.slice(1)}`);
-        else lines.push(entry);
-      }
-      lines.push("   }");
-      return { diff: lines.join("\n"), backup: backupPath(settingsPath), settingsPath, fingerprint: "mock-agent-fp" };
+      return preview(agentDiff(provider, install), status.settingsPath, "mock-agent-fp");
     },
     agentHooksApply: async (provider: AgentProvider, install: boolean, _fingerprint: string) => {
       await delay(150);
@@ -1707,6 +1775,8 @@ export function createMockApi(): Api {
       }
       if (install && relayMissing) throw new Error("relay_missing");
       const status = agentStatus(provider);
+      // Nothing to change: nothing written, no backup (hooks.rs).
+      if (!changes(agentDiff(provider, install))) return null;
       const backup = backupPath(status.settingsPath);
       status.installed = install;
       status.stale = false;
@@ -1731,12 +1801,7 @@ export function createMockApi(): Api {
       await delay(120);
       if (install && relayMissing) throw new Error("relay_missing");
       if (previewError) throw invalidJson();
-      return {
-        diff: diff(install),
-        backup: backupPath(hookStatus.settingsPath),
-        settingsPath: hookStatus.settingsPath,
-        fingerprint: "mock-fp",
-      };
+      return preview(diff(install), hookStatus.settingsPath, "mock-fp");
     },
     hooksApply: async (install: boolean, _fingerprint: string) => {
       await delay(150);
@@ -1745,6 +1810,8 @@ export function createMockApi(): Api {
         throw new Error("stale_preview");
       }
       if (install && relayMissing) throw new Error("relay_missing");
+      // Nothing to change: nothing written, no backup (hooks.rs).
+      if (!changes(diff(install))) return null;
       const backup = backupPath(hookStatus.settingsPath);
       noFile = false;
       // A foreign status line stays theirs: ours is never written over it.
@@ -1832,6 +1899,8 @@ export function createMockApi(): Api {
       // Rust refuses JSON that isn't a Nöbetçi settings file (Claude's own settings.json, say).
       if (importBad) throw new Error("not_nobetci_settings");
       emit("settings-changed", settings);
+      // In effect even when the write then fails (lib.rs try_store).
+      throwSaveError();
       return clone(settings);
     },
     settingsReset: async () => {
@@ -1845,6 +1914,8 @@ export function createMockApi(): Api {
         hooksInstalled: hookStatus.installed,
       });
       emit("settings-changed", settings);
+      // In effect even when the write then fails (lib.rs try_store).
+      throwSaveError();
       return clone(settings);
     },
     rulePatternCheck: async (mode: RuleMode, pattern: string) => {
@@ -1868,6 +1939,7 @@ export function createMockApi(): Api {
     __mockStale: () => void;
     __mockSettings: (patch: Partial<Settings>) => void;
     __mockState: () => Settings;
+    __mockRemoveHooks: () => void;
   };
   w.__mockDnd = (on: boolean) => {
     settings = { ...settings, dnd: on };
@@ -1884,5 +1956,13 @@ export function createMockApi(): Api {
   };
   // What "Rust" holds right now (for checks in the console).
   w.__mockState = () => clone(settings);
+  // `nobetci --remove-hooks` run while the window is open: every connection goes.
+  w.__mockRemoveHooks = () => {
+    hookStatus = { ...hookStatus, installed: false, events: [] };
+    for (const status of agentStatuses.values()) {
+      status.installed = false;
+      status.events = [];
+    }
+  };
   return api;
 }

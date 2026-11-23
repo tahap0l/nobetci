@@ -28,8 +28,11 @@ export function outcomeLabel(o: Evaluation["outcome"]): string {
 
 /**
  * Who decided (audit.rs `by`): user, hotkey, batch, rule, trusted, session,
- * timeout, terminal, paused, busy, unseen, resolved — and undelivered, an answer
- * given here that never reached Claude Code (the request had already ended).
+ * timeout, terminal, paused, busy, unseen, resolved — undelivered, an answer
+ * given here that never reached Claude Code (the request had already ended) —
+ * and, for a request handed back or left undecided, what took it over instead
+ * of the terminal: Cursor's own prompt or the Claude app's dialog (pipe.rs
+ * `host_of`).
  */
 export const BY_KEYS = [
   "user",
@@ -40,6 +43,8 @@ export const BY_KEYS = [
   "session",
   "timeout",
   "terminal",
+  "cursor",
+  "app",
   "paused",
   "busy",
   "unseen",
@@ -49,6 +54,32 @@ export const BY_KEYS = [
 
 export function byLabel(by: string): string {
   return (BY_KEYS as readonly string[]).includes(by) ? t(`by.${by}` as MsgKey) : by;
+}
+
+/**
+ * A finding's name in the UI language (C-24): by its category id through
+ * `risk_categories` when the history recorded one, else the label as it was
+ * recorded (in the language of that day). An id the engine no longer knows
+ * keeps its recorded label too.
+ */
+export function findingLabel(category: string | undefined, recorded: string): string {
+  if (!category) return recorded;
+  return cache.categories?.find((c) => c.id === category)?.label ?? (recorded || category);
+}
+
+/**
+ * Every finding of a history entry, named in the UI language where it can be,
+ * each once (as audit.rs `findings_now` counts them). The ids are used only when
+ * there is one per label, in the labels' order.
+ */
+export function findingLabels(e: { labels: string[]; categories?: string[] }): string[] {
+  const ids = e.categories && e.categories.length === e.labels.length ? e.categories : null;
+  const out: string[] = [];
+  e.labels.forEach((recorded, i) => {
+    const name = findingLabel(ids?.[i], recorded);
+    if (!out.includes(name)) out.push(name);
+  });
+  return out;
 }
 
 export function policyLabel(p: string): string {
