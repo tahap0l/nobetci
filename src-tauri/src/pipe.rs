@@ -362,7 +362,9 @@ async fn handle<C: Conn>(app: AppHandle, mut pipe: C) {
         kind: serde_json::to_value(a.kind).ok().and_then(|v| v.as_str().map(String::from)).unwrap_or_default(),
         target: a.target.clone(),
         level: serde_json::to_value(a.level).ok().and_then(|v| v.as_str().map(String::from)).unwrap_or_default(),
+        engine_level: audit::engine_level(eval.engine_level, a.level),
         labels: a.findings.iter().map(|f| f.label.to_string()).collect(),
+        categories: a.findings.iter().map(|f| f.category.to_string()).collect(),
         rule: eval.rule.clone().unwrap_or_default(),
         ..Entry::default()
     };

@@ -224,30 +224,75 @@ fn set_autostart(app: &AppHandle, on: bool) -> Result<(), String> {
 /// At start, the "Start at login" switch follows the OS. A login entry removed
 /// outside Nöbetçi (Task Manager, Login Items, the desktop's autostart settings,
 /// a cleanup tool) turns the setting off instead of being put back over that
-/// choice. On Linux an entry that is there is written again, because it names
-/// the program by path and an AppImage replaced by a newer file has a new one.
+/// choice. On Linux the desktop may switch the entry off instead of removing it
+/// (`Hidden=true`, `X-GNOME-Autostart-enabled=false`), which counts the same;
+/// an entry that is on gets its `Exec=` line brought up to date — it names the
+/// program by path, and an AppImage replaced by a newer file has a new one —
+/// and nothing else of it is touched.
 fn reconcile_autostart(app: &AppHandle) {
     if !current(app).autostart {
         return;
     }
     let Some(manager) = app.try_state::<tauri_plugin_autostart::AutoLaunchManager>() else { return };
+    let switched_off = |how: &str| {
+        log::line(format!("autostart: the login entry is {how} (changed outside Nöbetçi); the setting follows it"));
+        let mut s = current(app);
+        s.autostart = false;
+        // A failed save is logged inside; the switch shows the truth meanwhile.
+        let _ = apply_settings(app, s, true);
+    };
     match manager.is_enabled() {
         Ok(true) =>
         {
             #[cfg(target_os = "linux")]
-            if let Err(err) = manager.enable() {
-                log::line(format!("autostart: could not refresh the login entry: {err}"));
+            if refresh_login_entry(app) == LoginEntry::SwitchedOff {
+                switched_off("switched off");
             }
         }
-        Ok(false) => {
-            log::line("autostart: the login entry is gone (changed outside Nöbetçi); the setting follows it");
-            let mut s = current(app);
-            s.autostart = false;
-            // A failed save is logged inside; the switch shows the truth meanwhile.
-            let _ = apply_settings(app, s, true);
-        }
+        Ok(false) => switched_off("gone"),
         Err(err) => log::line(format!("autostart: could not check the login entry: {err}")),
     }
+}
+
+#[cfg(target_os = "linux")]
+#[derive(PartialEq)]
+enum LoginEntry {
+    On,
+    SwitchedOff,
+}
+
+/// Linux: reads Nöbetçi's XDG autostart entry, says whether the desktop
+/// switched it off, and points its `Exec=` at the program running now — the
+/// program alone: what the user wrote around it stays (`sys::login_entry_for`).
+#[cfg(target_os = "linux")]
+fn refresh_login_entry(app: &AppHandle) -> LoginEntry {
+    // Where the autostart plugin keeps it, under the name it gives it.
+    let file = sys::home().join(".config").join("autostart").join(format!("{}.desktop", app.package_info().name));
+    let text = match std::fs::read_to_string(&file) {
+        Ok(text) => text,
+        Err(err) => {
+            log::line(format!("autostart: could not read the login entry {}: {err}", file.display()));
+            return LoginEntry::On;
+        }
+    };
+    if sys::login_entry_switched_off(&text) {
+        return LoginEntry::SwitchedOff;
+    }
+    // The program the plugin names: the AppImage when there is one.
+    let program = app
+        .env()
+        .appimage
+        .map(std::path::PathBuf::from)
+        .or_else(|| std::env::current_exe().ok())
+        .map(|p| p.display().to_string());
+    let exists = |path: &str| std::path::Path::new(path).exists();
+    if let Some(updated) = program.and_then(|program| sys::login_entry_for(&text, &program, exists)) {
+        match std::fs::write(&file, updated) {
+            Ok(()) => log::line("autostart: the login entry now starts this copy of Nöbetçi"),
+            Err(err) => log::line(format!("autostart: could not refresh the login entry: {err}")),
+        }
+    }
+    LoginEntry::On
 }
 
 /// Saves new preferences; rejects with `save_failed: …` or `settings_unreadable`
@@ -924,6 +969,32 @@ fn notification_wanted(s: &Settings, kind: &str, island_visible: bool, quiet: bo
     s.toast_enabled && listed && !quiet && !(s.toast_only_when_hidden && island_visible)
 }
 
+/// The island puts at most the first 160 UTF-16 units of a command or a
+/// question into a notification (`src/island/hooks.ts`): a body that long may
+/// have been cut there, in the middle of a secret.
+const ISLAND_NOTIFY_CUT: usize = 160;
+
+/// How much of a body is read at most: far more than a notification shows.
+const NOTIFY_READ: usize = 4000;
+
+/// What a notification shows of `body`. Notifications linger in the action
+/// centre and can show on the lock screen: no live tokens in them — nor, in a
+/// body that may have been cut (by the island, or here), the first part of
+/// one the cut left at the end. Masked first, then cut to 240 characters, so
+/// that cut splits no secret.
+fn notification_body(body: &str) -> String {
+    let (body, cut) = match body.char_indices().nth(NOTIFY_READ) {
+        Some((at, _)) => (&body[..at], true),
+        None => (body, false),
+    };
+    let masked = if cut || body.encode_utf16().count() >= ISLAND_NOTIFY_CUT {
+        redact::redact_cut(body)
+    } else {
+        redact::redact(body)
+    };
+    masked.chars().take(240).collect()
+}
+
 /// A desktop notification for `kind` (approval, finished, error, waiting, or
 /// focus), if the settings want one right now. Returns whether it was shown.
 /// Off the main thread: on Linux the first one asks the notification server
@@ -934,9 +1005,7 @@ fn notify(app: AppHandle, kind: String, title: String, body: String, island_visi
     if !notification_wanted(&s, &kind, island_visible, quiet::reason(&s).is_some()) {
         return false;
     }
-    // Notifications linger in the action centre and can show on the lock screen:
-    // no live tokens in them.
-    let body: String = redact::redact(&body).chars().take(240).collect();
+    let body = notification_body(&body);
     // The body carries the command, path or URL Claude asked for. Where the
     // server reads markup, it must show that text as written, not as links.
     #[cfg(target_os = "linux")]
@@ -1008,6 +1077,7 @@ fn create_settings_window(app: &AppHandle) {
                 tauri::WindowEvent::CloseRequested { api, .. } => {
                     api.prevent_close();
                     let _ = hidden.hide();
+                    handle.state::<audit::Log>().forget();
                 }
                 // The island is always on top and, open, covers the top-centre of
                 // the screen — right where a centred window keeps its title bar and
@@ -1050,6 +1120,8 @@ fn close_settings_window(app: AppHandle) {
     if let Some(win) = settings_window(&app) {
         let _ = win.hide();
     }
+    // The History tab is the only reader of the parsed history.
+    app.state::<audit::Log>().forget();
 }
 
 /// Command-line jobs that run instead of the app. Returns an exit code when one ran.
@@ -1202,6 +1274,10 @@ pub fn run() {
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
 
+            // The run's first lines in the log: what follows belongs to it.
+            log::line(format!("--- Nöbetçi {} started ---", env!("CARGO_PKG_VERSION")));
+            settings::log_load_problem();
+
             let handle = app.handle().clone();
             tray::build(&handle)?;
             // The island's webview exists already (tauri.conf.json); these two
@@ -1222,7 +1298,6 @@ pub fn run() {
             gate.set_active(true);
             island::spawn_cursor_poll(handle.clone(), gate.clone());
 
-            log::line(format!("--- Nöbetçi {} started ---", env!("CARGO_PKG_VERSION")));
             *handle.state::<Shared>().hotkeys.lock().unwrap() = hotkeys::apply(&handle, &loaded.hotkeys);
             hooks::ensure_hook_exe(&handle);
             inputguard::start(&handle);
@@ -1461,6 +1536,47 @@ mod tests {
             let always = Settings { toast_only_when_hidden: false, ..Settings::default() };
             assert!(notification_wanted(&always, kind, true, false), "{kind}: wanted even when shown");
         }
+    }
+
+    /// redaction-history#4: the island cuts the command to 160 UTF-16 units
+    /// before it asks for a notification; what that cut leaves of a secret
+    /// is not shown, and short bodies keep their ordinary endings.
+    #[test]
+    fn a_notification_shows_no_part_of_a_secret_the_island_cut() {
+        let command = format!("echo {} && export DB_PASSWORD=\"correct horse battery staple\"", "x".repeat(120));
+        let cut: String =
+            String::from_utf16(&command.encode_utf16().take(ISLAND_NOTIFY_CUT).collect::<Vec<_>>()).unwrap();
+        assert!(cut.ends_with("DB_PASSWORD=\"correct hor"), "{cut}");
+        let body = notification_body(&format!("Çalıştırıyor: {cut}"));
+        assert!(body.ends_with("DB_PASSWORD=\"•••"), "{body}");
+        let command = format!("cd {} && git clone https://admin:SuperSecretPassword1@github.com/a/b", "x".repeat(113));
+        let cut: String = command.chars().take(ISLAND_NOTIFY_CUT).collect();
+        assert!(cut.ends_with("https://admin:SuperSecretPassw"), "{cut}");
+        assert!(notification_body(&format!("Bash: {cut}")).ends_with("https://admin:•••"));
+        // A question cut the same way (no label before it).
+        let question = format!("{} Should I use ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789?", "a".repeat(130));
+        let cut: String = question.chars().take(ISLAND_NOTIFY_CUT).collect();
+        assert!(notification_body(&cut).ends_with("use •••"), "{cut}");
+        // Too short to have been cut: an ending that looks like a token's
+        // start is a word.
+        for same in [
+            "Bash: rm -rf sk-dir",
+            "Bash: cat SG.txt",
+            "Bash: python train.py --model hf_model_large",
+            "Bash: echo sk-",
+        ] {
+            assert_eq!(notification_body(same), same);
+        }
+        // Long bodies are masked whole, then cut to 240 characters.
+        let long = format!("Bash: export DB_PASSWORD=hunter2hunter2 && {}", "y".repeat(400));
+        let body = notification_body(&long);
+        assert_eq!(body.chars().count(), 240);
+        assert!(body.starts_with("Bash: export DB_PASSWORD=••• && yyy"), "{body}");
+        // A body sent whole, however long, is read as far as it matters: a
+        // private key that runs past that is masked all the same.
+        let key =
+            format!("-----BEGIN OPENSSH PRIVATE KEY-----\n{}\n-----END OPENSSH PRIVATE KEY-----", "Ab1".repeat(3000));
+        assert_eq!(notification_body(&format!("Write: {key}")), "Write: •••");
     }
 
     #[test]

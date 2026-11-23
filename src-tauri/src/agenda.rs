@@ -46,6 +46,9 @@ const MAX_TEXT: usize = 200;
 const KEEP_DONE_DAYS: i64 = 30;
 /// What `agenda_put` answers when there is no room left (C-10).
 const FULL: &str = "agenda_full";
+/// What `agenda_list` answers while agenda.json is there but cannot be read
+/// (C-23): the island says so instead of showing an empty day.
+const UNREADABLE: &str = "agenda_unreadable";
 
 fn path() -> PathBuf {
     settings::config_dir().join("agenda.json")
@@ -270,6 +273,17 @@ impl Agenda {
         }
     }
 
+    /// The list to show, in order: refused while the file cannot be read, so
+    /// an unreadable agenda never looks like an empty one (C-23).
+    fn listed(&self, today: &str) -> Result<Vec<Item>, String> {
+        if self.guard == Guard::Unread {
+            return Err(UNREADABLE.to_string());
+        }
+        let mut items = self.items.clone();
+        tidy(&mut items, today);
+        Ok(items)
+    }
+
     /// Saves `next` over the file at `path` and only then makes it the agenda,
     /// so a change that could not be saved leaves the list as it was (C-10).
     /// Lines for the log go to `log`.
@@ -379,11 +393,11 @@ fn with_item(items: &[Item], item: Item, today: &str) -> Result<Vec<Item>, Strin
     Ok(next)
 }
 
+/// The agenda, or `agenda_unreadable` while agenda.json exists but cannot be
+/// read (it is tried again on every call).
 #[tauri::command(async)]
-pub fn agenda_list() -> Vec<Item> {
-    let mut items = agenda().items.clone();
-    tidy(&mut items, &today());
-    items
+pub fn agenda_list() -> Result<Vec<Item>, String> {
+    agenda().listed(&today())
 }
 
 /// Adds an item, or replaces the one with the same id.
@@ -664,6 +678,21 @@ mod tests {
     }
 
     #[test]
+    fn a_readable_agenda_lists_its_items_and_a_missing_one_is_empty() {
+        // C-23: only a file that is there and cannot be read is an error.
+        let dir = Dir::new("listed");
+        let (empty, _) = Agenda::from_loaded(&dir.file(), load(&dir.file()));
+        assert_eq!(empty.listed("2026-11-20"), Ok(Vec::new()));
+        save_to(&dir.file(), &[item("b", "2026-11-21", None, false), item("a", "2026-11-20", None, false)]).unwrap();
+        let (agenda, _) = Agenda::from_loaded(&dir.file(), load(&dir.file()));
+        assert_eq!(ids(&agenda.listed("2026-11-20").unwrap()), ["a", "b"], "in date order");
+        // A damaged file lists what could be read.
+        std::fs::write(dir.file(), br#"[{"id": "c", "text": "kept", "date": "2026-11-22"}, 7]"#).unwrap();
+        let (damaged, _) = Agenda::from_loaded(&dir.file(), load(&dir.file()));
+        assert_eq!(ids(&damaged.listed("2026-11-20").unwrap()), ["c"]);
+    }
+
+    #[test]
     fn a_file_that_is_not_a_list_is_kept_aside_before_anything_is_saved() {
         let dir = Dir::new("broken");
         std::fs::write(dir.file(), b"[{\"id\": \"a\", \"text\": \"half a file").unwrap();
@@ -698,6 +727,8 @@ mod tests {
         let (mut agenda, note) = Agenda::from_loaded(&dir.file(), loaded);
         assert_eq!(agenda.guard, Guard::Unread);
         assert!(note.is_some());
+        // C-23: the list says so instead of looking like an empty day.
+        assert_eq!(agenda.listed("2026-11-20"), Err(UNREADABLE.to_string()));
         let mut log = Vec::new();
         let refused = agenda.apply(&dir.file(), vec![item("n", "2026-11-20", None, false)], &mut log);
         assert!(refused.is_err());

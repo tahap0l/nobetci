@@ -13,7 +13,8 @@ use std::ffi::c_void;
 
 use windows::Win32::Foundation::HWND;
 use windows::Win32::UI::WindowsAndMessaging::{
-    GetWindowLongPtrW, SetWindowLongPtrW, GWL_EXSTYLE, WS_EX_APPWINDOW, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW,
+    GetForegroundWindow, GetWindowLongPtrW, IsWindow, IsWindowVisible, SetForegroundWindow, SetWindowLongPtrW,
+    GWL_EXSTYLE, WS_EX_APPWINDOW, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW,
 };
 
 // island.rs spells the bits out so its tests run everywhere; they must be these.
@@ -33,6 +34,29 @@ pub fn restyle(hwnd: *mut c_void, typing: bool) {
         let want = super::ex_style(ex, typing);
         if want != ex {
             SetWindowLongPtrW(hwnd, GWL_EXSTYLE, want);
+        }
+    }
+}
+
+/// The window in front now, as a number (0: none).
+pub fn foreground() -> isize {
+    unsafe { GetForegroundWindow().0 as isize }
+}
+
+/// Gives the foreground back to `previous` (from `foreground`) while the
+/// island (`island`) still has it and `previous` is still a visible window.
+/// The foreground window may hand the foreground on, so Windows allows it.
+pub fn give_back(previous: isize, island: isize) {
+    if previous == 0 || island == 0 {
+        return;
+    }
+    unsafe {
+        if GetForegroundWindow().0 as isize != island {
+            return;
+        }
+        let previous = HWND(previous as *mut c_void);
+        if IsWindow(Some(previous)).as_bool() && IsWindowVisible(previous).as_bool() {
+            let _ = SetForegroundWindow(previous);
         }
     }
 }

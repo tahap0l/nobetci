@@ -265,12 +265,24 @@ pub async fn island_media(app: AppHandle, include_artwork: Option<bool>, explici
     tauri::async_runtime::spawn_blocking(move || read_media(include_artwork, platform_media::read)).await.ok().flatten()
 }
 
+/// A seek position as the card sends it — the share of the bar clicked times
+/// the track's length, so rarely a whole number — in whole milliseconds. Not a
+/// number, negative or past any track: refused (Err), never sent to a player.
+fn seek_position(position_ms: Option<f64>) -> Result<Option<u64>, ()> {
+    match position_ms {
+        None => Ok(None),
+        // NaN and the infinities are outside the range too.
+        Some(ms) if (0.0..1e15).contains(&ms) => Ok(Some(ms.round() as u64)),
+        Some(_) => Err(()),
+    }
+}
+
 #[tauri::command]
 pub async fn island_media_control(
     app: AppHandle,
     source: String,
     action: String,
-    position_ms: Option<u64>,
+    position_ms: Option<f64>,
     explicit: Option<bool>,
 ) -> bool {
     if !media_allowed(super::current(&app).island_media, explicit) {
@@ -279,6 +291,7 @@ pub async fn island_media_control(
     if !matches!(action.as_str(), "previous" | "toggle" | "next" | "seek") {
         return false;
     }
+    let Ok(position_ms) = seek_position(position_ms) else { return false };
     tauri::async_runtime::spawn_blocking(move || platform_media::control(&source, &action, position_ms))
         .await
         .unwrap_or(false)
@@ -473,6 +486,21 @@ mod weather_tests {
 mod media_tests {
     use super::*;
     use std::sync::mpsc;
+
+    /// shell-widgets#1: a click on the time bar sends a fractional position
+    /// (62 % of a 215 s track is 133886.36… ms); it is taken, rounded.
+    #[test]
+    fn a_seek_position_need_not_be_a_whole_number() {
+        let sent: Option<f64> = serde_json::from_value(serde_json::json!(133886.36363636362)).unwrap();
+        assert_eq!(seek_position(sent), Ok(Some(133886)));
+        let whole: Option<f64> = serde_json::from_value(serde_json::json!(133886)).unwrap();
+        assert_eq!(seek_position(whole), Ok(Some(133886)), "a whole number still reads");
+        assert_eq!(seek_position(Some(0.4)), Ok(Some(0)));
+        assert_eq!(seek_position(None), Ok(None));
+        for bad in [-1.0, f64::NAN, f64::INFINITY, 1e300] {
+            assert_eq!(seek_position(Some(bad)), Err(()), "{bad}");
+        }
+    }
 
     #[test]
     fn the_player_is_asked_only_with_the_card_on_or_when_the_user_asks() {
