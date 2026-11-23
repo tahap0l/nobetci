@@ -296,6 +296,12 @@ const SHAPE_BOUNDING: c_int = 0;
 /// part is drawn and takes the mouse. `None` gives it its whole area back.
 /// False when it could not be done.
 pub fn set_shape(win: c_ulong, rect: Option<(i32, i32, u32, u32)>) -> bool {
+    set_shape_rects(win, rect.as_ref().map(std::slice::from_ref))
+}
+
+/// Cuts `win` down to the union of `rects` (none: nothing of it is drawn).
+/// `None` gives it its whole area back. False when it could not be done.
+pub fn set_shape_rects(win: c_ulong, rects: Option<&[(i32, i32, u32, u32)]>) -> bool {
     let (Some(c), Some(xf)) = (Conn::open(), xfixes()) else { return false };
     let clamp = |v: i32| v.clamp(i32::from(i16::MIN), i32::from(i16::MAX)) as i16;
     let size = |v: u32| v.min(u32::from(u16::MAX)) as u16;
@@ -309,10 +315,13 @@ pub fn set_shape(win: c_ulong, rect: Option<(i32, i32, u32, u32)>) -> bool {
         if (xf.XFixesQueryVersion)(c.dpy, &mut major, &minor) == 0 || major < 2 {
             return false;
         }
-        let region = match rect {
-            Some((x, y, w, h)) => {
-                let mut r = xlib::XRectangle { x: clamp(x), y: clamp(y), width: size(w), height: size(h) };
-                (xf.XFixesCreateRegion)(c.dpy, &mut r, 1)
+        let region = match rects {
+            Some(rects) => {
+                let mut list: Vec<xlib::XRectangle> = rects
+                    .iter()
+                    .map(|&(x, y, w, h)| xlib::XRectangle { x: clamp(x), y: clamp(y), width: size(w), height: size(h) })
+                    .collect();
+                (xf.XFixesCreateRegion)(c.dpy, list.as_mut_ptr(), list.len() as c_int)
             }
             // None: the window's own, unshaped area.
             None => 0,
@@ -324,4 +333,140 @@ pub fn set_shape(win: c_ulong, rect: Option<(i32, i32, u32, u32)>) -> bool {
         (c.x.XSync)(c.dpy, xlib::False);
     }
     true
+}
+
+/// What `win` draws, read from its pixels' alpha: a `width` × `height` mask,
+/// row by row, of the pixels at least half opaque. An ARGB window keeps its
+/// alpha even where no compositing manager runs to use it, so a window cut to
+/// this mask (`Painted::rects`) shows what it draws and none of the black that
+/// stands in for transparency. None when it cannot be read.
+pub fn painted(win: c_ulong) -> Option<Painted> {
+    let c = Conn::open()?;
+    let (mut root, mut x, mut y, mut width, mut height, mut border, mut depth) = (0, 0, 0, 0, 0, 0, 0);
+    let ok = unsafe {
+        (c.x.XGetGeometry)(c.dpy, win, &mut root, &mut x, &mut y, &mut width, &mut height, &mut border, &mut depth)
+    };
+    if ok == 0 || depth != 32 || width == 0 || height == 0 || width > 4096 || height > 4096 {
+        return None;
+    }
+    let image = unsafe { (c.x.XGetImage)(c.dpy, win, 0, 0, width, height, !0, xlib::ZPixmap) };
+    if image.is_null() {
+        return None;
+    }
+    // SAFETY: a ZPixmap image of `width` × `height` from the server; read
+    // within its rows and destroyed once.
+    unsafe {
+        let img = &*image;
+        let usable = img.bits_per_pixel == 32 && !img.data.is_null() && img.bytes_per_line >= 4 * img.width;
+        let painted = usable.then(|| {
+            let bytes = std::slice::from_raw_parts(img.data as *const u8, (img.bytes_per_line * img.height) as usize);
+            let little = img.byte_order == xlib::LSBFirst;
+            let (w, h) = (img.width as usize, img.height as usize);
+            let mut mask = Vec::with_capacity(w * h);
+            for py in 0..h {
+                for px in 0..w {
+                    let at = py * img.bytes_per_line as usize + px * 4;
+                    mask.push(if little { bytes[at + 3] } else { bytes[at] } >= 128);
+                }
+            }
+            Painted { width: w, height: h, mask }
+        });
+        (c.x.XDestroyImage)(image);
+        painted
+    }
+}
+
+/// A window's drawn pixels (`painted`).
+#[derive(Clone, Debug, PartialEq)]
+pub struct Painted {
+    pub width: usize,
+    pub height: usize,
+    /// Row by row: whether the pixel is drawn.
+    pub mask: Vec<bool>,
+}
+
+impl Painted {
+    /// The rectangles covering exactly the drawn pixels.
+    pub fn rects(&self) -> Vec<(i32, i32, u32, u32)> {
+        alpha_rects(self.width, self.height, |x, y| if self.mask[y * self.width + x] { 255 } else { 0 })
+    }
+}
+
+/// The rectangles covering every pixel of a `width` × `height` picture whose
+/// alpha (`alpha(x, y)`) is at least half: one row's runs at a time, a run
+/// that goes on unchanged from the row above growing that rectangle.
+pub(crate) fn alpha_rects(
+    width: usize,
+    height: usize,
+    alpha: impl Fn(usize, usize) -> u8,
+) -> Vec<(i32, i32, u32, u32)> {
+    let mut done: Vec<(i32, i32, u32, u32)> = Vec::new();
+    let mut open: Vec<(i32, i32, u32, u32)> = Vec::new();
+    for row in 0..height {
+        let mut runs = Vec::new();
+        let mut col = 0;
+        while col < width {
+            if alpha(col, row) >= 128 {
+                let start = col;
+                while col < width && alpha(col, row) >= 128 {
+                    col += 1;
+                }
+                runs.push((start as i32, (col - start) as u32));
+            } else {
+                col += 1;
+            }
+        }
+        let mut next = Vec::with_capacity(runs.len());
+        for (x, w) in runs {
+            match open.iter().position(|r| r.0 == x && r.2 == w) {
+                Some(i) => {
+                    let mut grown = open.swap_remove(i);
+                    grown.3 += 1;
+                    next.push(grown);
+                }
+                None => next.push((x, row as i32, w, 1)),
+            }
+        }
+        done.append(&mut open);
+        open = next;
+    }
+    done.append(&mut open);
+    done
+}
+
+#[cfg(test)]
+mod tests {
+    use super::alpha_rects;
+
+    #[test]
+    fn the_cut_covers_exactly_what_is_drawn() {
+        // A small mascot: a body two rows tall, ears above, a faint edge left out.
+        let picture = [
+            "#....#", //
+            "##..##", //
+            "######", //
+            "######", //
+            ".+##+.", // `+` is half-transparent antialiasing: left out
+        ];
+        let alpha = |x: usize, y: usize| match picture[y].as_bytes()[x] {
+            b'#' => 255,
+            b'+' => 90,
+            _ => 0,
+        };
+        let rects = alpha_rects(6, 5, alpha);
+        let covered = |x: usize, y: usize| {
+            rects.iter().any(|&(rx, ry, w, h)| {
+                (rx as usize..(rx as usize + w as usize)).contains(&x)
+                    && (ry as usize..(ry as usize + h as usize)).contains(&y)
+            })
+        };
+        for y in 0..5 {
+            for x in 0..6 {
+                assert_eq!(covered(x, y), alpha(x, y) >= 128, "({x}, {y}) in {rects:?}");
+            }
+        }
+        assert!(rects.contains(&(0, 2, 6, 2)), "rows that run on unchanged make one rectangle: {rects:?}");
+        assert!(alpha_rects(3, 2, |_, _| 0).is_empty(), "nothing drawn: nothing shown");
+        assert_eq!(alpha_rects(3, 2, |_, _| 255), vec![(0, 0, 3, 2)]);
+    }
 }

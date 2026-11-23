@@ -707,6 +707,8 @@ pub fn fit_shape(app: &AppHandle, gate: &PollGate) {
                     "island: no compositing manager on this X display — the island's window is cut to the island \
                      (square corners, no shadow). A compositor (the desktop's own, picom or xcompmgr) gives the full look."
                 });
+                // The desktop mascot's window follows suit.
+                crate::buddy::cut::again(app);
             }
             shape.checked = Some((Instant::now(), answer));
             answer
