@@ -239,6 +239,19 @@ function toast(kind: NotifyKind, title: string, body: string) {
   void Bridge.notify(kind, title, body, State.mode === "expanded");
 }
 
+/**
+ * A command or question for a notification body. It goes to Rust whole, so
+ * that Rust masks secrets with the whole text in view and only then cuts it
+ * (`notification_body` in lib.rs): a cut made here could end inside a
+ * password, leaving Rust to guess at the rest. Capped at 4000 code points,
+ * the most Rust reads, and never inside a surrogate pair, which Rust's JSON
+ * reader refuses. 4000 code points take at most 8000 UTF-16 units, so the
+ * first cut only keeps a huge command from becoming a huge array.
+ */
+function notifyText(text: string): string {
+  return Array.from(text.slice(0, 8000)).slice(0, 4000).join("");
+}
+
 function applyQuiet(p: HookPayload) {
   if (p.nobetci_quiet !== undefined) State.quiet = p.nobetci_quiet ?? null;
   Sound.quiet = State.isQuiet;
@@ -520,7 +533,7 @@ function onPermissionRequest(island: Island, p: HookPayload, restored = false): 
       toast(
         "approval",
         `${risky ? "⚠ " : ""}${t("toast.approval", { name: s.name })}`,
-        `${toolLabel(p.tool_name ?? "")}: ${p.risk.target.slice(0, 160)}`,
+        `${toolLabel(p.tool_name ?? "")}: ${notifyText(p.risk.target)}`,
       );
     } else {
       const title = t(kind === "question" ? "toast.question" : "toast.plan", { name: s.name });
@@ -533,7 +546,7 @@ function onPermissionRequest(island: Island, p: HookPayload, restored = false): 
 
 function firstQuestion(input: Record<string, unknown> | undefined): string {
   const qs = Array.isArray(input?.questions) ? (input?.questions as { question?: unknown }[]) : [];
-  return typeof qs[0]?.question === "string" ? qs[0].question.slice(0, 160) : "";
+  return typeof qs[0]?.question === "string" ? notifyText(qs[0].question) : "";
 }
 
 /** Claude Code's status line: context use and cost per session, plan limits for all. */

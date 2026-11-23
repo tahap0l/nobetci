@@ -969,9 +969,10 @@ fn notification_wanted(s: &Settings, kind: &str, island_visible: bool, quiet: bo
     s.toast_enabled && listed && !quiet && !(s.toast_only_when_hidden && island_visible)
 }
 
-/// The island puts at most the first 160 UTF-16 units of a command or a
-/// question into a notification (`src/island/hooks.ts`): a body that long may
-/// have been cut there, in the middle of a secret.
+/// A body of 160 UTF-16 units or more is read as possibly cut in the middle of
+/// a secret: the island used to cut a command or a question there. It now
+/// sends them whole, up to 4000 code points (`src/island/hooks.ts`), so this
+/// stays as a second line of defence for anything that still cuts.
 const ISLAND_NOTIFY_CUT: usize = 160;
 
 /// How much of a body is read at most: far more than a notification shows.
@@ -1538,9 +1539,9 @@ mod tests {
         }
     }
 
-    /// redaction-history#4: the island cuts the command to 160 UTF-16 units
-    /// before it asks for a notification; what that cut leaves of a secret
-    /// is not shown, and short bodies keep their ordinary endings.
+    /// redaction-history#4: a command cut to 160 UTF-16 units, where the
+    /// island used to cut it before it asked for a notification, shows no part
+    /// of a secret the cut ends in, and short bodies keep their ordinary endings.
     #[test]
     fn a_notification_shows_no_part_of_a_secret_the_island_cut() {
         let command = format!("echo {} && export DB_PASSWORD=\"correct horse battery staple\"", "x".repeat(120));
