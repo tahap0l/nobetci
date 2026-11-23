@@ -52,13 +52,14 @@ app is only ad-hoc signed. Linux packages are not signed; check them against the
    `Cargo.toml`, runs the tests, and builds the app and the relay from that commit. These build
    jobs run third-party code (npm and cargo dependencies), so they get a read-only token and no
    signing secrets.
-3. The two programs go to SignPath as a signing request, first thing in a job of their own, before
-   anything from the repository or npm runs on that machine. An approver checks on SignPath that
-   the request comes from the Release workflow, on `main`, at the commit being released, and only
-   then approves it.
-4. The installer is built from the signed programs (unchanged, as above) and goes to SignPath as a
-   second request, from a fresh machine where nothing from npm has run. It is approved the same
-   way.
+3. The two programs go to SignPath as a signing request from a job of their own, which runs
+   nothing from the repository, npm or cargo: a runner keeps a job's secrets for the whole job, so
+   the API token never shares a job with third-party code. An approver checks on SignPath that the
+   request comes from the Release workflow, on `main`, at the commit being released, and only then
+   approves it.
+4. The installer is built from the signed programs (unchanged, as above) in the next job, which
+   gets no signing secret, and goes to SignPath as a second request, from another fresh machine
+   that runs nothing from the repository, npm or cargo. It is approved the same way.
 5. The signed installer is checked (`Get-AuthenticodeSignature`), its SHA-256 is written to
    `SHA256SUMS.txt`, and the release is published on GitHub. If the tag already exists on another
    commit, the workflow refuses to publish unless it was started with **replace**, which moves the
@@ -169,13 +170,15 @@ yalnızca ad-hoc imzalıdır. Linux paketleri imzalanmaz; sürümdeki `SHA256SUM
    denetler, testleri çalıştırır, uygulamayı ve aktarıcıyı o commit'ten derler. Bu derleme işleri
    üçüncü taraf kodu (npm ve cargo bağımlılıkları) çalıştırdığı için yalnızca okuma yetkili bir
    jeton alır, imzalama sırlarına erişemez.
-3. İki program, kendi işlerinin ilk adımında, o makinede depodan ya da npm'den hiçbir şey
-   çalışmadan SignPath'e imzalama isteği olarak gider. Onaylayıcı, isteğin Release iş akışından,
-   `main` dalından ve yayımlanan commit'ten geldiğini SignPath'te denetler; ancak ondan sonra
-   onaylar.
-4. Kurulum dosyası imzalı programlardan (yukarıda anlatıldığı gibi değiştirilmeden) oluşturulur ve
-   npm'den hiçbir şeyin çalışmadığı temiz bir makineden ikinci istek olarak SignPath'e gider; aynı
-   şekilde onaylanır.
+3. İki program, depodan, npm'den ya da cargo'dan hiçbir şey çalıştırmayan kendi işlerinden
+   SignPath'e imzalama isteği olarak gider: GitHub'ın makinesi bir işin sırlarını iş boyunca
+   tuttuğundan API jetonu hiçbir zaman üçüncü taraf koduyla aynı işte bulunmaz. Onaylayıcı, isteğin
+   Release iş akışından, `main` dalından ve yayımlanan commit'ten geldiğini SignPath'te denetler;
+   ancak ondan sonra onaylar.
+4. Kurulum dosyası imzalı programlardan (yukarıda anlatıldığı gibi değiştirilmeden), hiçbir
+   imzalama sırrı almayan bir sonraki işte oluşturulur ve depodan, npm'den ya da cargo'dan hiçbir
+   şey çalıştırmayan başka bir temiz makineden ikinci istek olarak SignPath'e gider; aynı şekilde
+   onaylanır.
 5. İmzalı kurulum dosyası denetlenir (`Get-AuthenticodeSignature`), SHA-256 değeri
    `SHA256SUMS.txt` dosyasına yazılır ve sürüm GitHub'da yayımlanır. Etiket zaten başka bir
    commit'i gösteriyorsa iş akışı, **replace** ile başlatılmadıkça yayımlamayı reddeder; **replace**

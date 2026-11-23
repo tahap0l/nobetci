@@ -370,7 +370,8 @@ secret that's on it.
 
 **Release integrity.** Releases are started by hand from `main` and built by GitHub Actions from
 that commit, with every third-party action pinned to a full commit SHA; the build jobs get no
-signing secrets. A `cargo audit` job checks `Cargo.lock` against the RustSec advisory database
+signing secrets, and the jobs that use one run nothing from the repository, npm or cargo. A
+`cargo audit` job checks `Cargo.lock` against the RustSec advisory database
 whenever the Rust dependencies change and once a week, and Dependabot watches npm and the actions.
 `SHA256SUMS.txt` is published next to the Windows installer, the macOS disk image and the Linux
 packages. Releases are not code-signed yet (the macOS app is only ad-hoc signed and not
