@@ -517,16 +517,16 @@ Komut, içinde kelime aranarak değil komut olarak okunur: `git commit -m "grace
 `curl -o`, `sed -i`, tek satırlık bir betik — o yola yapılan dosya yazımı gibi değerlendirilir.
 
 **Dosya yazma** — yollar önce oturumun klasörüne göre çözülür; böylece `.claude//settings.json`,
-`./.git/hooks/pre-commit` ya da `../../usr/local/bin/git` düz yazılışlarıyla aynı kurallara takılır.
-Claude Code ayar dosyaları, Codex'in ve Cursor'un hook dosyaları, Nöbetçi'nin kendi dosyaları ve
-`~/.ssh` altındaki her şey için KRİTİK; Claude
-Code hook, agent, komut, skill ve eklentileri, `.mcp.json`, git hook'ları ve git ayarı, kabuk
+`./.git/hooks/pre-commit` ya da `../../usr/local/bin/git` düz yazılışlarıyla aynı kurallara takılır,
+`~/../../etc/cron.d/x` ya da `$HOME/../..` da gerçekte vardığı yere sayılır. Claude Code ayar
+dosyaları (`~/.claude` içinde ya da `CLAUDE_CONFIG_DIR`'in gösterdiği klasörde), Codex'in ve
+Cursor'un hook dosyaları, Nöbetçi'nin kendi dosyaları ve `~/.ssh` altındaki her şey için KRİTİK;
+Claude Code hook, agent, komut, skill ve eklentileri, `.mcp.json`, git hook'ları ve git ayarı, kabuk
 profilleri, başlangıç klasörleri ve LaunchAgents, sistem dosyaları, sır dosyaları (macOS anahtar
-zinciri dahil) ve özel anahtar ya da
-görünmez karakter içeren içerik için YÜKSEK; CI iş akışları, `CLAUDE.md`, kurulum betikleri
-(`postinstall`), koda gömülmüş görünen sırlar ve proje klasörü dışındaki her şey için ORTA;
-`package.json`, `Cargo.toml` ya da `Dockerfile` gibi build dosyaları için DÜŞÜK. `.env.example`
-gibi şablonlar yol kurallarını tetiklemez.
+zinciri dahil) ve özel anahtar ya da görünmez karakter içeren içerik için YÜKSEK; CI iş akışları,
+`CLAUDE.md`, kurulum betikleri (`postinstall`), koda gömülmüş görünen sırlar ve proje klasörü
+dışındaki her şey için ORTA; `package.json`, `Cargo.toml` ya da `Dockerfile` gibi build dosyaları
+için DÜŞÜK. `.env.example` gibi şablonlar yol kurallarını tetiklemez.
 
 **Dosya okuma** — sırlar için YÜKSEK (SSH anahtarları, `.env`, kimlik dosyaları, bulut ve
 Kubernetes ayarları, tarayıcı çerezleri ve kayıtlı girişler).
@@ -556,7 +556,11 @@ alanı da var.
   <img src="docs/media/tr/settings-rules.png" width="720" alt="Ayarlar'daki Kurallar sayfası: her biri aracı, deseni ve eylemiyle numaralı kurallar ve altında proje güveni bölümünün başı">
 </p>
 
-Kurallar, kart gösterilmeden önce yukarıdan aşağı denenir; ilk eşleşen kazanır.
+Kurallar, kart gösterilmeden önce yukarıdan aşağı denenir; ilk eşleşen kazanır — bir yolun
+çözülmesi reddetme kuralını hiçbir zaman bir soruya çevirmesin diye tek bir istisnayla: eşleşen ilk
+kural bir dosya yolunu yalnızca vardığı yerle (yazıldığı hâliyle değil) yakalamışsa ve reddetmiyorsa,
+aşağıda isteği kapsayan bir reddetme kuralı karar verir (kural test alanındaki not ikisinin de adını
+verir).
 
 | Bir kural… | Nasıl davranır |
 | --- | --- |
@@ -579,10 +583,19 @@ Desenler nasıl eşleşir:
   söyler; yasaklayan, her zaman sorduran ve seviyeyi yükselten kurallar her yerde eşleşir.
 - **Boş desen** o aracın her isteğiyle eşleşir ("MCP araçları için her seferinde sor" şablonu buna
   dayanır); her araç için boş desenli bir kuralı kaydetmeden önce düzenleyici seni uyarır.
-- **Bir yol, vardığı yer sayılır.** Bir dosya için izin veren ya da seviyeyi düşüren bir kural (ve
-  bir "tekrar sorma" izni) yalnızca yolun çözülmüş hâliyle eşleşir; böylece `..` bir kuralın
-  gösterdiği klasörden dışarı tırmanamaz. Yasaklayan, her zaman sorduran ve seviyeyi yükselten
-  kurallar her iki yazılışla da eşleşir.
+- **Bir yol, vardığı yer sayılır.** Nöbetçi bir yolun gerçekte nereye vardığını çıkarır: `..`, `.`,
+  `~` ve `$HOME` (`%USERPROFILE%`) çözülür, göreli yollar oturumun klasöründen başlar. Bir dosya
+  için izin veren ya da seviyeyi düşüren bir kural (ve bir "tekrar sorma" izni) yolla hem yazıldığı
+  hâliyle hem de vardığı yerle eşleşmek zorundadır; böylece `..` bir kuralın gösterdiği klasörden
+  dışarı tırmanamaz: `Write /work/app/*`, `/work/app/../../etc/hosts`'u kapsamaz; `Write ~/*` da
+  aslında `/etc/x` olan `~/../../etc/x`'i kapsamaz. Nöbetçi'nin yerini bilemediği bir klasörün
+  (başka bir kullanıcının `~bob`'u, `%APPDATA%`) üstüne tırmanan bir yol böyle bir kuralla asla
+  geçmez. Yasaklayan, her zaman sorduran ve seviyeyi yükselten kuralların ise iki yazılıştan biriyle
+  eşleşmesi yeter; böylece klasörlerine tırmanarak giren bir yolu da yakalarlar ve projeye göre
+  yazılmış böyle bir kural (`src/secrets/*`) aynı dosyayı tam yoluyla yazıldığında da yakalar.
+  Göreli bir yol için "tekrar sorma" izni yalnızca o dosyayı kapsar, başka bir klasördeki aynı adı
+  değil; bir Glob isteği de klasörünün altına yazılmış deseniyle (`/work/app/src/**/*.rs`)
+  gösterilir ve eşleştirilir.
 
 Şablonlar iyi bir başlangıç: `npm test`'e ve salt okuyan git komutlarına izin ver, `git push --force`
 ve paket yayınlamayı yasakla, Claude'u `.env` dosyalarından uzak tut, `rm -rf`'yi her zaman
@@ -590,7 +603,8 @@ KRİTİK say, MCP araçları için her seferinde sor.
 
 **Proje güveni** (Ayarlar → Kurallar) — *güvenilir*: DÜŞÜK istekler tavan izin veriyorsa
 kendiliğinden geçer; *normal*: varsayılan; *sıkı*: her istek bir seviye yüksek sayılır (ORTA
-YÜKSEK'e, YÜKSEK KRİTİK'e çıkar). İç içe klasörlerde en özel olan geçerlidir.
+YÜKSEK'e, YÜKSEK KRİTİK'e çıkar). İç içe klasörlerde en özel olan geçerlidir. Tırnak ya da
+boşluklarla yapıştırılan veya içe aktarılan bir klasör (`"C:\src\app"`) önce temizlenir.
 
 **Otomatik izin tavanı** (Ayarlar → Güvenlik) — *Kapalı*, *Sadece DÜŞÜK* (varsayılan) ya da
 *DÜŞÜK + ORTA*. Kuralların, güvenilir projelerin ve oturum izinlerinin sensiz onaylayabileceği en yüksek riski
@@ -603,13 +617,15 @@ ayar dosyası onu kaldıramaz.
   <img src="docs/media/tr/settings-history.png" width="720" alt="Ayarlar'daki Geçmiş sayfası: kayıt anahtarı ve dosya boyutu, son 30 günün toplamları ve günlük kararlar grafiğinin başı">
 </p>
 
-Her izin isteği kayda geçer: ne zaman, hangi proje ve araç, hedef (en fazla 4.000 karakter,
-sırlar maskeli), risk ve bulgular, karar, kararı kimin verdiği ve ne kadar sürdüğü — süresi dolan,
-terminale giden ya da cevabı Claude Code'a hiç ulaşmayan istekler dahil. Arayabilir,
-filtreleyebilir, günlük grafiklere ve en sık görülen projelere, bulgulara ve araçlara
-bakabilirsin; eşleşen her şeyi CSV ya da JSON olarak dışa aktarabilirsin. CSV virgülle ya da —
-noktalı virgül bekleyen dillerdeki tablo programları için (örneğin Türkçe Excel) — noktalı virgülle
-ayrılır ve açması güvenlidir: formül gibi okunacak hücreler etkisiz hâle getirilir.
+Her izin isteği kayda geçer: ne zaman, hangi proje ve araç, hedef (en fazla 4.000 karakter, sırlar
+maskeli), risk ve bulgular, karar, kararı kimin verdiği ve ne kadar sürdüğü — süresi dolan,
+terminale giden ya da cevabı Claude Code'a hiç ulaşmayan istekler dahil. Arayabilir (`İ`, `I`, `ı`
+ve `i` aynı harf sayılır; `İNFRA` yazınca `infra-scripts` de bulunur), filtreleyebilir, günlük
+grafiklere — gün, yaz saati geçişleri dahil senin yerel takvim günündür — ve en sık görülen
+projelere, bulgulara ve araçlara bakabilirsin; eşleşen her şeyi CSV ya da JSON olarak dışa
+aktarabilirsin. CSV virgülle ya da — noktalı virgül bekleyen dillerdeki tablo programları için
+(örneğin Türkçe Excel) — noktalı virgülle ayrılır ve açması güvenlidir: formül gibi okunacak
+hücreler etkisiz hâle getirilir.
 
 Geçmiş, Nöbetçi'nin veri klasöründeki `audit.jsonl` dosyasında durur (bkz.
 [Geliştirme](#geliştirme)); dosya 10 MB'a ulaşınca (ayarlanabilir) eski kayıtlar `audit.1.jsonl`'e

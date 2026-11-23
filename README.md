@@ -511,17 +511,17 @@ A command is read as a command, not searched for words: `git commit -m "graceful
 as data, not run) stay LOW. A command that writes a file — a redirect, `tee`, `cp`, `curl -o`,
 `sed -i`, a one-liner — is judged like a file write to that path.
 
-**File writes** — paths are resolved against the session's folder first, so `.claude//settings.json`,
-`./.git/hooks/pre-commit` or `../../usr/local/bin/git` meet the same rules as the plain spelling.
-CRITICAL for Claude Code's settings files, Codex's and Cursor's hook files, Nöbetçi's own files
-and anything under `~/.ssh`; HIGH for
+**File writes** — paths are resolved against the session's folder first, so
+`.claude//settings.json`, `./.git/hooks/pre-commit` or `../../usr/local/bin/git` meet the same rules
+as the plain spelling, and `~/../../etc/cron.d/x` or `$HOME/../..` land where they really lead.
+CRITICAL for Claude Code's settings files (in `~/.claude`, or in the folder `CLAUDE_CONFIG_DIR`
+names), Codex's and Cursor's hook files, Nöbetçi's own files and anything under `~/.ssh`; HIGH for
 Claude Code hooks, agents, commands, skills and plugins, `.mcp.json`, git hooks and git config,
 shell profiles, startup folders and LaunchAgents, system files, secrets files (the macOS keychain
-included), and content that contains a
-private key or invisible characters; MEDIUM for CI workflows, `CLAUDE.md`, install scripts
-(`postinstall`), secrets that look hard-coded, and anything outside the project folder; LOW for
-build files such as `package.json`, `Cargo.toml` or a `Dockerfile`. Templates such as
-`.env.example` don't trigger the path rules.
+included), and content that contains a private key or invisible characters; MEDIUM for CI workflows,
+`CLAUDE.md`, install scripts (`postinstall`), secrets that look hard-coded, and anything outside the
+project folder; LOW for build files such as `package.json`, `Cargo.toml` or a `Dockerfile`.
+Templates such as `.env.example` don't trigger the path rules.
 
 **File reads** — HIGH for secrets (SSH keys, `.env`, credential files, cloud and Kubernetes
 configs, browser cookies and saved logins).
@@ -550,7 +550,10 @@ would.
   <img src="docs/media/en/settings-rules.png" width="720" alt="The Rules page in Settings: numbered rules, each with its tool, pattern and action, above the start of the project trust section">
 </p>
 
-Rules are checked from top to bottom before a card is shown, and the first match wins.
+Rules are checked from top to bottom before a card is shown, and the first match wins — with one
+exception, so that resolving a path never turns your deny into a question: when the first rule
+that matches caught a file path only where it leads (not as written) and doesn't deny, a deny rule
+further down that covers the request decides (the rule tester's note names both).
 
 | A rule can… | How it behaves |
 | --- | --- |
@@ -573,9 +576,17 @@ How patterns match:
   always-ask and raising rules match anywhere.
 - **An empty pattern matches everything** for its tool (the "ask every time for MCP tools"
   template relies on it); the editor warns you before you save one for every tool.
-- **A path counts where it leads.** For a file, an allow rule or one that lowers the level (and a
-  "don't ask again" grant) matches only the path as it resolves, so `..` can't climb out of the
-  folder a rule names; deny, always-ask and raising rules match it either way.
+- **A path counts where it leads.** Nöbetçi works out where a path really leads: `..`, `.`, `~` and
+  `$HOME` (`%USERPROFILE%`) are resolved, and relative paths start from the session's folder. For a
+  file, an allow rule or one that lowers the level (and a "don't ask again" grant) has to match the
+  path both as written and where it leads, so `..` can't climb out of the folder a rule names:
+  `Write /work/app/*` doesn't cover `/work/app/../../etc/hosts`, and `Write ~/*` doesn't cover
+  `~/../../etc/x`, which is `/etc/x`. A path that climbs above a folder Nöbetçi can't place (another
+  user's `~bob`, `%APPDATA%`) is never let through that way. Deny, always-ask and raising rules
+  match either spelling, so they also catch a path that climbs into their folder, and one written
+  from the project (`src/secrets/*`) catches the same file spelled in full. A "don't ask again"
+  grant for a relative path covers that one file, not the same name in another folder, and a Glob
+  request is shown and matched as its pattern under its folder (`/work/app/src/**/*.rs`).
 
 The templates are a good start: allow `npm test` and read-only git commands, forbid
 `git push --force` and package publishing, keep Claude away from `.env` files, make `rm -rf`
@@ -583,7 +594,8 @@ always CRITICAL, and ask every time for MCP tools.
 
 **Project trust** (Settings → Rules) — *trusted*: LOW requests go through on their own, within the
 ceiling; *normal*: the default; *strict*: every request counts one level higher (MEDIUM becomes
-HIGH, HIGH becomes CRITICAL). When folders are nested, the most specific one wins.
+HIGH, HIGH becomes CRITICAL). When folders are nested, the most specific one wins. A folder
+pasted or imported with quotes or spaces around it (`"C:\src\app"`) is cleaned up first.
 
 **Auto-allow ceiling** (Settings → Safety) — *Off*, *LOW only* (the default) or *LOW + MEDIUM*.
 It caps what rules, trusted projects and session grants may approve without you. HIGH and CRITICAL are never
@@ -596,12 +608,13 @@ approved automatically: the cap lives in Rust, and a hand-edited settings file c
 </p>
 
 Every permission request is recorded: when, the project and tool, the target (up to 4,000
-characters, secrets masked), the risk and findings, the decision, who made it and how long it
-took — including requests that timed out, went to the terminal, or whose answer never reached
-Claude Code. Search it, filter it, look at daily charts and the most frequent projects, findings
-and tools, and export everything that matches as CSV or JSON. The CSV uses a comma, or a
-semicolon for spreadsheets in languages that expect one (Turkish Excel, for example), and is safe
-to open: cells that would be read as formulas are defused.
+characters, secrets masked), the risk and findings, the decision, who made it and how long it took —
+including requests that timed out, went to the terminal, or whose answer never reached Claude Code.
+Search it (`İ`, `I`, `ı` and `i` count as the same letter, so `İNFRA` finds `infra-scripts`), filter
+it, look at daily charts — a day is your local calendar day, daylight saving changes included — and
+the most frequent projects, findings and tools, and export everything that matches as CSV or JSON.
+The CSV uses a comma, or a semicolon for spreadsheets in languages that expect one (Turkish Excel,
+for example), and is safe to open: cells that would be read as formulas are defused.
 
 The history lives in `audit.jsonl` in Nöbetçi's data folder (see [Development](#development)),
 rolls over to `audit.1.jsonl` at 10 MB (adjustable), and can be switched off or cleared in

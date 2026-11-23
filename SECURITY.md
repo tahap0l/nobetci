@@ -137,9 +137,13 @@ line breaks, and a loose pattern (*starts with*, *contains*, glob or empty) that
 request doesn't match a command that chains more commands than the pattern itself — a line break,
 `;`, `&&`, `||`, `|`, `&`, backticks or `$(` — so `npm test` can't carry `rm -rf ~` behind it.
 Deny rules match anywhere. For a file path, an allow rule, a rule that lowers the level and a
-"don't ask again" grant match only where the path really leads once `..`, `.`, `~` and relative
-parts are resolved — an allow rule for `/work/app/*` doesn't cover `/work/app/../../etc/hosts` —
-while deny, always-ask and raising rules match the path as written or as resolved.
+"don't ask again" grant have to match the path both as written and where it really leads once
+`..`, `.`, `~`, `$HOME` and relative parts are resolved — an allow rule for `/work/app/*` doesn't
+cover `/work/app/../../etc/hosts`, nor one for `~/*` cover `~/../../etc/x` — and a path that climbs
+above a folder Nöbetçi can't place (another user's `~bob`, `%APPDATA%`) never passes that way.
+Deny, always-ask and raising rules match the path as written or as resolved. The first rule that
+matches decides, except that one which matched a path only where it leads, and doesn't deny, never
+hides a deny rule further down: resolving a path can't turn your deny into a question.
 
 **What you see is what runs.** The relay forwards every field of a permission request whole, up to
 64 KiB. Anything longer is cut, flagged and scored HIGH, with a finding telling you to review the
@@ -176,8 +180,9 @@ a command can't turn into a link or formatting there.
 **Each window can do only its own job.** The island, the settings window and the desktop mascot
 can each call only the app commands they use. The approval commands answer the island alone;
 previewing and writing hooks, testing rules and reading or clearing the history answer the settings
-window alone; the desktop mascot only shows itself and opens the island. A script running in the
-settings window or the mascot can't approve a request.
+window alone; the desktop mascot only shows itself, says it is ready and opens the island, and
+can't send the island events. A script running in the settings window or the mascot can't approve
+a request.
 
 **Physical-click guard.** While a request is waiting, Nöbetçi records every press of the primary
 mouse button and whether it came from a real device:
@@ -279,9 +284,11 @@ file couldn't be cleaned (0 when no entry of Nöbetçi's is left), in which case
 uninstaller keeps the relay in place and tells you what is left.
 
 **Nöbetçi guards itself.** A request from the agent to change Claude Code's permission or hook
-settings (in `~/.claude`, or in the folder `CLAUDE_CONFIG_DIR` names), or Codex's or Cursor's hook
-settings (their `hooks.json`, and Codex's `config.toml`), is scored CRITICAL; one that writes hooks,
-agents, plugins or `.mcp.json` is HIGH. The same goes for Nöbetçi itself, on all three systems:
+settings (`settings.json` or `settings.local.json` in `~/.claude`, or in the folder
+`CLAUDE_CONFIG_DIR` names — when Nöbetçi sees that variable, and whenever a command spells
+`$CLAUDE_CONFIG_DIR` out), or Codex's or Cursor's hook settings (their `hooks.json`, and Codex's
+`config.toml`), is scored CRITICAL; one that writes hooks, agents, commands, skills, plugins or
+`.mcp.json` is HIGH. The same goes for Nöbetçi itself, on all three systems:
 
 - writing to its folders — `%APPDATA%\Nobetci` and `%LOCALAPPDATA%\Nobetci` on Windows;
   `~/Library/Application Support/Nobetci` and `/Applications/Nobetci.app` on macOS;
@@ -296,8 +303,9 @@ agents, plugins or `.mcp.json` is HIGH. The same goes for Nöbetçi itself, on a
   a package manager's remove…) is HIGH.
 
 Paths are resolved against the session's folder first, so `.claude//settings.json`, `./` segments,
-`..` and relative paths meet the same rules as the plain spelling, and a `cd` earlier in the
-command is followed: `cd ~/.claude` and then `> settings.json` is a write to Claude Code's
+`..` and relative paths meet the same rules as the plain spelling, `~/..` and `$HOME/..` lead out
+of the home folder to where they really point (`~/../../etc/x` is `/etc/x`), and a `cd` earlier in
+the command is followed: `cd ~/.claude` and then `> settings.json` is a write to Claude Code's
 settings.
 
 **No telemetry; explicit provider requests only.** Nöbetçi has no analytics, crash reporting or
@@ -390,8 +398,11 @@ secret that's on it.
 **Release integrity.** Releases are started by hand from `main` and built by GitHub Actions from
 that commit, with every third-party action pinned to a full commit SHA; the build jobs get no
 signing secrets, and the jobs that use one run nothing from the repository, npm or cargo. A
-`cargo audit` job checks `Cargo.lock` against the RustSec advisory database
-whenever the Rust dependencies change and once a week, and Dependabot watches npm and the actions.
+`cargo audit` job checks `Cargo.lock` against the RustSec advisory database whenever the Rust
+dependencies change and once a week, and Dependabot watches npm and the actions. One advisory
+can't be fixed here yet: glib 0.18 (RUSTSEC-2024-0429), which Tauri's GTK 3 stack brings in on
+Linux, is unsound only in an iterator that neither Nöbetçi nor any crate it builds calls, and goes
+away when Tauri moves to GTK 4. (rustix is at 1.1.6, past RUSTSEC-2026-0486.)
 `SHA256SUMS.txt` is published next to the Windows installer, the macOS disk image and the Linux
 packages. Releases are not code-signed yet (the macOS app is only ad-hoc signed and not
 notarized), so a matching hash proves that your download is the file on the release page — not
