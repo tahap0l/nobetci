@@ -30,11 +30,11 @@
     <meta name="twitter:image" content="https://tahap0l.github.io/nobetci/social.png" />
     <meta name="twitter:image:alt" content="Nöbetçi'nin adası: kritik riskli bir komut için onay kartı ve baykuş" />
     <link rel="icon" type="image/png" href="/assets/owl.png" />
-    <link rel="stylesheet" href="/styles.css?v=2.4.1" />
-    <link rel="stylesheet" href="/home-themes.css?v=2.4.1" />
-    <link rel="stylesheet" href="/mascot-motion.css?v=2.4.1" />
+    <link rel="stylesheet" href="/styles.css?v=2.5.0" />
+    <link rel="stylesheet" href="/home-themes.css?v=2.5.0" />
+    <link rel="stylesheet" href="/mascot-motion.css?v=2.5.0" />
     <title>Nöbetçi — Son karar sende</title>
-    <script src="/i18n.js?v=2.4.1"></script>
+    <script src="/i18n.js?v=2.5.0"></script>
   </head>
   <body>
     <a class="skip-link" href="#main" data-i18n="skip">İçeriğe atla</a>
@@ -67,7 +67,7 @@
         <!-- Hero: it is on screen at once, so it rises in with CSS rather than waiting for the scroll reveals. -->
         <section class="hero container">
           <div class="hero-copy">
-            <a class="release-pill rise" href="#new"><b>2.4.1</b><span data-i18n="pill">Sorular, planlar ve toplu onay adada</span><span aria-hidden="true">→</span></a>
+            <a class="release-pill rise" href="#new"><b>2.5.0</b><span data-i18n="pill">Daha keskin risk motoru, daha güvenli onaylar</span><span aria-hidden="true">→</span></a>
             <h1 class="rise d1" data-i18n="heroTitle">Yapay zekâ kod yazsın.<br /><em>Son karar sende.</em></h1>
             <p class="hero-lede rise d2" data-i18n="heroText">Nöbetçi, Claude Code oturumlarını (Codex ve Cursor'u da) ekranının üstündeki küçük bir adada izler. Bir izin isteği geldiğinde komutu ve riskini tek bakışta gösterir; onaylamak ya da reddetmek sana kalır.</p>
             <div class="hero-actions rise d3">
@@ -203,6 +203,18 @@
           </div>
           <div class="timeline">
             <article class="release reveal">
+              <span class="release-mark" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5 5 6.2v5.3c0 4.1 2.9 7.6 7 9 4.1-1.4 7-4.9 7-9V6.2z"/><path d="m9 12 2.2 2.2L15.5 10"/></svg></span>
+              <div class="release-body">
+                <header><h3>2.5.0</h3><time datetime="2026-11-23" data-i18n="d250">23 Kasım 2026</time></header>
+                <ul>
+                  <li data-i18n="n250a">Risk motoru çok daha fazla tehlikeli komutu yakalıyor; gündelik komutlar düşük kalıyor</li>
+                  <li data-i18n="n250b">Reddetmek Claude'u durdurmuyor; geçmiş her sonucu kaydediyor</li>
+                  <li data-i18n="n250c">Linux'ta yüksek ve kritik istekler terminalde onaylanıyor</li>
+                  <li data-i18n="n250d">Windows'ta güncelleme hook'larını koruyor; ada, ayarlar ve maskotlarda çok sayıda düzeltme</li>
+                </ul>
+              </div>
+            </article>
+            <article class="release reveal">
               <span class="release-mark" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/></svg></span>
               <div class="release-body">
                 <header><h3>2.4.1</h3><time datetime="2026-11-19" data-i18n="d241">19 Kasım 2026</time></header>
@@ -298,7 +310,7 @@
             <div class="eyebrow"><span class="eyebrow-dot"></span><span data-i18n="dlEyebrow">İndir</span></div>
             <h2 data-i18n="dlTitle">Nöbetçi <em>nöbete hazır.</em></h2>
             <p data-i18n="dlIntro">Ücretsiz indir, kurulum sihirbazıyla Claude Code'a bağla, ilk izin isteğinde kararını ver.</p>
-            <p class="download-latest"><span data-i18n="dlLatest">Son sürüm</span> <b>2.4.1</b> · <time datetime="2026-11-19" data-i18n="d241">19 Kasım 2026</time> · <a href="https://github.com/tahap0l/nobetci/blob/main/CHANGELOG.md" target="_blank" rel="noreferrer" data-i18n="footerChanges">Sürüm notları</a></p>
+            <p class="download-latest"><span data-i18n="dlLatest">Son sürüm</span> <b>2.5.0</b> · <time datetime="2026-11-23" data-i18n="d250">23 Kasım 2026</time> · <a href="https://github.com/tahap0l/nobetci/blob/main/CHANGELOG.md" target="_blank" rel="noreferrer" data-i18n="footerChanges">Sürüm notları</a></p>
           </div>
           <div class="downloads">
             <a class="os-card reveal" data-os="windows" href="https://github.com/tahap0l/nobetci/releases/latest" target="_blank" rel="noreferrer">
@@ -383,10 +395,10 @@
       </svg>
       <span class="owl-hint" data-i18n="owlHint">Tıkla, selam versin</span>
     </button>
-    <script src="/site.js?v=2.4.1" defer></script>
-    <script src="/live-demo.js?v=2.4.1" defer></script>
-    <script src="/mascot-themes.js?v=2.4.1" defer></script>
-    <script type="module" src="/mascot-engine.js?v=2.4.1"></script>
-    <script src="/home-themes.js?v=2.4.1" defer></script>
+    <script src="/site.js?v=2.5.0" defer></script>
+    <script src="/live-demo.js?v=2.5.0" defer></script>
+    <script src="/mascot-themes.js?v=2.5.0" defer></script>
+    <script type="module" src="/mascot-engine.js?v=2.5.0"></script>
+    <script src="/home-themes.js?v=2.5.0" defer></script>
   </body>
 </html>

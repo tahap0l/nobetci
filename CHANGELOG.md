@@ -7,15 +7,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.5.0] - 2026-11-23
+
 A full audit of 2.4.1 — the code, the real app on Linux, every screen in both languages and all
 seven themes, the installers, the website and the documents — turned up the problems below. This
 release fixes them, and improves a few things along the way. One change is in how you approve: on
 Linux, HIGH and CRITICAL requests are now approved in the terminal (the first point under
 Security).
 
-**What was tested where.** Everything was built and its tests run on Linux, and the app was tried
-there on X11, on a virtual display. Code that exists only for Windows or macOS was compiled and
-linted for those systems, but none of it has run on them yet, not even its unit tests:
+**What was tested where.** Everything was built and tested on Linux, and the app was tried there
+on X11, on a virtual display. On Windows and macOS, CI builds the installers and runs the whole
+test suite, which passes, but the app itself has not been run on them yet. So these changes have
+not been tried there in real use:
 
 - Windows: the relay's pipe hardening and the flush before the pipe closes; the click guard's
   handling of swapped buttons, of touchpads without a device handle and of buttons a program
@@ -28,9 +31,10 @@ linted for those systems, but none of it has run on them yet, not even its unit 
   limits, the Apple Events entitlement, and the click guard's handling of a button a program holds
   down.
 
-The Windows path rules (device paths, 8.3 names, `::$DATA`) are text rules and were tested on
-Linux. On Linux, the desktop mascot's cut without a compositor was checked through the window
-shape X reports, not by eye on a real desktop. The new release jobs have not run yet.
+The Windows path rules (device paths, 8.3 names, `::$DATA`) are text rules, and their tests pass
+on all three systems. On Linux, the desktop mascot's cut without a compositor was checked through
+the window shape X reports, not by eye on a real desktop. This is the first release built by the
+reworked release jobs; their signing steps have not run, because no code signing is set up yet.
 
 ### Security
 
@@ -793,7 +797,8 @@ pipe relay, the reviewed-diff hook installer and the island window were adapted 
 [Coucou](https://github.com/Louis-CFM/coucou) (MIT). Everything they had, and much more, shipped
 publicly in 0.2.0.
 
-[Unreleased]: https://github.com/tahap0l/nobetci/compare/v2.4.1...HEAD
+[Unreleased]: https://github.com/tahap0l/nobetci/compare/v2.5.0...HEAD
+[2.5.0]: https://github.com/tahap0l/nobetci/compare/v2.4.1...v2.5.0
 [2.4.1]: https://github.com/tahap0l/nobetci/compare/v2.4.0...v2.4.1
 [2.4.0]: https://github.com/tahap0l/nobetci/compare/v2.3.3...v2.4.0
 [2.3.3]: https://github.com/tahap0l/nobetci/compare/v2.3.2...v2.3.3

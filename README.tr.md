@@ -160,7 +160,7 @@ Ayrıntılar için [Gizlilik Politikası](PRIVACY.md) sayfasına bak.
 
 Ücretsiz kod imzalama [SignPath.io](https://signpath.io) tarafından, sertifika
 [SignPath Foundation](https://signpath.org) tarafından sağlanmaktadır. Şimdiye kadarki sürümlerin
-hiçbiri (v2.4.1 dahil) kod imzalı değil: başvuru kabul edilip imzalama açılınca Windows sürümleri
+hiçbiri (v2.5.0 dahil) kod imzalı değil: başvuru kabul edilip imzalama açılınca Windows sürümleri
 imzalı çıkar ve her sürümün notları dosyalarının imzalı olup olmadığını söyler. O zamana kadar her
 indirdiğin dosyayı `SHA256SUMS.txt` ile doğrula. Neyin imzalandığı, bir sürümün nasıl onaylandığı ve
 kimin onayladığı: [Kod imzalama politikası](CODE_SIGNING_POLICY.md).

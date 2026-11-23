@@ -21,7 +21,7 @@ yüzden onaylanacak bir şey de olmaz.
 
 1. Nöbetçi'nin son sürümünü kur ve bir kez aç: aktarıcısını `%LOCALAPPDATA%\Nobetci\bin`
    klasörüne koyar. Nöbetçi 2.1.4 ile 2.4.1 arası köprünün mesajlarını düşürür; bu sürümlerle
-   adada hiçbir şey görünmez. 2.4.1'den sonraki sürüm bunu düzeltiyor.
+   adada hiçbir şey görünmez. Nöbetçi 2.5.0 bunu düzeltiyor.
 2. Chrome'da `chrome://extensions`, Edge'de `edge://extensions` sayfasını aç. **Geliştirici
    modu**nu aç, **Paketlenmemiş öğe yükle**'yi seç ve buradaki `extension` klasörünü göster.
 3. Eklentinin kimliğini kopyala (a ile p arasındaki harflerden 32 karakter). Bu klasörde

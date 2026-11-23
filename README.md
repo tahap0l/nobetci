@@ -160,7 +160,7 @@ See the full [Privacy Policy](PRIVACY.md).
 ### Code signing policy
 
 Free code signing provided by [SignPath.io](https://signpath.io), certificate by
-[SignPath Foundation](https://signpath.org). No release has been code-signed so far, v2.4.1
+[SignPath Foundation](https://signpath.org). No release has been code-signed so far, v2.5.0
 included: Windows releases move to signed builds once the application is accepted and signing is
 switched on, and each release's notes say whether its files are signed. Until then, check every
 download against `SHA256SUMS.txt`. What is signed, how a release is approved and who approves it:

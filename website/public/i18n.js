@@ -38,7 +38,7 @@
       nfHome: "Ana sayfaya dön", nfDemo: "Canlı demoyu aç",
 
       // Home: hero
-      pill: "Sorular, planlar ve toplu onay adada",
+      pill: "Daha keskin risk motoru, daha güvenli onaylar",
       heroTitle: "Yapay zekâ kod yazsın.<br /><em>Son karar sende.</em>",
       heroText: "Nöbetçi, Claude Code oturumlarını (Codex ve Cursor'u da) ekranının üstündeki küçük bir adada izler. Bir izin isteği geldiğinde komutu ve riskini tek bakışta gösterir; onaylamak ya da reddetmek sana kalır.",
       download: "Ücretsiz indir", downloadFor: "{os} için indir", tryDemo: "Canlı demoyu dene",
@@ -79,7 +79,11 @@
 
       // Home: what's new
       newEyebrow: "Yenilikler", newTitle: "Her sürümde <em>biraz daha yetenekli.</em>", newAll: "Tüm sürüm notları →",
-      d241: "19 Kasım 2026", d240: "19 Kasım 2026", d233: "16–19 Kasım 2026", d231: "15 Kasım 2026", d230: "14 Kasım 2026",
+      d250: "23 Kasım 2026", d241: "19 Kasım 2026", d240: "19 Kasım 2026", d233: "16–19 Kasım 2026", d231: "15 Kasım 2026", d230: "14 Kasım 2026",
+      n250a: "Risk motoru çok daha fazla tehlikeli komutu yakalıyor; gündelik komutlar düşük kalıyor",
+      n250b: "Reddetmek Claude'u durdurmuyor; geçmiş her sonucu kaydediyor",
+      n250c: "Linux'ta yüksek ve kritik istekler terminalde onaylanıyor",
+      n250d: "Windows'ta güncelleme hook'larını koruyor; ada, ayarlar ve maskotlarda çok sayıda düzeltme",
       n241a: "Windows kurulum sihirbazı ve macOS disk görüntüsü için yeni görünüm",
       n241b: "Kurulumda el sallayan, iş bitince sevinen baykuş",
       n240a: "Claude'un çoktan seçmeli sorularını adada cevapla",
@@ -147,7 +151,7 @@
       nfText: "The page you're looking for isn't here; it may have moved or been removed. You can carry on from the Nöbetçi home page.",
       nfHome: "Back to the home page", nfDemo: "Open the live demo",
 
-      pill: "Questions, plans and batch approval on the island",
+      pill: "A sharper risk engine and safer approvals",
       heroTitle: "Let AI write the code.<br /><em>You make the&nbsp;call.</em>",
       heroText: "Nöbetçi watches your Claude Code sessions (Codex and Cursor too) from a small island at the top of your screen. When a permission request arrives, it shows the command and its risk at a glance; allowing or denying it is up to you.",
       download: "Download free", downloadFor: "Download for {os}", tryDemo: "Try the live demo",
@@ -186,7 +190,11 @@
       altSecurity: "The Safety page in the settings window",
 
       newEyebrow: "What's new", newTitle: "A little more capable <em>with every release.</em>", newAll: "All release notes →",
-      d241: "19 November 2026", d240: "19 November 2026", d233: "16–19 November 2026", d231: "15 November 2026", d230: "14 November 2026",
+      d250: "23 November 2026", d241: "19 November 2026", d240: "19 November 2026", d233: "16–19 November 2026", d231: "15 November 2026", d230: "14 November 2026",
+      n250a: "The risk engine catches many more dangerous commands; everyday ones stay low",
+      n250b: "Denying no longer stops Claude; the history records every outcome",
+      n250c: "On Linux, high and critical requests are approved in the terminal",
+      n250d: "Updating on Windows keeps your hooks; many fixes across the island, settings and mascots",
       n241a: "A new look for the Windows installer and the macOS disk image",
       n241b: "An owl that waves during setup and cheers when it's done",
       n240a: "Answer Claude's multiple-choice questions on the island",

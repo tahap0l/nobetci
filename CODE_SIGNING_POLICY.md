@@ -6,7 +6,7 @@ Free code signing provided by [SignPath.io](https://signpath.io), certificate by
 [SignPath Foundation](https://signpath.org).
 
 > **Status:** Nöbetçi has applied for SignPath Foundation's open-source code signing. No release
-> has been code-signed so far, v2.4.1 included, which is why SmartScreen may warn about the
+> has been code-signed so far, v2.5.0 included, which is why SmartScreen may warn about the
 > installer. Once the application is accepted and signing is switched on, every Windows release is
 > signed as described below, and this note is updated with the first signed version. Until then,
 > check every download against the release's `SHA256SUMS.txt` (see
@@ -128,7 +128,7 @@ else that looks wrong, report it privately as described in [SECURITY.md](SECURIT
 (Free code signing provided by SignPath.io, certificate by SignPath Foundation.)
 
 > **Durum:** Nöbetçi, SignPath Foundation'ın açık kaynak kod imzalama programına başvurdu.
-> Şimdiye kadarki sürümlerin hiçbiri (v2.4.1 dahil) kod imzalı değil; Windows'ta SmartScreen bu
+> Şimdiye kadarki sürümlerin hiçbiri (v2.5.0 dahil) kod imzalı değil; Windows'ta SmartScreen bu
 > yüzden uyarı gösterebilir. Başvuru kabul edilip imzalama açılınca her Windows sürümü aşağıda
 > anlatıldığı gibi imzalanır; bu not ilk imzalı sürümle güncellenir. O zamana kadar her indirdiğin
 > dosyayı sürümdeki `SHA256SUMS.txt` ile doğrula (aşağıdaki "İmzayı kontrol etmek" bölümü nasıl

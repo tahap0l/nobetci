@@ -21,7 +21,7 @@ there is nothing to approve.
 
 1. Install the latest Nöbetçi and open it once: it puts its relay in `%LOCALAPPDATA%\Nobetci\bin`.
    Nöbetçi 2.1.4 to 2.4.1 drop the bridge's messages, so nothing appears on the island with them.
-   The release after 2.4.1 fixes this.
+   Nöbetçi 2.5.0 fixes this.
 2. Open `chrome://extensions` in Chrome or `edge://extensions` in Edge. Turn on **Developer mode**,
    choose **Load unpacked** and pick the `extension` folder here.
 3. Copy the extension's ID (32 letters from a to p). Open PowerShell in this folder and run the
