@@ -29,15 +29,92 @@ pub fn use_x11() {
 /// A program Nöbetçi starts (a browser through xdg-open, VS Code, the relay).
 /// On Linux it does not inherit the X11 backend Nöbetçi chose for itself: a
 /// browser opened from a link runs natively on Wayland, as if started from the
-/// desktop. Nöbetçi's own web views keep it.
+/// desktop. Nöbetçi's own web views keep it. Nor, when Nöbetçi runs from an
+/// AppImage, what the AppImage set up for its own GTK and GStreamer
+/// (`appimage_leftovers`): that program draws with the user's theme and loads
+/// the system's modules, not the ones inside an image that disappears when
+/// Nöbetçi quits.
 pub fn command(program: impl AsRef<std::ffi::OsStr>) -> Command {
     #[cfg_attr(not(target_os = "linux"), allow(unused_mut))]
     let mut cmd = Command::new(program);
     #[cfg(target_os = "linux")]
-    if X11_FORCED.load(Ordering::Relaxed) {
-        cmd.env_remove("GDK_BACKEND");
+    {
+        if X11_FORCED.load(Ordering::Relaxed) {
+            cmd.env_remove("GDK_BACKEND");
+        }
+        for (name, value) in appimage_leftovers(|name| std::env::var_os(name)) {
+            match value {
+                Some(value) => cmd.env(name, value),
+                None => cmd.env_remove(name),
+            };
+        }
     }
     cmd
+}
+
+/// What an AppImage's start-up hooks put in Nöbetçi's environment for its own
+/// GTK (linuxdeploy-plugin-gtk) and GStreamer (linuxdeploy-plugin-gstreamer,
+/// D19), plus the AppImage runtime's own markers: none of it belongs to a
+/// program Nöbetçi starts.
+#[cfg(any(target_os = "linux", test))]
+const APPIMAGE_VARS: &[&str] = &[
+    "APPIMAGE",
+    "APPDIR",
+    "ARGV0",
+    "OWD",
+    "GTK_DATA_PREFIX",
+    "GTK_THEME",
+    "GTK_EXE_PREFIX",
+    "GTK_PATH",
+    "GTK_IM_MODULE_FILE",
+    "GDK_PIXBUF_MODULE_FILE",
+    "GIO_MODULE_DIR",
+    "GSETTINGS_SCHEMA_DIR",
+    "GI_TYPELIB_PATH",
+    "GST_REGISTRY_REUSE_PLUGIN_SCANNER",
+    "GST_PLUGIN_SYSTEM_PATH_1_0",
+    "GST_PLUGIN_PATH_1_0",
+    "GST_PLUGIN_SCANNER_1_0",
+    "GST_PTP_HELPER_1_0",
+    "GST_PLUGIN_SYSTEM_PATH_0_10",
+    "GST_PLUGIN_SCANNER_0_10",
+    "GST_PTP_HELPER_0_10",
+];
+
+/// The environment changes that undo an AppImage's set-up for a program
+/// Nöbetçi starts: each variable to remove (None) or to set back. Nothing when
+/// Nöbetçi does not run from an AppImage (`APPDIR` unset), so a user's own
+/// GTK_THEME and the like stay. XDG_DATA_DIRS gets back what it was before the
+/// GTK hook put the image's folders in front of it, or goes when it had no
+/// value. `env` reads Nöbetçi's own environment.
+#[cfg(any(target_os = "linux", test))]
+fn appimage_leftovers(
+    env: impl Fn(&str) -> Option<std::ffi::OsString>,
+) -> Vec<(&'static str, Option<std::ffi::OsString>)> {
+    let Some(appdir) = env("APPDIR").filter(|dir| !dir.is_empty()) else { return Vec::new() };
+    // The runtime sets APPIMAGE; an image run unpacked has only the hook's
+    // mark. An APPDIR of somebody else's changes nothing.
+    if env("APPIMAGE").is_none() && env("GTK_DATA_PREFIX").as_ref() != Some(&appdir) {
+        return Vec::new();
+    }
+    let appdir = appdir.to_string_lossy().trim_end_matches('/').to_string();
+    let mut changes: Vec<(&'static str, Option<std::ffi::OsString>)> =
+        APPIMAGE_VARS.iter().filter(|name| env(name).is_some()).map(|name| (*name, None)).collect();
+    if let Some(dirs) = env("XDG_DATA_DIRS") {
+        let dirs = dirs.to_string_lossy().into_owned();
+        // The hook sets "$APPDIR/usr/share:/usr/share:$XDG_DATA_DIRS"; any other
+        // entry inside the image goes too.
+        let hooked = format!("{appdir}/usr/share:/usr/share:");
+        let before = dirs.strip_prefix(&hooked).unwrap_or(&dirs);
+        let kept: Vec<&str> = before
+            .split(':')
+            .filter(|d| !d.is_empty() && *d != appdir && !d.starts_with(&format!("{appdir}/")))
+            .collect();
+        if kept.join(":") != dirs {
+            changes.push(("XDG_DATA_DIRS", (!kept.is_empty()).then(|| kept.join(":").into())));
+        }
+    }
+    changes
 }
 
 /// Text for a notification body that is shown as written. Notification
@@ -76,6 +153,81 @@ pub fn notifications_read_markup() -> bool {
         let caps: Result<(Vec<String>,), dbus::Error> =
             server.method_call("org.freedesktop.Notifications", "GetCapabilities", ());
         caps.map(|(caps,)| caps.iter().any(|c| c == "body-markup")).unwrap_or(true)
+    })
+}
+
+/// Linux: whether a login entry (an XDG autostart `.desktop` file) is
+/// switched off by the desktop. Xfce, LXQt and KDE write `Hidden=true`,
+/// Cinnamon `X-GNOME-Autostart-enabled=false`, MATE its own key of that kind;
+/// none of them deletes the file.
+#[cfg(any(target_os = "linux", test))]
+pub fn login_entry_switched_off(text: &str) -> bool {
+    entry_lines(text).any(|(key, value)| {
+        let key = key.to_ascii_lowercase();
+        (key == "hidden" && value.eq_ignore_ascii_case("true"))
+            || (key.starts_with("x-") && key.ends_with("-autostart-enabled") && value.eq_ignore_ascii_case("false"))
+    })
+}
+
+/// Linux: a login entry that starts `program`: the entry as it is when its
+/// `Exec=` already names it (None), otherwise with only that line rewritten,
+/// as the autostart plugin writes it. Every other line — the desktop's own
+/// keys, a delay, comments — stays.
+#[cfg(any(target_os = "linux", test))]
+pub fn login_entry_for(text: &str, program: &str) -> Option<String> {
+    let current = entry_lines(text).find(|(key, _)| *key == "Exec").map(|(_, value)| value);
+    if current.is_some_and(|exec| exec.trim() == program) {
+        return None;
+    }
+    let exec = format!("Exec={program} ");
+    let mut group = "";
+    let mut done = false;
+    let mut out: Vec<String> = Vec::new();
+    for line in text.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with('[') {
+            if group == "[Desktop Entry]" && !done {
+                out.push(exec.clone());
+                done = true;
+            }
+            group = trimmed;
+        } else if group == "[Desktop Entry]"
+            && !done
+            && trimmed.split_once('=').is_some_and(|(k, _)| k.trim() == "Exec")
+        {
+            out.push(exec.clone());
+            done = true;
+            continue;
+        }
+        out.push(line.to_string());
+    }
+    if !done {
+        if group != "[Desktop Entry]" {
+            out.push("[Desktop Entry]".into());
+        }
+        out.push(exec);
+    }
+    let mut updated = out.join("\n");
+    if text.ends_with('\n') {
+        updated.push('\n');
+    }
+    Some(updated)
+}
+
+/// The `key=value` lines of a `.desktop` file's [Desktop Entry] group.
+#[cfg(any(target_os = "linux", test))]
+fn entry_lines(text: &str) -> impl Iterator<Item = (&str, &str)> {
+    let mut group = "";
+    text.lines().filter_map(move |line| {
+        let line = line.trim();
+        if line.starts_with('[') {
+            group = line;
+            return None;
+        }
+        if group != "[Desktop Entry]" || line.starts_with('#') {
+            return None;
+        }
+        line.split_once('=').map(|(key, value)| (key.trim(), value.trim()))
     })
 }
 
@@ -403,6 +555,90 @@ mod tests {
         let envs: Vec<_> = cmd.get_envs().collect();
         assert_eq!(envs, vec![(std::ffi::OsStr::new("GDK_BACKEND"), None)], "GDK_BACKEND is removed");
         X11_FORCED.store(false, Ordering::Relaxed);
+    }
+
+    /// shell-widgets#2: a program started from Nöbetçi's AppImage gets none of
+    /// the image's GTK and GStreamer set-up, and XDG_DATA_DIRS as it was.
+    #[test]
+    fn programs_started_from_the_appimage_get_the_desktops_environment() {
+        use std::collections::HashMap;
+        use std::ffi::OsString;
+        let appimage: HashMap<&'static str, &'static str> = [
+            ("APPIMAGE", "/home/u/Apps/Nobetci.AppImage"),
+            ("APPDIR", "/tmp/.mount_NobetcX"),
+            ("ARGV0", "Nobetci.AppImage"),
+            ("GTK_THEME", "Adwaita:dark"),
+            ("GTK_PATH", "/tmp/.mount_NobetcX//usr/lib/gtk-3.0"),
+            ("GIO_MODULE_DIR", "/tmp/.mount_NobetcX//usr/lib/gio/modules"),
+            ("GDK_PIXBUF_MODULE_FILE", "/tmp/.mount_NobetcX//usr/lib/gdk-pixbuf-2.0/2.10.0/loaders.cache"),
+            ("GST_PLUGIN_SYSTEM_PATH_1_0", "/tmp/.mount_NobetcX/usr/lib/gstreamer-1.0"),
+            ("GST_PLUGIN_SCANNER_1_0", "/tmp/.mount_NobetcX/usr/lib/gstreamer1.0/gstreamer-1.0/gst-plugin-scanner"),
+            ("XDG_DATA_DIRS", "/tmp/.mount_NobetcX/usr/share:/usr/share:/usr/local/share:/usr/share"),
+            ("HOME", "/home/u"),
+        ]
+        .into();
+        fn env<'a>(vars: &'a HashMap<&'static str, &'static str>) -> impl Fn(&str) -> Option<OsString> + 'a {
+            move |name| vars.get(name).map(OsString::from)
+        }
+        let changes = appimage_leftovers(env(&appimage));
+        let removed: Vec<&str> = changes.iter().filter(|(_, v)| v.is_none()).map(|(n, _)| *n).collect();
+        for name in ["APPIMAGE", "APPDIR", "ARGV0", "GTK_THEME", "GTK_PATH", "GIO_MODULE_DIR", "GST_PLUGIN_SCANNER_1_0"]
+        {
+            assert!(removed.contains(&name), "{name}: {changes:?}");
+        }
+        assert!(!removed.contains(&"HOME"));
+        assert!(
+            changes.contains(&("XDG_DATA_DIRS", Some(OsString::from("/usr/local/share:/usr/share")))),
+            "back to what it was: {changes:?}"
+        );
+        // The hook had nothing to put in front of: the variable goes.
+        let mut fresh = appimage.clone();
+        fresh.insert("XDG_DATA_DIRS", "/tmp/.mount_NobetcX/usr/share:/usr/share:");
+        assert!(appimage_leftovers(env(&fresh)).contains(&("XDG_DATA_DIRS", None)));
+        // An image run unpacked has no APPIMAGE, only the hook's mark.
+        let mut unpacked = appimage.clone();
+        unpacked.remove("APPIMAGE");
+        unpacked.insert("GTK_DATA_PREFIX", "/tmp/.mount_NobetcX");
+        assert!(appimage_leftovers(env(&unpacked)).iter().any(|(n, _)| *n == "GTK_THEME"));
+        // Not from an AppImage: a user's own GTK_THEME stays.
+        let desktop: HashMap<&'static str, &'static str> =
+            [("GTK_THEME", "Yaru:dark"), ("XDG_DATA_DIRS", "/usr/share")].into();
+        assert!(appimage_leftovers(env(&desktop)).is_empty());
+        let mut stray = desktop.clone();
+        stray.insert("APPDIR", "/opt/something");
+        assert!(appimage_leftovers(env(&stray)).is_empty(), "an APPDIR of somebody else's");
+    }
+
+    /// hooks-settings#2: a login entry the desktop switched off counts as
+    /// removed, and a refresh changes its Exec= line and nothing else.
+    #[test]
+    fn a_login_entry_switched_off_by_the_desktop_is_recognised_and_kept() {
+        let written = "[Desktop Entry]\nType=Application\nVersion=1.0\nName=Nobetci\nComment=Nobetci startup script\nExec=/home/u/Apps/Nobetci.AppImage \nStartupNotify=false\nTerminal=false";
+        assert!(!login_entry_switched_off(written));
+        for off in [
+            format!("{written}\nHidden=true"),
+            format!("{written}\nX-GNOME-Autostart-enabled=false"),
+            format!("{written}\nX-MATE-Autostart-enabled=False"),
+            format!("{written}\nhidden = TRUE"),
+        ] {
+            assert!(login_entry_switched_off(&off), "{off}");
+        }
+        assert!(!login_entry_switched_off(&format!("{written}\nX-GNOME-Autostart-enabled=true")));
+        assert!(!login_entry_switched_off("[Other Group]\nHidden=true\n"), "only the entry's own group counts");
+        // Already this program: left alone.
+        assert_eq!(login_entry_for(written, "/home/u/Apps/Nobetci.AppImage"), None);
+        // A moved AppImage: only Exec= changes; the user's delay and comment stay.
+        let customised =
+            "# mine\n[Desktop Entry]\nName=Nobetci\nExec=/old/Nobetci.AppImage \nX-GNOME-Autostart-Delay=10\n";
+        assert_eq!(
+            login_entry_for(customised, "/new/Nobetci.AppImage").as_deref(),
+            Some("# mine\n[Desktop Entry]\nName=Nobetci\nExec=/new/Nobetci.AppImage \nX-GNOME-Autostart-Delay=10\n")
+        );
+        // An entry without Exec= gets one in its group.
+        assert_eq!(
+            login_entry_for("[Desktop Entry]\nName=N\n[Extra]\nA=b\n", "/p/nobetci").as_deref(),
+            Some("[Desktop Entry]\nName=N\nExec=/p/nobetci \n[Extra]\nA=b\n")
+        );
     }
 
     #[test]

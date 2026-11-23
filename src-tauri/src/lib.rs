@@ -218,30 +218,73 @@ fn set_autostart(app: &AppHandle, on: bool) -> Result<(), String> {
 /// At start, the "Start at login" switch follows the OS. A login entry removed
 /// outside Nöbetçi (Task Manager, Login Items, the desktop's autostart settings,
 /// a cleanup tool) turns the setting off instead of being put back over that
-/// choice. On Linux an entry that is there is written again, because it names
-/// the program by path and an AppImage replaced by a newer file has a new one.
+/// choice. On Linux the desktop may switch the entry off instead of removing it
+/// (`Hidden=true`, `X-GNOME-Autostart-enabled=false`), which counts the same;
+/// an entry that is on gets its `Exec=` line brought up to date — it names the
+/// program by path, and an AppImage replaced by a newer file has a new one —
+/// and nothing else of it is touched.
 fn reconcile_autostart(app: &AppHandle) {
     if !current(app).autostart {
         return;
     }
     let Some(manager) = app.try_state::<tauri_plugin_autostart::AutoLaunchManager>() else { return };
+    let switched_off = |how: &str| {
+        log::line(format!("autostart: the login entry is {how} (changed outside Nöbetçi); the setting follows it"));
+        let mut s = current(app);
+        s.autostart = false;
+        // A failed save is logged inside; the switch shows the truth meanwhile.
+        let _ = apply_settings(app, s, true);
+    };
     match manager.is_enabled() {
         Ok(true) =>
         {
             #[cfg(target_os = "linux")]
-            if let Err(err) = manager.enable() {
-                log::line(format!("autostart: could not refresh the login entry: {err}"));
+            if refresh_login_entry(app) == LoginEntry::SwitchedOff {
+                switched_off("switched off");
             }
         }
-        Ok(false) => {
-            log::line("autostart: the login entry is gone (changed outside Nöbetçi); the setting follows it");
-            let mut s = current(app);
-            s.autostart = false;
-            // A failed save is logged inside; the switch shows the truth meanwhile.
-            let _ = apply_settings(app, s, true);
-        }
+        Ok(false) => switched_off("gone"),
         Err(err) => log::line(format!("autostart: could not check the login entry: {err}")),
     }
+}
+
+#[cfg(target_os = "linux")]
+#[derive(PartialEq)]
+enum LoginEntry {
+    On,
+    SwitchedOff,
+}
+
+/// Linux: reads Nöbetçi's XDG autostart entry, says whether the desktop
+/// switched it off, and points its `Exec=` at the program running now.
+#[cfg(target_os = "linux")]
+fn refresh_login_entry(app: &AppHandle) -> LoginEntry {
+    // Where the autostart plugin keeps it, under the name it gives it.
+    let file = sys::home().join(".config").join("autostart").join(format!("{}.desktop", app.package_info().name));
+    let text = match std::fs::read_to_string(&file) {
+        Ok(text) => text,
+        Err(err) => {
+            log::line(format!("autostart: could not read the login entry {}: {err}", file.display()));
+            return LoginEntry::On;
+        }
+    };
+    if sys::login_entry_switched_off(&text) {
+        return LoginEntry::SwitchedOff;
+    }
+    // The program the plugin names: the AppImage when there is one.
+    let program = app
+        .env()
+        .appimage
+        .map(std::path::PathBuf::from)
+        .or_else(|| std::env::current_exe().ok())
+        .map(|p| p.display().to_string());
+    if let Some(updated) = program.and_then(|program| sys::login_entry_for(&text, &program)) {
+        match std::fs::write(&file, updated) {
+            Ok(()) => log::line("autostart: the login entry now starts this copy of Nöbetçi"),
+            Err(err) => log::line(format!("autostart: could not refresh the login entry: {err}")),
+        }
+    }
+    LoginEntry::On
 }
 
 /// Saves new preferences; rejects with `save_failed: …` or `settings_unreadable`
