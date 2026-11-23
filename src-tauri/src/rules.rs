@@ -7,14 +7,18 @@
 // medium. Evaluated in Rust so the front end cannot widen it.
 //
 // Matching is deliberately lopsided. A rule that denies, asks or raises the risk
-// matches as widely as its pattern reads: there a wider net is the safe side,
-// and it also meets the other spellings the OS reads as the same path
-// (`//etc/x`, `\\?\C:\x`, `C:\Windows.\x`). A rule that lets a command through,
-// or calms its risk down, covers that command alone — "npm test" → allow says
-// nothing about `npm test && curl … | sh`, `npm test (iwr …)` or
-// `npm test =(curl …)` — and a path only where it really leads: `Write /p/*`
-// says nothing about `/p/../etc/hosts` or `~/../../etc/hosts`, while
-// `Write /etc/*` catches both.
+// matches as widely as its pattern reads: there a wider net is the safe side.
+// For a path it also meets the other spellings `os_spellings` lists (`//etc/x`,
+// `\\?\C:\x`, `\??\C:\x`, `\\localhost\C$\x`, `C:\Windows.\x`,
+// `/proc/self/root/etc/x`, `/private/etc/x`) and short 8.3 names of the names
+// the rule spells out (`C:\PROGRA~1\x` for `C:\Program Files\*`) — those, not
+// every name a file can have: links, junctions, mounted folders and substituted
+// drives are not followed, and a command's text is matched as written. A rule
+// that lets a command through, or calms its risk down, covers that command
+// alone — "npm test" → allow says nothing about `npm test && curl … | sh`,
+// `npm test (iwr …)` or `npm test =(curl …)` — and a path only where it really
+// leads: `Write /p/*` says nothing about `/p/../etc/hosts` or
+// `~/../../etc/hosts`, while `Write /etc/*` catches both.
 //
 // The first rule that matches decides. One that caught a path only where it
 // leads, and does not deny, leaves a deny rule further down its say
@@ -218,10 +222,11 @@ fn matches_any<'t>(mode: &str, pattern: &str, targets: impl IntoIterator<Item = 
 /// Whether the rule's pattern covers the request's target. A path counts as
 /// written and as it resolves (`Assessment::resolved`): a rule that lets the
 /// request through or calms it down must cover both, one that denies, asks or
-/// raises the risk either — or any other spelling the OS reads as the same
-/// path (`os_spellings`). A name that still climbs with `..` (above a root the
-/// engine cannot place) says nothing about where the path leads, so it never
-/// lets a request through.
+/// raises the risk either — or one of the other spellings of the path that
+/// `os_spellings` lists, or the path with a short 8.3 name in it read as a
+/// name the rule spells out (`long_name_spellings`). A name that still climbs
+/// with `..` (above a root the engine cannot place) says nothing about where
+/// the path leads, so it never lets a request through.
 fn covers(rule: &UserRule, a: &Assessment, loosens: bool) -> bool {
     let written = pattern_matches(&rule.mode, &rule.pattern, &a.target);
     if a.resolved.is_empty() {
@@ -231,58 +236,252 @@ fn covers(rule: &UserRule, a: &Assessment, loosens: bool) -> bool {
     if loosens {
         written && matches_any(&rule.mode, &rule.pattern, names.filter(|n| !risk::climbs(n)))
     } else {
-        let alike: Vec<String> =
-            std::iter::once(a.target.as_str()).chain(names.clone()).flat_map(os_spellings).collect();
+        let spelled: Vec<&str> = std::iter::once(a.target.as_str()).chain(names.clone()).collect();
+        let mut alike: Vec<String> = spelled.iter().copied().flat_map(os_spellings).collect();
+        let long: Vec<String> = spelled
+            .iter()
+            .copied()
+            .chain(alike.iter().map(String::as_str))
+            .flat_map(|p| long_name_spellings(p, &rule.pattern))
+            .collect();
+        alike.extend(long);
         written || matches_any(&rule.mode, &rule.pattern, names.chain(alike.iter().map(String::as_str)))
     }
 }
 
 /// Other spellings of `path` that the OS reads as the same file, for the rules
-/// that deny, ask or raise (never for one that lets a request through):
-///   * Linux and macOS read `//etc/x` and `///etc/x` as /etc/x;
-///   * Windows reads `\\?\C:\x` and `\\.\C:\x` as C:\x, `\\?\UNC\srv\share` as
-///     \\srv\share, and drops trailing dots and spaces from every name:
+/// that deny, ask or raise (never for one that lets a request through). These,
+/// and no others:
+///   * Linux and macOS read a run of leading slashes as one: `//etc/x` and
+///     `///etc/x` are /etc/x;
+///   * on Linux a process's root folder is `/`: `/proc/self/root/etc/x` (and
+///     `thread-self`'s, or a numbered process's) is /etc/x outside a container;
+///   * macOS keeps /etc, /tmp and /var in /private: `/private/etc/x` is /etc/x;
+///   * Windows reads the device and object-manager paths `\\?\C:\x`,
+///     `\\.\C:\x` and `\??\C:\x` as C:\x, `\\?\UNC\srv\share` as \\srv\share,
+///     a drive's administrative share on this computer (`\\localhost\C$\x`,
+///     `\\127.0.0.1\C$\x`) as the drive, and drops trailing dots and spaces
+///     and the `::$DATA` that names a file's contents from every name:
 ///     `C:\Windows.\x` is C:\Windows\x.
 ///
-/// Either slash goes. Empty when there is no other spelling.
+/// Either slash goes, and a Windows spelling found here comes in both. Links,
+/// junctions, mount points, substituted drives, a share reached by the
+/// computer's own name and a volume named by its device or GUID are not
+/// followed. Empty when there is no other spelling.
 fn os_spellings(path: &str) -> Vec<String> {
+    // Windows: the path a device, object-manager or share spelling names, and
+    // its names as Windows reads them.
+    let base = device_path(path).unwrap_or_else(|| path.to_string());
+    let mut windows: Vec<String> = Vec::new();
+    for p in std::iter::once(base.clone()).chain(admin_share(&base)) {
+        if looks_windows(&p) {
+            windows.push(trim_names(&p));
+        }
+        windows.push(p);
+    }
+    // POSIX: leading slashes, a process's root, macOS's /private.
     let mut out: Vec<String> = Vec::new();
-    let mut add = |p: String| {
-        if p != path && !p.is_empty() && !out.contains(&p) {
-            out.push(p);
+    let mut add = |r: String| {
+        if r != path && !r.is_empty() && !out.contains(&r) {
+            out.push(r);
         }
     };
-    // Win32 device paths.
-    let lower = path.to_ascii_lowercase();
-    let plain =
-        ["\\\\?\\", "//?/", "\\\\.\\", "//./"].iter().find(|p| lower.starts_with(**p)).map(|p| &path[p.len()..]);
-    let plain = plain.map(|rest| match rest.get(..4) {
-        Some(unc) if unc.eq_ignore_ascii_case("unc\\") => format!("\\\\{}", &rest[4..]),
-        Some(unc) if unc.eq_ignore_ascii_case("unc/") => format!("//{}", &rest[4..]),
-        _ => rest.to_string(),
-    });
-    let base = plain.unwrap_or_else(|| path.to_string());
-    // Windows drops trailing dots and spaces from each name.
-    let b = base.as_bytes();
-    let windows = (b.len() >= 2 && b[1] == b':' && b[0].is_ascii_alphabetic()) || base.starts_with("\\\\");
-    let trimmed = if windows { trim_names(&base) } else { base.clone() };
-    // POSIX reads any run of leading slashes as one (a Windows share keeps its
-    // two backslashes, and `//server/share` stays a candidate as well).
-    let single = trimmed.trim_start_matches('/');
-    if trimmed.starts_with("//") {
-        add(format!("/{single}"));
+    for p in windows {
+        let single = p.starts_with("//").then(|| format!("/{}", p.trim_start_matches('/')));
+        for q in std::iter::once(p).chain(single) {
+            for r in [proc_root(&q), private_folder(&q), Some(q)].into_iter().flatten() {
+                // A Windows path this found, in either slash: a rule may be
+                // written with either, whichever the engine resolved to.
+                if r != path && looks_windows(&r.replace('/', "\\")) {
+                    add(r.replace('/', "\\"));
+                    add(r.replace('\\', "/"));
+                }
+                add(r);
+            }
+        }
     }
-    add(trimmed);
-    add(base);
     out
 }
 
-/// Every name of a Windows path without its trailing dots and spaces (`.` and
-/// `..` stay as they are).
+/// The path a Windows device or object-manager spelling names: `\\?\C:\x`,
+/// `\\.\C:\x` and `\??\C:\x` are C:\x, `\\?\UNC\srv\share` is \\srv\share.
+fn device_path(path: &str) -> Option<String> {
+    let lower = path.to_ascii_lowercase();
+    let prefix = ["\\\\?\\", "//?/", "\\\\.\\", "//./", "\\??\\", "/??/", "\\\\??\\", "//??/"]
+        .iter()
+        .find(|p| lower.starts_with(**p))?;
+    let rest = &path[prefix.len()..];
+    Some(match rest.get(..4) {
+        Some(unc) if unc.eq_ignore_ascii_case("unc\\") => format!("\\\\{}", &rest[4..]),
+        Some(unc) if unc.eq_ignore_ascii_case("unc/") => format!("//{}", &rest[4..]),
+        _ => rest.to_string(),
+    })
+}
+
+/// A drive's administrative share on this computer as the drive itself:
+/// `\\localhost\C$\x`, `\\127.0.0.1\c$\x` are C:\x.
+fn admin_share(path: &str) -> Option<String> {
+    let rest = path.strip_prefix("\\\\").or_else(|| path.strip_prefix("//"))?;
+    let (host, share) = rest.split_once(['\\', '/'])?;
+    let loopback = host.eq_ignore_ascii_case("localhost")
+        || host.eq_ignore_ascii_case("0--1.ipv6-literal.net")
+        || host.strip_prefix("127.").is_some_and(|ip| {
+            let octets: Vec<&str> = ip.split('.').collect();
+            octets.len() == 3
+                && octets.iter().all(|n| (1..=3).contains(&n.len()) && n.bytes().all(|b| b.is_ascii_digit()))
+        });
+    let b = share.as_bytes();
+    let drive = b.len() >= 2
+        && b[0].is_ascii_alphabetic()
+        && b[1] == b'$'
+        && b.get(2).is_none_or(|c| matches!(c, b'\\' | b'/'));
+    (loopback && drive).then(|| {
+        let slash = if path.starts_with('/') { '/' } else { '\\' };
+        format!("{}:{slash}{}", b[0] as char, share.get(3..).unwrap_or(""))
+    })
+}
+
+/// A drive path or a share: where Windows' rules for names apply.
+fn looks_windows(path: &str) -> bool {
+    let b = path.as_bytes();
+    (b.len() >= 2 && b[1] == b':' && b[0].is_ascii_alphabetic()) || path.starts_with("\\\\")
+}
+
+/// A process's root folder on Linux read as `/`: `/proc/self/root/etc/x`,
+/// `/proc/thread-self/root/…` and `/proc/<pid>/root/…`. A `..` past it climbs
+/// from `/`.
+fn proc_root(path: &str) -> Option<String> {
+    let (who, rest) = path.strip_prefix("/proc/")?.split_once('/')?;
+    let rest = rest.strip_prefix("root")?;
+    let process = who == "self" || who == "thread-self" || (!who.is_empty() && who.bytes().all(|b| b.is_ascii_digit()));
+    if !process || !(rest.is_empty() || rest.starts_with('/')) {
+        return None;
+    }
+    let root = format!("/{}", rest.trim_start_matches('/'));
+    Some(if risk::climbs(&root) { risk::resolve("", &root) } else { root })
+}
+
+/// macOS keeps /etc, /tmp and /var in /private: `/private/etc/hosts` read as
+/// /etc/hosts.
+fn private_folder(path: &str) -> Option<String> {
+    let rest = path.get(..9).filter(|p| p.eq_ignore_ascii_case("/private/")).map(|_| &path[8..])?;
+    let kept = ["/etc", "/tmp", "/var"].iter().any(|dir| {
+        rest.get(..dir.len()).is_some_and(|p| p.eq_ignore_ascii_case(dir))
+            && rest[dir.len()..].chars().next().is_none_or(|c| c == '/')
+    });
+    kept.then(|| rest.to_string())
+}
+
+/// `path` with each short 8.3 name in it (`PROGRA~1`, `SETTIN~1.JSO`) read as
+/// a name the rule's `pattern` spells out that Windows may have given it that
+/// short name: a deny rule on `C:\Program Files\*` meets `C:\PROGRA~1\x`.
+/// The file system is never asked (it may wait on a share, and only the disk
+/// that made a short name knows it): the rule says what the name may stand
+/// for, which may be more than one name. Empty when no short name in `path`
+/// reads as one of the rule's names. At most 16.
+fn long_name_spellings(path: &str, pattern: &str) -> Vec<String> {
+    const MOST: usize = 16;
+    if !path.contains('~') {
+        return Vec::new();
+    }
+    let names = pattern_names(pattern);
+    let slashes: Vec<char> = path.chars().filter(|c| matches!(c, '/' | '\\')).collect();
+    let mut out = vec![String::new()];
+    let mut read = false;
+    for (i, part) in path.split(['/', '\\']).enumerate() {
+        let longs: Vec<&str> = match short_name(part) {
+            Some(short) => names.iter().copied().filter(|name| short.fits(name)).collect(),
+            None => Vec::new(),
+        };
+        read |= !longs.is_empty();
+        let choices = if longs.is_empty() { vec![part] } else { longs };
+        let slash = slashes.get(i).map(char::to_string).unwrap_or_default();
+        let mut next = Vec::new();
+        for head in &out {
+            for choice in &choices {
+                if next.len() < MOST {
+                    next.push(format!("{head}{choice}{slash}"));
+                }
+            }
+        }
+        out = next;
+    }
+    if read {
+        out
+    } else {
+        Vec::new()
+    }
+}
+
+/// The names a rule's pattern spells out, to read short names against: each
+/// part between its separators (`Program Files (x86)` in a glob) and each run
+/// of letters, digits, spaces, dots, dashes and underscores (`Program Files`
+/// in the regex `Program Files( \(x86\))?`).
+fn pattern_names(pattern: &str) -> Vec<&str> {
+    let mut names: Vec<&str> = pattern.split(['/', '\\']).collect();
+    names.extend(pattern.split(|c: char| !(c.is_alphanumeric() || matches!(c, ' ' | '.' | '-' | '_'))));
+    names.retain(|n| !n.trim().is_empty());
+    names.sort_unstable();
+    names.dedup();
+    names
+}
+
+/// A short 8.3 name: the start of a long name and of its extension that it
+/// keeps (`PROGRA~1`, `SETTIN~1.JSO`).
+struct ShortName {
+    start: Vec<char>,
+    ext: Vec<char>,
+}
+
+fn short_name(part: &str) -> Option<ShortName> {
+    let (stem, ext) = part.split_once('.').unwrap_or((part, ""));
+    let (start, number) = stem.rsplit_once('~')?;
+    let (start, ext): (Vec<char>, Vec<char>) = (start.chars().collect(), ext.chars().collect());
+    let short = (1..=6).contains(&start.len())
+        && !number.is_empty()
+        && number.bytes().all(|b| b.is_ascii_digit())
+        && start.len() + 1 + number.len() <= 8
+        && ext.len() <= 3
+        && !start.iter().chain(&ext).any(|c| matches!(c, '*' | '?' | '[' | ' ' | '.'));
+    short.then_some(ShortName { start, ext })
+}
+
+impl ShortName {
+    /// Whether Windows may have given the long `name` this short name: the
+    /// start of its name without spaces and dots (a leading dot dropped) in
+    /// any case, `_` for a letter a short name cannot hold, and the start of
+    /// its extension — or, past the fourth short name of the same start, its
+    /// first two letters and four hex digits of a hash.
+    fn fits(&self, name: &str) -> bool {
+        let name = name.trim().trim_start_matches('.');
+        let (stem, ext) = name.rsplit_once('.').unwrap_or((name, ""));
+        let squeeze = |s: &str| s.chars().filter(|c| !matches!(c, '.' | ' ')).collect::<Vec<char>>();
+        let (stem, ext) = (squeeze(stem), squeeze(ext));
+        let begins = |short: &[char], long: &[char]| {
+            short.len() <= long.len() && short.iter().zip(long).all(|(s, l)| letter_fits(*s, *l))
+        };
+        let hashed = self.start.len() == 6 && self.start[2..].iter().all(char::is_ascii_hexdigit);
+        let start = begins(&self.start, &stem) || (hashed && begins(&self.start[..2], &stem));
+        start && self.ext.len() == ext.len().min(3) && begins(&self.ext, &ext)
+    }
+}
+
+/// A letter of a short name against the long name's: the same in any case, or
+/// `_` for a letter a short name cannot hold.
+fn letter_fits(short: char, long: char) -> bool {
+    short.to_lowercase().eq(long.to_lowercase()) || (short == '_' && !long.is_ascii_alphanumeric())
+}
+
+/// Every name of a Windows path without its trailing dots and spaces and the
+/// `::$DATA` that names its contents (`.` and `..` stay as they are).
 fn trim_names(path: &str) -> String {
     let mut out = String::with_capacity(path.len());
     let mut name = String::new();
     let flush = |name: &mut String, out: &mut String| {
+        let len = name.len();
+        if len >= 7 && name.get(len - 7..).is_some_and(|tail| tail.eq_ignore_ascii_case("::$data")) {
+            name.truncate(len - 7);
+        }
         if name.chars().all(|c| c == '.') {
             out.push_str(name);
         } else {
@@ -1023,18 +1222,36 @@ mod tests {
     }
 
     #[test]
-    fn a_deny_rule_meets_every_spelling_the_os_reads_as_the_same_path() {
-        // approval-safety#3: Linux and macOS read leading slashes as one.
+    fn a_deny_rule_meets_the_other_spellings_os_spellings_lists() {
+        // approval-safety#3: Linux and macOS read leading slashes as one; Linux
+        // reaches / through a process's root, macOS keeps /etc in /private.
         let s = with_rule(for_writes(rule("/etc/*", "glob", "deny")));
-        for path in ["//etc/cron.d/x", "///etc/cron.d/x", "//work/app/../../etc/cron.d/x"] {
+        for path in [
+            "//etc/cron.d/x",
+            "///etc/cron.d/x",
+            "//work/app/../../etc/cron.d/x",
+            "/proc/self/root/etc/cron.d/x",
+            "/proc/thread-self/root/etc/cron.d/x",
+            "/proc/1/root/etc/cron.d/x",
+            "//proc/self/root//etc/cron.d/x",
+            "/proc/self/root/../../etc/cron.d/x",
+            "/private/etc/hosts",
+        ] {
             let e = write_to(&s, path, APP);
             assert_eq!((e.outcome, e.by), (Outcome::Deny, Some("rule")), "{path}");
         }
-        // Windows: device paths and trailing dots and spaces.
+        // Windows: device and object-manager paths, this computer's
+        // administrative shares, trailing dots and spaces, `::$DATA`.
         let s = with_rule(for_writes(rule(r"C:\Windows\*", "glob", "deny")));
         for path in [
             r"\\?\C:\Windows\System32\drivers\etc\hosts",
             r"\\.\C:\Windows\System32\drivers\etc\hosts",
+            r"\??\C:\Windows\System32\drivers\etc\hosts",
+            "/??/C:/Windows/System32/drivers/etc/hosts",
+            r"\\localhost\C$\Windows\System32\drivers\etc\hosts",
+            r"\\127.0.0.1\c$\Windows\System32\drivers\etc\hosts",
+            "//localhost/C$/Windows/System32/drivers/etc/hosts",
+            r"\\?\UNC\localhost\C$\Windows\System32\drivers\etc\hosts",
             r"C:\Windows.\System32\drivers\etc\hosts",
             r"C:\Windows \System32\drivers\etc\hosts",
             r"\\?\C:\Windows.\System32\drivers\etc\hosts",
@@ -1042,8 +1259,16 @@ mod tests {
             let e = write_to(&s, path, r"C:\work\app");
             assert_eq!((e.outcome, e.by), (Outcome::Deny, Some("rule")), "{path}");
         }
+        let s = with_rule(for_writes(rule(r"C:\Windows\System32\drivers\etc\hosts", "exact", "deny")));
+        assert_eq!(
+            write_to(&s, r"C:\Windows\System32\drivers\etc\hosts::$DATA", r"C:\work\app").outcome,
+            Outcome::Deny
+        );
         let s = with_rule(for_writes(rule(r"\\server\share\*", "glob", "deny")));
         assert_eq!(write_to(&s, r"\\?\UNC\server\share\x.txt", r"C:\work\app").outcome, Outcome::Deny);
+        // Only this computer's shares: another one's C$ is another disk.
+        let s = with_rule(for_writes(rule(r"C:\Windows\*", "glob", "deny")));
+        assert_ne!(write_to(&s, r"\\fileserver\C$\Windows\x.txt", r"C:\work\app").outcome, Outcome::Deny);
         // The other spellings never let anything through: an allow rule still
         // needs the path as written.
         let s = Settings {
@@ -1052,13 +1277,78 @@ mod tests {
             ..Settings::default()
         };
         assert_eq!(write_to(&s, r"C:\work\app\src\main.rs", r"C:\work\app").outcome, Outcome::Allow);
-        let e = write_to(&s, r"\\?\C:\work\app\src\main.rs", r"C:\work\app");
-        assert_eq!((e.outcome, e.rule.as_deref()), (Outcome::Ask, None));
+        for path in [r"\\?\C:\work\app\src\main.rs", r"\??\C:\work\app\src\main.rs", r"\\localhost\C$\work\app\x.rs"] {
+            let e = write_to(&s, path, r"C:\work\app");
+            assert_eq!((e.outcome, e.rule.as_deref()), (Outcome::Ask, None), "{path}");
+        }
         // Ordinary paths have no other spelling.
         assert!(os_spellings("/etc/hosts").is_empty());
+        assert!(os_spellings("/proc/cpuinfo").is_empty());
+        assert!(os_spellings("/private/notes/x").is_empty());
         assert!(os_spellings(r"C:\work\app\x.rs").is_empty());
+        assert!(os_spellings(r"\\fileserver\share\x").is_empty());
         assert_eq!(os_spellings("//etc/x"), ["/etc/x"]);
-        assert_eq!(os_spellings(r"C:\a.\b..\..\c"), [r"C:\a\b\..\c"]);
+        assert_eq!(os_spellings(r"C:\a.\b..\..\c"), [r"C:\a\b\..\c", "C:/a/b/../c"]);
+        assert_eq!(os_spellings(r"\??\C:\x"), [r"C:\x", "C:/x"]);
+        assert_eq!(os_spellings(r"\\LOCALHOST\d$"), [r"d:\", "d:/"]);
+    }
+
+    #[test]
+    fn a_deny_rule_reads_a_short_name_as_the_names_it_spells_out() {
+        // The verifier's case: `C:\PROGRA~1` is C:\Program Files on a stock
+        // Windows, and Node's file functions read it so.
+        let s = with_rule(for_writes(rule(r"C:\Program Files\*", "glob", "deny")));
+        for path in [
+            r"C:\PROGRA~1\x\y.dll",
+            r"c:\progra~2\x\y.dll",
+            r"\\?\C:\PROGRA~1\x\y.dll",
+            // Past four alike names Windows keeps two letters and a hash.
+            r"C:\PR5F3E~1\x\y.dll",
+        ] {
+            let e = write_to(&s, path, r"C:\work\app");
+            assert_eq!((e.outcome, e.by), (Outcome::Deny, Some("rule")), "{path}");
+        }
+        // A short name may stand for any name with that start: `PROGRA~1`
+        // meets a rule on `Program Files (x86)` as well, and a regex's names.
+        for (pattern, mode) in [
+            (r"C:\Program Files (x86)\*", "glob"),
+            (r"^C:\\Program Files( \(x86\))?\\", "regex"),
+            (r"\Program Files\", "contains"),
+        ] {
+            let s = with_rule(for_writes(rule(pattern, mode, "deny")));
+            assert_eq!(write_to(&s, r"C:\PROGRA~1\x\y.dll", r"C:\work\app").outcome, Outcome::Deny, "{pattern}");
+        }
+        // Extensions and dot names: `SETTIN~1.JSO` in `CLAUDE~1`.
+        let s = with_rule(for_writes(rule(r"*\.claude\settings.json", "glob", "deny")));
+        let e = write_to(&s, r"C:\Users\dev\CLAUDE~1\SETTIN~1.JSO", r"C:\work\app");
+        assert_eq!(e.outcome, Outcome::Deny);
+        // Not every name: a short name that cannot stand for the rule's.
+        let s = with_rule(for_writes(rule(r"C:\Windows\*", "glob", "deny")));
+        for path in [r"C:\PROGRA~1\x\y.dll", r"C:\Users\dev\DOCUME~1\x.txt"] {
+            assert_ne!(write_to(&s, path, r"C:\work\app").outcome, Outcome::Deny, "{path}");
+        }
+        let s = with_rule(for_writes(rule(r"*\.claude\settings.json", "glob", "deny")));
+        assert_ne!(write_to(&s, r"C:\Users\dev\CLAUDE~1\SETTIN~1.TXT", r"C:\work\app").outcome, Outcome::Deny);
+        // Never to let anything through, and never in a command's text.
+        let s = Settings {
+            auto_allow_max: "medium".into(),
+            rules: vec![for_writes(rule(r"C:\Program Files\*", "glob", "allow"))],
+            ..Settings::default()
+        };
+        let e = write_to(&s, r"C:\PROGRA~1\x\y.dll", r"C:\work\app");
+        assert_eq!((e.outcome, e.rule.as_deref()), (Outcome::Ask, None));
+        let s = with_rule(rule("*headers*", "glob", "deny"));
+        assert_ne!(run(&s, "Bash", bash("git diff HEAD~1")).outcome, Outcome::Deny);
+        // The pieces.
+        assert!(long_name_spellings(r"C:\Program Files\x", r"C:\Program Files\*").is_empty());
+        assert_eq!(long_name_spellings(r"C:\PROGRA~1\x", r"C:\Program Files\*"), [r"C:\Program Files\x"]);
+        assert!(short_name("PROGRA~1").is_some_and(|s| s.fits("Program Files") && s.fits("ProgramData")));
+        assert!(short_name("SETTIN~1.JSO").is_some_and(|s| s.fits("settings.json") && !s.fits("settings")));
+        assert!(short_name("NBETI~1").is_some_and(|s| !s.fits("Nobetci")));
+        assert!(short_name("N_BET_~1").is_some_and(|s| s.fits("Nöbetçi")));
+        for not_short in ["PROGRAM~1", "PROGRA~", "PROGRA~X", "~1", "A~1.JSON", "PRO*~1", "notes.txt"] {
+            assert!(short_name(not_short).is_none(), "{not_short}");
+        }
     }
 
     #[test]
