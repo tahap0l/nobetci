@@ -24,6 +24,14 @@ use tauri::{AppHandle, WebviewWindow};
 
 use super::Rect;
 
+/// Every mouse event names the process that posted it: the guard can vouch for
+/// a hold here.
+pub const VOUCHES_FOR_HOLDS: bool = true;
+
+/// The guard's key for the left button (`inputguard::program_down`): the only
+/// one the monitor watches.
+const LEFT: u64 = 0;
+
 /// The island's NSWindow, to tell its presses from the settings window's.
 static ISLAND: AtomicUsize = AtomicUsize::new(0);
 static ARMED: AtomicBool = AtomicBool::new(false);
@@ -51,10 +59,19 @@ fn install() {
         if ARMED.load(Ordering::Acquire) {
             // SAFETY: AppKit hands the monitor a live event for the call's duration.
             let ev = unsafe { event.as_ref() };
+            // A program's left button is followed until it lets go, so a real
+            // press made while it is down vouches for nothing (`inputguard`).
             if ev.r#type() == NSEventType::LeftMouseDown {
+                if !is_physical(ev) {
+                    super::program_down(LEFT);
+                }
                 note(ev);
             } else if ev.r#type() == NSEventType::LeftMouseUp {
-                super::release();
+                let physical = is_physical(ev);
+                if !physical {
+                    super::program_up(LEFT);
+                }
+                super::release(physical);
             }
         }
         // Always pass the event on untouched.
@@ -77,10 +94,13 @@ fn install() {
     }
 }
 
+/// Whether the HID system made the event (a real mouse), not a program.
+fn is_physical(ev: &NSEvent) -> bool {
+    ev.CGEvent().is_some_and(|cg| CGEvent::integer_value_field(Some(&*cg), CGEventField::EventSourceUnixProcessID) == 0)
+}
+
 fn note(ev: &NSEvent) {
-    let physical = ev
-        .CGEvent()
-        .is_some_and(|cg| CGEvent::integer_value_field(Some(&*cg), CGEventField::EventSourceUnixProcessID) == 0);
+    let physical = is_physical(ev);
     let island = ISLAND.load(Ordering::Acquire);
     // SAFETY: `window` is a plain property read on an event we were handed.
     let window: *mut AnyObject = unsafe { msg_send![ev, window] };

@@ -1,17 +1,28 @@
 // Linux half of the click guard: XInput 2 raw events.
 //
 // X11 lets any program of the user's fake input with the XTEST extension, and to
-// the page such a click looks real. The X server keeps the two apart, though:
-// every event says which device it came from, and XTEST input always comes from
-// an XTEST device — "Virtual core XTEST pointer", or "<name> XTEST pointer" for
-// a master pointer that a program adds later (`xinput create-master`), which any
-// client may do without asking. So a thread listens to raw button presses on the
-// root window (no grab, nothing taken from anyone) and, at every press, asks the
-// server about the device it came from right then — never a list made earlier.
-// An XTEST device (by its name or its "XTEST Device" property), a device the
-// server no longer knows, or one whose id changed hands while we asked counts as
+// the page such a click looks real. What the guard can tell: every raw event
+// names the device it came from, and the usual way to fake a click — XTEST's
+// core request, which xdotool, xte and most tools use — presses through an XTEST
+// device: "Virtual core XTEST pointer", or "<name> XTEST pointer" for a master
+// pointer a program adds later (`xinput create-master`), which any client may do
+// without asking. So a thread listens to raw button presses on the root window
+// (no grab, nothing taken from anyone) and, at every press, asks the server about
+// the device it came from right then — never a list made earlier. An XTEST
+// device (by its name or its "XTEST Device" property), a device the server no
+// longer knows, or one whose id changed hands while we asked counts as
 // synthetic. Pressing the button through the accessibility bus (AT-SPI) makes no
 // mouse event at all.
+//
+// What it cannot tell: XTEST also takes a device to press through
+// (XTestFakeDeviceButtonEvent on a device opened with XOpenDevice), and then the
+// server posts the press through that device, the real mouse included. Such a
+// press names the real mouse as its source, and nothing in it — no flag, no
+// property — sets it apart from a hand on that mouse. So this half cannot vouch
+// for a press (`VOUCHES_FOR_HOLDS` is false): HIGH and CRITICAL requests, the
+// ones that need a hold, are never approved on the island on Linux and are
+// decided in the terminal (D23). For LOW and MEDIUM the check stays as a speed
+// bump that stops the common tools, nothing more.
 //
 // XInput 2.2 is asked for: from 2.1 on, raw events arrive even while another
 // client holds a grab — the implicit one the island's toolkit takes on a click —
@@ -33,10 +44,17 @@
 // a notice waits behind it, or the press came before the guard was watching its
 // device; a press judged under maps that may have moved backs no approval.
 //
-// A press from a device that is not physical is recorded whatever its button
-// (only wheel steps are passed over): it replaces the last press, so a program
-// can neither click with a button that a map makes the primary one nor change a
-// map behind its own click, and its click never rides on an earlier real one.
+// A press from a device that is not physical is recorded whatever its button,
+// wheel steps included: it replaces the last press, so a program can neither
+// click with a button that a map makes the primary one (a wheel button mapped
+// to 1 too) nor change a map behind its own click, and its click never rides on
+// an earlier real one. Only a real wheel step is passed over. The guard follows
+// every button a program holds until it is let go, by device and button, so a
+// real press made while one is still down cannot vouch for the click its
+// release makes (`inputguard`).
+// The pointer is asked where it is as soon as a press arrives, before the
+// device and maps are: a program that moves it right after a real press has
+// less time to put that press on our button.
 //
 // The core map read is the guard's own client pointer's, the first master
 // pointer's. A press through a second master pointer (`xinput create-master`)
@@ -63,6 +81,10 @@ use x11_dl::xinput2::{self, XInput2};
 use x11_dl::xlib::{self, Xlib};
 
 use super::Rect;
+
+/// A program can press through the real mouse device here (see above): the
+/// guard cannot vouch for a hold, and the island approves none (D23).
+pub const VOUCHES_FOR_HOLDS: bool = false;
 
 static ARMED: AtomicBool = AtomicBool::new(false);
 /// The XInput extension's opcode, for the event-queue check.
@@ -193,8 +215,8 @@ fn logical_button(button: u32, device_map: &[u8], core_map: &[u8]) -> u32 {
     through(core_map, through(device_map, button))
 }
 
-/// Wheel steps arrive as buttons 4 to 7. They are never the primary click,
-/// whatever a map says, and are passed over before the server is asked anything.
+/// Wheel steps arrive as buttons 4 to 7. A real one is never the primary click,
+/// whatever a map says, and is passed over before the maps are asked about.
 fn is_wheel(button: u32) -> bool {
     (4..=7).contains(&button)
 }
@@ -205,17 +227,18 @@ fn identity_map() -> [c_uchar; 255] {
 }
 
 /// What a press of physical `button` stands for, from what the server says,
-/// asked only as far as needed: None when it is no click at all (a wheel step,
-/// a real press of another button); otherwise whether it can back an approval.
-/// A program's press counts whatever its button — as one that backs nothing,
-/// so it replaces the last press — and so does a real one judged under button
-/// maps that may have moved (`primary` is None).
+/// asked only as far as needed: None when it is no click at all (a real wheel
+/// step, a real press of another button); otherwise whether it can back an
+/// approval. A program's press counts whatever its button, wheel buttons
+/// included — as one that backs nothing, so it replaces the last press — and
+/// so does a real one judged under button maps that may have moved (`primary`
+/// is None).
 fn verdict(button: u32, physical: impl FnOnce() -> bool, primary: impl FnOnce() -> Option<bool>) -> Option<bool> {
-    if is_wheel(button) {
-        return None;
-    }
     if !physical() {
         return Some(false);
+    }
+    if is_wheel(button) {
+        return None;
     }
     match primary() {
         Some(true) => Some(true),
@@ -533,8 +556,8 @@ fn listen() -> Result<(), &'static str> {
     crate::log::line(format!("input guard: XInput {major}.{minor}, every press checked against its device"));
     super::set_available(true);
 
-    // The device and physical button behind the press being tracked: only
-    // letting go of that button on that device ends it.
+    // The device and physical button behind the last press: only letting go of
+    // that button on that device ends it.
     let mut pressed_by: Option<(c_int, u32)> = None;
     loop {
         let mut event: xlib::XEvent = unsafe { std::mem::zeroed() };
@@ -562,21 +585,45 @@ fn listen() -> Result<(), &'static str> {
         }
         if evtype == xinput2::XI_RawButtonRelease {
             if pressed_by == Some((source, button)) {
-                super::release();
+                super::release_last();
             }
+            super::program_up(held_key(source, button));
             continue;
         }
+        // Raw events carry no position. Asked first, before the device and the
+        // maps, so a program that moves the pointer once a real press arrives
+        // has the least time to put that press on our button.
+        let (px, py) = pointer(x, dpy, root);
         let Some(backs) = server.judge_press(source, button, serial) else { continue };
-        // Raw events carry no position; the pointer has not moved since.
-        let (mut root_ret, mut child): (c_ulong, c_ulong) = (0, 0);
-        let (mut rx, mut ry, mut wx, mut wy) = (0, 0, 0, 0);
-        let mut state: c_uint = 0;
-        let found = unsafe {
-            (x.XQueryPointer)(dpy, root, &mut root_ret, &mut child, &mut rx, &mut ry, &mut wx, &mut wy, &mut state)
-        };
-        let (px, py) = if found != 0 { (rx as f64, ry as f64) } else { (f64::NAN, f64::NAN) };
         pressed_by = Some((source, button));
+        if !backs {
+            // Some(false) is a program's press, or a real one judged under maps
+            // that may have moved; either way it backs nothing, and following
+            // it as a program's until it is let go only ever refuses more.
+            super::program_down(held_key(source, button));
+        }
         super::record(backs, px, py);
+    }
+}
+
+/// The guard's key for a button held on a device (`inputguard::program_down`).
+fn held_key(source: c_int, button: u32) -> u64 {
+    (u64::from(source as u32) << 32) | u64::from(button)
+}
+
+/// Where the pointer is now, in root-window pixels; NaN when it is on another
+/// screen.
+fn pointer(x: &Xlib, dpy: *mut xlib::Display, root: c_ulong) -> (f64, f64) {
+    let (mut root_ret, mut child): (c_ulong, c_ulong) = (0, 0);
+    let (mut rx, mut ry, mut wx, mut wy) = (0, 0, 0, 0);
+    let mut state: c_uint = 0;
+    let found = unsafe {
+        (x.XQueryPointer)(dpy, root, &mut root_ret, &mut child, &mut rx, &mut ry, &mut wx, &mut wy, &mut state)
+    };
+    if found != 0 {
+        (rx as f64, ry as f64)
+    } else {
+        (f64::NAN, f64::NAN)
     }
 }
 
@@ -642,10 +689,10 @@ mod tests {
     #[test]
     fn a_program_s_press_is_recorded_whatever_its_button() {
         let never = || -> Option<bool> { panic!("the maps are not asked about") };
-        let not_asked = || -> bool { panic!("the device is not asked about") };
         // A program's press replaces the last one, as one that backs nothing:
-        // even a button that is not the click, under any map.
-        for button in [1, 2, 3, 8, 9] {
+        // even a button that is not the click, under any map — a wheel button
+        // too, which a map can make button 1 (`pointer = 4 2 3 1`).
+        for button in [1, 2, 3, 4, 5, 6, 7, 8, 9] {
             assert_eq!(verdict(button, || false, never), Some(false), "button {button}");
         }
         // A real press: the primary click backs an approval, another button is no click.
@@ -653,9 +700,21 @@ mod tests {
         assert_eq!(verdict(3, || true, || Some(false)), None);
         // Maps that may have moved behind it: recorded, backing nothing.
         assert_eq!(verdict(1, || true, || None), Some(false));
-        // Wheel steps are passed over before anything is asked.
+        // A real wheel step is passed over before the maps are asked.
         for button in 4..=7 {
-            assert_eq!(verdict(button, not_asked, never), None, "button {button}");
+            assert_eq!(verdict(button, || true, never), None, "button {button}");
+        }
+    }
+
+    #[test]
+    fn each_device_and_button_is_held_apart() {
+        // A program's held button is let go only by a release of that button on
+        // that device: no other release may stand in for it.
+        let keys = [held_key(4, 1), held_key(4, 3), held_key(6, 1), held_key(10, 1), held_key(c_int::MAX, 255)];
+        for (i, a) in keys.iter().enumerate() {
+            for b in &keys[i + 1..] {
+                assert_ne!(a, b);
+            }
         }
     }
 
@@ -839,7 +898,7 @@ mod tests {
         };
         let restore = || {
             set_device(&xi1, program, xtest, &[1, 2, 3]);
-            set_core(x, program, &[1, 2, 3]);
+            set_core(x, program, &[1, 2, 3, 4]);
             unsafe { (x.XSync)(program, xlib::False) };
             drain(x, guard);
         };
@@ -880,7 +939,8 @@ mod tests {
         assert_eq!(server.primary(source, button, serial), None, "followed only after the press");
         restore();
         // Whatever the maps do, a program's press is recorded, as one that backs
-        // nothing: it replaces the last press. A wheel step is no click at all.
+        // nothing: it replaces the last press — a wheel step too, since a map
+        // can make it the click (`pointer = 4 2 3 1`).
         click_then(3, &|| set_core(x, program, &[3, 2, 1]));
         let (source, button, serial) = next_press();
         assert_eq!(server.judge_press(source, button, serial), Some(false));
@@ -888,9 +948,10 @@ mod tests {
         click_then(1, &|| {});
         let (source, button, serial) = next_press();
         assert_eq!(server.judge_press(source, button, serial), Some(false));
+        set_core(x, program, &[4, 2, 3, 1]);
         click_then(4, &|| {});
         let (source, button, serial) = next_press();
-        assert_eq!(server.judge_press(source, button, serial), None);
+        assert_eq!(server.judge_press(source, button, serial), Some(false), "a program's wheel button as the click");
         restore();
         unsafe {
             (x.XCloseDisplay)(program);

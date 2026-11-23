@@ -38,7 +38,7 @@ use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::sync::{mpsc, Semaphore};
 
 use crate::audit::{self, Entry, Log};
-use crate::i18n::pick;
+use crate::i18n::{is_tr, pick};
 use crate::inputguard;
 use crate::island::WINDOW_LABEL;
 use crate::log;
@@ -368,25 +368,30 @@ async fn handle<C: Conn>(app: AppHandle, mut pipe: C) {
     };
     log::line(format!("PermissionRequest id={id} tool={tool} risk={:?} outcome={:?}", a.level, eval.outcome));
 
+    // Where the request goes when nobody here decides it: the terminal, or the
+    // host's own prompt — Cursor's, the Claude app's.
+    let (agent, entrypoint) = (str_of(&payload, "agent_name").to_string(), str_of(&payload, "entrypoint").to_string());
+    let host = host_of(&agent, &entrypoint);
+
     // A question or a plan the island cannot answer whole goes straight back:
     // turned off in Settings, or cut by the relay (the answer echoes the input,
     // and a cut plan must never be handed back as if it were the real one).
     if interactive.is_some() && (!settings.island_questions || truncated) {
         pipe.close().await;
         entry.decision = "none".into();
-        entry.by = "terminal".into();
+        entry.by = host.into();
+        let (who_en, who_tr) = who_asks(&agent, host);
         entry.message = if truncated {
-            pick(
-                "Cut by the relay: a cut question or plan is never answered here, so Claude Code asked in the terminal.",
-                "Aktarıcı kesti: kesilmiş soru ya da plan burada cevaplanmaz, Claude Code terminalde sordu.",
-            )
+            if is_tr() {
+                format!("Aktarıcı kesti: kesilmiş soru ya da plan burada cevaplanmaz, {who_tr}.")
+            } else {
+                format!("Cut by the relay: a cut question or plan is never answered here, so {who_en}.")
+            }
+        } else if is_tr() {
+            format!("Adada soru ve plan kapalı, {who_tr}.")
         } else {
-            pick(
-                "Questions and plans on the island are off, so Claude Code asked in the terminal.",
-                "Adada soru ve plan kapalı, Claude Code terminalde sordu.",
-            )
-        }
-        .into();
+            format!("Questions and plans on the island are off, so {who_en}.")
+        };
         record(&app, &settings, entry);
         return;
     }
@@ -485,17 +490,61 @@ async fn handle<C: Conn>(app: AppHandle, mut pipe: C) {
             } else {
                 log::line(format!("id={id} {} could not be delivered: the relay was gone", answer.decision));
                 undelivered(&mut entry, answer.decision);
+                // The island already wrote the decision on its timeline (C-21).
+                let _ = app.emit_to(WINDOW_LABEL, UNDELIVERED_EVENT, undelivered_notice(&id));
             }
         }
         // No decision: say nothing at all. nobetci-hook then writes nothing to
-        // stdout and Claude Code asks in the terminal, as if Nöbetçi were closed.
+        // stdout and Claude Code asks in the terminal, as if Nöbetçi were closed
+        // (Cursor is told to ask itself; the Claude app shows its own dialog).
         Err(reason) => {
             entry.decision = "none".into();
-            entry.by = reason.into();
+            entry.by = taken_by(reason, host).into();
         }
     }
     pipe.close().await;
     record(&app, &settings, entry);
+}
+
+/// What the island is told when an answer it sent never reached the relay.
+const UNDELIVERED_EVENT: &str = "approval-undelivered";
+
+fn undelivered_notice(request_id: &str) -> Value {
+    json!({ "requestId": request_id })
+}
+
+/// What takes over a request nobody here decides, for the history: Cursor's
+/// own prompt, the Claude desktop app's own dialog, or the terminal (Claude
+/// Code's, Codex's).
+fn host_of(agent: &str, entrypoint: &str) -> &'static str {
+    if agent == "Cursor" {
+        "cursor"
+    } else if entrypoint == "claude-desktop" {
+        "app"
+    } else {
+        "terminal"
+    }
+}
+
+/// The history's `by` for a request that went without a decision: the reason
+/// — paused, busy, timed out, not seen, answered elsewhere — or, when it was
+/// handed back, what took it over (`host_of`).
+fn taken_by(reason: &'static str, host: &'static str) -> &'static str {
+    if reason == "terminal" {
+        host
+    } else {
+        reason
+    }
+}
+
+/// Who asked instead of Nöbetçi, for a history message: English, Turkish.
+fn who_asks(agent: &str, host: &str) -> (&'static str, &'static str) {
+    match (agent, host) {
+        ("Cursor", _) => ("Cursor asked the user itself", "Cursor kullanıcıya kendisi sordu"),
+        (_, "app") => ("the Claude app asked", "Claude uygulaması sordu"),
+        ("Codex", _) => ("Codex asked in the terminal", "Codex terminalde sordu"),
+        _ => ("Claude Code asked in the terminal", "Claude Code terminalde sordu"),
+    }
 }
 
 /// Writes the answer line. False when it never got to the relay: the relay was
@@ -536,10 +585,12 @@ fn undelivered(entry: &mut Entry, decision: &str) {
 const DEFAULT_DENY: (&str, &str) = ("The user denied this through Nöbetçi.", "Kullanıcı Nöbetçi üzerinden reddetti.");
 
 /// A frame over MAX_PAYLOAD is refused unread, and Claude Code asks in the
-/// terminal. It is still logged and, if it was a permission request, written to
-/// the history — with whatever its first megabyte says about it.
+/// terminal (Cursor asks itself, the Claude app shows its dialog). It is still
+/// logged and, if it was a permission request, written to the history — with
+/// whatever its first megabyte says about it.
 fn too_long(app: &AppHandle, start: &[u8]) {
-    let fields = top_level_strings(start, &["hook_event_name", "session_id", "cwd", "tool_name"]);
+    let fields =
+        top_level_strings(start, &["hook_event_name", "session_id", "cwd", "tool_name", "agent_name", "entrypoint"]);
     let field = |key: &str| fields.get(key).cloned().unwrap_or_default();
     let (event, tool) = (field("hook_event_name"), field("tool_name"));
     log::line(format!(
@@ -552,6 +603,9 @@ fn too_long(app: &AppHandle, start: &[u8]) {
     }
     let settings = app.state::<Shared>().settings.lock().unwrap().clone();
     let cwd = field("cwd");
+    let agent = field("agent_name");
+    let host = host_of(&agent, &field("entrypoint"));
+    let (who_en, who_tr) = who_asks(&agent, host);
     let entry = Entry {
         ts: audit::now_ms(),
         id: next_id(),
@@ -562,12 +616,12 @@ fn too_long(app: &AppHandle, start: &[u8]) {
         // Never scored, and it could not be shown whole: what a cut request gets.
         level: "high".into(),
         decision: "none".into(),
-        by: "terminal".into(),
-        message: pick(
-            "Over 1 MiB: too large for Nöbetçi to show whole, so Claude Code asked in the terminal.",
-            "1 MiB'tan büyük: Nöbetçi tamamını gösteremeyeceği için Claude Code terminalde sordu.",
-        )
-        .into(),
+        by: host.into(),
+        message: if is_tr() {
+            format!("1 MiB'tan büyük: Nöbetçi tamamını gösteremeyeceği için {who_tr}.")
+        } else {
+            format!("Over 1 MiB: too large for Nöbetçi to show whole, so {who_en}.")
+        },
         ..Entry::default()
     };
     record(app, &settings, entry);
@@ -640,7 +694,8 @@ fn forget(app: &AppHandle, request_id: &str) {
     }
 }
 
-fn send(app: &AppHandle, request_id: &str, reply: Reply, keep: bool) {
+/// Hands `reply` to the request's wait; false when nothing waits for it any more.
+fn send(app: &AppHandle, request_id: &str, reply: Reply, keep: bool) -> bool {
     let sender = {
         let pending = app.state::<Pending>();
         let mut map = pending.0.lock().unwrap();
@@ -653,8 +708,16 @@ fn send(app: &AppHandle, request_id: &str, reply: Reply, keep: bool) {
     match sender {
         Some(tx) => {
             let _ = tx.try_send(reply);
+            true
         }
-        None => log::line(format!("reply for id={request_id} — no pending request")),
+        None => false,
+    }
+}
+
+/// `send`, with a line in the log when nothing waited for the reply.
+fn send_or_note(app: &AppHandle, request_id: &str, reply: Reply, keep: bool) {
+    if !send(app, request_id, reply, keep) {
+        log::line(format!("reply for id={request_id} — no pending request"));
     }
 }
 
@@ -663,7 +726,7 @@ pub fn acknowledge(app: &AppHandle, request_id: &str) {
     if let Some(w) = app.state::<Pending>().0.lock().unwrap().get_mut(request_id) {
         w.acked_at.get_or_insert_with(Instant::now);
     }
-    send(app, request_id, Reply::Ack, true);
+    send_or_note(app, request_id, Reply::Ack, true);
 }
 
 /// The card became the island's front, interactive card. It can be approved
@@ -700,7 +763,17 @@ fn payloads(map: &HashMap<String, Waiting>, now: Instant) -> Vec<Value> {
 
 /// Nobody will act on this one here — the terminal takes it right away.
 pub fn decline(app: &AppHandle, request_id: &str, reason: &str) {
-    send(app, request_id, Reply::Decline(decline_reason(reason)), false);
+    let gone = !send(app, request_id, Reply::Decline(decline_reason(reason)), false);
+    if gone && worth_noting_gone(reason) {
+        log::line(format!("reply for id={request_id} — no pending request"));
+    }
+}
+
+/// Whether a decline for a request that no longer waits is worth a line in the
+/// log. The island's countdown ending (`expired`) a moment after ours did is
+/// the normal course of things, not news.
+fn worth_noting_gone(reason: &str) -> bool {
+    reason != "expired"
 }
 
 /// How the history names why the island let a request go.
@@ -720,23 +793,96 @@ fn decline_reason(reason: &str) -> &'static str {
 /// slack). Without an anchor, the visible island. Never the whole transparent
 /// panel — other windows show through it, and a real click on one of them must
 /// not vouch for an invoke on our button.
+///
+/// Both come from the page, so neither is taken on trust: whatever it says is
+/// cut to the island's own window, an anchor bigger than any button the island
+/// draws (`MAX_ANCHOR`) is no anchor at all — the press then counts as made
+/// elsewhere — and the button counts only as far as it lies inside the visible
+/// island, the part of the window that takes clicks (`island::Gate`). A page
+/// that lies can no longer make every real press on the screen, a long one
+/// anywhere, or a click on another window behind the transparent panel count
+/// as one on Allow.
 fn anchor_rect(app: &AppHandle, anchor: Option<Anchor>) -> Option<inputguard::Rect> {
     let win = app.get_webview_window(WINDOW_LABEL)?;
-    let (x, y, w, h, slack) = match anchor {
-        Some(a) if a.w > 0.0 && a.h > 0.0 => (a.x, a.y, a.w, a.h, 4.0),
-        _ => {
-            let r = *app.state::<crate::Shared>().gate.rect.lock().unwrap();
-            (r.x, r.y, r.w, r.h, 0.0)
-        }
+    let scale = win.scale_factor().ok().filter(|s| *s > 0.0)?;
+    let size = win.inner_size().ok()?;
+    let window = (f64::from(size.width) / scale, f64::from(size.height) / scale);
+    let r = *app.state::<crate::Shared>().gate.rect.lock().unwrap();
+    let area = button_area(anchor, Area { x: r.x, y: r.y, w: r.w, h: r.h }, window);
+    let Some(Area { x, y, w, h }) = area else {
+        log::line(
+            "click guard: the place the island gave for the button is not inside the island — counted as elsewhere",
+        );
+        return None;
     };
-    inputguard::island_rect(&win, x - slack, y - slack, w + 2.0 * slack, h + 2.0 * slack)
+    inputguard::island_rect(&win, x, y, w, h)
+}
+
+/// A rectangle in the island window, logical pixels.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Area {
+    x: f64,
+    y: f64,
+    w: f64,
+    h: f64,
+}
+
+/// The largest button the island draws, with room to spare (its widest Allow
+/// button is under 200 px): a bigger "button" is no button.
+const MAX_ANCHOR: (f64, f64) = (480.0, 120.0);
+/// Slack around the button, for a press on its very edge.
+const ANCHOR_SLACK: f64 = 4.0;
+
+/// Where a press backs the approval: the button the page named (`anchor`),
+/// cut to the visible island, or without one the visible island itself — all
+/// of it cut to the window (`width`, `height`). None when no part of it is left.
+fn button_area(anchor: Option<Anchor>, visible: Area, window: (f64, f64)) -> Option<Area> {
+    let visible = within(visible, Area { x: 0.0, y: 0.0, w: window.0, h: window.1 })?;
+    match anchor {
+        None => Some(visible),
+        Some(a) => within(anchor_area(a)?, visible),
+    }
+}
+
+/// The Allow button's area with its slack, if the page's anchor can be a button
+/// of the island at all.
+fn anchor_area(a: Anchor) -> Option<Area> {
+    if !(a.w > 0.0 && a.h > 0.0 && a.w <= MAX_ANCHOR.0 && a.h <= MAX_ANCHOR.1) {
+        return None;
+    }
+    let s = ANCHOR_SLACK;
+    Some(Area { x: a.x - s, y: a.y - s, w: a.w + 2.0 * s, h: a.h + 2.0 * s })
+}
+
+/// `area` cut to `bounds`; None when nothing of it is in there, or either is
+/// not a rectangle at all (NaN, infinite, empty).
+fn within(area: Area, bounds: Area) -> Option<Area> {
+    let real = |r: Area| [r.x, r.y, r.w, r.h].iter().all(|v| v.is_finite()) && r.w > 0.0 && r.h > 0.0;
+    if !real(area) || !real(bounds) {
+        return None;
+    }
+    let (left, top) = (area.x.max(bounds.x), area.y.max(bounds.y));
+    let (right, bottom) = ((area.x + area.w).min(bounds.x + bounds.w), (area.y + area.h).min(bounds.y + bounds.h));
+    (right > left && bottom > top).then_some(Area { x: left, y: top, w: right - left, h: bottom - top })
 }
 
 /// What a decision is allowed to mean for a request at this level. Errors are
-/// codes the island turns into words.
-fn resolve(decision: &str, level: Level, engine_level: Level, via: &str) -> Result<&'static str, &'static str> {
+/// codes the island turns into words. `holds`: whether this platform can vouch
+/// for a physical hold (`inputguard::vouches_for_holds`).
+fn resolve(
+    decision: &str,
+    level: Level,
+    engine_level: Level,
+    via: &str,
+    holds: bool,
+) -> Result<&'static str, &'static str> {
     match (decision, via) {
         ("deny", _) => Ok("deny"),
+        // High and critical need a hold. Where nothing can vouch for one — on
+        // Linux a program can press through the real mouse device (D23) — no
+        // allow from the island stands, click, hold or key alike: the request
+        // is decided in the terminal.
+        ("allow" | "allow_confirmed", _) if level >= Level::High && !holds => Err("terminal_only"),
         // Keystrokes can be synthesised by any program and cannot be told apart
         // from real ones, so the allow hotkey only ever covers low risk — low as
         // scored now and as the engine scored it before a rule calmed it down.
@@ -803,7 +949,7 @@ fn back_allow(app: &AppHandle, what: &str, since: Instant, backing: Backing) -> 
     };
     result.map_err(|why| {
         match why {
-            "too_soon" | "no_hotkey" | "hold_incomplete" | "guard_unavailable" => why,
+            "too_soon" | "no_hotkey" | "hold_incomplete" | "guard_unavailable" | "terminal_only" => why,
             _ => "input_not_physical",
         }
         .to_string()
@@ -835,7 +981,7 @@ pub struct Choice<'a> {
 
 /// Called by the island's Allow / Deny controls and the global shortcuts.
 pub fn answer(app: &AppHandle, request_id: &str, c: Choice) -> Result<(), String> {
-    let (level, engine_level, grantable, since, session, tool, target, resolved, kind) = {
+    let (level, engine_level, grantable, since, session, tool, target, resolved, kind, agent) = {
         let pending = app.state::<Pending>();
         let map = pending.0.lock().unwrap();
         match map.get(request_id) {
@@ -849,6 +995,7 @@ pub fn answer(app: &AppHandle, request_id: &str, c: Choice) -> Result<(), String
                 w.target.clone(),
                 w.resolved.clone(),
                 w.kind,
+                str_of(&w.payload, "agent_name").to_string(),
             ),
             None => return Err("not_pending".into()),
         }
@@ -857,8 +1004,15 @@ pub fn answer(app: &AppHandle, request_id: &str, c: Choice) -> Result<(), String
     if kind != "permission" && c.decision != "deny" {
         return Err("needs_answer".into());
     }
-    let word = resolve(c.decision, level, engine_level, c.via).map_err(|why| {
-        log::line(format!("decision id={request_id} rejected: {why}"));
+    let word = resolve(c.decision, level, engine_level, c.via, inputguard::vouches_for_holds()).map_err(|why| {
+        if why == "terminal_only" {
+            log::line(format!(
+                "decision id={request_id} rejected: terminal_only — {level:?} needs a hold, and this platform \
+                 cannot tell a program's fake click from a real one; the request waits for the terminal or a deny"
+            ));
+        } else {
+            log::line(format!("decision id={request_id} rejected: {why}"));
+        }
         why.to_string()
     })?;
     let by: &'static str = if c.via == "hotkey" { "hotkey" } else { "user" };
@@ -897,10 +1051,42 @@ pub fn answer(app: &AppHandle, request_id: &str, c: Choice) -> Result<(), String
             .chars()
             .take(500)
             .collect::<String>();
-        (deny_reply(&message, c.stop), message)
+        // Codex and Cursor take a deny but no stop: their hooks have no way to
+        // end the agent's turn. They get the plain deny (with the words, which
+        // still ask the agent to stop), and the history says so.
+        let stop = c.stop && can_stop(&agent);
+        let recorded = if c.stop && !stop {
+            log::line(format!("id={request_id}: {agent} cannot be stopped through its hook — a plain deny"));
+            format!("{message} ({})", not_stopped(&agent))
+        } else {
+            message.clone()
+        };
+        (deny_reply(&message, stop), recorded)
     };
-    send(app, request_id, Reply::Decision(Answer { reply: reply.to_string(), decision: word, by, message }), false);
+    send_or_note(
+        app,
+        request_id,
+        Reply::Decision(Answer { reply: reply.to_string(), decision: word, by, message }),
+        false,
+    );
     Ok(())
+}
+
+/// Whether "Deny and stop" can end the agent's turn: Claude Code's hooks can
+/// (`continue: false`), Codex's and Cursor's cannot — Codex refuses a hook
+/// answer that asks to interrupt, and Cursor's permission answer has no field
+/// for it.
+fn can_stop(agent: &str) -> bool {
+    !matches!(agent, "Codex" | "Cursor")
+}
+
+/// The history's note when an agent was only denied, not stopped.
+fn not_stopped(agent: &str) -> String {
+    if is_tr() {
+        format!("{agent} hook'u üzerinden durdurulamıyor, yalnızca reddedildi")
+    } else {
+        format!("{agent} can't be stopped through its hook, so it was only denied")
+    }
 }
 
 /// The line for a denial. A plain Deny — a person's, a rule's, a plan sent back
@@ -995,7 +1181,12 @@ pub fn respond(app: &AppHandle, request_id: &str, response: Response, anchor: Op
         let backing = Backing::Click { hold: Duration::ZERO, guard, anchor };
         back_allow(app, &format!("answer id={request_id}"), since, backing)?;
     }
-    send(app, request_id, Reply::Decision(Answer { reply: reply.to_string(), decision, by: "user", message }), false);
+    send_or_note(
+        app,
+        request_id,
+        Reply::Decision(Answer { reply: reply.to_string(), decision, by: "user", message }),
+        false,
+    );
     Ok(())
 }
 
@@ -1027,7 +1218,12 @@ pub fn allow_low(app: &AppHandle, anchor: Option<Anchor>, ids: &[String]) -> Res
     back_allow(app, "batch approval", since, Backing::Click { hold: Duration::ZERO, guard, anchor })?;
     for id in &chosen {
         let reply = json!({ "behavior": "allow" }).to_string();
-        send(app, id, Reply::Decision(Answer { reply, decision: "allow", by: "batch", message: String::new() }), false);
+        send_or_note(
+            app,
+            id,
+            Reply::Decision(Answer { reply, decision: "allow", by: "batch", message: String::new() }),
+            false,
+        );
     }
     log::line(format!("batch: allowed {} low-risk requests", chosen.len()));
     Ok(chosen.len())
@@ -1144,30 +1340,148 @@ mod tests {
         assert!(top_level_strings(br#"{"cwd":"unterminated"#, &["cwd"]).is_empty());
     }
 
+    /// Windows and macOS: the guard vouches for a hold.
+    const HOLDS: bool = true;
+
     #[test]
     fn high_risk_needs_a_confirmed_allow() {
         use Level::*;
-        assert_eq!(resolve("allow", Low, Low, "user"), Ok("allow"));
-        assert_eq!(resolve("allow", Medium, Medium, "user"), Ok("allow"));
-        assert_eq!(resolve("allow", High, High, "user"), Err("hold_required"));
-        assert_eq!(resolve("allow", Critical, Critical, "user"), Err("hold_required"));
-        assert_eq!(resolve("allow_confirmed", Critical, Critical, "user"), Ok("allow"));
-        assert_eq!(resolve("deny", Critical, Critical, "user"), Ok("deny"));
-        assert_eq!(resolve("always", Low, Low, "user"), Err("unknown_decision"));
+        assert_eq!(resolve("allow", Low, Low, "user", HOLDS), Ok("allow"));
+        assert_eq!(resolve("allow", Medium, Medium, "user", HOLDS), Ok("allow"));
+        assert_eq!(resolve("allow", High, High, "user", HOLDS), Err("hold_required"));
+        assert_eq!(resolve("allow", Critical, Critical, "user", HOLDS), Err("hold_required"));
+        assert_eq!(resolve("allow_confirmed", Critical, Critical, "user", HOLDS), Ok("allow"));
+        assert_eq!(resolve("deny", Critical, Critical, "user", HOLDS), Ok("deny"));
+        assert_eq!(resolve("always", Low, Low, "user", HOLDS), Err("unknown_decision"));
         // A rule that calmed a high request down to low makes it a plain click.
-        assert_eq!(resolve("allow", Low, High, "user"), Ok("allow"));
+        assert_eq!(resolve("allow", Low, High, "user", HOLDS), Ok("allow"));
     }
 
     #[test]
     fn the_allow_hotkey_covers_low_risk_only() {
         use Level::*;
-        assert_eq!(resolve("allow", Low, Low, "hotkey"), Ok("allow"));
-        assert_eq!(resolve("allow", Medium, Medium, "hotkey"), Err("hotkey_low_only"));
-        assert_eq!(resolve("allow_confirmed", Critical, Critical, "hotkey"), Err("hotkey_low_only"));
-        assert_eq!(resolve("deny", Critical, Critical, "hotkey"), Ok("deny"));
+        assert_eq!(resolve("allow", Low, Low, "hotkey", HOLDS), Ok("allow"));
+        assert_eq!(resolve("allow", Medium, Medium, "hotkey", HOLDS), Err("hotkey_low_only"));
+        assert_eq!(resolve("allow_confirmed", Critical, Critical, "hotkey", HOLDS), Err("hotkey_low_only"));
+        assert_eq!(resolve("deny", Critical, Critical, "hotkey", HOLDS), Ok("deny"));
         // "git push" → low must not let `git push --force` through on a keystroke.
-        assert_eq!(resolve("allow", Low, High, "hotkey"), Err("hotkey_low_only"));
-        assert_eq!(resolve("allow", Low, Medium, "hotkey"), Err("hotkey_low_only"));
+        assert_eq!(resolve("allow", Low, High, "hotkey", HOLDS), Err("hotkey_low_only"));
+        assert_eq!(resolve("allow", Low, Medium, "hotkey", HOLDS), Err("hotkey_low_only"));
+    }
+
+    /// D23 / C-25: where the guard cannot vouch for a hold (Linux), nothing
+    /// that needs one is approved on the island; the request stays for the
+    /// terminal, and deny still works. LOW and MEDIUM are as before.
+    #[test]
+    fn without_a_hold_to_trust_high_and_critical_are_for_the_terminal() {
+        use Level::*;
+        let holds = false;
+        for (decision, via) in
+            [("allow", "user"), ("allow_confirmed", "user"), ("allow", "hotkey"), ("allow_confirmed", "hotkey")]
+        {
+            for level in [High, Critical] {
+                assert_eq!(
+                    resolve(decision, level, level, via, holds),
+                    Err("terminal_only"),
+                    "{decision} {via} {level:?}"
+                );
+            }
+        }
+        assert_eq!(resolve("deny", Critical, Critical, "user", holds), Ok("deny"));
+        assert_eq!(resolve("deny", High, High, "hotkey", holds), Ok("deny"));
+        // LOW and MEDIUM: unchanged, the guard's speed bump still applies.
+        assert_eq!(resolve("allow", Low, Low, "user", holds), Ok("allow"));
+        assert_eq!(resolve("allow", Medium, Medium, "user", holds), Ok("allow"));
+        assert_eq!(resolve("allow_confirmed", Medium, Medium, "user", holds), Ok("allow"));
+        assert_eq!(resolve("allow", Low, Low, "hotkey", holds), Ok("allow"));
+        assert_eq!(resolve("allow", Medium, Medium, "hotkey", holds), Err("hotkey_low_only"));
+        // A rule that calmed a high request down to low makes it a plain click,
+        // as everywhere — but never a keystroke.
+        assert_eq!(resolve("allow", Low, High, "user", holds), Ok("allow"));
+        assert_eq!(resolve("allow", Low, High, "hotkey", holds), Err("hotkey_low_only"));
+        // The island learns which it is from the platform's own answer.
+        assert_eq!(inputguard::vouches_for_holds(), !cfg!(target_os = "linux"));
+    }
+
+    #[test]
+    fn the_button_s_place_is_a_button_inside_the_visible_island() {
+        // approval-safety#5: the island window is 720×460; the island shows a
+        // 640×300 card at the top centre, the rest is transparent and lets
+        // clicks through to the windows behind it.
+        let window = (720.0, 460.0);
+        let visible = Area { x: 40.0, y: 0.0, w: 640.0, h: 300.0 };
+        let anchor = |x, y, w, h| Some(Anchor { x, y, w, h });
+        // An ordinary Allow button, with four pixels of slack around it.
+        let allow = button_area(anchor(520.0, 230.0, 112.0, 32.0), visible, window);
+        assert_eq!(allow, Some(Area { x: 516.0, y: 226.0, w: 120.0, h: 40.0 }));
+        // On the island's edge: cut to the island, never past it.
+        let edge = button_area(anchor(600.0, 280.0, 112.0, 32.0), visible, window);
+        assert_eq!(edge, Some(Area { x: 596.0, y: 276.0, w: 84.0, h: 24.0 }));
+        // A page that lies: a screen-sized "button", the whole window, a button
+        // in the transparent part (over another window), one off the window, or
+        // nonsense, vouches for nothing.
+        for lie in [
+            anchor(-5000.0, -5000.0, 20000.0, 20000.0),
+            anchor(0.0, 0.0, 720.0, 460.0),
+            anchor(100.0, 380.0, 112.0, 32.0),
+            anchor(2000.0, 900.0, 100.0, 30.0),
+            anchor(10.0, 10.0, 0.0, 30.0),
+            anchor(f64::NAN, 10.0, 100.0, 30.0),
+            anchor(10.0, 10.0, f64::INFINITY, 30.0),
+        ] {
+            assert_eq!(button_area(lie, visible, window), None, "{lie:?}");
+        }
+        // No anchor: the visible island, itself cut to the window.
+        assert_eq!(button_area(None, visible, window), Some(visible));
+        let huge = Area { x: -100.0, y: 0.0, w: 5000.0, h: 5000.0 };
+        assert_eq!(button_area(None, huge, window), Some(Area { x: 0.0, y: 0.0, w: 720.0, h: 460.0 }));
+        // A visible island the page placed off the window takes no press at all.
+        let off = Area { x: 800.0, y: 0.0, w: 10.0, h: 10.0 };
+        assert_eq!(button_area(None, off, window), None);
+        assert_eq!(button_area(anchor(520.0, 230.0, 112.0, 32.0), off, window), None);
+    }
+
+    #[test]
+    fn only_claude_code_can_be_stopped() {
+        assert!(can_stop(""), "Claude Code sends no agent name");
+        assert!(!can_stop("Codex"));
+        assert!(!can_stop("Cursor"));
+        let note = not_stopped("Cursor");
+        assert!(note.contains("Cursor"), "{note}");
+    }
+
+    #[test]
+    fn what_takes_over_is_named_in_the_history() {
+        // A hand-back names the place that asks instead.
+        assert_eq!(host_of("Cursor", ""), "cursor");
+        assert_eq!(host_of("", "claude-desktop"), "app");
+        assert_eq!(host_of("", "cli"), "terminal");
+        assert_eq!(host_of("Codex", ""), "terminal");
+        assert_eq!(taken_by("terminal", "cursor"), "cursor");
+        assert_eq!(taken_by("terminal", "app"), "app");
+        assert_eq!(taken_by("terminal", "terminal"), "terminal");
+        // Other reasons say why, wherever it went.
+        for reason in ["timeout", "unseen", "paused", "busy", "resolved"] {
+            assert_eq!(taken_by(reason, "cursor"), reason);
+        }
+        assert_eq!(who_asks("Cursor", "cursor").0, "Cursor asked the user itself");
+        assert_eq!(who_asks("", "app").1, "Claude uygulaması sordu");
+        assert_eq!(who_asks("Codex", "terminal").0, "Codex asked in the terminal");
+        assert_eq!(who_asks("", "terminal").0, "Claude Code asked in the terminal");
+    }
+
+    #[test]
+    fn the_island_hears_of_an_answer_that_never_arrived() {
+        assert_eq!(UNDELIVERED_EVENT, "approval-undelivered");
+        assert_eq!(undelivered_notice("123-4"), json!({ "requestId": "123-4" }));
+    }
+
+    #[test]
+    fn an_expired_card_after_our_own_timeout_is_no_news() {
+        assert!(!worth_noting_gone("expired"));
+        for reason in ["terminal", "paused", "busy", "resolved"] {
+            assert!(worth_noting_gone(reason), "{reason}");
+        }
     }
 
     #[test]

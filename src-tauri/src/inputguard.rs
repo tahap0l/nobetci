@@ -6,19 +6,32 @@
 // through the accessibility API (UI Automation on Windows, AXPress on macOS).
 // Both look like an ordinary click to the page.
 //
-// The OS can tell them apart, and each platform half records the last left-button
-// press on its own terms:
+// Each platform half records the last press on its own terms:
 //   * Windows (`inputguard/raw_input.rs`): raw input carries the handle of the
 //     device a press came from; SendInput has none.
 //   * macOS (`inputguard/appkit.rs`): a mouse event carries the process id of
 //     whoever posted it; a real mouse's events come from the HID system, pid 0.
-//   * Linux (`inputguard/x11.rs`): XInput 2 names the device behind every press;
-//     XTEST, the way X11 programs fake input, has devices of its own.
-// An accessibility "press" produces no mouse event at all on either.
+//   * Linux (`inputguard/x11.rs`): XInput 2 names the device behind every press.
+//     That catches the usual way X11 programs fake input (xdotool and the like
+//     press through an XTEST device), but not all of it: a program may also
+//     have the X server press through the real mouse device itself, and nothing
+//     in the event tells such a press from a hand on the mouse.
+// An accessibility "press" produces no mouse event at all on any of them.
+//
+// So the guard says whether its platform can vouch for a physical hold
+// (`vouches_for_holds`). Windows and macOS can. On Linux it cannot: there the
+// island approves nothing that needs a hold — HIGH and CRITICAL requests are
+// decided in the terminal (`terminal_only`) — and for LOW and MEDIUM the check
+// is a speed bump that stops the common tools, not a proof.
 //
 // An approval is only accepted when the last press was physical, recent, on the
 // Allow button, made after the card came up, and not already spent on another
-// approval. Recording stops as soon as nothing is waiting.
+// approval — and no button a program pressed was still down when it began: a
+// program that holds the button on Allow while the user clicks elsewhere must
+// not have its own release judged by that real press. Every button a program
+// holds is followed until it is let go (`program_down` / `program_up`), not
+// just the newest, so a second, quick press cannot hide the one still held.
+// Recording stops as soon as nothing is waiting.
 //
 // Limits, stated plainly: touchscreens, remote-control software and
 // accessibility tools (on-screen keyboards, speech control) produce synthesised
@@ -62,6 +75,9 @@ pub struct Press {
     /// Already backed an approval; kept so a click meant for the card before
     /// can be told from no click at all.
     pub used: bool,
+    /// A button a program pressed was still down when this press began: the
+    /// click the page gets may be the program's, made when it lets go.
+    pub amid_program: bool,
 }
 
 /// A click is fresh for this long after the mouse button was let go (or, while
@@ -86,22 +102,76 @@ impl Rect {
     }
 }
 
+/// The most buttons a program is followed holding at once. More than that is
+/// no hand at work: from then on, until the next card, every press counts as
+/// made while a program holds one (`Presses::overflow`).
+const MAX_HELD: usize = 32;
+
+/// What the guard has seen since it was armed.
+#[derive(Clone, Default)]
+struct Presses {
+    /// The last press, whoever made it.
+    last: Option<Press>,
+    /// The buttons a program holds down right now, by the platform half's own
+    /// key for each (device and button on Linux, the button on Windows and macOS).
+    program_held: Vec<u64>,
+    /// A program held more buttons than are followed (`MAX_HELD`).
+    overflow: bool,
+}
+
+impl Presses {
+    /// Whether a button a program pressed is down right now.
+    fn program_holds(&self) -> bool {
+        self.overflow || !self.program_held.is_empty()
+    }
+}
+
 struct Guard {
     /// The platform could listen; if not, the guard stands down rather than
     /// refusing every approval.
     available: AtomicBool,
-    last: Mutex<Option<Press>>,
+    presses: Mutex<Presses>,
 }
 
-static GUARD: LazyLock<Guard> = LazyLock::new(|| Guard { available: AtomicBool::new(false), last: Mutex::new(None) });
+static GUARD: LazyLock<Guard> =
+    LazyLock::new(|| Guard { available: AtomicBool::new(false), presses: Mutex::new(Presses::default()) });
 
-/// Called by the platform half for every primary-button press while armed.
+/// Called by the platform half for every press that may be a click while armed:
+/// a real press of the primary button, and a program's press of any button.
 fn record(physical: bool, x: f64, y: f64) {
-    *GUARD.last.lock().unwrap() = Some(Press { at: Instant::now(), physical, released_at: None, x, y, used: false });
+    let mut presses = GUARD.presses.lock().unwrap();
+    let amid_program = presses.program_holds();
+    presses.last = Some(Press { at: Instant::now(), physical, released_at: None, x, y, used: false, amid_program });
+}
+
+/// A program pressed the button the platform half calls `key`: it counts as
+/// held until `program_up` with the same key (or the next card).
+fn program_down(key: u64) {
+    let mut presses = GUARD.presses.lock().unwrap();
+    if presses.program_held.contains(&key) {
+        return;
+    }
+    if presses.program_held.len() >= MAX_HELD {
+        presses.overflow = true;
+    } else {
+        presses.program_held.push(key);
+    }
+}
+
+/// A program let go of the button `key` (nothing happens for one it does not hold).
+fn program_up(key: u64) {
+    GUARD.presses.lock().unwrap().program_held.retain(|held| *held != key);
 }
 
 fn set_available(ok: bool) {
     GUARD.available.store(ok, Ordering::Release);
+}
+
+/// Whether this platform can vouch that a hold on the Allow button was a hand
+/// on the mouse. False on Linux, where a program can press through the real
+/// mouse device: the island then approves nothing that needs a hold.
+pub fn vouches_for_holds() -> bool {
+    imp::VOUCHES_FOR_HOLDS
 }
 
 /// Starts the platform listener (idle until `arm(true)`).
@@ -113,14 +183,26 @@ pub fn start(app: &AppHandle) {
 pub fn arm(on: bool) {
     if on {
         // A press from before the card appeared must not count.
-        *GUARD.last.lock().unwrap() = None;
+        *GUARD.presses.lock().unwrap() = Presses::default();
     }
     imp::arm(on);
 }
 
-/// Keep a released press for ordinary clicks, which reach the app on mouse up.
-fn release() {
-    if let Some(press) = GUARD.last.lock().unwrap().as_mut() {
+/// The button behind the last press was let go. A released press is kept for
+/// ordinary clicks, which reach the app on mouse up.
+#[cfg(target_os = "linux")]
+fn release_last() {
+    if let Some(press) = GUARD.presses.lock().unwrap().last.as_mut() {
+        press.released_at.get_or_insert_with(Instant::now);
+    }
+}
+
+/// The primary button was let go by a real device (`physical`), or a button by
+/// a program — for a platform that does not follow which press a release
+/// ends: it ends the last press if the same kind of hand made it.
+#[cfg(not(target_os = "linux"))]
+fn release(physical: bool) {
+    if let Some(press) = GUARD.presses.lock().unwrap().last.as_mut().filter(|p| p.physical == physical) {
         press.released_at.get_or_insert_with(Instant::now);
     }
 }
@@ -135,14 +217,19 @@ pub fn island_rect(win: &WebviewWindow, x: f64, y: f64, w: f64, h: f64) -> Optio
 }
 
 /// Verify and consume the press atomically so it can back only one approval.
-/// `since` is when the card came up: the press must not be older.
+/// `since` is when the card came up: the press must not be older. A hold
+/// (`minimum` above zero) is refused outright with `terminal_only` where the
+/// platform cannot vouch for one (`vouches_for_holds`).
 pub fn check_and_consume(minimum: Duration, since: Instant, on: Option<Rect>) -> Result<(), &'static str> {
+    if !minimum.is_zero() && !vouches_for_holds() {
+        return Err("terminal_only");
+    }
     if !available() {
         return if minimum.is_zero() { Ok(()) } else { Err("guard_unavailable") };
     }
-    let mut last = GUARD.last.lock().unwrap();
-    judge(*last, Instant::now(), since, minimum, on)?;
-    if let Some(press) = last.as_mut() {
+    let mut presses = GUARD.presses.lock().unwrap();
+    judge(presses.last, Instant::now(), since, minimum, on)?;
+    if let Some(press) = presses.last.as_mut() {
         press.used = true;
     }
     Ok(())
@@ -166,6 +253,13 @@ fn judge(
         return Err(if p.physical && just_ended { "too_soon" } else { "no_click" });
     }
     if !p.physical {
+        return Err("synthetic_click");
+    }
+    // A button a program pressed was still down when this real press began:
+    // the click the page got may be the program's own, made by letting go on
+    // our button, while the hand on the mouse pressed somewhere else. (A
+    // program's press made after this one is the last press itself, above.)
+    if p.amid_program {
         return Err("synthetic_click");
     }
     // Fresh from when the mouse button was let go — a slow click is still a
@@ -195,7 +289,7 @@ mod tests {
     const ISLAND: Option<Rect> = Some(Rect { left: 100.0, top: 0.0, right: 820.0, bottom: 460.0 });
 
     fn press(at: Instant, physical: bool, x: f64, y: f64) -> Press {
-        Press { at, physical, released_at: None, x, y, used: false }
+        Press { at, physical, released_at: None, x, y, used: false, amid_program: false }
     }
 
     /// A moment well before `now`, for the card's arrival.
@@ -273,14 +367,138 @@ mod tests {
     }
 
     #[test]
+    fn a_real_press_made_while_a_program_holds_a_button_vouches_for_nothing() {
+        let now = Instant::now();
+        let Some(since) = earlier(now, 2) else { return };
+        let user = Press { released_at: Some(now), ..press(since + Duration::from_millis(500), true, 300.0, 100.0) };
+        assert_eq!(judge(Some(user), now, since, Duration::ZERO, ISLAND), Ok(()));
+        let amid = Press { amid_program: true, ..user };
+        assert_eq!(judge(Some(amid), now, since, Duration::ZERO, ISLAND), Err("synthetic_click"));
+    }
+
+    /// The tests that use the guard itself take turns: it is one for the process.
+    static TURN: Mutex<()> = Mutex::new(());
+
+    fn take_turn() -> std::sync::MutexGuard<'static, ()> {
+        TURN.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    /// Lets go of the button behind the last press, as the platform half would.
+    fn let_go_of_the_last_press() {
+        #[cfg(target_os = "linux")]
+        release_last();
+        #[cfg(not(target_os = "linux"))]
+        release(true);
+    }
+
+    /// What the guard would answer for an approval of the card that came up at
+    /// `since`, without spending the press.
+    fn verdict_now(since: Instant) -> Result<(), &'static str> {
+        judge(GUARD.presses.lock().unwrap().last, Instant::now(), since, Duration::ZERO, ISLAND)
+    }
+
+    #[test]
+    fn a_program_s_held_press_is_not_vouched_for_by_a_real_one() {
+        // approval-safety#2: a program presses on Allow and keeps the button
+        // down; the user clicks somewhere else (the program moves the pointer
+        // onto Allow before the guard reads it); the program lets go on Allow,
+        // and the page gets its click. The real press must not stand behind it.
+        let _turn = take_turn();
+        set_available(true);
+        arm(true);
+        let since = Instant::now();
+        program_down(1);
+        record(false, 300.0, 100.0);
+        record(true, 300.0, 100.0);
+        let_go_of_the_last_press();
+        assert_eq!(verdict_now(since), Err("synthetic_click"), "the program still holds its button");
+        program_up(1);
+        assert_eq!(verdict_now(since), Err("synthetic_click"), "it held it when the real press began");
+
+        // The way around a guard that follows only the newest program press: a
+        // second, quick press of another button, let go before the user's press.
+        arm(true);
+        let since = Instant::now();
+        program_down(1);
+        record(false, 300.0, 100.0);
+        program_down(3);
+        record(false, 300.0, 100.0);
+        program_up(3);
+        record(true, 300.0, 100.0);
+        let_go_of_the_last_press();
+        assert_eq!(verdict_now(since), Err("synthetic_click"), "button 1 is still the program's");
+
+        // Every button a program held was let go before the real press: the
+        // real click counts.
+        arm(true);
+        let since = Instant::now();
+        program_down(1);
+        record(false, 300.0, 100.0);
+        program_up(1);
+        record(true, 300.0, 100.0);
+        let_go_of_the_last_press();
+        assert_eq!(verdict_now(since), Ok(()));
+        arm(false);
+    }
+
+    #[test]
+    fn a_program_holding_too_many_buttons_taints_every_press_until_the_next_card() {
+        let _turn = take_turn();
+        set_available(true);
+        arm(true);
+        let since = Instant::now();
+        for key in 0..(MAX_HELD as u64 + 1) {
+            program_down(key);
+        }
+        for key in 0..(MAX_HELD as u64 + 1) {
+            program_up(key);
+        }
+        record(true, 300.0, 100.0);
+        let_go_of_the_last_press();
+        assert_eq!(verdict_now(since), Err("synthetic_click"), "one button went unfollowed");
+        arm(true);
+        let since = Instant::now();
+        record(true, 300.0, 100.0);
+        let_go_of_the_last_press();
+        assert_eq!(verdict_now(since), Ok(()), "a new card starts afresh");
+        arm(false);
+    }
+
+    #[test]
     fn a_press_is_spent_by_the_approval_it_backs() {
+        let _turn = take_turn();
         set_available(true);
         arm(true);
         record(true, 300.0, 100.0);
-        release();
-        let since = GUARD.last.lock().unwrap().map(|p| p.at).unwrap();
+        let_go_of_the_last_press();
+        let since = GUARD.presses.lock().unwrap().last.map(|p| p.at).unwrap();
         assert_eq!(check_and_consume(Duration::ZERO, since, ISLAND), Ok(()));
         assert_eq!(check_and_consume(Duration::ZERO, since, ISLAND), Err("too_soon"), "one press, one approval");
+        arm(false);
+    }
+
+    /// D23: on Linux a program can press through the real mouse device, so the
+    /// guard cannot vouch for a hold there and refuses one outright, whatever
+    /// it saw; Windows and macOS vouch as before.
+    #[test]
+    fn only_a_platform_that_can_tell_a_hand_from_a_program_vouches_for_holds() {
+        let _turn = take_turn();
+        set_available(true);
+        arm(true);
+        let since = Instant::now();
+        record(true, 300.0, 100.0);
+        let hold = Duration::from_millis(1);
+        std::thread::sleep(Duration::from_millis(5));
+        if cfg!(target_os = "linux") {
+            assert!(!vouches_for_holds());
+            assert_eq!(check_and_consume(hold, since, ISLAND), Err("terminal_only"));
+            // A plain click (LOW, MEDIUM) is still judged by the guard.
+            let_go_of_the_last_press();
+            assert_eq!(check_and_consume(Duration::ZERO, since, ISLAND), Ok(()));
+        } else {
+            assert!(vouches_for_holds());
+            assert_eq!(check_and_consume(hold, since, ISLAND), Ok(()));
+        }
         arm(false);
     }
 }

@@ -5,7 +5,9 @@
 // top of the screen and stay above the others. The same connection answers:
 //   * which window is in front, and is it full screen (full-screen quiet);
 //   * which top-level window belongs to a process (go to the session's window);
-//   * which device a mouse press came from (the click guard, `inputguard/x11.rs`);
+//   * which device a mouse press came from (the click guard, `inputguard/x11.rs`
+//     — a speed bump for LOW and MEDIUM approvals that cannot vouch for a
+//     hold, so HIGH and CRITICAL are decided in the terminal on Linux);
 //   * whether a compositing manager runs, and if not, cuts the island's window
 //     down to the island (`island::fit_shape`).
 //

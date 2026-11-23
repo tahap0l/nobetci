@@ -9,6 +9,12 @@
 //
 // Raw input reports physical buttons: with "Primary mouse button: Right" (the
 // left-handed setting, SM_SWAPBUTTON) the click a page sees is the right one.
+// That setting is read when the press is handled, a moment after it happened,
+// so it only picks among real presses: a program's press of any button is
+// recorded as one that backs nothing, and swapping the buttons around its own
+// click cannot hide it. The guard follows every button a program holds until
+// it is let go, so a real click made while a program holds a button down
+// cannot vouch for the click the program's release makes (`inputguard`).
 //
 // Some laptops' precision touchpads also deliver presses without a device
 // handle. Those count as synthetic like SendInput's — the decision does not
@@ -36,11 +42,21 @@ use windows::Win32::UI::WindowsAndMessaging::{
 
 use super::Rect;
 
+/// Raw input names the device behind a press, and SendInput's have none: the
+/// guard can vouch for a hold here.
+pub const VOUCHES_FOR_HOLDS: bool = true;
+
 /// RI_MOUSE_*_BUTTON_DOWN / _UP in RAWMOUSE::usButtonFlags.
 const LEFT_DOWN: u16 = 0x0001;
 const LEFT_UP: u16 = 0x0002;
 const RIGHT_DOWN: u16 = 0x0004;
 const RIGHT_UP: u16 = 0x0008;
+/// Every button's down and up flags: left, right, middle, X1 and X2. Each
+/// button's up flag is the bit above its down flag.
+const BUTTONS: [(u16, u16); 5] =
+    [(LEFT_DOWN, LEFT_UP), (RIGHT_DOWN, RIGHT_UP), (0x0010, 0x0020), (0x0040, 0x0080), (0x0100, 0x0200)];
+const ANY_DOWN: u16 = LEFT_DOWN | RIGHT_DOWN | 0x0010 | 0x0040 | 0x0100;
+const ANY_UP: u16 = LEFT_UP | RIGHT_UP | 0x0020 | 0x0080 | 0x0200;
 /// Our own message: wParam 1 = start listening, 0 = stop.
 const WM_ARM: u32 = WM_APP + 1;
 
@@ -77,11 +93,16 @@ fn on_raw_input(lparam: LPARAM) {
         return;
     }
     let flags = unsafe { raw.data.mouse.Anonymous.Anonymous.usButtonFlags };
+    let physical = !raw.header.hDevice.is_invalid();
     // Read at every press, so a change in Windows' mouse settings applies at once.
-    let swapped = unsafe { GetSystemMetrics(SM_SWAPBUTTON) } != 0;
-    let (down, up) = primary_button(swapped);
+    let (down, up) = watched_buttons(physical, || unsafe { GetSystemMetrics(SM_SWAPBUTTON) } != 0);
+    // A program's buttons are followed until let go: presses first, since one
+    // event may carry a press and its release.
+    let (pressed, let_go) = if physical { (0, 0) } else { program_buttons(flags) };
+    for button in BUTTONS.iter().map(|b| b.0).filter(|d| pressed & d != 0) {
+        super::program_down(u64::from(button));
+    }
     if flags & down != 0 {
-        let physical = !raw.header.hDevice.is_invalid();
         if !physical {
             note_press_without_device();
         }
@@ -89,8 +110,36 @@ fn on_raw_input(lparam: LPARAM) {
         let _ = unsafe { GetCursorPos(&mut p) };
         super::record(physical, p.x as f64, p.y as f64);
     }
+    for button in BUTTONS.iter().map(|b| b.0).filter(|d| let_go & d != 0) {
+        super::program_up(u64::from(button));
+    }
     if flags & up != 0 {
-        super::release();
+        super::release(physical);
+    }
+}
+
+/// The buttons a program's event presses and lets go of, each named by its
+/// down flag.
+fn program_buttons(flags: u16) -> (u16, u16) {
+    let (mut pressed, mut let_go) = (0, 0);
+    for (down, up) in BUTTONS {
+        if flags & down != 0 {
+            pressed |= down;
+        }
+        if flags & up != 0 {
+            let_go |= down;
+        }
+    }
+    (pressed, let_go)
+}
+
+/// The raw flags the guard follows for a press: for a real one, the button a
+/// click comes from (`primary_button`); for a program's, every button.
+fn watched_buttons(physical: bool, swapped: impl FnOnce() -> bool) -> (u16, u16) {
+    if physical {
+        primary_button(swapped())
+    } else {
+        (ANY_DOWN, ANY_UP)
     }
 }
 
@@ -198,5 +247,33 @@ mod tests {
     fn the_primary_button_follows_the_swap_setting() {
         assert_eq!(primary_button(false), (LEFT_DOWN, LEFT_UP));
         assert_eq!(primary_button(true), (RIGHT_DOWN, RIGHT_UP), "left-handed: the right button clicks");
+    }
+
+    #[test]
+    fn a_program_s_press_counts_whatever_its_button() {
+        // A real press: only the primary button, as the swap setting says.
+        assert_eq!(watched_buttons(true, || false), (LEFT_DOWN, LEFT_UP));
+        assert_eq!(watched_buttons(true, || true), (RIGHT_DOWN, RIGHT_UP));
+        // A program's: every button, and the swap setting is not even read, so
+        // flipping it behind its own click hides nothing.
+        let (down, up) = watched_buttons(false, || panic!("the setting is not read"));
+        for (d, u) in [(0x0001, 0x0002), (0x0004, 0x0008), (0x0010, 0x0020), (0x0040, 0x0080), (0x0100, 0x0200)] {
+            assert!(down & d != 0 && up & u != 0, "button flags {d:#06x}/{u:#06x}");
+        }
+        assert_eq!(down & up, 0, "downs and ups never mix");
+    }
+
+    #[test]
+    fn a_program_s_buttons_are_followed_until_let_go() {
+        // Each button is named by its down flag, pressed or let go.
+        assert_eq!(program_buttons(LEFT_DOWN), (LEFT_DOWN, 0));
+        assert_eq!(program_buttons(LEFT_UP), (0, LEFT_DOWN));
+        assert_eq!(program_buttons(LEFT_DOWN | LEFT_UP), (LEFT_DOWN, LEFT_DOWN), "a click in one event");
+        assert_eq!(program_buttons(RIGHT_DOWN | 0x0020), (RIGHT_DOWN, 0x0010), "right down, middle up");
+        assert_eq!(program_buttons(0x0100 | 0x0200), (0x0100, 0x0100));
+        assert_eq!(program_buttons(0x0400), (0, 0), "a wheel step is no button");
+        for (down, up) in BUTTONS {
+            assert_eq!(up, down << 1);
+        }
     }
 }

@@ -99,6 +99,11 @@ pub struct BootInfo {
     /// what to do. Defaults (or every value that could be read) are in use, and
     /// nothing is saved over the file until Nöbetçi restarts. Null otherwise.
     settings_load_error: Option<String>,
+    /// Whether the island may approve a request that needs a hold (HIGH and
+    /// CRITICAL). False on Linux, where a program's fake click cannot be told
+    /// from a real one: there such requests are decided in the terminal, and
+    /// Rust refuses an island approval with `terminal_only` (D23).
+    hold_approvals: bool,
 }
 
 #[tauri::command]
@@ -119,6 +124,7 @@ fn boot(app: AppHandle, shared: State<Shared>) -> BootInfo {
         platform: sys::PLATFORM,
         fullscreen_supported: sys::FULLSCREEN_SUPPORTED,
         settings_load_error: settings::load_problem(),
+        hold_approvals: inputguard::vouches_for_holds(),
     }
 }
 
@@ -1359,6 +1365,26 @@ mod tests {
         for c in ["boot", "approval_decision", "approval_pending", "buddy_ready", "rule_pattern_check"] {
             assert!(commands.iter().any(|x| x == c), "{c} is registered");
         }
+    }
+
+    /// C-25: the island learns at boot whether it may approve a request that
+    /// needs a hold — never on Linux (D23).
+    #[test]
+    fn boot_says_whether_the_island_may_approve_holds() {
+        let info = BootInfo {
+            settings: Settings::default(),
+            system_lang: "en",
+            hooks_lost: false,
+            screen: ScreenInfo { x: 0.0, y: 0.0, width: 1920.0, height: 1080.0, scale: 1.0 },
+            version: String::new(),
+            hook_path: String::new(),
+            platform: sys::PLATFORM,
+            fullscreen_supported: sys::FULLSCREEN_SUPPORTED,
+            settings_load_error: None,
+            hold_approvals: inputguard::vouches_for_holds(),
+        };
+        let sent = serde_json::to_value(&info).unwrap();
+        assert_eq!(sent["holdApprovals"], serde_json::json!(!cfg!(target_os = "linux")));
     }
 
     #[test]
