@@ -162,7 +162,8 @@ reworked release jobs; their signing steps have not run, because no code signing
   call the approval commands, and the desktop mascot can't send the island events.
 - **Linux notifications show text as written.** Where the notification server reads markup, a
   command in a notification can no longer turn into a link or formatting.
-- **Dependencies.** rustix moves to 1.1.6, past RUSTSEC-2026-0486.
+- **Dependencies.** rustix moves to 1.1.6, past RUSTSEC-2026-0486; url to 2.5.9, past
+  RUSTSEC-2026-0592; and cookie to 0.18.3, past RUSTSEC-2026-0594.
 - **Release pipeline.** Releases start only by hand from `main`; the build jobs run with a
   read-only token and no signing secrets, and Windows signing runs in jobs of its own that run
   nothing from the repository, npm or cargo, so the SignPath token never shares a job with
