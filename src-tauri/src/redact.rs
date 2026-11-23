@@ -173,25 +173,74 @@ fn is_reference(value: &str) -> bool {
         || v.starts_with("<") && v.ends_with('>')
 }
 
-/// What is left at the end of a text of a vendor token that was cut short:
-/// its prefix and whatever of it there is. Whole, such tokens are masked by
-/// `PATTERNS`; cut, they are too short for those to recognise.
+/// A vendor token cut short at the end of a text: its prefix and the rest of
+/// what is there. Whole, such tokens are masked by `PATTERNS`; cut, they are
+/// too short for those to recognise. The prefix starts a word of its own
+/// (not `my-sk-project`).
 static CUT_TOKEN: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
-        r"(?-u:\b)(?:(?:AKIA|ASIA)[0-9A-Z]{4,}|AIza[0-9A-Za-z_-]{4,}|(?:sk-|ghp_|gho_|ghu_|ghs_|ghr_|github_pat_|glpat-|xox[abposr]-|xapp-|(?:sk|rk|pk)_(?:live|test)_|npm_|hf_|dop_v1_|SG\.|shp(?:at|ca|pa|ss)_|pypi-|dckr_pat_|lin_api_|PMAK-|sbp_|eyJ)[A-Za-z0-9._-]*)$",
+        r"(?:^|[^A-Za-z0-9_.-])(?P<token>(?P<prefix>AKIA|ASIA|AIza|sk-|ghp_|gho_|ghu_|ghs_|ghr_|github_pat_|glpat-|xox[abposr]-|xapp-|(?:sk|rk|pk)_(?:live|test)_|npm_|hf_|dop_v1_|SG\.|shp(?:at|ca|pa|ss)_|pypi-|dckr_pat_|lin_api_|PMAK-|sbp_|eyJ)(?P<rest>[A-Za-z0-9._-]*))$",
     )
     .expect("bad cut-token pattern")
 });
 
-/// `redact`, for a text that may have been cut short — a notification body
-/// built from the first characters of a command: a token cut off at the end
-/// is masked as well, so not even its first half is shown.
+/// Where a vendor token cut short starts at the end of `text`, if one does.
+/// It needs a few characters after its prefix — fewer tell nothing, and
+/// `sk-dir`, `SG.txt` or `hf_model` are ordinary words — with a digit or a
+/// capital among them, as random tokens have: `sk-learn-examples` is a name.
+fn cut_token(text: &str) -> Option<usize> {
+    let c = CUT_TOKEN.captures(text)?;
+    let rest = c.name("rest").map_or("", |m| m.as_str());
+    let least = if &c["prefix"] == "eyJ" { 6 } else { 8 };
+    let random = rest.bytes().any(|b| b.is_ascii_digit() || b.is_ascii_uppercase());
+    (rest.len() >= least && random).then(|| c.name("token").map_or(0, |m| m.start()))
+}
+
+/// A URL that ends in a port, `http://localhost:8080`, not a password cut
+/// before its `@`.
+fn ends_in_a_port(text: &str) -> bool {
+    text.rsplit_once(':')
+        .is_some_and(|(_, port)| (1..=5).contains(&port.len()) && port.bytes().all(|b| b.is_ascii_digit()))
+}
+
+/// `redact`, for a text that was cut short — a notification body built from
+/// the first characters of a command or question. Whatever secret the cut
+/// left unfinished at the end is masked as well, so not even its first part
+/// shows: a vendor token (`ghp_ABCDEFGH…`), a quoted value whose quote never
+/// closes (`DB_PASSWORD="correct hor`), a URL's password before its `@`
+/// (`https://admin:SuperSecr`), or a value after a secret's name that is too
+/// short yet to look like one (`password: hunt`).
 pub fn redact_cut(text: &str) -> String {
     let out = redact(text);
-    match CUT_TOKEN.find(&out) {
-        Some(m) => format!("{}{MASK}", &out[..m.start()]),
-        None => out,
+    if out.ends_with(MASK) {
+        return out;
     }
+    if let Some(at) = cut_token(&out) {
+        return format!("{}{MASK}", &out[..at]);
+    }
+    // Go on the way the secret would have: a closing quote, the `@` before a
+    // URL's host, or a digit (a value with a digit looks like a credential).
+    // If the text so finished hides something that runs into that ending,
+    // the end of the text was part of a secret.
+    let nothing_of_the_text = format!("{out}{MASK}");
+    for ending in ["\"", "'", "@x", "0"] {
+        if ending == "@x" && ends_in_a_port(text) {
+            continue;
+        }
+        let finished = redact(&format!("{text}{ending}"));
+        let masked = if ending == "0" {
+            // The digit went into the mask, if anything was masked.
+            finished.ends_with(MASK).then_some(finished.as_str())
+        } else {
+            finished.strip_suffix(ending).filter(|head| head.ends_with(MASK))
+        };
+        // A mask over the added ending alone (`password: ` cut before its
+        // value) hides nothing that was there.
+        if let Some(masked) = masked.filter(|masked| *masked != nothing_of_the_text) {
+            return masked.to_string();
+        }
+    }
+    out
 }
 
 /// `text` with every recognised secret replaced by •••.
@@ -450,9 +499,53 @@ mod tests {
         assert_eq!(redact_cut(&cut), "git push https://•••");
         assert_eq!(redact_cut("Bash: export KEY=sk-ant-api03-A"), "Bash: export KEY=•••");
         assert_eq!(redact_cut("Bash: curl -H 'x: eyJhbGciOiJIUzI1NiJ9.eyJz"), "Bash: curl -H 'x: •••");
+        assert_eq!(redact_cut("echo AKIAIOSFODNN7EXAMPL"), "echo •••");
+        // A value cut before it ends: a quote that never closes, a URL's
+        // password before its `@`, a value too short yet to look like one.
+        for (input, want) in [
+            (
+                "Çalıştırıyor: echo xxx && export DB_PASSWORD=\"correct hor",
+                "Çalıştırıyor: echo xxx && export DB_PASSWORD=\"•••",
+            ),
+            ("Bash: git clone https://admin:SuperSecretPassw", "Bash: git clone https://admin:•••"),
+            ("Bash: psql \"postgres://:pw123", "Bash: psql \"postgres://:•••"),
+            ("Bash: export PASSWORD='correct horse", "Bash: export PASSWORD='•••"),
+            ("Bash: mysql --password \"two wo", "Bash: mysql --password \"•••"),
+            ("Bash: curl -u 'admin:S3cr", "Bash: curl -u 'admin:•••"),
+            ("Bash: mysql -u root -p'S3cr", "Bash: mysql -u root -p'•••"),
+            ("Bash: curl -b 'sid=abc", "Bash: curl -b '•••"),
+            ("{\"password\": \"two wo", "{\"password\": \"•••"),
+            ("Bash: echo password: hunt", "Bash: echo password: •••"),
+            (
+                "Bash: aws configure set aws_secret_access_key wJalrXUt",
+                "Bash: aws configure set aws_secret_access_key •••",
+            ),
+        ] {
+            assert_eq!(redact_cut(input), want, "{input}");
+        }
         // Whole tokens are masked as before; ordinary endings stay.
         assert_eq!(redact_cut(&command), "git push https://•••@github.com/a/b main");
-        for same in ["npm run risk-check", "Bash: ls -la", "pip install task-runner", "echo ASIAN", "Bash: echo AKIA"] {
+        for same in [
+            "npm run risk-check",
+            "Bash: ls -la",
+            "pip install task-runner",
+            "echo ASIAN",
+            "Bash: echo AKIA",
+            "Bash: rm -rf sk-dir",
+            "Bash: cat SG.txt",
+            "Bash: python train.py --model hf_model",
+            "Bash: echo sk-",
+            "Bash: cd sk-learn-examples",
+            "Bash: cd /tmp/my-sk-project12345",
+            "Bash: curl http://localhost:8080",
+            "Bash: echo \"hello wor",
+            "Bash: git commit -m \"fix the token refresh",
+            "Bash: export PATH=$PATH:/opt/bin",
+            // Cut before the value: nothing of it is there to hide.
+            "Bash: export DB_PASS=",
+            "Bash: echo \"Password: ",
+            "Bash: gh secret set API_TOKEN ",
+        ] {
             assert_eq!(redact_cut(same), same);
         }
     }

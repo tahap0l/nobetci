@@ -961,6 +961,32 @@ fn notification_wanted(s: &Settings, kind: &str, island_visible: bool, quiet: bo
     s.toast_enabled && listed && !quiet && !(s.toast_only_when_hidden && island_visible)
 }
 
+/// The island puts at most the first 160 UTF-16 units of a command or a
+/// question into a notification (`src/island/hooks.ts`): a body that long may
+/// have been cut there, in the middle of a secret.
+const ISLAND_NOTIFY_CUT: usize = 160;
+
+/// How much of a body is read at most: far more than a notification shows.
+const NOTIFY_READ: usize = 4000;
+
+/// What a notification shows of `body`. Notifications linger in the action
+/// centre and can show on the lock screen: no live tokens in them — nor, in a
+/// body that may have been cut (by the island, or here), the first part of
+/// one the cut left at the end. Masked first, then cut to 240 characters, so
+/// that cut splits no secret.
+fn notification_body(body: &str) -> String {
+    let (body, cut) = match body.char_indices().nth(NOTIFY_READ) {
+        Some((at, _)) => (&body[..at], true),
+        None => (body, false),
+    };
+    let masked = if cut || body.encode_utf16().count() >= ISLAND_NOTIFY_CUT {
+        redact::redact_cut(body)
+    } else {
+        redact::redact(body)
+    };
+    masked.chars().take(240).collect()
+}
+
 /// A desktop notification for `kind` (approval, finished, error, waiting, or
 /// focus), if the settings want one right now. Returns whether it was shown.
 /// Off the main thread: on Linux the first one asks the notification server
@@ -971,9 +997,7 @@ fn notify(app: AppHandle, kind: String, title: String, body: String, island_visi
     if !notification_wanted(&s, &kind, island_visible, quiet::reason(&s).is_some()) {
         return false;
     }
-    // Notifications linger in the action centre and can show on the lock screen:
-    // no live tokens in them — nor the first half of one the island cut off.
-    let body: String = redact::redact_cut(&body).chars().take(240).collect();
+    let body = notification_body(&body);
     // The body carries the command, path or URL Claude asked for. Where the
     // server reads markup, it must show that text as written, not as links.
     #[cfg(target_os = "linux")]
@@ -1484,6 +1508,47 @@ mod tests {
             let always = Settings { toast_only_when_hidden: false, ..Settings::default() };
             assert!(notification_wanted(&always, kind, true, false), "{kind}: wanted even when shown");
         }
+    }
+
+    /// redaction-history#4: the island cuts the command to 160 UTF-16 units
+    /// before it asks for a notification; what that cut leaves of a secret
+    /// is not shown, and short bodies keep their ordinary endings.
+    #[test]
+    fn a_notification_shows_no_part_of_a_secret_the_island_cut() {
+        let command = format!("echo {} && export DB_PASSWORD=\"correct horse battery staple\"", "x".repeat(120));
+        let cut: String =
+            String::from_utf16(&command.encode_utf16().take(ISLAND_NOTIFY_CUT).collect::<Vec<_>>()).unwrap();
+        assert!(cut.ends_with("DB_PASSWORD=\"correct hor"), "{cut}");
+        let body = notification_body(&format!("Çalıştırıyor: {cut}"));
+        assert!(body.ends_with("DB_PASSWORD=\"•••"), "{body}");
+        let command = format!("cd {} && git clone https://admin:SuperSecretPassword1@github.com/a/b", "x".repeat(113));
+        let cut: String = command.chars().take(ISLAND_NOTIFY_CUT).collect();
+        assert!(cut.ends_with("https://admin:SuperSecretPassw"), "{cut}");
+        assert!(notification_body(&format!("Bash: {cut}")).ends_with("https://admin:•••"));
+        // A question cut the same way (no label before it).
+        let question = format!("{} Should I use ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789?", "a".repeat(130));
+        let cut: String = question.chars().take(ISLAND_NOTIFY_CUT).collect();
+        assert!(notification_body(&cut).ends_with("use •••"), "{cut}");
+        // Too short to have been cut: an ending that looks like a token's
+        // start is a word.
+        for same in [
+            "Bash: rm -rf sk-dir",
+            "Bash: cat SG.txt",
+            "Bash: python train.py --model hf_model_large",
+            "Bash: echo sk-",
+        ] {
+            assert_eq!(notification_body(same), same);
+        }
+        // Long bodies are masked whole, then cut to 240 characters.
+        let long = format!("Bash: export DB_PASSWORD=hunter2hunter2 && {}", "y".repeat(400));
+        let body = notification_body(&long);
+        assert_eq!(body.chars().count(), 240);
+        assert!(body.starts_with("Bash: export DB_PASSWORD=••• && yyy"), "{body}");
+        // A body sent whole, however long, is read as far as it matters: a
+        // private key that runs past that is masked all the same.
+        let key =
+            format!("-----BEGIN OPENSSH PRIVATE KEY-----\n{}\n-----END OPENSSH PRIVATE KEY-----", "Ab1".repeat(3000));
+        assert_eq!(notification_body(&format!("Write: {key}")), "Write: •••");
     }
 
     #[test]
