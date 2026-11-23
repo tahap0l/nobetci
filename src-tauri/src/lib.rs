@@ -929,8 +929,8 @@ fn notify(app: AppHandle, kind: String, title: String, body: String, island_visi
         return false;
     }
     // Notifications linger in the action centre and can show on the lock screen:
-    // no live tokens in them.
-    let body: String = redact::redact(&body).chars().take(240).collect();
+    // no live tokens in them — nor the first half of one the island cut off.
+    let body: String = redact::redact_cut(&body).chars().take(240).collect();
     // The body carries the command, path or URL Claude asked for. Where the
     // server reads markup, it must show that text as written, not as links.
     #[cfg(target_os = "linux")]
@@ -1002,6 +1002,7 @@ fn create_settings_window(app: &AppHandle) {
                 tauri::WindowEvent::CloseRequested { api, .. } => {
                     api.prevent_close();
                     let _ = hidden.hide();
+                    handle.state::<audit::Log>().forget();
                 }
                 // The island is always on top and, open, covers the top-centre of
                 // the screen — right where a centred window keeps its title bar and
@@ -1044,6 +1045,8 @@ fn close_settings_window(app: AppHandle) {
     if let Some(win) = settings_window(&app) {
         let _ = win.hide();
     }
+    // The History tab is the only reader of the parsed history.
+    app.state::<audit::Log>().forget();
 }
 
 /// Command-line jobs that run instead of the app. Returns an exit code when one ran.

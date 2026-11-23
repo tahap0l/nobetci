@@ -851,20 +851,62 @@ pub(crate) fn strip_bom(bytes: &[u8]) -> &[u8] {
 }
 
 /// Creates one of Nöbetçi's own folders, private to the user on Unix (0700),
-/// and tightens one that already exists.
+/// and tightens one that already exists (`tighten`).
 pub(crate) fn private_dir(dir: &Path) -> std::io::Result<()> {
     #[cfg(unix)]
     {
         use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
         std::fs::DirBuilder::new().recursive(true).mode(0o700).create(dir)?;
-        let mode = std::fs::metadata(dir)?.permissions().mode();
-        if mode & 0o077 != 0 {
-            std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700))?;
-        }
-        Ok(())
+        let meta = std::fs::metadata(dir)?;
+        tighten(dir, &meta, || std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700)))
     }
     #[cfg(not(unix))]
     std::fs::create_dir_all(dir)
+}
+
+/// Folders and files of the user's that could not be made private, each named
+/// once in the log (`take_loose`), and what the log has yet to say about them.
+static LOOSE: Mutex<(Vec<PathBuf>, Vec<String>)> = Mutex::new((Vec::new(), Vec::new()));
+
+/// Makes `path` (described by `meta`) the user's alone with `change` when
+/// others may read it. Where that is refused for one of the user's own folders
+/// or files — a file system without Unix modes (vfat, exFAT, some network
+/// shares), or a mode pinned by an attribute — it is used as it is, because
+/// what goes into it (every decision in the history) matters more; files
+/// created in it are still 0600, and the log says so once. One that belongs to
+/// another account is refused, as before.
+#[cfg(unix)]
+pub(crate) fn tighten(
+    path: &Path,
+    meta: &std::fs::Metadata,
+    change: impl FnOnce() -> std::io::Result<()>,
+) -> std::io::Result<()> {
+    use std::os::unix::fs::{MetadataExt, PermissionsExt};
+    if meta.permissions().mode() & 0o077 == 0 {
+        return Ok(());
+    }
+    match change() {
+        Ok(()) => Ok(()),
+        // SAFETY: geteuid has no preconditions and cannot fail.
+        Err(err) if meta.uid() == unsafe { libc::geteuid() } => {
+            let mut loose = LOOSE.lock().unwrap_or_else(PoisonError::into_inner);
+            if !loose.0.iter().any(|p| p == path) {
+                loose.0.push(path.to_path_buf());
+                loose.1.push(format!(
+                    "{} could not be made private ({err}); it is used as it is, so other accounts may be able to \
+                     read it — check the file system it is on",
+                    path.display()
+                ));
+            }
+            Ok(())
+        }
+        Err(err) => Err(err),
+    }
+}
+
+/// What the log has not yet said about folders and files left readable (`tighten`).
+pub(crate) fn take_loose() -> Vec<String> {
+    std::mem::take(&mut LOOSE.lock().unwrap_or_else(PoisonError::into_inner).1)
 }
 
 /// Writes a whole file only the user can read (0600 on Unix), flushed to disk.

@@ -135,6 +135,50 @@ pub fn local_time() -> LocalTime {
     }
 }
 
+/// How far local time was from UTC at `ts_ms` (milliseconds since the epoch),
+/// in minutes east of UTC, by this computer's time zone rules: summer time
+/// where it was in force at that moment. None when the system cannot say.
+#[cfg(unix)]
+pub fn utc_offset_min_at(ts_ms: u64) -> Option<i32> {
+    let secs = libc::time_t::try_from(ts_ms / 1000).ok()?;
+    // SAFETY: localtime_r only writes into `tm`, which outlives the call.
+    unsafe {
+        let mut tm: libc::tm = std::mem::zeroed();
+        if libc::localtime_r(&secs, &mut tm).is_null() {
+            return None;
+        }
+        i32::try_from(tm.tm_gmtoff / 60).ok()
+    }
+}
+
+#[cfg(windows)]
+pub fn utc_offset_min_at(ts_ms: u64) -> Option<i32> {
+    use windows::Win32::Foundation::{FILETIME, SYSTEMTIME};
+    use windows::Win32::System::Time::{
+        FileTimeToSystemTime, GetDynamicTimeZoneInformation, SystemTimeToFileTime, SystemTimeToTzSpecificLocalTimeEx,
+        DYNAMIC_TIME_ZONE_INFORMATION, TIME_ZONE_ID_INVALID,
+    };
+    // A FILETIME counts 100 ns from 1601-01-01 UTC.
+    let ticks = i64::try_from(ts_ms / 1000).ok()?.checked_add(11_644_473_600)?.checked_mul(10_000_000)?;
+    let utc_ft = FILETIME { dwLowDateTime: ticks as u32, dwHighDateTime: (ticks >> 32) as u32 };
+    let (mut utc, mut local, mut local_ft) = (SYSTEMTIME::default(), SYSTEMTIME::default(), FILETIME::default());
+    let mut zone = DYNAMIC_TIME_ZONE_INFORMATION::default();
+    // SAFETY: every pointer is to a local that outlives the call. The dynamic
+    // zone carries the daylight-saving rules of each year, so `utc` is read
+    // with the rules of its own year, not this year's.
+    unsafe {
+        if GetDynamicTimeZoneInformation(&mut zone) == TIME_ZONE_ID_INVALID {
+            return None;
+        }
+        FileTimeToSystemTime(&utc_ft, &mut utc).ok()?;
+        SystemTimeToTzSpecificLocalTimeEx(Some(&zone as *const DYNAMIC_TIME_ZONE_INFORMATION), &utc, &mut local)
+            .ok()?;
+        SystemTimeToFileTime(&local, &mut local_ft).ok()?;
+    }
+    let local_ticks = (i64::from(local_ft.dwHighDateTime) << 32) | i64::from(local_ft.dwLowDateTime);
+    i32::try_from((local_ticks - ticks) / 600_000_000).ok()
+}
+
 /// Whether the OS shows its interface in Turkish.
 #[cfg(windows)]
 pub fn system_is_turkish() -> bool {

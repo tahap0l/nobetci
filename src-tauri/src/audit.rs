@@ -7,7 +7,14 @@
 // (timed out / handed to the terminal). Nothing leaves the machine. On Linux
 // and macOS only its owner may read it: it holds commands and paths, masked
 // only where a secret is recognised.
+//
+// A line keeps the level the decision was made at and, when a user rule
+// changed it, the engine's own level too (`engineLevel`), so the history never
+// understates what was let through. Findings are kept as the labels the card
+// showed and as category ids (`categories`), which the settings window shows
+// in whatever language it uses now.
 
+use std::collections::{HashMap, HashSet};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -16,6 +23,7 @@ use std::time::{Duration, Instant, SystemTime};
 use serde::{Deserialize, Serialize};
 
 use crate::i18n::pick;
+use crate::risk::Level;
 
 /// Longest target kept per line; the card shows more, the history needs less.
 const MAX_TARGET: usize = 4000;
@@ -47,9 +55,18 @@ pub struct Entry {
     pub tool: String,
     pub kind: String,
     pub target: String,
-    /// low, medium, high or critical.
+    /// low, medium, high or critical: the level the request was decided at.
     pub level: String,
+    /// The risk engine's own level (same values), present only when a user
+    /// rule re-scored the request to `level` (C-22).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub engine_level: Option<String>,
+    /// The findings as the card showed them, in the language of that moment.
     pub labels: Vec<String>,
+    /// The findings' category ids (`risk_categories`), one per label and in
+    /// the same order (C-24). Absent in entries written before they were kept.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub categories: Vec<String>,
     /// allow, deny or none (nobody decided here).
     pub decision: String,
     /// user, hotkey, batch, rule, trusted, session, timeout, terminal, paused,
@@ -69,6 +86,38 @@ impl Entry {
         }
         self
     }
+
+    /// The findings to show now, each once: through `labels_now` (category id →
+    /// label in the current language) where the entry kept its categories,
+    /// as recorded otherwise.
+    fn findings_now<'a>(&'a self, labels_now: &'a HashMap<&'static str, &'static str>) -> Vec<&'a str> {
+        let by_id = self.categories.len() == self.labels.len();
+        let mut seen = HashSet::new();
+        self.labels
+            .iter()
+            .enumerate()
+            .map(|(i, label)| {
+                by_id.then(|| labels_now.get(self.categories[i].as_str()).copied()).flatten().unwrap_or(label.as_str())
+            })
+            .filter(|label| seen.insert(*label))
+            .collect()
+    }
+}
+
+/// A level as the history writes it: "low", "medium", "high" or "critical".
+fn level_word(level: Level) -> String {
+    serde_json::to_value(level).ok().and_then(|v| v.as_str().map(String::from)).unwrap_or_default()
+}
+
+/// What `engineLevel` holds for a request the engine scored `engine` and that
+/// was decided at `level`: nothing unless a rule changed it.
+pub fn engine_level(engine: Level, level: Level) -> Option<String> {
+    (engine != level).then(|| level_word(engine))
+}
+
+/// Every finding category's label in the current language, by id.
+fn current_labels() -> HashMap<&'static str, &'static str> {
+    crate::risk::categories().into_iter().map(|c| (c.id, c.label)).collect()
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -179,17 +228,31 @@ fn day_buckets(now: u64, days: u32, tz_offset_min: i32, day_starts: Option<&[f64
     (starts, (first..=today).map(ymd).collect())
 }
 
-/// A file as it was when it was read: its length and when it was last changed.
+/// A file as it was when it was read: which file it is (device and inode on
+/// Linux and macOS, its creation time elsewhere), its length and when it was
+/// last changed. A file deleted and written anew is another file.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct Stamp {
+    id: Option<(u64, u64)>,
+    created: Option<SystemTime>,
     len: u64,
     modified: Option<SystemTime>,
 }
 
 fn stamp(path: &Path) -> Option<Stamp> {
     let meta = std::fs::metadata(path).ok()?;
-    Some(Stamp { len: meta.len(), modified: meta.modified().ok() })
+    #[cfg(unix)]
+    let id = {
+        use std::os::unix::fs::MetadataExt;
+        Some((meta.dev(), meta.ino()))
+    };
+    #[cfg(not(unix))]
+    let id = None;
+    Some(Stamp { id, created: meta.created().ok(), len: meta.len(), modified: meta.modified().ok() })
 }
+
+/// How many bytes before `read_to` are kept to recognise the file read so far.
+const TAIL: u64 = 64;
 
 /// The parsed history, kept while the files stay as they were.
 #[derive(Default)]
@@ -198,8 +261,23 @@ struct Cache {
     current: Option<Stamp>,
     /// How far into the current file has been read: the end of its last whole line.
     read_to: u64,
+    /// The last bytes before `read_to`. A file that grew but no longer has them
+    /// there was emptied or rewritten, not appended to.
+    tail: Vec<u8>,
     entries: Vec<Entry>,
     used: Option<Instant>,
+}
+
+/// The `TAIL` bytes of `path` before `end` (fewer near its start).
+fn tail_of(path: &Path, end: u64) -> Vec<u8> {
+    let from = end.saturating_sub(TAIL);
+    let mut bytes = Vec::new();
+    if let Ok(mut file) = std::fs::File::open(path) {
+        if file.seek(SeekFrom::Start(from)).is_ok() {
+            let _ = file.take(end - from).read_to_end(&mut bytes);
+        }
+    }
+    bytes
 }
 
 pub struct Log {
@@ -235,20 +313,11 @@ fn read_from(path: &Path, from: u64, whole_lines: bool) -> (Vec<u8>, u64) {
     (bytes, end)
 }
 
-/// The history folder, owner-only on Linux and macOS.
+/// The history folder, owner-only on Linux and macOS where the file system
+/// allows it: a decision is recorded even where it does not
+/// (`settings::tighten`, which also names such a folder in the log).
 fn private_dir(dir: &Path) -> std::io::Result<()> {
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
-        std::fs::DirBuilder::new().recursive(true).mode(0o700).create(dir)?;
-        let mode = std::fs::metadata(dir)?.permissions().mode();
-        if mode & 0o077 != 0 {
-            std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700))?;
-        }
-        Ok(())
-    }
-    #[cfg(not(unix))]
-    std::fs::create_dir_all(dir)
+    crate::settings::private_dir(dir)
 }
 
 /// The history file opened for appending, owner-only on Linux and macOS —
@@ -265,9 +334,8 @@ fn open_private(path: &Path) -> std::io::Result<std::fs::File> {
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        if file.metadata()?.permissions().mode() & 0o077 != 0 {
-            file.set_permissions(std::fs::Permissions::from_mode(0o600))?;
-        }
+        let meta = file.metadata()?;
+        crate::settings::tighten(path, &meta, || file.set_permissions(std::fs::Permissions::from_mode(0o600)))?;
     }
     Ok(file)
 }
@@ -342,22 +410,40 @@ impl Log {
             parse_lines(&read_from(&self.current(), 0, true).0, &mut entries);
             return f(&entries);
         }
+        // Appended to: the same file, longer, and still holding what was read
+        // where it was read. A file emptied or replaced and then grown past
+        // that point is read again whole.
         let grown = cache.previous == previous
-            && cache.current.zip(current).is_some_and(|(was, now)| now.len > was.len && now.len >= cache.read_to);
+            && cache.current.zip(current).is_some_and(|(was, now)| {
+                was.id == now.id
+                    && was.created == now.created
+                    && now.len > was.len
+                    && now.len >= cache.read_to
+                    && tail_of(&self.current(), cache.read_to) == cache.tail
+            });
         if grown {
             let (bytes, end) = read_from(&self.current(), cache.read_to, true);
             parse_lines(&bytes, &mut cache.entries);
             cache.read_to = end;
+            cache.tail = tail_of(&self.current(), end);
             cache.current = current;
         } else if cache.previous != previous || cache.current != current || cache.used.is_none() {
             let mut entries = Vec::new();
             parse_lines(&read_from(&self.previous(), 0, false).0, &mut entries);
             let (bytes, end) = read_from(&self.current(), 0, true);
             parse_lines(&bytes, &mut entries);
-            *cache = Cache { previous, current, read_to: end, entries, used: None };
+            let tail = tail_of(&self.current(), end);
+            *cache = Cache { previous, current, read_to: end, tail, entries, used: None };
         }
         cache.used = Some(Instant::now());
         f(&cache.entries)
+    }
+
+    /// Lets go of the parsed history (the settings window, its only reader,
+    /// was closed): a long history is tens of megabytes in memory. The next
+    /// query reads the files again.
+    pub fn forget(&self) {
+        *self.cache.lock().unwrap_or_else(|e| e.into_inner()) = Cache::default();
     }
 
     /// Everything on disk, oldest first. A damaged line is skipped, not fatal.
@@ -385,9 +471,16 @@ impl Log {
     }
 
     /// Like `query`, with an explicit cap — exports take everything that matches.
+    /// A finding matches by the label it was recorded with and, where the entry
+    /// kept its category, by that category's label in the current language.
     pub fn query_up_to(&self, f: &Filter, limit: usize) -> Page {
         let text = fold(f.text.trim());
         let project = fold(f.project.trim());
+        let labels_now: HashMap<&str, String> = if text.is_empty() {
+            HashMap::new()
+        } else {
+            current_labels().into_iter().map(|(id, l)| (id, fold(l))).collect()
+        };
         self.with(|entries| {
             let hits: Vec<&Entry> = entries
                 .iter()
@@ -403,7 +496,10 @@ impl Log {
                             || fold(&e.project).contains(&text)
                             || fold(&e.tool).contains(&text)
                             || fold(&e.rule).contains(&text)
-                            || e.labels.iter().any(|l| fold(l).contains(&text)))
+                            || e.labels.iter().any(|l| fold(l).contains(&text))
+                            || e.categories
+                                .iter()
+                                .any(|c| labels_now.get(c.as_str()).is_some_and(|l| l.contains(&text))))
                 })
                 .collect();
             let total = hits.len();
@@ -435,6 +531,10 @@ impl Log {
         let mut tools: std::collections::HashMap<String, usize> = Default::default();
         let mut labels: std::collections::HashMap<String, usize> = Default::default();
         let mut waits: Vec<u64> = Vec::new();
+        // Findings are counted under their label in the current language where
+        // the entry kept the category, so a history recorded in Turkish reads
+        // in English after a switch (C-24).
+        let labels_now = current_labels();
 
         self.with(|entries| {
             for e in entries {
@@ -472,8 +572,8 @@ impl Log {
                 }
                 *projects.entry(e.project.clone()).or_default() += 1;
                 *tools.entry(e.tool.clone()).or_default() += 1;
-                for l in &e.labels {
-                    *labels.entry(l.clone()).or_default() += 1;
+                for label in e.findings_now(&labels_now) {
+                    *labels.entry(label.to_string()).or_default() += 1;
                 }
             }
         });
@@ -526,17 +626,25 @@ pub fn local_stamp(ts: u64, tz_offset_min: i32) -> String {
     format!("{} {:02}:{:02}:{:02}", ymd(day), secs / 3600, secs / 60 % 60, secs % 60)
 }
 
-/// One CSV cell. Quoted always; any line of it that a spreadsheet would read
-/// as a formula is defused with a leading apostrophe — the history is full of
-/// text a hostile prompt could have chosen, and a reader that splits rows at
-/// line breaks would see each line as a cell of its own.
+/// One CSV cell. Quoted always; anything in it a spreadsheet could take for a
+/// formula is defused with an apostrophe — the history is full of text a
+/// hostile prompt could have chosen. Not only the cell's start: a reader that
+/// splits rows at line breaks, or that opens a `,` file with `;` (or the other
+/// way round) and does not honour the quotes, cuts the text at those points,
+/// so whatever follows a line break, a `,` or a `;` (and any quotes there)
+/// starts a cell of its own.
 fn cell(s: &str) -> String {
-    let lines = s.replace("\r\n", "\n").replace('\r', "\n");
-    let body: Vec<String> = lines
-        .split('\n')
-        .map(|line| if line.starts_with(['=', '+', '-', '@', '\t']) { format!("'{line}") } else { line.to_string() })
-        .collect();
-    format!("\"{}\"", body.join("\n").replace('"', "\"\""))
+    let text = s.replace("\r\n", "\n").replace('\r', "\n");
+    let mut body = String::with_capacity(text.len() + 2);
+    let mut starts_cell = true;
+    for c in text.chars() {
+        if starts_cell && matches!(c, '=' | '+' | '-' | '@' | '\t') {
+            body.push('\'');
+        }
+        body.push(c);
+        starts_cell = matches!(c, '\n' | ',' | ';') || (starts_cell && c == '"');
+    }
+    format!("\"{}\"", body.replace('"', "\"\""))
 }
 
 /// The separators an export may use: a comma, or a semicolon for spreadsheets
@@ -548,18 +656,30 @@ pub fn separator(choice: Option<&str>) -> char {
     }
 }
 
+/// The export as CSV. Each row's time is local time as it was at that moment
+/// on this computer — summer or winter time alike, as the History table shows
+/// it — and `tz_offset_min` (the window's offset today) only where the system
+/// cannot say.
 pub fn to_csv(entries: &[Entry], tz_offset_min: i32, sep: char) -> String {
-    // The header follows the app's language, like the labels in the rows below it.
+    to_csv_by(entries, sep, |ts| crate::sys::utc_offset_min_at(ts).map_or(tz_offset_min, |east| -east))
+}
+
+/// `to_csv`, with `tz_offset_at(ts)` giving the offset in force at `ts`, in
+/// `Date.getTimezoneOffset()` minutes (west of UTC).
+fn to_csv_by(entries: &[Entry], sep: char, tz_offset_at: impl Fn(u64) -> i32) -> String {
+    // The header follows the app's language. `findings` are the labels as the
+    // card showed them; `engine_level` is the engine's own level where a rule
+    // changed `risk`, and empty otherwise.
     let mut out = String::from("\u{FEFF}");
     let header = pick(
-        "time,project,session,tool,kind,risk,decision,decided_by,rule,target,findings,message,duration_ms",
-        "zaman,proje,oturum,araç,tür,risk,karar,karar_veren,kural,hedef,bulgular,mesaj,süre_ms",
+        "time,project,session,tool,kind,risk,decision,decided_by,rule,target,findings,message,duration_ms,engine_level",
+        "zaman,proje,oturum,araç,tür,risk,karar,karar_veren,kural,hedef,bulgular,mesaj,süre_ms,motor_riski",
     );
     out.push_str(&header.replace(',', &sep.to_string()));
     out.push_str("\r\n");
     for e in entries {
         let row = [
-            local_stamp(e.ts, tz_offset_min),
+            local_stamp(e.ts, tz_offset_at(e.ts)),
             e.project.clone(),
             e.session.clone(),
             e.tool.clone(),
@@ -572,6 +692,7 @@ pub fn to_csv(entries: &[Entry], tz_offset_min: i32, sep: char) -> String {
             e.labels.join(" | "),
             e.message.clone(),
             e.ms.to_string(),
+            e.engine_level.clone().unwrap_or_default(),
         ];
         out.push_str(&row.iter().map(|c| cell(c)).collect::<Vec<_>>().join(&sep.to_string()));
         out.push_str("\r\n");
@@ -774,11 +895,12 @@ mod tests {
     #[test]
     fn csv_is_quoted_and_formula_safe() {
         let e = entry(0, "high", "deny", "user", "=HYPERLINK(\"http://x\")");
-        let csv = to_csv(&[e], 0, ',');
+        let csv = to_csv_by(&[e], ',', |_| 0);
         assert!(csv.starts_with('\u{FEFF}'));
         let header = csv.trim_start_matches('\u{FEFF}').lines().next().unwrap();
         assert!(header.starts_with("time,project,") || header.starts_with("zaman,proje,"), "{header}");
-        assert_eq!(header.split(',').count(), 13, "one name per column");
+        assert_eq!(header.split(',').count(), 14, "one name per column");
+        assert!(header.ends_with(",engine_level") || header.ends_with(",motor_riski"), "{header}");
         assert!(csv.contains("\"'=HYPERLINK(\"\"http://x\"\")\""));
         assert!(csv.contains("1970-01-01 00:00:00"));
     }
@@ -788,10 +910,10 @@ mod tests {
         // R-16 / C-7: a reader that splits rows at line breaks, or Excel in a
         // locale whose list separator is `;`, must not meet a live formula.
         let e = entry(0, "high", "deny", "user", "echo a\r\n=cmd|'/c calc'!A1\n+1\recho b; c");
-        let csv = to_csv(&[e], 0, ';');
+        let csv = to_csv_by(&[e], ';', |_| 0);
         assert!(csv.contains("\"echo a\n'=cmd|'/c calc'!A1\n'+1\necho b; c\""), "{csv}");
         let header = csv.trim_start_matches('\u{FEFF}').lines().next().unwrap();
-        assert_eq!(header.split(';').count(), 13);
+        assert_eq!(header.split(';').count(), 14);
         assert!(!header.contains(','));
         let row = csv.lines().nth(1).unwrap();
         assert!(row.starts_with("\"1970-01-01 00:00:00\";\"nobetci\";"), "{row}");
@@ -961,6 +1083,223 @@ mod tests {
         // Days of exactly 22 and 26 hours are accepted (both ends included).
         let edge = [0.0, 22.0 * hour, 48.0 * hour];
         assert_eq!(local_midnights(&edge, 2), Some(vec![0, 22 * HOUR_MS, 48 * HOUR_MS]));
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// C-22 / C-24: the engine's level where a rule changed it, and the
+    /// findings' category ids, are kept beside what was decided — and only
+    /// when there is something to say. Lines written before still read.
+    #[test]
+    fn the_engine_level_and_finding_ids_are_kept_beside_the_decision() {
+        assert_eq!(engine_level(Level::High, Level::Low).as_deref(), Some("high"));
+        assert_eq!(engine_level(Level::Critical, Level::High).as_deref(), Some("critical"));
+        assert_eq!(engine_level(Level::Medium, Level::Medium), None);
+        let dir = tmp("engine");
+        let log = Log::new(&dir);
+        let mut lowered = entry(1, "low", "deny", "user", "git push --force origin main");
+        lowered.engine_level = engine_level(Level::High, Level::Low);
+        lowered.labels = vec!["Zorla push".into()];
+        lowered.categories = vec!["force_push".into()];
+        log.append(lowered, 10).unwrap();
+        log.append(entry(2, "low", "allow", "user", "npm test"), 10).unwrap();
+        // A line from before: no engineLevel, no categories.
+        std::fs::OpenOptions::new()
+            .append(true)
+            .open(log.current())
+            .unwrap()
+            .write_all(b"{\"ts\":3,\"id\":\"old\",\"level\":\"high\",\"labels\":[\"Eski etiket\"],\"decision\":\"deny\",\"by\":\"user\"}\n")
+            .unwrap();
+        let text = std::fs::read_to_string(log.current()).unwrap();
+        let lines: Vec<serde_json::Value> = text.lines().map(|l| serde_json::from_str(l).unwrap()).collect();
+        assert_eq!(lines[0]["engineLevel"], "high");
+        assert_eq!(lines[0]["categories"], serde_json::json!(["force_push"]));
+        assert!(lines[1].get("engineLevel").is_none() && lines[1].get("categories").is_none(), "{}", lines[1]);
+        let all = log.all();
+        assert_eq!(all.len(), 3);
+        assert_eq!((all[2].engine_level.as_deref(), all[2].categories.len()), (None, 0));
+        // The settings window gets them as `engineLevel` and `categories`.
+        let sent = serde_json::to_value(&log.query(&Filter::default()).entries[2]).unwrap();
+        assert_eq!((sent["engineLevel"].as_str(), sent["categories"][0].as_str()), (Some("high"), Some("force_push")));
+        // The export: engine_level last, empty where no rule changed the level.
+        let csv = to_csv_by(&all, ',', |_| 0);
+        let rows: Vec<&str> = csv.lines().skip(1).collect();
+        assert!(rows[0].ends_with(",\"high\""), "{}", rows[0]);
+        assert!(rows[1].ends_with(",\"\""), "{}", rows[1]);
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// C-24: findings with a category read in the current language in the
+    /// statistics and the search; older entries keep their recorded text.
+    #[test]
+    fn findings_with_a_category_read_in_the_current_language() {
+        let now_label = current_labels()["recursive_delete"];
+        let dir = tmp("labels-now");
+        let log = Log::new(&dir);
+        let now = now_ms();
+        let mut kept = entry(now - 2000, "high", "deny", "user", "rm -rf build");
+        kept.labels = vec!["Recorded in another language".into(), "Recorded twice".into()];
+        kept.categories = vec!["recursive_delete".into(), "recursive_delete".into()];
+        log.append(kept, 10).unwrap();
+        let mut old = entry(now - 1000, "high", "deny", "user", "rm -rf dist");
+        old.labels = vec!["Old style label".into()];
+        log.append(old, 10).unwrap();
+        let mut unknown = entry(now - 500, "low", "allow", "user", "ls");
+        unknown.labels = vec!["From a newer version".into()];
+        unknown.categories = vec!["not_a_category_yet".into()];
+        log.append(unknown, 10).unwrap();
+        let top = log.stats(7, 0, None).top_labels;
+        assert!(top.contains(&(now_label.to_string(), 1)), "counted once per entry: {top:?}");
+        assert!(top.contains(&("Old style label".to_string(), 1)), "{top:?}");
+        assert!(top.contains(&("From a newer version".to_string(), 1)), "an unknown id keeps its text: {top:?}");
+        assert!(!top.iter().any(|(l, _)| l.starts_with("Recorded")), "{top:?}");
+        // Searching by today's label finds the entry recorded in the other language…
+        let word = now_label.split_whitespace().max_by_key(|w| w.chars().count()).unwrap();
+        let found = log.query(&Filter { text: word.into(), ..Filter::default() });
+        assert!(found.entries.iter().any(|e| e.target == "rm -rf build"), "{word}: {found:?}");
+        // …and its recorded text still finds it too.
+        assert_eq!(log.query(&Filter { text: "recorded in another".into(), ..Filter::default() }).total, 1);
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// redaction-history#3: a `,` file opened with `;` (or the other way
+    /// round), or a reader that splits at line breaks and ignores the quotes,
+    /// meets no cell that starts like a formula.
+    #[test]
+    fn a_reader_with_the_other_separator_meets_no_formula() {
+        let hostile = "echo \"a;=WEBSERVICE(CHAR(104)&A2);b\",x,@SUM(1);+2;-3\n=4,\"=5\";\"+6\"\t-7";
+        let mut e = entry(0, "high", "deny", "user", hostile);
+        e.message = "=HYPERLINK(\"x\");@x,+y".into();
+        for (sep, other) in [(',', ';'), (';', ',')] {
+            let csv = to_csv_by(std::slice::from_ref(&e), sep, |_| 0);
+            for line in csv.trim_start_matches('\u{FEFF}').lines().skip(1) {
+                for piece in line.split(other).chain(line.split(sep)) {
+                    let bare = piece.trim_start_matches('"');
+                    assert!(!bare.starts_with(['=', '+', '-', '@', '\t']), "{sep:?} read with {other:?}: {piece:?}");
+                }
+            }
+        }
+        // What a spreadsheet that honours the quotes shows: the text, defused.
+        assert_eq!(cell("a,-b; c;=d"), "\"a,'-b; c;'=d\"");
+        assert_eq!(cell("x,\"=y\""), "\"x,\"\"'=y\"\"\"");
+        assert_eq!(cell("plain, text; and more"), "\"plain, text; and more\"");
+    }
+
+    /// redaction-history#9: every row's time is local time as it was at that
+    /// moment, not by today's offset.
+    #[test]
+    fn each_rows_time_is_local_time_as_it_was_then() {
+        // Berlin (getTimezoneOffset -120 in summer time, -60 in winter time),
+        // exported in November.
+        let summer = utc(2026, 3, 29, 1, 0) as u64..utc(2026, 10, 25, 1, 0) as u64;
+        let berlin = |ts: u64| if summer.contains(&ts) { -120 } else { -60 };
+        let rows = [
+            entry(utc(2026, 10, 20, 12, 0) as u64, "low", "allow", "user", "a"),
+            entry(utc(2026, 10, 23, 22, 30) as u64, "low", "allow", "user", "b"),
+            entry(utc(2026, 11, 22, 9, 0) as u64, "low", "allow", "user", "c"),
+        ];
+        let csv = to_csv_by(&rows, ',', berlin);
+        for want in ["\"2026-10-20 14:00:00\"", "\"2026-10-24 00:30:00\"", "\"2026-11-22 10:00:00\""] {
+            assert!(csv.contains(want), "{want} in {csv}");
+        }
+        // The system answers for any moment, with a plausible offset (Windows
+        // from its dynamic time zone, Linux and macOS from localtime_r).
+        for ts in [0, utc(2026, 7, 1, 12, 0) as u64, now_ms()] {
+            let east = crate::sys::utc_offset_min_at(ts).expect("the system knows its time zone");
+            assert!((-14 * 60..=14 * 60).contains(&east), "{east}");
+        }
+    }
+
+    /// redaction-history#8: a history emptied or deleted by hand and then
+    /// grown past what was read before is read again, not appended to.
+    #[test]
+    fn a_history_replaced_and_grown_again_is_read_again() {
+        let dir = tmp("regrow");
+        let log = Log::new(&dir);
+        let targets = |log: &Log| -> Vec<String> {
+            log.query(&Filter { limit: 50, ..Filter::default() }).entries.into_iter().map(|e| e.target).collect()
+        };
+        for i in 0..3 {
+            log.append(entry(i, "low", "allow", "user", &format!("old{i}")), 10).unwrap();
+        }
+        assert_eq!(targets(&log), ["old2", "old1", "old0"]);
+        // Emptied in place (the same file), then more than before.
+        std::fs::write(log.current(), b"").unwrap();
+        for i in 10..15 {
+            log.append(entry(i, "low", "allow", "user", &format!("new{i}")), 10).unwrap();
+        }
+        assert_eq!(targets(&log), ["new14", "new13", "new12", "new11", "new10"]);
+        // Deleted and written anew.
+        std::fs::remove_file(log.current()).unwrap();
+        for i in 20..27 {
+            log.append(entry(i, "low", "allow", "user", &format!("again{i}")), 10).unwrap();
+        }
+        assert_eq!(targets(&log).len(), 7);
+        assert_eq!(targets(&log)[0], "again26");
+        // Plain appends are still read from where the last read stopped.
+        log.append(entry(30, "low", "allow", "user", "appended"), 10).unwrap();
+        assert_eq!(targets(&log)[0], "appended");
+        assert_eq!(log.cache.lock().unwrap().read_to, std::fs::metadata(log.current()).unwrap().len());
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// redaction-history#10: closing the settings window lets the parsed
+    /// history go.
+    #[test]
+    fn forgetting_lets_the_parsed_history_go() {
+        let dir = tmp("forget");
+        let log = Log::new(&dir);
+        log.append(entry(1, "low", "allow", "user", "x"), 10).unwrap();
+        assert_eq!(log.query(&Filter::default()).total, 1);
+        assert_eq!(log.cache.lock().unwrap().entries.len(), 1);
+        log.forget();
+        assert!(log.cache.lock().unwrap().entries.is_empty());
+        assert_eq!(log.query(&Filter::default()).total, 1, "read again when asked");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// redaction-history#5: a folder of the user's whose mode cannot be changed
+    /// (here pinned with `chattr +a`) still gets the decision, and the log says
+    /// why it is not private; somebody else's folder is still refused. Needs
+    /// the right to pin attributes (root here); skipped without it.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn a_folder_whose_mode_cannot_change_still_gets_the_decision() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tmp("pinned");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o777)).unwrap();
+        let pinned = std::process::Command::new("chattr").arg("+a").arg(&dir).status().is_ok_and(|s| s.success());
+        if !pinned {
+            let _ = std::fs::remove_dir_all(dir);
+            return;
+        }
+        let log = Log::new(&dir);
+        let written = log.append(entry(1, "high", "deny", "user", "rm -rf /"), 10);
+        let notes = crate::settings::take_loose();
+        let _ = std::process::Command::new("chattr").arg("-a").arg(&dir).status();
+        written.unwrap();
+        assert_eq!(log.all().len(), 1, "the decision is on record");
+        assert!(notes.iter().any(|n| n.contains(&dir.display().to_string())), "{notes:?}");
+        assert_eq!(
+            std::fs::metadata(log.current()).unwrap().permissions().mode() & 0o777,
+            0o600,
+            "the file is private"
+        );
+        // Somebody else's folder (only root can make one here).
+        if unsafe { libc::geteuid() } == 0 {
+            let theirs = tmp("theirs");
+            std::fs::create_dir_all(&theirs).unwrap();
+            std::fs::set_permissions(&theirs, std::fs::Permissions::from_mode(0o777)).unwrap();
+            std::os::unix::fs::chown(&theirs, Some(65534), Some(65534)).unwrap();
+            let pinned =
+                std::process::Command::new("chattr").arg("+a").arg(&theirs).status().is_ok_and(|s| s.success());
+            let refused = Log::new(&theirs).append(entry(2, "low", "allow", "user", "x"), 10);
+            let _ = std::process::Command::new("chattr").arg("-a").arg(&theirs).status();
+            if pinned {
+                assert!(refused.is_err(), "another account's folder is not written into");
+            }
+            let _ = std::fs::remove_dir_all(theirs);
+        }
         let _ = std::fs::remove_dir_all(dir);
     }
 }

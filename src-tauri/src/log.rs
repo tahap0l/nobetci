@@ -2,7 +2,9 @@
 // (%LOCALAPPDATA%\Nobetci on Windows, ~/Library/Application Support/Nobetci on
 // macOS, ~/.local/share/nobetci on Linux). Nothing leaves the machine. On Linux
 // and macOS the folder and the file are the user's alone (0700 / 0600): the log
-// names projects and paths.
+// names projects and paths. Where the file system cannot keep them private, the
+// log is still written and says so (`settings::tighten`); where it cannot be
+// written at all, the line goes to stderr, so a failure is never silent.
 
 use std::io::Write;
 
@@ -11,16 +13,24 @@ use crate::settings;
 pub fn line(message: impl AsRef<str>) {
     let stamp = crate::sys::local_time().stamp();
     let dir = settings::local_dir();
-    if settings::private_dir(&dir).is_err() {
-        return;
-    }
-    let path = dir.join("nobetci.log");
-    // Keep it from growing forever: start fresh past ~1 MB.
-    if std::fs::metadata(&path).map(|m| m.len() > 1_000_000).unwrap_or(false) {
-        let _ = std::fs::remove_file(&path);
-    }
-    if let Ok(mut file) = open(&path) {
-        let _ = writeln!(file, "{stamp} {}", message.as_ref());
+    let written = settings::private_dir(&dir).and_then(|()| {
+        let path = dir.join("nobetci.log");
+        // Keep it from growing forever: start fresh past ~1 MB.
+        if std::fs::metadata(&path).map(|m| m.len() > 1_000_000).unwrap_or(false) {
+            let _ = std::fs::remove_file(&path);
+        }
+        let mut file = open(&path)?;
+        writeln!(file, "{stamp} {}", message.as_ref())?;
+        for note in settings::take_loose() {
+            writeln!(file, "{stamp} {note}")?;
+        }
+        Ok(())
+    });
+    if let Err(err) = written {
+        eprintln!("{stamp} {} (nobetci.log could not be written: {err})", message.as_ref());
+        for note in settings::take_loose() {
+            eprintln!("{stamp} {note}");
+        }
     }
 }
 
@@ -38,9 +48,8 @@ fn open(path: &std::path::Path) -> std::io::Result<std::fs::File> {
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        if file.metadata()?.permissions().mode() & 0o077 != 0 {
-            file.set_permissions(std::fs::Permissions::from_mode(0o600))?;
-        }
+        let meta = file.metadata()?;
+        settings::tighten(path, &meta, || file.set_permissions(std::fs::Permissions::from_mode(0o600)))?;
     }
     Ok(file)
 }

