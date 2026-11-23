@@ -345,6 +345,15 @@ static COMMAND_RULES: LazyLock<Vec<Rule>> = LazyLock::new(|| {
         // front of one of Nöbetçi's folders; the reading of the command sees
         // every other way of writing there (`self_touched`).
         rule("nobetci_self", Critical, L_SELF, Tag::None, &format!(r"{WRITE_VERBS}[^\n;&|]*{SELF_DIRS}")),
+        // The uninstaller's command, however it is run: through a pipe into a
+        // shell, a variable, `xargs`, `$(…)`, a git option, `script`, `tmux`.
+        // The reading of the command (`shell::unhooks`) sees the plain ways;
+        // this one keeps the line that names both unless every mention is
+        // text that is only printed, searched or recorded — `echo`, `grep`,
+        // `git commit -m`, `gh pr create --body` — and nothing in the line
+        // runs what it is handed (`shell::only_mentions`).
+        rule("nobetci_unhook", Critical, L_UNHOOK, Tag::None, r"(?s:nobetci.*--remove-hooks|--remove-hooks.*nobetci)")
+            .except(mentions_unhook),
         rule(
             "nobetci_kill",
             High,
@@ -481,8 +490,11 @@ static COMMAND_RULES: LazyLock<Vec<Rule>> = LazyLock::new(|| {
             High,
             ("Zorla push: uzak geçmişi eziyor", "Force push: overwrites remote history"),
             Tag::None,
-            // `-f` alone or in a group (`-uf`, `-fu`).
-            &format!(r"{GIT}push\b[^\n]*(\s--force(-with-lease)?\b|\s-[a-z]*f[a-z]*\b|\s\+\S+)"),
+            // `-f` alone or in a group (`-uf`, `-fu`) — a group only in the push
+            // itself, not in a command after it (`&& tar -xzf x`, `; ls -lf`).
+            &format!(
+                r"{GIT}push\b([^\n]*(\s--force(-with-lease)?\b|\s-f\b|\s\+\S+)|[^\n;&|]*\s-[a-z]*f[a-z]*\b)"
+            ),
         ),
         rule(
             "git_destructive",
@@ -832,19 +844,21 @@ fn is_tag_spec(c: char) -> bool {
     matches!(c, '\u{E0030}'..='\u{E0039}' | '\u{E0061}'..='\u{E007A}')
 }
 
-/// Whether the tag character at `at` belongs to a well-formed flag: the black
-/// flag, two to seven tag letters or digits, and the cancel tag — England,
-/// Scotland, Wales. Anything else is text smuggled past the eye (a space, a
-/// capital, punctuation, a longer run, a run that never ends). Looks at no more
-/// than a flag's length either way, so a long run costs nothing extra.
+/// Whether the tag character at `at` belongs to one of the three tag flags
+/// Unicode recommends for general use (RGI): England, Scotland and Wales — the
+/// black flag, `gbeng`, `gbsct` or `gbwls` in tag letters, the cancel tag. Any
+/// other run of tags shows as a plain black flag, or as nothing, and carries
+/// letters a model reads: text smuggled past the eye, a few letters a flag at a
+/// time. Looks at no more than a flag's length either way.
 fn in_flag(text: &str, at: usize) -> bool {
-    const LONGEST: usize = 7;
+    const FLAGS: [&str; 3] = ["gbeng", "gbsct", "gbwls"];
+    const LETTERS: usize = 5;
     // Back over the letters before this character to the flag.
     let mut start = at;
     let mut letters = 0;
     let mut flag = false;
     for c in text[..at].chars().rev() {
-        if is_tag_spec(c) && letters < LONGEST {
+        if is_tag_spec(c) && letters < LETTERS {
             start -= c.len_utf8();
             letters += 1;
             continue;
@@ -855,14 +869,15 @@ fn in_flag(text: &str, at: usize) -> bool {
     if !flag {
         return false;
     }
-    // Forward from there: letters, then the cancel tag, with `at` among them.
-    let mut count = 0;
+    // Forward from there: one of the three spellings, then the cancel tag,
+    // with `at` among them.
+    let mut spelled = String::new();
     for (i, c) in text[start..].char_indices() {
-        if is_tag_spec(c) && count < LONGEST {
-            count += 1;
+        if is_tag_spec(c) && spelled.len() < LETTERS {
+            spelled.push(char::from_u32(c as u32 - 0xE0000).unwrap_or('?'));
             continue;
         }
-        return c == '\u{E007F}' && (2..=LONGEST).contains(&count) && at <= start + i;
+        return c == '\u{E007F}' && FLAGS.contains(&spelled.as_str()) && at <= start + i;
     }
     false
 }
@@ -944,19 +959,127 @@ fn segment_and_cut(text: &str, at: Range<usize>) -> (&str, bool) {
     (&text[start..end], cut)
 }
 
-/// `--dry-run`, `git clean -n` and a draft release change nothing yet. Each
-/// tool by its own options: `-n` is `--notes` to `gh release create` and
-/// `--no-interaction` to `poetry publish`, a dry run only to `git clean`.
+/// A line that names Nöbetçi and its uninstall option only in text it
+/// prints, searches or records.
+fn mentions_unhook(text: &str, _at: Range<usize>) -> bool {
+    shell::only_mentions(text, "--remove-hooks")
+}
+
+/// `--dry-run`, `git clean -n` and a draft release change nothing yet. Read
+/// from the command as it runs: a comment (`npm publish # --dry-run`), the
+/// value of an option (`git clean -e -n -fdx`, `--notes "-d"`) or `--dry-run
+/// false` is no dry run. Each tool by its own options: `-n` is `--notes` to
+/// `gh release create` and `--no-interaction` to `poetry publish`, a dry run
+/// only to `git clean`.
 fn dry_run(text: &str, at: Range<usize>) -> bool {
-    let cmd = segment(text, at.clone());
-    let what = text[at].to_ascii_lowercase();
+    let what = text[at.clone()].to_ascii_lowercase();
+    let Some(tool) = what.split_whitespace().next().map(shell::base_name) else { return false };
     let clean = what.contains("clean");
     let release = what.contains("release");
-    cmd.split_whitespace().any(|w| {
-        w == "--dry-run"
-            || clean && w.starts_with('-') && !w.starts_with("--") && w.contains('n')
-            || release && matches!(w, "--draft" | "-d" | "--draft=true")
-    })
+    let reading = shell::read(segment(text, at), shell::Dialect::Posix);
+    if reading.partial {
+        return false;
+    }
+    let Some(cmd) =
+        reading.pipes.iter().flat_map(|p| &p.stages).find_map(|s| shell::command(&s.words).filter(|c| c.name == tool))
+    else {
+        return false;
+    };
+    // Options whose value is the next word, never an option of its own.
+    let valued: &[&str] = if clean {
+        &["-e", "--exclude", "-C", "-c", "--git-dir", "--work-tree"]
+    } else if release {
+        &[
+            "-n",
+            "--notes",
+            "-F",
+            "--notes-file",
+            "-t",
+            "--title",
+            "--target",
+            "--discussion-category",
+            "-R",
+            "--repo",
+            "--notes-start-tag",
+            "-a",
+        ]
+    } else {
+        &[
+            "--otp",
+            "--tag",
+            "--access",
+            "--registry",
+            "--workspace",
+            "-w",
+            "--userconfig",
+            "--token",
+            "--index",
+            "-p",
+            "--package",
+            "--manifest-path",
+            "--target",
+            "--target-dir",
+            "-j",
+            "--jobs",
+            "-F",
+            "--features",
+            "--config",
+            "-Z",
+            "-r",
+            "--repository",
+            "-u",
+            "--username",
+            "--password",
+            "--cert",
+            "--client-cert",
+            "--dist-dir",
+            "--publish-url",
+        ]
+    };
+    let args = cmd.args;
+    let mut i = 0;
+    while let Some(w) = args.get(i) {
+        i += 1;
+        if w == "--" {
+            break;
+        }
+        if valued.contains(&w.as_str()) {
+            i += 1;
+            continue;
+        }
+        if !w.starts_with('-') || w == "-" {
+            continue;
+        }
+        if clean {
+            if w == "--dry-run" {
+                return true;
+            }
+            if !w.starts_with("--") {
+                // `-fdn`; `-e` takes the rest of the group, or the next word.
+                for (at, c) in w.char_indices().skip(1) {
+                    if c == 'n' {
+                        return true;
+                    }
+                    if c == 'e' {
+                        if at + 1 == w.len() {
+                            i += 1;
+                        }
+                        break;
+                    }
+                }
+            }
+        } else if release {
+            let group = !w.starts_with("--") && w[1..].chars().all(|c| matches!(c, 'd' | 'p')) && w.contains('d');
+            if w == "--draft" || w == "--draft=true" || group {
+                return true;
+            }
+        } else if w == "--dry-run" && !args.get(i).is_some_and(|v| matches!(v.as_str(), "false" | "0" | "no"))
+            || matches!(w.as_str(), "--dry-run=true" | "--dry-run=1" | "--dry-run=yes")
+        {
+            return true;
+        }
+    }
+    false
 }
 
 /// `git restore --staged` without `--worktree` puts the index back; the work
@@ -1068,9 +1191,9 @@ static WRITE_PATH_RULES: LazyLock<Vec<Rule>> = LazyLock::new(|| {
                 "Shell profile or startup file (runs every time)",
             ),
             Tag::None,
-            // PowerShell's `$PROFILE` (and `$PROFILE.CurrentUserAllHosts`), the
+            // PowerShell's `$PROFILE` (`${PROFILE}`, `$PROFILE.CurrentUserAllHosts`), the
             // files a shell's own startup files pull in, fish's functions.
-            r"(^|[\\/])\.(bashrc|bash_profile|bash_login|bash_logout|bash_aliases|profile|zshrc|zprofile|zshenv|zlogin|zlogout|kshrc|mkshrc|cshrc|tcshrc|xprofile|xinitrc|xsession)$|(^|[\\/])\.zshrc\.local$|(^|[\\/])\$profile(\.\w+)?$|profile\.ps1$|(^|[\\/])\.oh-my-zsh[\\/]custom[\\/]|(^|[\\/])start menu[\\/]programs[\\/]startup([\\/]|$)|(^|[\\/])\.config[\\/]autostart([\\/]|$)|(^|[\\/])\.config[\\/]fish[\\/](config\.fish$|conf\.d[\\/]|functions[\\/])",
+            r"(^|[\\/])\.(bashrc|bash_profile|bash_login|bash_logout|bash_aliases|profile|zshrc|zprofile|zshenv|zlogin|zlogout|kshrc|mkshrc|cshrc|tcshrc|xprofile|xinitrc|xsession)$|(^|[\\/])\.zshrc\.local$|(^|[\\/])\$(profile|\{profile\})(\.\w+)?$|profile\.ps1$|(^|[\\/])\.oh-my-zsh[\\/]custom[\\/]|(^|[\\/])start menu[\\/]programs[\\/]startup([\\/]|$)|(^|[\\/])\.config[\\/]autostart([\\/]|$)|(^|[\\/])\.config[\\/]fish[\\/](config\.fish$|conf\.d[\\/]|functions[\\/])",
         ),
         rule(
             "persistence",
@@ -1313,7 +1436,7 @@ fn split_root(path: &str) -> (&str, &str) {
         path.find('}').map_or(0, |i| i + 1)
     } else if let Some(name) = path.strip_prefix('%') {
         name.find('%').map_or(0, |i| i + 2)
-    } else if path.len() > 5 && path[..5].eq_ignore_ascii_case("$env:") {
+    } else if path.get(..5).is_some_and(|p| p.eq_ignore_ascii_case("$env:")) && path.len() > 5 {
         var_end(5)
     } else if path.strip_prefix('$').is_some_and(|name| name.starts_with(|c: char| c.is_alphabetic() || c == '_')) {
         var_end(1)
@@ -1647,7 +1770,9 @@ fn check_write(raw: &str, path: &str, at: Place, by_place: bool, off: &Disabled,
         }
         found.derived += PATTERN_COST;
     }
-    for name in variants(path, at.home) {
+    let (names, cut) = variants(path, at.home);
+    found.unread |= cut;
+    for name in names {
         check_derived(raw, &name, at, off, found);
     }
 }
@@ -1876,40 +2001,76 @@ const HOME_NAMES: &[&str] = &[
 /// Windows alias, and for a part written as a pattern (`~/.claude/s*s.json`,
 /// `~/.config/nob*/settings.json`, a brace written out past its limit) or as
 /// an 8.3 alias (`NOBETC~1`, `SETTIN~1.JSO`), each protected name it can
-/// stand for. At most 64.
-fn variants(path: &str, home: &str) -> Vec<String> {
+/// stand for. At most MOST, and the work bounded whatever the path: past
+/// DEEPEST pattern parts only the trailing parts are read — the folders above
+/// them could be anything — and the second value says so.
+fn variants(path: &str, home: &str) -> (Vec<String>, bool) {
     const MOST: usize = 64;
+    const DEEPEST: usize = 16;
     let mut out: Vec<String> = Vec::new();
+    let mut cut = false;
     let alias = windows_alias(path);
     for spelled in std::iter::once(path).chain(alias.as_deref()) {
         if alias.as_deref() == Some(spelled) {
             out.push(spelled.to_string());
         }
-        let parts: Vec<&str> = spelled.split('/').collect();
-        if !parts.iter().any(|p| is_pattern(p)) {
+        let mut parts: Vec<&str> = spelled.split('/').collect();
+        let patterns: Vec<usize> = (0..parts.len()).filter(|&i| is_pattern(parts[i])).collect();
+        if patterns.is_empty() {
             continue;
+        }
+        if patterns.len() > DEEPEST {
+            cut = true;
+            parts = parts.split_off(patterns[patterns.len() - DEEPEST]);
         }
         let mut prefixes: Vec<String> = vec![String::new()];
         for (i, part) in parts.iter().enumerate() {
-            let mut next: Vec<String> = Vec::new();
-            for prefix in &prefixes {
-                let join = |name: &str| if i == 0 { name.to_string() } else { format!("{prefix}/{name}") };
-                if !is_pattern(part) {
-                    next.push(join(part));
-                    continue;
+            if !is_pattern(part) {
+                for prefix in &mut prefixes {
+                    if i > 0 {
+                        prefix.push('/');
+                    }
+                    prefix.push_str(part);
                 }
+                continue;
+            }
+            let part = cheap_pattern(part);
+            let mut next: Vec<String> = Vec::new();
+            'prefixes: for prefix in &prefixes {
                 let at_home = home_at_or_below(prefix, home).is_some_and(|h| norm(&h) == norm(prefix))
                     || matches!(norm(prefix).as_str(), "~" | "$home" | "${home}");
                 let names = PLACE_NAMES.iter().chain(if at_home { HOME_NAMES } else { &[] });
-                next.extend(names.filter(|name| part_matches(part, name)).map(|name| join(name)));
+                for name in names.filter(|name| part_matches(&part, name)) {
+                    if next.len() >= MOST {
+                        break 'prefixes;
+                    }
+                    next.push(if i == 0 { name.to_string() } else { format!("{prefix}/{name}") });
+                }
             }
-            next.truncate(MOST);
             prefixes = next;
         }
         out.extend(prefixes);
     }
     out.truncate(MOST);
-    out
+    (out, cut)
+}
+
+/// A pattern part made cheap to match: a run of stars is one star, and a part
+/// longer than any file name can be stands for anything.
+fn cheap_pattern(part: &str) -> std::borrow::Cow<'_, str> {
+    if part.len() > 255 {
+        return "*".into();
+    }
+    if !part.contains("**") {
+        return part.into();
+    }
+    let mut out = String::with_capacity(part.len());
+    for c in part.chars() {
+        if !(c == '*' && out.ends_with('*')) {
+            out.push(c);
+        }
+    }
+    out.into()
 }
 
 /// A part of a path written as a pattern or an 8.3 alias.
@@ -2104,7 +2265,26 @@ fn runs_fetched_variable(cmd: &str) -> Option<String> {
             r#"(?i)(?-u:\b)(iex|invoke-expression)(?-u:\b)[^\n;|]*{var}|\[scriptblock\]::create\(\s*{var}|(?-u:\b)eval\s+["']?{var}|(?-u:\b)({SHELL_NAMES}|python[\d.]*|node|perl|ruby|php|pwsh|powershell)(\.exe)?\s+(-\S+\s+)*-[a-z]*[ce][a-z]*\s+["']?{var}|{var}\}}?["']?(\.content)?\s*\|\s*((sudo|doas)\s+)?({SHELL_NAMES}|iex|invoke-expression|python[\d.]*|node|perl|ruby)(?-u:\b)|({SHELL_NAMES})\s+(-\S+\s+)*<<<\s*["']?{var}"#
         );
         let Ok(re) = Regex::new(&pattern) else { continue };
-        if let Some(m) = re.find(&cmd[after..]) {
+        let rest = &cmd[after..];
+        for m in re.find_iter(rest).take(16) {
+            // Piped on, it runs only in a program that takes its program from
+            // its input: `| python3 -m json.tool` and `| node -e '…'` read data.
+            if let Some(pipe) = m.as_str().rfind('|') {
+                let from = m.start() + pipe + 1;
+                let end = rest[from..].find(['|', ';', '&', '\n']).map_or(rest.len(), |i| from + i);
+                let stage = shell::read(&rest[from..end], shell::Dialect::Posix);
+                let runs = stage
+                    .pipes
+                    .first()
+                    .and_then(|p| p.stages.first())
+                    .and_then(|s| shell::command(&s.words))
+                    .is_some_and(|c| {
+                        matches!(c.name.as_str(), "iex" | "invoke-expression") || shell::reads_program(&c)
+                    });
+                if !runs {
+                    continue;
+                }
+            }
             return Some(m.as_str().to_string());
         }
     }
@@ -2112,32 +2292,77 @@ fn runs_fetched_variable(cmd: &str) -> Option<String> {
 }
 
 /// Files .NET calls in PowerShell write: `[IO.File]::WriteAllText("…", …)`,
-/// `[System.IO.File]::Copy("a", "…")`. The parser reads such a call as
-/// words of other commands; the paths it names are read here.
-fn dotnet_writes(cmd: &str) -> Vec<String> {
+/// `[System.IO.File]::Copy("a", "…")`, a `StreamWriter` or `FileStream` made
+/// with `::new(…)` or `New-Object` — named in quotes or by a variable an
+/// assignment set (`$p = "…"; [IO.File]::WriteAllText($p, …)`, `values`). The
+/// parser reads such a call as words of other commands; the paths it names are
+/// read here.
+fn dotnet_writes(cmd: &str, values: &shell::PsValues) -> Vec<String> {
+    const ARG: &str = r#"(?:"([^"\n]{1,512})"|'([^'\n]{1,512})'|\$\{?(\w{1,64})\}?)"#;
     static CALL: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(
-            r#"(?i)\[(?:system\.)?io\.(file|directory)\]::(\w+)\s*\(\s*(?:"([^"\n]{1,512})"|'([^'\n]{1,512})')(?:\s*,\s*(?:"([^"\n]{1,512})"|'([^'\n]{1,512})'))?"#,
-        )
+        Regex::new(&format!(r#"(?i)\[(?:system\.)?io\.(file|directory)\]::(\w+)\s*\(\s*{ARG}(?:\s*,\s*{ARG})?"#))
+            .expect("bad pattern")
+    });
+    static WRITER: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(&format!(
+            r#"(?i)(?:\[(?:system\.)?io\.(?:streamwriter|filestream)\]::new\s*\(|\bnew-object\s+(?:-typename\s+)?(?:system\.)?io\.(?:streamwriter|filestream)\b\s*(?:-argumentlist\s+)?(?:@?\(\s*)?)\s*{ARG}"#
+        ))
         .expect("bad pattern")
     });
+    // A quoted path or a variable, as the call names it.
+    let arg = |c: &regex::Captures, at: usize| -> Vec<String> {
+        if let Some(m) = c.get(at).or_else(|| c.get(at + 1)) {
+            values.expand(m.as_str())
+        } else {
+            c.get(at + 2).map(|name| values.of(name.as_str())).unwrap_or_default()
+        }
+    };
     let mut out = Vec::new();
     for c in CALL.captures_iter(cmd).take(64) {
         let method = c.get(2).map_or("", |m| m.as_str()).to_ascii_lowercase();
-        let first = c.get(3).or_else(|| c.get(4)).map(|m| m.as_str().to_string());
-        let second = c.get(5).or_else(|| c.get(6)).map(|m| m.as_str().to_string());
         let writes =
             ["write", "append", "create", "open", "delete", "replace", "setattributes", "encrypt", "move", "copy"];
         if !writes.iter().any(|w| method.starts_with(w)) || method == "openread" || method == "opentext" {
             continue;
         }
-        out.extend(first);
+        out.extend(arg(&c, 3));
         // Copy and Move name the destination second; Replace, the file replaced.
         if matches!(method.as_str(), "copy" | "move" | "replace") {
-            out.extend(second);
+            out.extend(arg(&c, 6));
         }
     }
+    for c in WRITER.captures_iter(cmd).take(64) {
+        out.extend(arg(&c, 1));
+    }
     out
+}
+
+/// Files the rules protect by the folder they lie in: Claude Code's, Codex's
+/// and Cursor's settings and hooks, the home folder's startup files, the relay.
+const TAIL_FILES: &[&str] = &[
+    "settings.json",
+    "settings.local.json",
+    "managed-settings.json",
+    "hooks.json",
+    "config.toml",
+    "mcp.json",
+    "authorized_keys",
+    "nobetci-hook",
+    "nobetci-hook.exe",
+    "nobetci.exe",
+    "nobetci.sock",
+];
+
+/// Whether what follows a folder the reading cannot place names one of those
+/// files right below it: `/settings.json` in `$D/settings.json`.
+fn protected_tail(tail: &str) -> bool {
+    let plain = tail.replace('\\', "/");
+    let parts: Vec<String> = plain
+        .split('/')
+        .map(|p| p.trim_matches(['"', '\'']).to_lowercase())
+        .filter(|p| !p.is_empty() && p != "." && p != "..")
+        .collect();
+    matches!(parts.as_slice(), [file] if TAIL_FILES.contains(&file.as_str()) || HOME_NAMES.contains(&file.as_str()))
 }
 
 /// Reads a command as text and as commands; `at` is where it runs.
@@ -2166,6 +2391,11 @@ fn command_findings(cmd: &str, dialect: shell::Dialect, at: Place, off: &Disable
     let (writes, lost) = shell::writes(&pipes, cwd);
     found.unread |= lost;
     for w in writes {
+        // A file the rules protect by its folder, written below a folder the
+        // reading cannot place (`D=$(…)`, `read D`, `$1`): a person decides.
+        if w.unplaced && protected_tail(shell::unplaced_tail(&w.raw).unwrap_or("")) {
+            found.unread = true;
+        }
         let path = leads_to(&w.path, home);
         match w.how {
             shell::How::Meta => {
@@ -2179,7 +2409,9 @@ fn command_findings(cmd: &str, dialect: shell::Dialect, at: Place, off: &Disable
         }
     }
     if dialect == shell::Dialect::PowerShell {
-        for raw in dotnet_writes(cmd) {
+        let values = shell::ps_values(&pipes);
+        found.unread |= values.crowded;
+        for raw in dotnet_writes(cmd, &values) {
             let path = leads_to(&resolve(cwd, &raw), home);
             check_write(&raw, &path, at, false, off, found);
         }
@@ -2960,7 +3192,17 @@ pub(crate) fn assess_at(
                 found.add(f, Tag::None, off);
             }
         }
-        scan(&*CONTENT_RULES, &written_text(input), off, &mut found);
+        let text = written_text(input);
+        scan(&*CONTENT_RULES, &text, off, &mut found);
+        // Code that loads a way of faking input — XTest, uinput, pyautogui,
+        // robotjs, SendInput — written anywhere but in a page of notes.
+        if !shell::is_document(path) {
+            if let Some(m) = shell::LOADS_FAKE_INPUT.find(&text) {
+                let label = i18n::pick(L_FAKE_INPUT.1, L_FAKE_INPUT.0);
+                let f = Finding { category: "synthetic_input", level: High, label, excerpt: excerpt(m.as_str()) };
+                found.add(f, Tag::None, off);
+            }
+        }
         let replaces_all = |v: &Value| v.get("replace_all").and_then(Value::as_bool) == Some(true);
         if replaces_all(input)
             || input.get("edits").and_then(Value::as_array).is_some_and(|e| e.iter().any(replaces_all))
@@ -3102,9 +3344,11 @@ mod tests {
         let _ = (&*HIDDEN_RE, &*SELF_TOUCH);
         // Patterns built on first use, which a typo would otherwise turn into
         // a panic in the middle of an approval.
-        let _ = (runs_fetched_variable("x"), dotnet_writes("x"), starts_like_sql("x"), code_literals("'x'"));
-        let pipes = shell::read("python3 -c 'x' && osascript -e 'x'", shell::Dialect::Posix).pipes;
+        let pipes = shell::read("python3 -c 'x' && osascript -e 'x' && $p = '$q'", shell::Dialect::Posix).pipes;
+        let values = shell::ps_values(&pipes);
+        let _ = (runs_fetched_variable("x"), dotnet_writes("x", &values), starts_like_sql("x"), code_literals("'x'"));
         let _ = (shell::elevates(&pipes), shell::fakes_input(&pipes), shell::code_writes("open('x','w')"));
+        let _ = (values.expand("$p"), shell::only_mentions("x", "y"), &*shell::LOADS_FAKE_INPUT);
     }
 
     #[test]

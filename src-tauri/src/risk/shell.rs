@@ -109,10 +109,16 @@ fn parse_into(text: &str, dialect: Dialect, depth: usize, out: &mut Vec<Pipeline
     let mut p = Parser { c: &chars, i: 0, dialect, nest: depth, cut: false };
     p.list(None, out);
     st.partial |= p.cut;
+    for pipe in &mut out[start..] {
+        feed_interpreters(pipe);
+    }
     // Commands handed over as text run too: `bash -c "…"`, `eval …`,
-    // `ssh host …`, a here-document fed to a shell. Each text once.
-    let handed: Vec<(String, Dialect)> =
-        out[start..].iter().flat_map(|pipe| pipe.stages.iter()).flat_map(|s| handed_over(s, dialect)).collect();
+    // `ssh host …`, a here-document fed to a shell, text printed into one
+    // (`echo … | sh`). Each text once.
+    let handed: Vec<(String, Dialect)> = out[start..]
+        .iter()
+        .flat_map(|pipe| pipe.stages.iter().flat_map(|s| handed_over(s, dialect)).chain(piped_over(pipe)))
+        .collect();
     for (text, d) in handed {
         if st.seen.insert((text.clone(), d)) {
             parse_into(&text, d, depth + 1, out, st);
@@ -606,6 +612,41 @@ const WRAPPERS: &[(&str, &[&str])] = &[
     ),
     ("exec", &["-a"]),
     ("caffeinate", &["-t", "-w"]),
+    // `flock FILE command`: the lock file comes before the command (`command`
+    // steps over it); `flock FILE -c 'text'` hands text over (`handed_over`).
+    ("flock", &["-w", "--wait", "--timeout", "-E", "--conflict-exit-code"]),
+    ("coproc", &[]),
+    (
+        "systemd-run",
+        &[
+            "-p",
+            "--property",
+            "-u",
+            "--unit",
+            "--description",
+            "--slice",
+            "-E",
+            "--setenv",
+            "--uid",
+            "--gid",
+            "--nice",
+            "-D",
+            "--working-directory",
+            "-M",
+            "--machine",
+            "-H",
+            "--host",
+            "--on-active",
+            "--on-boot",
+            "--on-startup",
+            "--on-unit-active",
+            "--on-unit-inactive",
+            "--on-calendar",
+            "--timer-property",
+            "--path-property",
+            "--socket-property",
+        ],
+    ),
     ("nohup", &[]),
     ("time", &["-f", "-o"]),
     ("command", &[]),
@@ -676,8 +717,8 @@ pub fn command(words: &[String]) -> Option<Cmd<'_>> {
             }
             i += if takes.contains(&a.as_str()) { 2 } else { 1 };
         }
-        if name == "timeout" {
-            // Its duration.
+        if name == "timeout" || name == "flock" {
+            // Its duration; the file it locks.
             i += 1;
         }
     }
@@ -804,6 +845,9 @@ pub struct Written {
     /// Made absolute against the folder the command runs in (`cd` followed).
     pub path: String,
     pub how: How,
+    /// It starts at a variable the reading could not put in, in the command
+    /// as it runs (`unplaced_tail`): `$D/settings.json` after `D=$(…)`.
+    pub unplaced: bool,
 }
 
 /// How a command touches a path.
@@ -1071,6 +1115,64 @@ fn copy_options(name: &str) -> &'static [&'static str] {
     }
 }
 
+/// The short options of GNU's cp, mv, ln and install that take a value.
+fn gnu_short_values(name: &str) -> Option<&'static str> {
+    match name {
+        "cp" | "gcp" | "mv" | "gmv" | "ln" => Some("tS"),
+        "install" => Some("tSmog"),
+        _ => None,
+    }
+}
+
+/// A GNU command line read the way getopt reads it: the operands, and the
+/// target folder however it is written — `-t DIR`, `-tDIR`, a group that ends
+/// with it (`-Dt DIR`, `-vtDIR`), `--target-directory[=]DIR`. `letters` are
+/// the short options that take a value; `long` holds those written in full.
+fn gnu_operands<'a>(args: &'a [String], letters: &str, long: &[&str]) -> (Vec<&'a str>, Option<&'a str>) {
+    let mut ops = Vec::new();
+    let mut target = None;
+    let mut only = false;
+    let mut i = 0;
+    while let Some(a) = args.get(i) {
+        i += 1;
+        if only || a == "-" || !a.starts_with('-') {
+            ops.push(a.as_str());
+        } else if a == "--" {
+            only = true;
+        } else if let Some(name) = a.strip_prefix("--") {
+            let (key, value) = name.split_once('=').map_or((name, None), |(k, v)| (k, Some(v)));
+            let takes = long.contains(&format!("--{key}").as_str());
+            let value = if takes && value.is_none() {
+                i += 1;
+                args.get(i - 1).map(String::as_str)
+            } else {
+                value
+            };
+            if key == "target-directory" {
+                target = value;
+            }
+        } else {
+            for (at, letter) in a.char_indices().skip(1) {
+                if !letters.contains(letter) {
+                    continue;
+                }
+                let rest = &a[at + 1..];
+                let value = if rest.is_empty() {
+                    i += 1;
+                    args.get(i - 1).map(String::as_str)
+                } else {
+                    Some(rest)
+                };
+                if letter == 't' {
+                    target = value;
+                }
+                break;
+            }
+        }
+    }
+    (ops, target)
+}
+
 /// The words that are neither options nor the values of the options in `valued`.
 fn operands<'a>(args: &'a [String], dos: bool, valued: &[&str]) -> Vec<&'a str> {
     let mut out = Vec::new();
@@ -1093,6 +1195,12 @@ fn operands<'a>(args: &'a [String], dos: bool, valued: &[&str]) -> Vec<&'a str> 
 /// into a folder. Empty for `.`, `x/.` and `x/` copied by rsync — the
 /// folder's contents, not the folder.
 fn last_part(path: &str) -> &str {
+    // A remote source (`host:settings.json`, `me@host:cfg/x`) keeps the name
+    // it has on the host; `C:\x` is a drive.
+    let path = match path.split_once(':') {
+        Some((host, rest)) if host.len() > 1 && !host.contains(['/', '\\']) => rest,
+        _ => path,
+    };
     let trimmed = path.trim_end_matches(['/', '\\']);
     let last = trimmed.rsplit(['/', '\\']).next().unwrap_or(trimmed);
     if last == "." || last.is_empty() {
@@ -1271,7 +1379,7 @@ const PERMISSIONS: &[&str] = &[
 /// file — or hands the work to another program.
 static WRITES_IN_CODE: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
     regex::Regex::new(
-        r#"(?i)\bopen\s*\([^\n]*?,\s*(f?["'][rbtu]*[wax+][rbtwax+]*["']|mode\s*=\s*f?["'][^"']*[wax+])|\.write(_text|_bytes|lines)?\s*\(|\b(write|append)(file|filesync|_text|_bytes|alltext|allbytes|alllines)\b|createwritestream|\b(copyfile|copyfilesync|copytree|copy2|cpsync)\b|\b(rename|renamesync|replace|unlink|unlinksync|remove|rmtree|rmdir|rmdirsync|rmsync|chmod|chmodsync|symlink|symlinksync|truncate|truncatesync|move)\s*\(|\bshutil\.|\bos\.(remove|unlink|rename|replace|chmod|symlink|system|popen)\b|\bfs\.(promises\.)?(write|append|copy|cp|rename|rm|unlink|symlink|chmod|truncate|open)\w*|fileutils\.|\bfile\.(write|open|delete|rename|chmod)\b|\bio\.(write|binwrite)\b|\b(set|add)-content\b|\bout-file\b|\b(copy|move|remove|new|rename)-item\b|\[(system\.)?io\.file\]::|\bsubprocess\b|child_process|\bsystem\s*\(|\bexec\w*\s*\(|["']\s*\+?>{1,2}|>\s*["'$]"#,
+        r#"(?i)\bopen\s*\([^\n]*?,\s*(f?["'][rbtu]*[wax+][rbtwax+]*["']|mode\s*=\s*f?["'][^"']*[wax+]|(mode\s*=\s*)?[a-z_]\w*\s*[,)])|\.write(_text|_bytes|lines)?\s*\(|\b(write|append)(file|filesync|_text|_bytes|alltext|allbytes|alllines)\b|createwritestream|\b(copyfile|copyfilesync|copytree|copy2|cpsync)\b|\b(rename|renamesync|replace|unlink|unlinksync|remove|rmtree|rmdir|rmdirsync|rmsync|chmod|chmodsync|symlink|symlinksync|truncate|truncatesync|move)\s*\(|\bshutil\.|\bos\.(remove|unlink|rename|replace|chmod|symlink|system|popen)\b|\bfs\.(promises\.)?(write|append|copy|cp|rename|rm|unlink|symlink|chmod|truncate|open)\w*|fileutils\.|\bfile\.(write|open|delete|rename|chmod)\b|\bio\.(write|binwrite)\b|\b(set|add)-content\b|\bout-file\b|\b(copy|move|remove|new|rename)-item\b|\[(system\.)?io\.file\]::|\bsubprocess\b|child_process|\bsystem\s*\(|\bexec\w*\s*\(|["']\s*\+?>{1,2}|>\s*["'$]"#,
     )
     .expect("bad pattern")
 });
@@ -1444,8 +1552,14 @@ fn written_by(s: &Simple, cmd: Option<&Cmd>) -> Vec<(String, How)> {
             }
         }
         n if COPIERS.contains(&n) || MOVERS.contains(&n) => {
-            let ops = operands(args, DOS.contains(&n), copy_options(n));
-            let target = option_value(args, &["-t", "--target-directory"]);
+            let (ops, target) = match gnu_short_values(n) {
+                // `-t DIR`, `-tDIR`, `-Dt DIR`, `--target-directory=DIR`.
+                Some(letters) => gnu_operands(args, letters, copy_options(n)),
+                None => (
+                    operands(args, DOS.contains(&n), copy_options(n)),
+                    option_value(args, &["-t", "--target-directory"]),
+                ),
+            };
             let (sources, dest, folder): (Vec<&str>, Option<&str>, bool) = match target {
                 Some(t) => (ops.clone(), Some(t), true),
                 None if ops.len() >= 2 => (ops[..ops.len() - 1].to_vec(), ops.last().copied(), false),
@@ -1645,6 +1759,27 @@ impl Vars {
 
     /// Records what a command that only assigns sets; true when it is one.
     fn record(&mut self, words: &[String]) -> bool {
+        // `for NAME in WORDS` (and bash's `select`) sets NAME to each word in
+        // turn: a brace group of them, which `braces` writes out — one word as
+        // it is. Words a brace group cannot hold leave NAME unset: a path that
+        // starts there is then one the reading cannot place (`unknown_root`).
+        if matches!(words.first().map(String::as_str), Some("for" | "select"))
+            && words.get(1).is_some_and(|n| is_name(n))
+            && words.get(2).is_some_and(|w| w == "in")
+        {
+            let name = &words[1];
+            let values: Vec<String> = words[3..].iter().map(|w| self.expand(w)).collect();
+            match values.as_slice() {
+                [one] => self.set(name, one.clone()),
+                many if !many.is_empty() && !many.iter().any(|v| v.contains(['{', '}', ','])) => {
+                    self.set(name, format!("{{{}}}", many.join(",")))
+                }
+                _ => {
+                    self.0.remove(name);
+                }
+            }
+            return true;
+        }
         // PowerShell: `$D = value`, `$D=value`.
         if let Some(rest) = words.first().and_then(|w| w.strip_prefix('$')) {
             let value = match rest.split_once('=') {
@@ -1755,6 +1890,67 @@ impl Vars {
     }
 }
 
+/// The values PowerShell assignments give their variables (`$p = "…"`), with
+/// the variables set before them put in, by name in lower case: PowerShell
+/// does not tell `$P` from `$p`. A name given more values than MOST_VALUES is
+/// `crowded`: which one a later call sees cannot be told.
+#[derive(Default)]
+pub struct PsValues {
+    values: std::collections::HashMap<String, Vec<String>>,
+    pub crowded: bool,
+}
+
+const MOST_VALUES: usize = 64;
+
+impl PsValues {
+    /// Every value `name` was given.
+    pub fn of(&self, name: &str) -> Vec<String> {
+        self.values.get(&name.to_lowercase()).cloned().unwrap_or_default()
+    }
+
+    /// A quoted text as written, and with the variables it names put in (the
+    /// last value each was given): `"$dir\settings.json"`. `$env:…` stays.
+    pub fn expand(&self, text: &str) -> Vec<String> {
+        static VAR: std::sync::LazyLock<regex::Regex> =
+            std::sync::LazyLock::new(|| regex::Regex::new(r"\$\{?(\w{1,64})\}?(:)?").expect("bad pattern"));
+        let mut out = vec![text.to_string()];
+        if !text.contains('$') {
+            return out;
+        }
+        let put = VAR.replace_all(text, |c: &regex::Captures| {
+            let value =
+                c.get(2).is_none().then(|| self.values.get(&c[1].to_lowercase()).and_then(|v| v.last())).flatten();
+            value.cloned().unwrap_or_else(|| c[0].to_string())
+        });
+        if put != text {
+            out.push(put.into_owned());
+        }
+        out
+    }
+}
+
+/// What the PowerShell assignments in the commands set (`$p = "…"`, `$p="…"`).
+pub fn ps_values(pipes: &[Pipeline]) -> PsValues {
+    let mut vars = Vars::default();
+    let mut out = PsValues::default();
+    for s in pipes.iter().flat_map(|p| &p.stages) {
+        let name =
+            s.words.first().and_then(|w| w.strip_prefix('$')).map(|w| w.split('=').next().unwrap_or(w).to_string());
+        if !vars.record(&s.words) {
+            continue;
+        }
+        let Some(name) = name.filter(|n| is_name(n)) else { continue };
+        let Some(value) = vars.0.get(&name) else { continue };
+        let all = out.values.entry(name.to_lowercase()).or_default();
+        if all.len() >= MOST_VALUES {
+            out.crowded = true;
+        } else if !all.contains(value) {
+            all.push(value.clone());
+        }
+    }
+    out
+}
+
 /// `{a,b}` written out: `~/.claude/{settings.json,x}` is two paths. Past
 /// MAX_BRACES words, or in a word too long or too full of braces to be a
 /// path, each group stands for anything (`*`), which the path rules read as
@@ -1858,10 +2054,15 @@ fn expanded(s: &Simple, vars: &Vars, budget: &mut usize) -> Result<Option<Simple
 /// Walks the commands in order, following `cd`, `pushd` and `Set-Location`
 /// to know the folder each one runs in, and the variables earlier commands
 /// set. A command that uses a variable or a brace is seen twice: as written,
-/// and with them put in. True when something could not be followed: the
+/// and with them put in — `f`'s last argument says which one runs (the one
+/// put in, or the only one). True when something could not be followed: the
 /// folder (past a great many `cd`s) or the expansions (past a few times the
 /// command's own length) — `writes` reports it and the request needs a person.
-fn walk(pipes: &[Pipeline], cwd: &str, mut f: impl FnMut(&str, &Simple, Option<Cmd<'_>>, Option<&Simple>)) -> bool {
+fn walk(
+    pipes: &[Pipeline],
+    cwd: &str,
+    mut f: impl FnMut(&str, &Simple, Option<Cmd<'_>>, Option<&Simple>, bool),
+) -> bool {
     // Following a `cd` costs the length of the folders involved. Real
     // commands change folder a handful of times; past this much work the
     // folder is no longer known (None), and the reading says so instead of
@@ -1881,6 +2082,16 @@ fn walk(pipes: &[Pipeline], cwd: &str, mut f: impl FnMut(&str, &Simple, Option<C
         .iter()
         .flat_map(|p| p.stages.iter().enumerate().map(move |(i, s)| (s, i.checked_sub(1).map(|j| &p.stages[j]))));
     for (s, prev) in stages {
+        // `read D <<< value` sets D to the value.
+        if s.words.first().is_some_and(|w| w == "read") {
+            let names: Vec<&String> = s.words[1..].iter().filter(|w| !w.starts_with('-')).collect();
+            if let ([name], Some(r)) = (names.as_slice(), s.redirects.iter().find(|r| r.op == "<<<")) {
+                if is_name(name) {
+                    let value = vars.expand(r.target.trim_end_matches('\n'));
+                    vars.set(name, value);
+                }
+            }
+        }
         let wide = match expanded(s, &vars, &mut budget) {
             Ok(wide) => wide,
             Err(()) => {
@@ -1894,9 +2105,9 @@ fn walk(pipes: &[Pipeline], cwd: &str, mut f: impl FnMut(&str, &Simple, Option<C
             continue;
         }
         let here = dir.as_deref().unwrap_or("");
-        f(here, s, command(&s.words), prev);
+        f(here, s, command(&s.words), prev, wide.is_none());
         if let Some(w) = &wide {
-            f(here, w, command(&w.words), prev);
+            f(here, w, command(&w.words), prev, true);
         }
         let looked = wide.as_ref().unwrap_or(s);
         let Some(cmd) = command(&looked.words).filter(|_| !assigns) else { continue };
@@ -1950,12 +2161,79 @@ fn walk(pipes: &[Pipeline], cwd: &str, mut f: impl FnMut(&str, &Simple, Option<C
 /// lost along the way (`walk`).
 pub fn writes(pipes: &[Pipeline], cwd: &str) -> (Vec<Written>, bool) {
     let mut out = Vec::new();
-    let lost = walk(pipes, cwd, |dir, s, cmd, _| {
+    let lost = walk(pipes, cwd, |dir, s, cmd, _, runs| {
         for (raw, how) in written_by(s, cmd.as_ref()) {
-            out.push(Written { path: resolve(dir, &raw), raw, how });
+            let unplaced = runs && unplaced_tail(&raw).is_some();
+            out.push(Written { path: resolve(dir, &raw), raw, how, unplaced });
         }
     });
     (out, lost)
+}
+
+/// Roots the path rules place: the home folder, the configuration and data
+/// folders, Claude Code's own, the temporary folders.
+const PLACED_ROOTS: &[&str] = &[
+    "home",
+    "userprofile",
+    "appdata",
+    "localappdata",
+    "programdata",
+    "programfiles",
+    "xdg_config_home",
+    "xdg_data_home",
+    "xdg_state_home",
+    "xdg_cache_home",
+    "claude_config_dir",
+    "tmpdir",
+    "tmp",
+    "temp",
+];
+
+/// A path that starts at something the reading cannot put in — a variable
+/// set from a command's output or read from input, a script's argument, one
+/// from the environment (`$D/x`, `$1/x`, `$(…)/x`, `%D%\x`) — and not at a
+/// root the path rules place (`$HOME`, `$env:APPDATA`, `$XDG_CONFIG_HOME`):
+/// what follows that start.
+pub fn unplaced_tail(raw: &str) -> Option<&str> {
+    let t = raw.trim_start_matches(['"', '\'']);
+    // `$(…)` and backticks, to their matching end.
+    let nested = if let Some(inner) = t.strip_prefix("$(") {
+        let mut depth = 1usize;
+        inner.char_indices().find_map(|(i, c)| {
+            match c {
+                '(' => depth += 1,
+                ')' => depth -= 1,
+                _ => {}
+            }
+            (depth == 0).then(|| &inner[i + 1..])
+        })
+    } else if let Some(inner) = t.strip_prefix('`') {
+        inner.find('`').map(|i| &inner[i + 1..])
+    } else {
+        None
+    };
+    if nested.is_some() {
+        return nested;
+    }
+    let (name, tail) = if let Some(rest) = t.strip_prefix('%') {
+        let end = rest.find('%')?;
+        (&rest[..end], &rest[end + 1..])
+    } else {
+        let rest = t.strip_prefix('$')?;
+        let braced = rest.starts_with('{');
+        let rest = rest.strip_prefix('{').unwrap_or(rest);
+        if rest.starts_with(['@', '*', '#', '!']) || rest.starts_with(|c: char| c.is_ascii_digit()) {
+            let end = rest.find(['/', '\\']).unwrap_or(rest.len());
+            return Some(&rest[end..]);
+        }
+        let rest = if rest.get(..4).is_some_and(|p| p.eq_ignore_ascii_case("env:")) { &rest[4..] } else { rest };
+        let end = rest.find(|c: char| !(c.is_ascii_alphanumeric() || c == '_')).unwrap_or(rest.len());
+        let tail = &rest[end..];
+        // `${NAME…}`: past the closing brace.
+        let tail = if braced { tail.find('}').map_or(tail, |i| &tail[i + 1..]) } else { tail };
+        (&rest[..end], tail)
+    };
+    (!name.is_empty() && !PLACED_ROOTS.contains(&name.to_ascii_lowercase().as_str())).then_some(tail)
 }
 
 /// Programs that only look: what they are handed is read, not changed.
@@ -2148,8 +2426,22 @@ fn writes_known(cmd: &Cmd) -> bool {
 /// such a path cannot be told, so it counts as a write — the rule does not
 /// hang on a fixed list of verbs.
 pub fn unknown_touch(pipes: &[Pipeline], cwd: &str, protected: &dyn Fn(&str) -> bool) -> Option<String> {
+    // A PowerShell assignment names the place for what follows it: `$p =
+    // "$env:APPDATA\Nobetci\settings.json"`, `$w = New-Object IO.StreamWriter
+    // "…"`. However the value is used later, a protected place in it counts.
+    for s in pipes.iter().flat_map(|p| &p.stages) {
+        let Some(first) = s.words.first().filter(|w| w.starts_with('$')) else { continue };
+        let assigns = first.contains('=') || s.words.get(1).is_some_and(|w| w == "=");
+        let value = first.split_once('=').map(|(_, v)| v).into_iter().chain(s.words[1..].iter().map(String::as_str));
+        let touches = value
+            .into_iter()
+            .any(|a| protected(a) || a.contains(['/', '\\', '~', '$', '%']) && protected(&resolve(cwd, a)));
+        if assigns && touches {
+            return Some(s.text());
+        }
+    }
     let mut hit = None;
-    walk(pipes, cwd, |dir, s, cmd, _| {
+    walk(pipes, cwd, |dir, s, cmd, _, _| {
         let Some(cmd) = cmd else { return };
         if hit.is_some() || writes_known(&cmd) {
             return;
@@ -2194,13 +2486,16 @@ pub fn unknown_touch(pipes: &[Pipeline], cwd: &str, protected: &dyn Fn(&str) -> 
 
 // ── What runs ─────────────────────────────────────────────────────────────────
 
-/// The text of the first command `test` picks.
+/// The text of the first command `test` picks: as written, and with the
+/// variables earlier commands set put in (`X=xdotool; $X click 1`).
 pub fn first(pipes: &[Pipeline], test: impl Fn(&Simple, &Cmd) -> bool) -> Option<String> {
-    pipes
-        .iter()
-        .flat_map(|p| p.stages.iter())
-        .find(|s| command(&s.words).is_some_and(|c| test(s, &c)))
-        .map(Simple::text)
+    let mut hit = None;
+    walk(pipes, "", |_, s, cmd, _, _| {
+        if hit.is_none() && cmd.is_some_and(|c| test(s, &c)) {
+            hit = Some(s.text());
+        }
+    });
+    hit
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -2288,6 +2583,10 @@ pub fn reads_program(cmd: &Cmd) -> bool {
             let flags = &a[1..];
             if flags.chars().any(|f| inline.contains(f)) || matches!(flags, "v" | "V" | "h" | "?" | "version") {
                 return false;
+            }
+            // `sh -s -- args`: a shell told to read its commands from its input.
+            if SHELLS.contains(&n) && flags.contains('s') {
+                return true;
             }
             if flags.len() == 1 && valued.contains(flags) {
                 i += 1;
@@ -2459,32 +2758,57 @@ pub fn runs_rimraf(pipes: &[Pipeline]) -> Option<String> {
     })
 }
 
-/// Runs something as another user — `sudo`, `doas`, `pkexec`, `run0`, `su`,
-/// `gsudo` — however it is spelled (`/usr/bin/sudo`, inside `bash -c`).
+/// Runs something as another user — `sudo`, `sudoedit`, `doas`, `pkexec`,
+/// `run0`, `su`, `gsudo`, a system service through `systemd-run` — however it
+/// is spelled (`/usr/bin/sudo`, `S=sudo; $S`, inside `bash -c`, behind `flock`).
 pub fn elevates(pipes: &[Pipeline]) -> Option<String> {
-    const ELEVATORS: &[&str] = &["sudo", "doas", "pkexec", "run0", "su", "gsudo", "runas"];
+    const ELEVATORS: &[&str] = &["sudo", "sudoedit", "doas", "pkexec", "run0", "su", "gsudo", "runas"];
     // In a script's code: `os.system("sudo …")`. A message that mentions
     // sudo is not code (`git commit -m "…sudo…"`).
     static IN_CODE: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
-        regex::Regex::new(r#"(?i)(^|[\s;&|(`'"/])(sudo|doas|pkexec|run0)(\.exe)?(\s|["'])"#).expect("bad pattern")
+        regex::Regex::new(r#"(?i)(^|[\s;&|(`'"/])(sudo|sudoedit|doas|pkexec|run0)(\.exe)?(\s|["'])"#)
+            .expect("bad pattern")
     });
     first(pipes, |s, c| {
         ELEVATORS.contains(&c.name.as_str())
             || c.wrappers.iter().any(|w| ELEVATORS.contains(&w.as_str()))
+            || system_unit(s, c)
             || code_of(s, c).is_some_and(|code| IN_CODE.is_match(&code))
     })
 }
 
-/// Runs Nöbetçi's uninstall command: `--remove-hooks` — the word itself, its
-/// quoting taken off (`--remove-ho''oks`) — handed to any program but one that
-/// only prints, searches or records text (`echo`, `grep`, `git commit`): a
-/// launcher, a pattern, a variable, `find -exec {}`, `xargs -I % %`, `cargo
-/// run`, all may start Nöbetçi. Or both words in a script's code. A message
-/// that mentions it is one word, not the option (`git commit -m "… --remove-hooks …"`).
-pub fn unhooks(pipes: &[Pipeline]) -> Option<String> {
-    // Programs that only print, search or record text. Not the openers
-    // (`open`, `start`, `xdg-open`), which start what they are handed; `find`
-    // hands its `-exec` command over to be read on its own.
+/// `systemd-run` starts its command as a system service — as root — unless
+/// told `--user`.
+fn system_unit(s: &Simple, c: &Cmd) -> bool {
+    let Some(at) = s.words.iter().position(|w| base_name(w) == "systemd-run") else { return false };
+    let end =
+        s.words.iter().position(|w| std::ptr::eq(w.as_str(), c.word)).filter(|&end| end > at).unwrap_or(s.words.len());
+    !s.words[at + 1..end].iter().any(|w| w == "--user")
+}
+
+/// git's subcommand and the words after it, past git's own options
+/// (`git -C repo -c k=v commit`).
+fn git_sub(args: &[String]) -> Option<(&str, &[String])> {
+    let mut i = 0;
+    while let Some(a) = args.get(i) {
+        if !a.starts_with('-') {
+            return Some((a.as_str(), &args[i + 1..]));
+        }
+        let valued = matches!(
+            a.as_str(),
+            "-c" | "-C" | "--git-dir" | "--work-tree" | "--namespace" | "--config-env" | "--super-prefix"
+        );
+        i += if valued { 2 } else { 1 };
+    }
+    None
+}
+
+/// Programs that only print, search or record the text they are handed. Not
+/// the openers (`open`, `start`, `xdg-open`), which start what they are handed.
+/// git, gh and glab only where they record a message or search; what `find
+/// -exec`, `man -P` or a git option would run is handed over and read on its
+/// own (`handed_over`).
+fn only_prints(c: &Cmd) -> bool {
     const TEXT_ONLY: &[&str] = &[
         "echo",
         "printf",
@@ -2509,9 +2833,6 @@ pub fn unhooks(pipes: &[Pipeline]) -> Option<String> {
         "find",
         "test",
         "[",
-        "git",
-        "gh",
-        "glab",
         "man",
         "info",
         "tldr",
@@ -2520,14 +2841,285 @@ pub fn unhooks(pipes: &[Pipeline]) -> Option<String> {
         "help",
         "get-help",
     ];
+    match c.name.as_str() {
+        "git" => matches!(
+            git_sub(c.args).map(|(sub, _)| sub),
+            Some("commit" | "tag" | "notes" | "grep" | "log" | "show" | "shortlog" | "blame" | "diff" | "status")
+        ),
+        "gh" | "glab" => !matches!(positional(c.args, false).first(), Some(&("alias" | "extension" | "ext"))),
+        // ripgrep's `--pre` runs a program on every file it searches.
+        "rg" => !c.args.iter().any(|a| a == "--pre" || a.starts_with("--pre=")),
+        n => TEXT_ONLY.contains(&n),
+    }
+}
+
+/// Runs Nöbetçi's uninstall command: `--remove-hooks` — the word itself, its
+/// quoting taken off (`--remove-ho''oks`), a variable put in — handed to any
+/// program but one that only prints, searches or records text (`only_prints`):
+/// a launcher, a pattern, a variable, `find -exec {}`, `xargs -I % %`, `cargo
+/// run`, all may start Nöbetçi. Or both words in a script's code. A message
+/// that mentions it is one word, not the option (`git commit -m "… --remove-hooks …"`).
+/// risk.rs keeps the plain-text rule beside it for every way of running it the
+/// reading cannot follow (`only_mentions`).
+pub fn unhooks(pipes: &[Pipeline]) -> Option<String> {
     first(pipes, |s, c| {
-        if c.args.iter().any(|a| a == "--remove-hooks") && !TEXT_ONLY.contains(&c.name.as_str()) {
+        if c.args.iter().any(|a| a == "--remove-hooks") && !only_prints(c) {
             return true;
         }
         code_of(s, c).is_some_and(|code| {
             let code = code.to_lowercase();
             code.contains("--remove-hooks") && code.contains("nobetci")
         })
+    })
+}
+
+/// Wrappers that run their program with its own words and hand no text over.
+const QUIET_WRAPPERS: &[&str] = &[
+    "then",
+    "else",
+    "elif",
+    "do",
+    "if",
+    "while",
+    "until",
+    "!",
+    "command",
+    "builtin",
+    "time",
+    "nohup",
+    "nice",
+    "ionice",
+    "timeout",
+    "stdbuf",
+    "unbuffer",
+    "setsid",
+    "chronic",
+    "caffeinate",
+    "env",
+    "flock",
+    "coproc",
+];
+
+/// A program that runs what it is handed or what a file holds: a shell or an
+/// interpreter, `source`, `eval`, an opener, a scheduler, a remote shell, one
+/// named by its path or a variable, `xargs` or `sudo` in front of one, and
+/// every program that hands text over to run (`find -exec`, `git -c
+/// core.pager=…`, `man -P`, `tmux new`).
+fn runs_handed(s: &Simple, c: &Cmd) -> bool {
+    let n = c.name.as_str();
+    c.word != "[" && c.word.contains(['/', '\\', '$', '`', '*', '?', '['])
+        || SHELLS.contains(&n)
+        || is_python(n)
+        || matches!(
+            n,
+            "node"
+                | "nodejs"
+                | "deno"
+                | "bun"
+                | "perl"
+                | "ruby"
+                | "php"
+                | "lua"
+                | "luajit"
+                | "osascript"
+                | "pwsh"
+                | "powershell"
+                | "cmd"
+                | "wsl"
+                | "source"
+                | "."
+                | "eval"
+                | "exec"
+                | "iex"
+                | "invoke-expression"
+                | "invoke-command"
+                | "icm"
+                | "start-process"
+                | "saps"
+                | "start"
+                | "open"
+                | "xdg-open"
+                | "invoke-item"
+                | "ii"
+                | "xargs"
+                | "parallel"
+                | "watch"
+                | "at"
+                | "batch"
+                | "crontab"
+                | "ssh"
+                | "make"
+        )
+        || c.wrappers.iter().any(|w| !QUIET_WRAPPERS.contains(&w.as_str()))
+        || !handed_over(s, Dialect::Posix).is_empty()
+}
+
+/// `git commit -m "…"`, `git tag -a v1 -m "…"`, `git log --grep "…"`, `git
+/// grep "…"`: every word of git's that mentions `needle` is a message it
+/// records or a pattern it searches for, and git is handed no program to run.
+fn git_records(args: &[String], heredoc: &str, needle: &str) -> bool {
+    let mention = |w: &str| w.to_lowercase().contains(needle);
+    let Some((sub, rest)) = git_sub(args) else { return false };
+    let own = &args[..args.len() - rest.len() - 1];
+    if own.iter().any(|w| mention(w)) || !git_runs(args).is_empty() {
+        return false;
+    }
+    match sub {
+        "commit" | "tag" | "notes" | "merge" | "stash" => {
+            // The message: `-m`/`--message`, or `-F -` read from a here-document.
+            let mut from_input = false;
+            let mut j = 0;
+            while let Some(w) = rest.get(j) {
+                j += 1;
+                if w == "--" {
+                    return !rest[j..].iter().any(|w| mention(w)) && (from_input || !mention(heredoc));
+                }
+                if w == "--message" || w == "--file" {
+                    from_input |= w == "--file" && rest.get(j).is_some_and(|f| f == "-");
+                    j += 1;
+                    continue;
+                }
+                if w.starts_with("--message=") || w == "--file=-" {
+                    from_input |= w == "--file=-";
+                    continue;
+                }
+                if w.starts_with('-') && !w.starts_with("--") {
+                    if let Some(at) = w[1..].find(['m', 'F']) {
+                        let letter = &w[at + 1..at + 2];
+                        if w.len() > at + 2 {
+                            from_input |= letter == "F" && &w[at + 2..] == "-";
+                        } else {
+                            from_input |= letter == "F" && rest.get(j).is_some_and(|f| f == "-");
+                            j += 1;
+                        }
+                        continue;
+                    }
+                }
+                if mention(w) {
+                    return false;
+                }
+            }
+            from_input || !mention(heredoc)
+        }
+        // Patterns and messages searched for; `git grep -O` opens a pager.
+        "log" | "grep" | "shortlog" | "show" => {
+            !rest.iter().any(|w| w.starts_with("-O") || w.starts_with("--open-files-in-pager")) && !mention(heredoc)
+        }
+        _ => false,
+    }
+}
+
+/// A command that only prints, searches or records the text it mentions:
+/// `echo`, `grep`, a here-document handed to `cat`, `git commit -m`, `gh pr
+/// create --body`. Its output goes on through filters only, and no file keeps
+/// it but a page of notes.
+fn records(s: &Simple, later: &[Simple], needle: &str) -> bool {
+    const FILTERS: &[&str] = &[
+        "head",
+        "tail",
+        "wc",
+        "sort",
+        "uniq",
+        "cut",
+        "tr",
+        "column",
+        "nl",
+        "fold",
+        "fmt",
+        "cat",
+        "grep",
+        "egrep",
+        "fgrep",
+        "less",
+        "more",
+        "tee",
+        "out-host",
+        "out-string",
+        "format-table",
+        "format-list",
+        "select-object",
+    ];
+    let Some(c) = command(&s.words) else { return false };
+    let mention = |w: &str| w.to_lowercase().contains(needle);
+    if mention(c.word) || c.wrappers.iter().any(|w| !QUIET_WRAPPERS.contains(&w.as_str())) {
+        return false;
+    }
+    let n = c.name.as_str();
+    let ok = match n {
+        "echo" | "print" | "write-host" | "write-output" | "cat" | "head" | "tail" | "wc" | "diff" | "grep"
+        | "egrep" | "fgrep" | "ack" | "select-string" | "sls" | "tldr" | "apropos" | "whatis" | "help" | "get-help"
+        | "test" | "[" => true,
+        // `printf -v X '…'` keeps the text in a variable, to run as `$X`.
+        "printf" => !c.args.iter().any(|a| a == "-v"),
+        "rg" | "ag" => !c.args.iter().any(|a| a.starts_with("--pre") || a.starts_with("--pager")),
+        "git" => git_records(c.args, &s.heredoc, needle),
+        "gh" | "glab" => {
+            matches!(positional(c.args, false).first(), Some(&("pr" | "issue" | "mr" | "release" | "search")))
+                && !mention(&s.heredoc)
+        }
+        _ => false,
+    };
+    // PowerShell's common parameters that keep the output in a variable.
+    let kept = (n.contains('-') || n == "sls")
+        && c.args.iter().any(|a| {
+            matches!(a.to_ascii_lowercase().as_str(), "-ov" | "-pv" | "-iv" | "-wv" | "-ev")
+                || ["outvariable", "pipelinevariable", "informationvariable", "warningvariable", "errorvariable"]
+                    .iter()
+                    .any(|p| ps_param(a, p, 4))
+        });
+    if !ok || kept {
+        return false;
+    }
+    for t in later {
+        let Some(tc) = command(&t.words) else { return false };
+        if !tc.wrappers.is_empty() || !FILTERS.contains(&tc.name.as_str()) {
+            return false;
+        }
+        if tc.name == "tee" && !positional(tc.args, false).iter().all(|f| is_device(f) || is_document(f)) {
+            return false;
+        }
+    }
+    s.redirects.iter().chain(later.iter().flat_map(|t| &t.redirects)).all(|r| {
+        !matches!(r.op.as_str(), ">" | ">>" | ">|" | "&>" | "&>>" | "<>")
+            || is_device(&r.target)
+            || is_document(&r.target)
+    })
+}
+
+/// Whether every mention of `needle` in a command line is text that is only
+/// printed, searched or recorded (`records`), and nothing in the line runs
+/// what it is handed (`runs_handed`). Read as a POSIX shell and as PowerShell
+/// would read it: something left unread, a variable set to it, a mention the
+/// reading cannot place, and the answer is no. risk.rs lets a plain-text rule
+/// pass over such a line, and no other.
+pub fn only_mentions(text: &str, needle: &str) -> bool {
+    let needle = needle.to_lowercase();
+    let count = |t: &str| t.to_lowercase().matches(needle.as_str()).count();
+    let total = count(text);
+    [Dialect::Posix, Dialect::PowerShell].into_iter().all(|dialect| {
+        let reading = read(text, dialect);
+        if reading.partial {
+            return false;
+        }
+        let mut seen = 0;
+        for pipe in &reading.pipes {
+            for (i, s) in pipe.stages.iter().enumerate() {
+                if command(&s.words).is_some_and(|c| runs_handed(s, &c)) {
+                    return false;
+                }
+                let here = s.words.iter().map(|w| count(w)).sum::<usize>()
+                    + s.redirects.iter().map(|r| count(&r.target)).sum::<usize>()
+                    + count(&s.heredoc);
+                if here == 0 {
+                    continue;
+                }
+                if !records(s, &pipe.stages[i + 1..], &needle) {
+                    return false;
+                }
+                seen += here;
+            }
+        }
+        seen >= total
     })
 }
 
@@ -2629,15 +3221,90 @@ static FAKES_IN_CODE: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::n
     .expect("bad pattern")
 });
 
+/// Code that loads a way of faking input, as it is written into a file: a
+/// header or a library linked, an import, a call — not a word in a sentence
+/// (`docs: xdotool …`).
+pub static LOADS_FAKE_INPUT: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
+    regex::Regex::new(
+        r#"(?i)#\s*include\s*[<"][^>"\n]*xtest\.h|\bxtestfake\w*\s*\(|-lxtst\b|-l:libxtst|\blibxtst\.(so|a)\b|\bxlib\.ext\b[^\n]*\bxtest\b|\bxtest\.fake_input\b|\bevdev\b[^\n]*\buinput\b|\buinput\s*\(|/dev/uinput|\b(import|from)\s+(pyautogui|pynput|pydirectinput|autopy)\b|\b(require\s*\(|from)\s*['"](robotjs|@nut-tree(-fork)?/nut-js)['"]|\benigo\s*(::|=)|\bsendinput\s*\(|\bkeybd_event\s*\(|\bmouse_event\s*\(|\bsendkeys\.send(wait)?\s*\(|\[(system\.)?windows\.forms\.sendkeys\]::send|\.sendkeys\s*\(|\bxdo_\w+\s*\(|-lxdo\b|system events[^\n]*\b(keystroke|key code|click)\b"#,
+    )
+    .expect("bad pattern")
+});
+
+/// A file only read by people: a page of documentation, a note, a log.
+pub fn is_document(path: &str) -> bool {
+    let name = base_name(path.trim_end_matches(['/', '\\']));
+    let ext = name.rsplit_once('.').map_or("", |(_, ext)| ext);
+    matches!(
+        ext,
+        "md" | "markdown" | "mdx" | "rst" | "txt" | "adoc" | "asciidoc" | "org" | "html" | "htm" | "tex" | "log"
+    )
+}
+
+/// A compiler or linker told to link XTest or libxdo: `gcc c.c -lXtst`,
+/// `cc c.c $(pkg-config --libs xtst x11)`.
+fn links_fake_input(name: &str, args: &[String]) -> bool {
+    let compiler = matches!(
+        name,
+        "gcc"
+            | "cc"
+            | "clang"
+            | "g++"
+            | "c++"
+            | "clang++"
+            | "tcc"
+            | "ld"
+            | "lld"
+            | "ld.lld"
+            | "ld.gold"
+            | "zig"
+            | "rustc"
+    ) || name.ends_with("-gcc")
+        || name.ends_with("-g++")
+        || name.starts_with("gcc-")
+        || name.starts_with("clang-");
+    compiler
+        && args.iter().any(|a| {
+            let a = a.to_ascii_lowercase();
+            matches!(a.as_str(), "-lxtst" | "-lxdo" | "xtst" | "xdo")
+                || a.starts_with("-l:libxtst")
+                || a.starts_with("-l:libxdo")
+                || a.contains("libxtst.")
+                || a.contains("libxdo.")
+                || a.contains("pkg-config") && (a.contains("xtst") || a.contains("libxdo"))
+        })
+}
+
+/// Code put in a file that loads a way of faking input: `cat > c.py <<'EOF' …
+/// import pyautogui … EOF`, `echo 'import pynput' > c.py`. Whether or not the
+/// same command runs it, it is there to click with. Not a page of notes.
+fn keeps_fake_input(s: &Simple, c: &Cmd) -> bool {
+    let mut files: Vec<&str> = s
+        .redirects
+        .iter()
+        .filter(|r| matches!(r.op.as_str(), ">" | ">>" | ">|" | "&>" | "&>>"))
+        .map(|r| r.target.as_str())
+        .collect();
+    if c.name == "tee" {
+        files.extend(positional(c.args, false));
+    }
+    files.retain(|f| !is_device(f));
+    !files.is_empty()
+        && !files.iter().all(|f| is_document(f))
+        && emitted(s).iter().any(|text| LOADS_FAKE_INPUT.is_match(text))
+}
+
 /// Starts a program that fakes input into other windows — or code that does,
-/// or lets one in (`xinput float`, `chmod` on /dev/uinput). Such a program
-/// can click Nöbetçi's Allow or type into the terminal. Its name in a
-/// message, a search or `--help` is not running it.
+/// or lets one in (`xinput float`, `chmod` on /dev/uinput), or puts such code
+/// in a file. Such a program can click Nöbetçi's Allow or type into the
+/// terminal. Its name in a message, a search or `--help` is not running it.
 pub fn fakes_input(pipes: &[Pipeline]) -> Option<String> {
     first(pipes, |s, c| {
         let ops = positional(c.args, false);
+        // Only asking for its help or version — not run bare (`dotoolc` reads
+        // its commands from its input).
         let help = || {
-            ops.iter().all(|a| matches!(*a, "help" | "version"))
+            !c.args.is_empty()
                 && c.args
                     .iter()
                     .all(|a| matches!(a.as_str(), "--help" | "-h" | "--version" | "-V" | "help" | "version"))
@@ -2648,9 +3315,11 @@ pub fn fakes_input(pipes: &[Pipeline]) -> Option<String> {
             (matches!(n, "gcc" | "cc" | "clang" | "tcc" | "g++" | "c++") && !s.heredoc.is_empty())
                 .then(|| s.heredoc.clone())
         });
+        // xinput takes its command with leading dashes too: `xinput --float 12`.
+        let xinput = c.args.first().map(|a| a.trim_start_matches('-').to_ascii_lowercase());
         INPUT_FAKERS.contains(&n) && !help()
             || n == "xdotool" && xdotool_acts(c.args)
-            || n == "xinput" && matches!(ops.first().copied(), Some("create-master" | "reattach" | "float" | "set-cp"))
+            || n == "xinput" && matches!(xinput.as_deref(), Some("create-master" | "reattach" | "float" | "set-cp"))
             || matches!(n, "nircmd" | "nircmdc")
                 && ops.first().is_some_and(|op| {
                     matches!(
@@ -2660,7 +3329,9 @@ pub fn fakes_input(pipes: &[Pipeline]) -> Option<String> {
                 })
             || PERMISSIONS.contains(&n) && ops.iter().any(|p| p.trim_end_matches('/') == "/dev/uinput")
             || n == "modprobe" && ops.contains(&"uinput")
+            || links_fake_input(n, c.args)
             || code.is_some_and(|code| FAKES_IN_CODE.is_match(&code))
+            || keeps_fake_input(s, c)
     })
 }
 
@@ -2750,7 +3421,7 @@ pub fn find_narrows<S: AsRef<str>>(words: &[S]) -> bool {
 /// the folder each runs in, with the command's text.
 pub fn wipes(pipes: &[Pipeline], cwd: &str) -> Vec<(String, String)> {
     let mut out = Vec::new();
-    walk(pipes, cwd, |dir, s, cmd, prev| {
+    walk(pipes, cwd, |dir, s, cmd, prev, _| {
         if let Some(cmd) = cmd {
             for target in wiped(&cmd, prev) {
                 out.push((resolve(dir, &target), s.text()));
@@ -2778,7 +3449,7 @@ pub struct Sweep {
 pub fn sweeps(pipes: &[Pipeline], cwd: &str) -> Vec<Sweep> {
     const REMOVERS: &[&str] = &["rm", "shred", "unlink", "srm", "trash", "trash-put"];
     let mut out = Vec::new();
-    walk(pipes, cwd, |dir, s, cmd, _| {
+    walk(pipes, cwd, |dir, s, cmd, _, _| {
         let Some(cmd) = cmd.filter(|c| c.name == "find") else { return };
         let args = cmd.args;
         let mut removes = args.iter().any(|a| a == "-delete");
@@ -2834,13 +3505,316 @@ pub fn join_words<S: AsRef<str>>(words: &[S]) -> String {
         .join(" ")
 }
 
+/// Settings that make git run a command: a pager, an editor, ssh, a diff or
+/// merge driver, a filter — and any alias or helper written `!command`.
+fn git_key_runs(key: &str, value: &str) -> bool {
+    let key = key.to_ascii_lowercase();
+    let ends = |tail: &str| key.ends_with(tail);
+    value.starts_with('!')
+        || matches!(
+            key.as_str(),
+            "core.pager"
+                | "core.editor"
+                | "core.sshcommand"
+                | "core.askpass"
+                | "core.fsmonitor"
+                | "core.gitproxy"
+                | "sequence.editor"
+                | "diff.external"
+                | "gpg.program"
+                | "gpg.ssh.program"
+                | "gpg.x509.program"
+                | "gpg.openpgp.program"
+                | "credential.helper"
+                | "uploadpack.packobjectshook"
+                | "sendemail.smtpserver"
+                | "web.browser"
+        )
+        || key.starts_with("pager.")
+        || key.starts_with("filter.") && (ends(".clean") || ends(".smudge") || ends(".process"))
+        || key.starts_with("merge.") && ends(".driver")
+        || key.starts_with("diff.") && (ends(".command") || ends(".textconv"))
+        || (key.starts_with("difftool.")
+            || key.starts_with("mergetool.")
+            || key.starts_with("browser.")
+            || key.starts_with("man."))
+            && ends(".cmd")
+}
+
+/// What git is told to run besides itself: `-c core.pager=…`, `-c
+/// alias.x='!…'`, `rebase -x …`, `bisect run …`, `submodule foreach …`,
+/// `difftool -x …`, `filter-branch --tree-filter …`.
+fn git_runs(args: &[String]) -> Vec<String> {
+    let mut v = Vec::new();
+    let mut i = 0;
+    while let Some(a) = args.get(i) {
+        if !a.starts_with('-') {
+            break;
+        }
+        if a == "-c" || a.starts_with("-c") && a.len() > 2 {
+            let pair = if a == "-c" {
+                i += 1;
+                args.get(i).map(String::as_str)
+            } else {
+                Some(&a[2..])
+            };
+            if let Some((key, value)) = pair.and_then(|p| p.split_once('=')) {
+                if git_key_runs(key, value) {
+                    v.push(value.trim_start_matches('!').to_string());
+                }
+            }
+        } else if matches!(
+            a.as_str(),
+            "-C" | "--git-dir" | "--work-tree" | "--namespace" | "--config-env" | "--super-prefix"
+        ) {
+            i += 1;
+        }
+        i += 1;
+    }
+    let Some(sub) = args.get(i) else { return v };
+    let rest = &args[i + 1..];
+    // The values of the options that hand a command over.
+    let values = |names: &[&str], short: Option<&str>| -> Vec<String> {
+        let mut out = Vec::new();
+        for (j, a) in rest.iter().enumerate() {
+            if names.contains(&a.as_str()) || short == Some(a.as_str()) {
+                out.extend(rest.get(j + 1).cloned());
+            } else if let Some(value) = names.iter().find_map(|n| a.strip_prefix(&format!("{n}="))) {
+                out.push(value.to_string());
+            } else if let Some(value) = short.and_then(|s| a.strip_prefix(s)).filter(|v| !v.is_empty()) {
+                out.push(value.to_string());
+            }
+        }
+        out
+    };
+    match sub.as_str() {
+        "rebase" => v.extend(values(&["--exec"], Some("-x"))),
+        "difftool" => v.extend(values(&["--extcmd"], Some("-x"))),
+        "bisect" if rest.first().is_some_and(|w| w == "run") => v.push(join_words(&rest[1..])),
+        "submodule" => {
+            if let Some(at) = rest.iter().position(|w| w == "foreach") {
+                let command: Vec<&String> = rest[at + 1..].iter().skip_while(|w| w.starts_with('-')).collect();
+                if !command.is_empty() {
+                    v.push(join_words(&command));
+                }
+            }
+        }
+        "filter-branch" => v.extend(values(
+            &[
+                "--env-filter",
+                "--tree-filter",
+                "--index-filter",
+                "--parent-filter",
+                "--msg-filter",
+                "--commit-filter",
+                "--tag-name-filter",
+            ],
+            None,
+        )),
+        _ => {}
+    }
+    v
+}
+
+/// The words after a program's options read as command lines: each word that
+/// is not an option on its own (`tmux new -d 'text'`, `tmux send-keys 'text'
+/// Enter`), and from there to the end (`screen -dmS x prog args`). More
+/// readings than there are, never fewer.
+fn tails(args: &[String]) -> Vec<String> {
+    let mut v = Vec::new();
+    for (i, w) in args.iter().enumerate().filter(|(_, w)| !w.starts_with('-')).take(8) {
+        v.push(w.clone());
+        if i + 1 < args.len() {
+            v.push(join_words(&args[i..]));
+        }
+    }
+    v
+}
+
+/// The text a command prints as it is written: `echo`'s words, `printf`'s
+/// format and arguments (`\n` read as a line break), what a here-document or
+/// here-string hands `cat` or `tee`, a PowerShell string standing alone.
+fn emitted(s: &Simple) -> Vec<String> {
+    let mut v = Vec::new();
+    let Some(cmd) = command(&s.words) else { return v };
+    let lines = |t: &str| t.replace("\\n", "\n").replace("\\t", "\t");
+    match cmd.name.as_str() {
+        "echo" | "print" | "write-output" | "write-host" | "write" => {
+            let words: Vec<&str> = cmd
+                .args
+                .iter()
+                .map(String::as_str)
+                .skip_while(|a| {
+                    a.len() > 1 && a.starts_with('-') && a[1..].chars().all(|c| matches!(c, 'n' | 'e' | 'E'))
+                })
+                .collect();
+            if !words.is_empty() {
+                v.push(lines(&words.join(" ")));
+            }
+        }
+        "printf" => {
+            let mut i = 0;
+            while let Some(a) = cmd.args.get(i) {
+                match a.as_str() {
+                    "-v" => i += 2,
+                    "--" => {
+                        i += 1;
+                        break;
+                    }
+                    _ => break,
+                }
+            }
+            v.extend(cmd.args.iter().skip(i).map(|a| lines(a)));
+        }
+        "cat" | "tee" => {
+            if !s.heredoc.is_empty() {
+                v.push(s.heredoc.clone());
+            }
+            v.extend(s.redirects.iter().filter(|r| r.op == "<<<").map(|r| r.target.clone()));
+        }
+        _ if s.words.len() == 1 && s.words[0].contains(char::is_whitespace) => v.push(s.words[0].clone()),
+        _ => {}
+    }
+    v
+}
+
+/// PowerShell reading its commands from its input: `pwsh -`, `pwsh -Command -`,
+/// or neither a command nor a file to run.
+fn ps_reads_input(args: &[String]) -> bool {
+    args.iter().any(|a| a == "-")
+        || !args.iter().any(|a| ps_param(a, "command", 1) || ps_param(a, "file", 1) || ps_param(a, "encodedcommand", 1))
+}
+
+/// Text printed into an interpreter that takes its program from its input
+/// (`echo "open(…)" | python3`, `cat <<EOF | node`) is its code: kept with
+/// what it reads, where `code_of` finds it. Shells get theirs read as
+/// commands (`piped_over`).
+fn feed_interpreters(pipe: &mut Pipeline) {
+    let mut texts: Vec<String> = Vec::new();
+    for s in &mut pipe.stages {
+        let fed = command(&s.words).is_some_and(|c| !SHELLS.contains(&c.name.as_str()) && reads_program(&c));
+        let printed = emitted(s);
+        if fed && !texts.is_empty() {
+            for t in &texts {
+                if s.heredoc.len() + t.len() <= MAX_FED {
+                    s.heredoc.push_str(t);
+                    s.heredoc.push('\n');
+                }
+            }
+        }
+        texts.extend(printed);
+    }
+}
+
+/// The most text kept as an interpreter's input.
+const MAX_FED: usize = 1 << 20;
+
+/// Text printed into a program that runs what it reads — `echo 'sudo id' |
+/// sh`, `printf 'x\n' | bash`, `cat <<EOF | pwsh -`, `'…' | iex` — or into
+/// `xargs`, which adds what it reads to its own command (`echo --x | xargs
+/// prog`), and runs it as a command of its own through `sh -c '{}'`.
+fn piped_over(pipe: &Pipeline) -> Vec<(String, Dialect)> {
+    let mut v = Vec::new();
+    let mut texts: Vec<String> = Vec::new();
+    for s in &pipe.stages {
+        let Some(cmd) = command(&s.words) else { continue };
+        if !texts.is_empty() {
+            let n = cmd.name.as_str();
+            let dos = |a: &String| matches!(a.to_ascii_lowercase().as_str(), "/c" | "/k" | "/r");
+            let dialect = if SHELLS.contains(&n) && reads_program(&cmd) || n == "cmd" && !cmd.args.iter().any(dos) {
+                Some(Dialect::Posix)
+            } else if matches!(n, "pwsh" | "powershell") && ps_reads_input(cmd.args)
+                || matches!(n, "iex" | "invoke-expression") && cmd.args.is_empty()
+            {
+                Some(Dialect::PowerShell)
+            } else {
+                None
+            };
+            if let Some(d) = dialect {
+                v.extend(texts.iter().map(|t| (t.clone(), d)));
+            } else if cmd.wrappers.iter().any(|w| w == "xargs") {
+                let own: Vec<&str> = std::iter::once(cmd.word).chain(cmd.args.iter().map(String::as_str)).collect();
+                for t in &texts {
+                    v.push((format!("{} {t}", join_words(&own)), Dialect::Posix));
+                    v.push((t.clone(), Dialect::Posix));
+                }
+            }
+        }
+        texts.extend(emitted(s));
+    }
+    v
+}
+
 /// Commands handed over as text, to read as commands too.
 fn handed_over(s: &Simple, dialect: Dialect) -> Vec<(String, Dialect)> {
     let mut v = Vec::new();
     let Some(cmd) = command(&s.words) else { return v };
     let args = cmd.args;
     let n = cmd.name.as_str();
-    if n == "find" {
+    // Wrappers that take a command line as text: `env -S 'prog args'`,
+    // `flock FILE -c 'text'`.
+    for (i, w) in s.words.iter().enumerate() {
+        let rest = &s.words[i + 1..];
+        match base_name(w).as_str() {
+            "env" => {
+                for (j, a) in rest.iter().enumerate() {
+                    let text = match a.strip_prefix("--split-string=").or_else(|| a.strip_prefix("-S")) {
+                        Some("") if a == "-S" => rest.get(j + 1).map(|t| (t.as_str(), j + 2)),
+                        Some(t) if !t.is_empty() => Some((t, j + 1)),
+                        _ if a == "--split-string" => rest.get(j + 1).map(|t| (t.as_str(), j + 2)),
+                        _ => None,
+                    };
+                    if let Some((text, after)) = text {
+                        v.push((format!("{text} {}", join_words(&rest[after..])), Dialect::Posix));
+                        break;
+                    }
+                    if !a.starts_with('-') {
+                        break;
+                    }
+                }
+            }
+            "flock" => {
+                if let Some(j) = rest.iter().position(|a| a == "-c" || a == "--command") {
+                    v.extend(rest.get(j + 1).map(|t| (t.clone(), Dialect::Posix)));
+                }
+            }
+            _ => {}
+        }
+    }
+    if n == "git" {
+        v.extend(git_runs(args).into_iter().map(|t| (t, Dialect::Posix)));
+    } else if n == "script" {
+        // util-linux `script -c 'text' [file]`; BSD `script [file [command …]]`.
+        let at = args.iter().position(|a| a == "--command" || short_group_has(a, 'c'));
+        if let Some(text) = args.iter().find_map(|a| a.strip_prefix("--command=")) {
+            v.push((text.to_string(), Dialect::Posix));
+        } else if let Some(i) = at {
+            v.extend(args.get(i + 1).map(|t| (t.clone(), Dialect::Posix)));
+        } else if let Some(file) = args.iter().position(|a| !a.starts_with('-')) {
+            if file + 1 < args.len() {
+                v.push((join_words(&args[file + 1..]), Dialect::Posix));
+            }
+        }
+    } else if matches!(n, "tmux" | "screen") {
+        // The shell command a session, window or pane starts with, or that
+        // `run-shell` runs: wherever it starts among the words that follow.
+        v.extend(tails(args).into_iter().map(|t| (t, Dialect::Posix)));
+    } else if matches!(n, "man" | "info") {
+        // The pager it runs the page through.
+        let pager = option_value(args, &["-P", "--pager"])
+            .or_else(|| args.iter().find_map(|a| a.strip_prefix("-P").filter(|p| !p.is_empty())));
+        v.extend(pager.map(|p| (p.to_string(), Dialect::Posix)));
+    } else if matches!(n, "gh" | "glab") {
+        // `gh alias set --shell name 'text'`, or an expansion that starts with `!`.
+        let pos = positional(args, false);
+        if pos.first() == Some(&"alias") && pos.get(1) == Some(&"set") {
+            if let Some(expansion) = pos.get(3) {
+                if args.iter().any(|a| a == "--shell" || a == "-s") || expansion.starts_with('!') {
+                    v.push((expansion.trim_start_matches('!').to_string(), Dialect::Posix));
+                }
+            }
+        }
+    } else if n == "find" {
         // What `-exec … ;` runs for every file it finds.
         let mut i = 0;
         while i < args.len() {
