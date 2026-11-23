@@ -75,8 +75,8 @@ exactly the same.
 
 Nöbetçi moves that decision to one place you can always see. It reads each request the way a
 careful reviewer would, tells you what stands out and why, and makes the dangerous ones take a
-deliberate press-and-hold instead of a click. When nothing needs you, it folds away into the top
-edge of the screen.
+deliberate press-and-hold instead of a click (on Linux, an answer in the terminal). When nothing
+needs you, it folds away into the top edge of the screen.
 
 ## Features
 
@@ -102,7 +102,9 @@ edge of the screen.
   of blank lines or spaces are collapsed into markers like `⟦40 blank lines⟧`, and a request too
   long to carry whole is flagged and scored HIGH — never silently cut.
 - **Press and hold for the dangerous ones.** HIGH and CRITICAL requests need the Allow button held
-  down (1.2 s and 2.4 s by default). The rule is enforced in Rust, not just in the UI.
+  down (1.2 s and 2.4 s by default). The rule is enforced in Rust, not just in the UI. On Linux,
+  where a program's fake click can't be told from a real one, they are approved in the terminal
+  instead: their card offers **Hand to terminal** and **Deny**.
 - **No approval by accident.** A card that has just appeared ignores clicks for a moment, so a
   double-click, or the release of a hold, meant for one card can't approve the next one.
 - **Deny with a reason.** Claude reads your reason and carries on another way; **Deny and stop
@@ -123,7 +125,8 @@ edge of the screen.
   own only up to LOW (the default), up to MEDIUM, or not at all. **HIGH and CRITICAL are never
   approved without you.**
 - **History and audit log.** Every permission request, its risk, the decision and who made it —
-  you, a hotkey, a batch, a rule, a trusted project, a session grant, a timeout or the terminal.
+  you, a hotkey, a batch, a rule, a trusted project, a session grant, a timeout, or the terminal,
+  Cursor or the Claude app when the request went back to them.
   Search, filters, charts, CSV and JSON export.
 - **Quiet when you need it.** Do not disturb, quiet hours, and automatic quiet while a full-screen
   app is in front. Requests still queue; nothing pops up or makes a sound.
@@ -295,6 +298,11 @@ the session's folder instead), and quiet in full screen doesn't notice native Wa
 Programs Nöbetçi opens for you — links, VS Code, the file manager — still start natively on
 Wayland. The [installation guide](docs/install.md#linux) has the details.
 
+**On Linux, HIGH and CRITICAL requests are approved in the terminal.** X11 lets any program running
+as you click through the real mouse, and nothing in such a click tells it from yours, so the island
+approves only LOW and MEDIUM requests there. A HIGH or CRITICAL card says why and offers **Hand to
+terminal** (**Hand to Cursor** for a Cursor request) and **Deny**.
+
 ### Build from source
 
 You need [Rust](https://rustup.rs) with the MSVC toolchain, Node.js 22 or newer, and the
@@ -412,10 +420,13 @@ the animation loop stops and the cursor poll parks.
 - **The findings** list every reason with its level, plus any rule or project note ("Strict
   project", or a rule that wanted to allow the request but hit the ceiling).
 - **Allow** is a click for LOW and MEDIUM. For HIGH and CRITICAL it reads **Hold · Allow**: keep
-  it pressed until the bar fills. Approvals take a real mouse click, not Enter or Space.
+  it pressed until the bar fills. Approvals take a real mouse click, not Enter or Space. On Linux a
+  HIGH or CRITICAL card has no Allow: it says why, with **Hand to terminal** (**Hand to Cursor**
+  for Cursor) first, then Deny.
 - **Deny** refuses the request and tells Claude, which carries on another way. The arrow next to
   it opens ready-made reasons that are passed on to Claude (edit them in Settings → Rules) and
-  **Deny and stop Claude**, which also ends Claude's turn so it waits for you.
+  **Deny and stop Claude**, which also ends Claude's turn so it waits for you. Codex and Cursor
+  can't be stopped from a hook, so their cards offer the reasons without it.
 - **Don't ask again this session for …** is offered only where the auto-allow ceiling allows it:
   LOW with the default ceiling, LOW and MEDIUM with *LOW + MEDIUM*, never with the ceiling off. The
   box says what it covers — this exact command, changes to this file, this address, or this tool
@@ -452,7 +463,8 @@ the animation loop stops and the cursor poll parks.
 | **HIGH** | Deliberate, visible or hard to undo. Press and hold to allow. | `rm -rf node_modules`, `git push --force`, `git reset --hard`, `npm publish`, `schtasks /create …`, `certutil -urlcache …`, reading `~/.ssh/id_rsa` or `.env`, writing `.git/hooks/pre-commit` or `.mcp.json`, invisible Unicode characters |
 | **CRITICAL** | Irreversible, or a classic attack shape. A longer hold. | `curl … \| bash`, `irm … \| iex`, `powershell -enc …`, `Set-MpPreference -DisableRealtimeMonitoring $true`, `vssadmin delete shadows`, `rm -rf ~`, `gh repo delete`, writing `~/.claude/settings.json`, reading a secret and sending it out in the same request |
 
-The Turkish UI calls the levels DÜŞÜK, ORTA, YÜKSEK and KRİTİK.
+On Linux, HIGH and CRITICAL requests are approved in the terminal instead of with a hold (see
+[Linux](#linux)). The Turkish UI calls the levels DÜŞÜK, ORTA, YÜKSEK and KRİTİK.
 
 <details>
 <summary><b>What the risk engine looks for</b></summary>
@@ -475,7 +487,9 @@ The Turkish UI calls the levels DÜŞÜK, ORTA, YÜKSEK and KRİTİK.
   `su`, `runas`, `gsudo` and AppleScript's `with administrator privileges`; persistence (scheduled
   tasks, Run keys, services, startup folders, cron and `crontab`, systemd units including user
   ones, LaunchAgents and LaunchDaemons, login items); removing the macOS quarantine flag (`xattr -d`);
-  reading the macOS keychain (`security find-generic-password`, `dump-keychain`); suspicious
+  reading the macOS keychain (`security find-generic-password`, `dump-keychain`); programs that
+  fake clicks or keystrokes in other windows (`xdotool`, `ydotool`, `xte`, `xinput create-master`,
+  a script that loads XTest or uinput); suspicious
   built-in Windows tools such as `mshta`,
   `regsvr32 /i:`, `certutil -urlcache` or `bitsadmin /transfer`; bypassing the PowerShell
   execution policy; credential and secret files, including a `.env` loaded into a program with
@@ -500,17 +514,17 @@ A command is read as a command, not searched for words: `git commit -m "graceful
 as data, not run) stay LOW. A command that writes a file — a redirect, `tee`, `cp`, `curl -o`,
 `sed -i`, a one-liner — is judged like a file write to that path.
 
-**File writes** — paths are resolved against the session's folder first, so `.claude//settings.json`,
-`./.git/hooks/pre-commit` or `../../usr/local/bin/git` meet the same rules as the plain spelling.
-CRITICAL for Claude Code's settings files, Codex's and Cursor's hook files, Nöbetçi's own files
-and anything under `~/.ssh`; HIGH for
+**File writes** — paths are resolved against the session's folder first, so
+`.claude//settings.json`, `./.git/hooks/pre-commit` or `../../usr/local/bin/git` meet the same rules
+as the plain spelling, and `~/../../etc/cron.d/x` or `$HOME/../..` land where they really lead.
+CRITICAL for Claude Code's settings files (in `~/.claude`, or in the folder `CLAUDE_CONFIG_DIR`
+names), Codex's and Cursor's hook files, Nöbetçi's own files and anything under `~/.ssh`; HIGH for
 Claude Code hooks, agents, commands, skills and plugins, `.mcp.json`, git hooks and git config,
 shell profiles, startup folders and LaunchAgents, system files, secrets files (the macOS keychain
-included), and content that contains a
-private key or invisible characters; MEDIUM for CI workflows, `CLAUDE.md`, install scripts
-(`postinstall`), secrets that look hard-coded, and anything outside the project folder; LOW for
-build files such as `package.json`, `Cargo.toml` or a `Dockerfile`. Templates such as
-`.env.example` don't trigger the path rules.
+included), and content that contains a private key or invisible characters; MEDIUM for CI workflows,
+`CLAUDE.md`, install scripts (`postinstall`), secrets that look hard-coded, and anything outside the
+project folder; LOW for build files such as `package.json`, `Cargo.toml` or a `Dockerfile`.
+Templates such as `.env.example` don't trigger the path rules.
 
 **File reads** — HIGH for secrets (SSH keys, `.env`, credential files, cloud and Kubernetes
 configs, browser cookies and saved logins).
@@ -525,11 +539,11 @@ something; LOW otherwise. Its arguments are checked too: a command, a URL, a fil
 (`DROP TABLE` in an `execute_sql` call is HIGH). A tool Nöbetçi doesn't know is shown and matched
 with all of its arguments.
 
-**Combinations** — a secret and a way out in the same request is CRITICAL, and a request that had
-to be cut to fit is HIGH. These two can't be switched off, not even by switching off the
-categories that make them up; every other category can, in **Settings → Safety → Risk
-categories**. The same page has a tester that scores a request for any tool the way the engine
-would.
+**Combinations** — a secret and a way out in the same request is CRITICAL, a request that had to be
+cut to fit is HIGH, and so is a command too tangled for the engine to read in full (check all of it
+yourself). These three can't be switched off, not even by switching off the categories that make
+them up; every other category can, in **Settings → Safety → Risk categories**. The same page has a
+tester that scores a request for any tool the way the engine would.
 
 </details>
 
@@ -539,7 +553,10 @@ would.
   <img src="docs/media/en/settings-rules.png" width="720" alt="The Rules page in Settings: numbered rules, each with its tool, pattern and action, above the start of the project trust section">
 </p>
 
-Rules are checked from top to bottom before a card is shown, and the first match wins.
+Rules are checked from top to bottom before a card is shown, and the first match wins — with one
+exception, so that resolving a path never turns your deny into a question: when the first rule
+that matches caught a file path only where it leads (not as written) and doesn't deny, a deny rule
+further down that covers the request decides (the rule tester's note names both).
 
 | A rule can… | How it behaves |
 | --- | --- |
@@ -555,16 +572,29 @@ How patterns match:
 - **Glob** (`*` and `?`) crosses line breaks, so a newline in a command can't slip past a deny
   rule. The editor checks glob and regex patterns with the same engine the rules use, and shows
   where one fails.
-- **A loose rule that allows or lowers covers one command only.** With *starts with*, *contains*,
-  a glob or an empty pattern, an allow rule (or one that lowers the level) doesn't match when the
-  command chains more commands than the pattern itself does: a line break, `;`, `&&`, `||`, `|`,
-  `&`, backticks or `$(`. *Equals* and regex patterns mean exactly what they say, and deny,
-  always-ask and raising rules match anywhere.
+- **A rule that allows or lowers covers one command only.** With *starts with*, *contains*, a
+  glob or an empty pattern, an allow rule (or one that lowers the level) doesn't match when the
+  command runs more commands than the pattern itself does: a line break, `;`, `&&`, `||`, `|`, `&`,
+  backticks, `$(`, `<(` and `>(`, or the brackets PowerShell, fish and zsh run a command in — `( )`,
+  `@( )`, `{ }`, `=( )` and glob qualifiers — so `npm test` can't carry `(iwr …)` along. A regex
+  allow rule covers what it matches and nothing the command runs past it: `^git status` doesn't
+  allow `git status; rm -rf ~`. *Equals* patterns mean exactly what they say, and deny, always-ask
+  and raising rules match anywhere.
 - **An empty pattern matches everything** for its tool (the "ask every time for MCP tools"
   template relies on it); the editor warns you before you save one for every tool.
-- **A path counts where it leads.** For a file, an allow rule or one that lowers the level (and a
-  "don't ask again" grant) matches only the path as it resolves, so `..` can't climb out of the
-  folder a rule names; deny, always-ask and raising rules match it either way.
+- **A path counts where it leads.** Nöbetçi works out where a path really leads: `..`, `.`, `~` and
+  `$HOME` (`%USERPROFILE%`) are resolved, and relative paths start from the session's folder. For a
+  file, an allow rule or one that lowers the level (and a "don't ask again" grant) has to match the
+  path both as written and where it leads, so `..` can't climb out of the folder a rule names:
+  `Write /work/app/*` doesn't cover `/work/app/../../etc/hosts`, and `Write ~/*` doesn't cover
+  `~/../../etc/x`, which is `/etc/x`. A path that climbs above a folder Nöbetçi can't place (another
+  user's `~bob`, `%APPDATA%`) is never let through that way. Deny, always-ask and raising rules
+  match either spelling — and the ones the system reads as the same file, such as `//etc/x`,
+  `\\?\C:\x` or a name with a trailing dot — so they also catch a path that climbs into their
+  folder, and one written from the project (`src/secrets/*`) catches the same file spelled in full.
+  A "don't ask again" grant for a relative path covers that one file, not the same name in another
+  folder, and a Glob request is shown and matched as its pattern under its folder
+  (`/work/app/src/**/*.rs`).
 
 The templates are a good start: allow `npm test` and read-only git commands, forbid
 `git push --force` and package publishing, keep Claude away from `.env` files, make `rm -rf`
@@ -572,7 +602,8 @@ always CRITICAL, and ask every time for MCP tools.
 
 **Project trust** (Settings → Rules) — *trusted*: LOW requests go through on their own, within the
 ceiling; *normal*: the default; *strict*: every request counts one level higher (MEDIUM becomes
-HIGH, HIGH becomes CRITICAL). When folders are nested, the most specific one wins.
+HIGH, HIGH becomes CRITICAL). When folders are nested, the most specific one wins. A folder
+pasted or imported with quotes or spaces around it (`"C:\src\app"`) is cleaned up first.
 
 **Auto-allow ceiling** (Settings → Safety) — *Off*, *LOW only* (the default) or *LOW + MEDIUM*.
 It caps what rules, trusted projects and session grants may approve without you. HIGH and CRITICAL are never
@@ -585,12 +616,13 @@ approved automatically: the cap lives in Rust, and a hand-edited settings file c
 </p>
 
 Every permission request is recorded: when, the project and tool, the target (up to 4,000
-characters, secrets masked), the risk and findings, the decision, who made it and how long it
-took — including requests that timed out, went to the terminal, or whose answer never reached
-Claude Code. Search it, filter it, look at daily charts and the most frequent projects, findings
-and tools, and export everything that matches as CSV or JSON. The CSV uses a comma, or a
-semicolon for spreadsheets in languages that expect one (Turkish Excel, for example), and is safe
-to open: cells that would be read as formulas are defused.
+characters, secrets masked), the risk and findings, the decision, who made it and how long it took —
+including requests that timed out, went to the terminal, or whose answer never reached Claude Code.
+Search it (`İ`, `I`, `ı` and `i` count as the same letter, so `İNFRA` finds `infra-scripts`), filter
+it, look at daily charts — a day is your local calendar day, daylight saving changes included — and
+the most frequent projects, findings and tools, and export everything that matches as CSV or JSON.
+The CSV uses a comma, or a semicolon for spreadsheets in languages that expect one (Turkish Excel,
+for example), and is safe to open: cells that would be read as formulas are defused.
 
 The history lives in `audit.jsonl` in Nöbetçi's data folder (see [Development](#development)),
 rolls over to `audit.1.jsonl` at 10 MB (adjustable), and can be switched off or cleared in
@@ -637,7 +669,9 @@ reasons you can read.
 What it takes care of: the card shows exactly what will run; HIGH and CRITICAL approvals need a
 hold that Rust enforces; approvals must come from a physical mouse click on the Allow button
 itself — one click, one approval, never on a card that has only just appeared — so a script
-can't press Allow on the agent's behalf; the relay and the app talk over a named pipe (Windows)
+can't press Allow on the agent's behalf (on Linux, where X11 lets a program click through the real
+mouse, that check is only a speed bump, so HIGH and CRITICAL are approved in the terminal there);
+the relay and the app talk over a named pipe (Windows)
 or a Unix socket (macOS, Linux) that only your account can open, and the relay checks that the
 app on the other end runs as you; a request to change Nöbetçi's own files, swap its relay or
 remove its hooks is CRITICAL on every system; the history masks secrets, and its CSV export is
@@ -682,7 +716,8 @@ Both, yes. On macOS 11 or later the island sits below the menu bar as a panel th
 focus, quiet in full screen works, and **Go to window** brings the session's app to the front
 rather than one particular window. On Linux the island runs on X11 (with a compositor) or,
 through XWayland, on Wayland, where global shortcuts, **Go to window** and quiet in full screen
-only see X11 windows; the media card works with every MPRIS player.
+only see X11 windows; the media card works with every MPRIS player. On Linux, HIGH and CRITICAL
+requests are approved in the terminal rather than on the island.
 
 **Why does macOS refuse to open it?**
 Releases aren't notarized by Apple yet. Check the SHA-256, then open it once through **System
@@ -702,7 +737,8 @@ opens the project folder if it can't find one.
 
 **Could Claude approve its own requests through Nöbetçi?**
 Not through the island: approvals must come from a physical click, the allow hotkey is off by
-default and LOW-only, and HIGH and CRITICAL need a hold. But whatever an approved command starts
+default and LOW-only, and HIGH and CRITICAL need a hold — on Linux, where a program could click
+through the real mouse, they can't be approved on the island at all. But whatever an approved command starts
 runs with your rights and could, for instance, edit Claude Code's settings, rewrite Nöbetçi's
 own settings or remove its hooks — which is exactly why such requests are scored CRITICAL. The
 [threat model](SECURITY.md) has the details.
@@ -750,8 +786,10 @@ Cursor keep working, and a message says which entries to delete by hand.
 
 Your preferences and agenda (`%APPDATA%\Nobetci`) and history (`%LOCALAPPDATA%\Nobetci\audit.jsonl`)
 stay, so a reinstall picks up where you left off. Tick **Delete the application data** in the
-uninstaller to remove them too. Installing a newer (or older) version over the current one is an
-update, not an uninstall: hooks, **Start with Windows** and data all stay.
+uninstaller to remove them too. Installing a newer version over the current one — or an older one
+with an installer newer than 2.4.1 — is an update, not an uninstall: hooks, **Start with Windows**
+and data all stay. To go back to 2.4.1 or earlier and keep them, choose **Do not uninstall** on the
+page its installer shows ([details](docs/install.md#8-update)).
 
 ### macOS
 
@@ -794,9 +832,9 @@ npm run pack:linux   # the .deb and the AppImage, into release/
 With the dev server running:
 
 - `http://127.0.0.1:1420/?demo=critical` shows the island with fake sessions and requests. Other
-  demos: `low`, `write`, `hidden`, `deny-menu`, `batch`, `question`, `plan`, `overview`,
-  `session`, `assistant`, `compact`, `empty`, `tour`, `mascots`, `reactions`. Add `&theme=wolf`
-  (or another mascot) to see it on the island.
+  demos: `low`, `medium`, `write`, `hidden`, `deny-menu`, `batch`, `question`, `plan`, `overview`,
+  `session`, `assistant`, `compact`, `empty`, `tour`, `mascots`, `reactions`, `installer-art`.
+  Add `&theme=wolf` (or another mascot) to see it on the island.
 - `http://127.0.0.1:1420/settings.html?tab=kurallar` opens Settings with mock data. Tabs:
   `genel`, `claude`, `chatgpt`, `ajanlar`, `prompts`, `guvenlik`, `kurallar`, `bildirimler`,
   `gecmis`, `hakkinda`, plus `hosgeldin` for the welcome wizard.

@@ -73,7 +73,8 @@ sorular ya fark edilmeden bekler ya da refleksle onaylanır — üstelik termina
 
 Nöbetçi bu kararı her zaman görebileceğin tek bir yere taşır. Her isteği dikkatli bir gözden
 geçirici gibi okur, göze batanı ve nedenini söyler; tehlikeli olanlarda tek tıklama yetmez,
-butonu bilerek basılı tutman gerekir. Sana ihtiyaç olmadığında ekranın üst kenarına çekilir.
+butonu bilerek basılı tutman (Linux'ta ise terminalde cevap vermen) gerekir. Sana ihtiyaç
+olmadığında ekranın üst kenarına çekilir.
 
 ## Özellikler
 
@@ -101,7 +102,8 @@ butonu bilerek basılı tutman gerekir. Sana ihtiyaç olmadığında ekranın ü
   kesilmez.
 - **Tehlikeliye basılı tutarak izin.** YÜKSEK ve KRİTİK isteklerde "İzin ver" butonunu basılı
   tutman gerekir (varsayılan 1,2 sn ve 2,4 sn). Bu kural sadece arayüzde değil, Rust tarafında
-  uygulanır.
+  uygulanır. Linux'ta bir programın sahte tıklaması gerçeğinden ayırt edilemediği için bunlar
+  terminalde onaylanır: kartları **Terminale bırak** ve **Reddet** sunar.
 - **Kazara onay yok.** Yeni açılan bir kart bir an tıklama kabul etmez; böylece bir karta
   yönelik çift tıklama ya da basılı tutmanın bırakılışı sıradaki kartı onaylayamaz.
 - **Gerekçeyle reddet.** Claude gerekçeni okur ve başka bir yoldan devam eder; **Reddet ve
@@ -122,7 +124,8 @@ butonu bilerek basılı tutman gerekir. Sana ihtiyaç olmadığında ekranın ü
   fazla DÜŞÜK (varsayılan) ya da ORTA riske kadar onay verebilir; istersen hiç veremez. **YÜKSEK ve KRİTİK
   asla sensiz onaylanmaz.**
 - **Geçmiş ve denetim kaydı.** Her izin isteği, riski, kararı ve kararı kimin verdiği: sen,
-  kısayol, toplu onay, kural, güvenilir proje, oturum izni, zaman aşımı ya da terminal. Arama,
+  kısayol, toplu onay, kural, güvenilir proje, oturum izni, zaman aşımı ya da istek geri
+  verildiyse terminal, Cursor veya Claude uygulaması. Arama,
   filtreler, grafikler, CSV ve JSON dışa aktarma.
 - **Gerektiğinde sessiz.** Rahatsız etme, sessiz saatler ve tam ekran bir uygulama öndeyken
   kendiliğinden sessizlik. İstekler yine sıraya girer; hiçbir şey açılmaz, ses çıkmaz.
@@ -296,6 +299,12 @@ bulamaz (onun yerine oturumun klasörünü açar) ve tam ekranda sessizlik yerel
 fark etmez. Nöbetçi'nin senin için açtığı programlar — bağlantılar, VS Code, dosya yöneticisi — yine
 doğrudan Wayland'de açılır. Ayrıntılar [kurulum kılavuzunda](docs/kurulum.md#linux).
 
+**Linux'ta YÜKSEK ve KRİTİK istekler terminalde onaylanır.** X11, senin hesabınla çalışan her
+programın gerçek fare üzerinden tıklamasına izin verir ve böyle bir tıklamayı seninkinden ayıran
+hiçbir şey yoktur; bu yüzden ada orada yalnızca DÜŞÜK ve ORTA istekleri onaylar. YÜKSEK ya da
+KRİTİK bir kart nedenini söyler ve **Terminale bırak** (Cursor isteğinde **Cursor'a bırak**) ile
+**Reddet** sunar.
+
 ### Kaynaktan derleme
 
 [Rust](https://rustup.rs) (MSVC araç zinciriyle), Node.js 22 ya da üstü ve "Desktop development
@@ -414,10 +423,12 @@ Gizli bir ada neredeyse hiç kaynak harcamaz: animasyon döngüsü durur, imleç
   proje" ya da izin vermek isteyip tavana takılan bir kural gibi).
 - **İzin ver**, DÜŞÜK ve ORTA için tek tıklamadır. YÜKSEK ve KRİTİK'te buton **Basılı tut · İzin
   ver** olur: çubuk dolana kadar basılı tut. Onay gerçek bir fare tıklaması ister; Enter ya da
-  Boşluk tuşu yetmez.
+  Boşluk tuşu yetmez. Linux'ta YÜKSEK ya da KRİTİK bir kartta İzin ver yoktur: kart nedenini
+  söyler; önce **Terminale bırak** (Cursor'da **Cursor'a bırak**), sonra Reddet gelir.
 - **Reddet** isteği geri çevirir ve Claude'a söyler; Claude başka bir yoldan devam eder. Yanındaki
   ok, Claude'a iletilen hazır gerekçeleri (Ayarlar → Kurallar'dan düzenlenir) ve **Reddet ve
-  Claude'u durdur**'u açar; bu ikincisi Claude'un turunu da bitirir, Claude seni bekler.
+  Claude'u durdur**'u açar; bu ikincisi Claude'un turunu da bitirir, Claude seni bekler. Codex ve
+  Cursor bir hook'tan durdurulamaz; bu yüzden onların kartları yalnızca gerekçeleri sunar.
 - **Bu oturumda … için tekrar sorma** yalnızca otomatik izin tavanının izin verdiği yerde çıkar:
   varsayılan tavanda DÜŞÜK için, *DÜŞÜK + ORTA* tavanında DÜŞÜK ve ORTA için; tavan kapalıyken hiç
   çıkmaz. Kutu neyi kapsadığını söyler — tam olarak bu komut, bu dosyadaki değişiklikler, bu adres
@@ -455,7 +466,8 @@ Gizli bir ada neredeyse hiç kaynak harcamaz: animasyon döngüsü durur, imleç
 | **YÜKSEK** | Bilinçli, görünür ya da geri alması zor. Basılı tutarak izin. | `rm -rf node_modules`, `git push --force`, `git reset --hard`, `npm publish`, `schtasks /create …`, `certutil -urlcache …`, `~/.ssh/id_rsa` ya da `.env` okumak, `.git/hooks/pre-commit` ya da `.mcp.json` yazmak, görünmez Unicode karakterleri |
 | **KRİTİK** | Geri dönüşü yok ya da klasik bir saldırı kalıbı. Daha uzun basılı tutma. | `curl … \| bash`, `irm … \| iex`, `powershell -enc …`, `Set-MpPreference -DisableRealtimeMonitoring $true`, `vssadmin delete shadows`, `rm -rf ~`, `gh repo delete`, `~/.claude/settings.json` yazmak, aynı istekte bir sırrı okuyup dışarı göndermek |
 
-İngilizce arayüzde seviyeler LOW, MEDIUM, HIGH ve CRITICAL olarak geçer.
+Linux'ta YÜKSEK ve KRİTİK istekler basılı tutmayla değil, terminalde onaylanır (bkz.
+[Linux](#linux)). İngilizce arayüzde seviyeler LOW, MEDIUM, HIGH ve CRITICAL olarak geçer.
 
 <details>
 <summary><b>Risk motoru neye bakar</b></summary>
@@ -481,7 +493,8 @@ Gizli bir ada neredeyse hiç kaynak harcamaz: animasyon döngüsü durur, imleç
   `crontab`, kullanıcı birimleri dahil systemd, LaunchAgents ve LaunchDaemons, oturum açma
   öğeleri); macOS karantina işaretini kaldırmak
   (`xattr -d`); macOS anahtar zincirini okumak (`security find-generic-password`,
-  `dump-keychain`); `mshta`, `regsvr32 /i:`, `certutil -urlcache`
+  `dump-keychain`); başka pencerelere sahte tıklama ya da tuş gönderen programlar (`xdotool`,
+  `ydotool`, `xte`, `xinput create-master`, XTest ya da uinput yükleyen bir betik); `mshta`, `regsvr32 /i:`, `certutil -urlcache`
   ya da `bitsadmin /transfer` gibi şüpheli yerleşik Windows araçları; PowerShell betik
   politikasını devre dışı bırakmak; kimlik ve sır dosyaları — bir programa `--env-file` ile
   yüklenen `.env` dahil (program yüklediğini ekrana yazdırabilir); bilinen veri sızdırma servisleri
@@ -506,16 +519,16 @@ Komut, içinde kelime aranarak değil komut olarak okunur: `git commit -m "grace
 `curl -o`, `sed -i`, tek satırlık bir betik — o yola yapılan dosya yazımı gibi değerlendirilir.
 
 **Dosya yazma** — yollar önce oturumun klasörüne göre çözülür; böylece `.claude//settings.json`,
-`./.git/hooks/pre-commit` ya da `../../usr/local/bin/git` düz yazılışlarıyla aynı kurallara takılır.
-Claude Code ayar dosyaları, Codex'in ve Cursor'un hook dosyaları, Nöbetçi'nin kendi dosyaları ve
-`~/.ssh` altındaki her şey için KRİTİK; Claude
-Code hook, agent, komut, skill ve eklentileri, `.mcp.json`, git hook'ları ve git ayarı, kabuk
+`./.git/hooks/pre-commit` ya da `../../usr/local/bin/git` düz yazılışlarıyla aynı kurallara takılır,
+`~/../../etc/cron.d/x` ya da `$HOME/../..` da gerçekte vardığı yere sayılır. Claude Code ayar
+dosyaları (`~/.claude` içinde ya da `CLAUDE_CONFIG_DIR`'in gösterdiği klasörde), Codex'in ve
+Cursor'un hook dosyaları, Nöbetçi'nin kendi dosyaları ve `~/.ssh` altındaki her şey için KRİTİK;
+Claude Code hook, agent, komut, skill ve eklentileri, `.mcp.json`, git hook'ları ve git ayarı, kabuk
 profilleri, başlangıç klasörleri ve LaunchAgents, sistem dosyaları, sır dosyaları (macOS anahtar
-zinciri dahil) ve özel anahtar ya da
-görünmez karakter içeren içerik için YÜKSEK; CI iş akışları, `CLAUDE.md`, kurulum betikleri
-(`postinstall`), koda gömülmüş görünen sırlar ve proje klasörü dışındaki her şey için ORTA;
-`package.json`, `Cargo.toml` ya da `Dockerfile` gibi build dosyaları için DÜŞÜK. `.env.example`
-gibi şablonlar yol kurallarını tetiklemez.
+zinciri dahil) ve özel anahtar ya da görünmez karakter içeren içerik için YÜKSEK; CI iş akışları,
+`CLAUDE.md`, kurulum betikleri (`postinstall`), koda gömülmüş görünen sırlar ve proje klasörü
+dışındaki her şey için ORTA; `package.json`, `Cargo.toml` ya da `Dockerfile` gibi build dosyaları
+için DÜŞÜK. `.env.example` gibi şablonlar yol kurallarını tetiklemez.
 
 **Dosya okuma** — sırlar için YÜKSEK (SSH anahtarları, `.env`, kimlik dosyaları, bulut ve
 Kubernetes ayarları, tarayıcı çerezleri ve kayıtlı girişler).
@@ -531,11 +544,11 @@ yayınlıyor, itiyor, oluşturuyor, güncelliyor, yüklüyor, ödüyor, dağıt�
 ya da SQL (`execute_sql` çağrısındaki `DROP TABLE` YÜKSEK). Nöbetçi'nin tanımadığı bir araç bütün
 argümanlarıyla gösterilir ve eşleştirilir.
 
-**Birleşimler** — aynı istekte bir sır ve dışarı giden bir yol varsa KRİTİK, sığması için
-kesilmek zorunda kalınan bir istek YÜKSEK. Bu ikisi kapatılamaz, onları oluşturan kategoriler
-kapatılsa bile; diğer bütün kategoriler **Ayarlar → Güvenlik → Risk kategorileri**'nden tek tek
-kapatılabilir. Aynı sayfada, her araç için bir isteği motorun yapacağı gibi puanlayan bir test
-alanı da var.
+**Birleşimler** — aynı istekte bir sır ve dışarı giden bir yol varsa KRİTİK, sığması için kesilmek
+zorunda kalınan bir istek YÜKSEK; motorun tamamını okuyamayacağı kadar karışık bir komut da YÜKSEK
+(hepsini kendin kontrol et). Bu üçü kapatılamaz, onları oluşturan kategoriler kapatılsa bile; diğer
+bütün kategoriler **Ayarlar → Güvenlik → Risk kategorileri**'nden tek tek kapatılabilir. Aynı
+sayfada, her araç için bir isteği motorun yapacağı gibi puanlayan bir test alanı da var.
 
 </details>
 
@@ -545,7 +558,11 @@ alanı da var.
   <img src="docs/media/tr/settings-rules.png" width="720" alt="Ayarlar'daki Kurallar sayfası: her biri aracı, deseni ve eylemiyle numaralı kurallar ve altında proje güveni bölümünün başı">
 </p>
 
-Kurallar, kart gösterilmeden önce yukarıdan aşağı denenir; ilk eşleşen kazanır.
+Kurallar, kart gösterilmeden önce yukarıdan aşağı denenir; ilk eşleşen kazanır — bir yolun
+çözülmesi reddetme kuralını hiçbir zaman bir soruya çevirmesin diye tek bir istisnayla: eşleşen ilk
+kural bir dosya yolunu yalnızca vardığı yerle (yazıldığı hâliyle değil) yakalamışsa ve reddetmiyorsa,
+aşağıda isteği kapsayan bir reddetme kuralı karar verir (kural test alanındaki not ikisinin de adını
+verir).
 
 | Bir kural… | Nasıl davranır |
 | --- | --- |
@@ -561,17 +578,31 @@ Desenler nasıl eşleşir:
 - **Glob** (`*` ve `?`) satır sonlarının da üstünden geçer; böylece komuta eklenen bir satır sonu
   bir yasak kuralını atlatamaz. Düzenleyici glob ve regex desenlerini kuralların kullandığı motorla
   denetler ve hatalı yeri gösterir.
-- **İzin veren ya da seviyeyi düşüren gevşek bir kural tek bir komutu kapsar.** *İle başlar*,
-  *içerir*, glob ya da boş desenle kurulan bir izin kuralı (ya da seviyeyi düşüren bir kural),
-  komut desenin kendisinin içerdiğinden fazla komut zincirliyorsa eşleşmez: satır sonu, `;`, `&&`,
-  `||`, `|`, `&`, ters tırnak ya da `$(`. *Tam eşit* ve regex desenleri tam olarak yazdıklarını
-  söyler; yasaklayan, her zaman sorduran ve seviyeyi yükselten kurallar her yerde eşleşir.
+- **İzin veren ya da seviyeyi düşüren bir kural tek bir komutu kapsar.** *İle başlar*, *içerir*,
+  glob ya da boş desenle kurulan bir izin kuralı (ya da seviyeyi düşüren bir kural), komut desenin
+  kendisinin içerdiğinden fazla komut çalıştırıyorsa eşleşmez: satır sonu, `;`, `&&`, `||`, `|`,
+  `&`, ters tırnak, `$(`, `<(` ve `>(` ya da PowerShell, fish ve zsh'in içinde komut çalıştırdığı
+  ayraçlar — `( )`, `@( )`, `{ }`, `=( )` ve glob niteleyicileri; böylece `npm test` yanında
+  `(iwr …)` taşıyamaz. Regex ile kurulan bir izin kuralı yalnızca eşleştiği kısmı kapsar, komutun
+  onun ötesinde çalıştırdığı hiçbir şeyi kapsamaz: `^git status`, `git status; rm -rf ~`'a izin
+  vermez. *Tam eşit* desenler tam olarak yazdıklarını söyler; yasaklayan, her zaman sorduran ve
+  seviyeyi yükselten kurallar her yerde eşleşir.
 - **Boş desen** o aracın her isteğiyle eşleşir ("MCP araçları için her seferinde sor" şablonu buna
   dayanır); her araç için boş desenli bir kuralı kaydetmeden önce düzenleyici seni uyarır.
-- **Bir yol, vardığı yer sayılır.** Bir dosya için izin veren ya da seviyeyi düşüren bir kural (ve
-  bir "tekrar sorma" izni) yalnızca yolun çözülmüş hâliyle eşleşir; böylece `..` bir kuralın
-  gösterdiği klasörden dışarı tırmanamaz. Yasaklayan, her zaman sorduran ve seviyeyi yükselten
-  kurallar her iki yazılışla da eşleşir.
+- **Bir yol, vardığı yer sayılır.** Nöbetçi bir yolun gerçekte nereye vardığını çıkarır: `..`, `.`,
+  `~` ve `$HOME` (`%USERPROFILE%`) çözülür, göreli yollar oturumun klasöründen başlar. Bir dosya
+  için izin veren ya da seviyeyi düşüren bir kural (ve bir "tekrar sorma" izni) yolla hem yazıldığı
+  hâliyle hem de vardığı yerle eşleşmek zorundadır; böylece `..` bir kuralın gösterdiği klasörden
+  dışarı tırmanamaz: `Write /work/app/*`, `/work/app/../../etc/hosts`'u kapsamaz; `Write ~/*` da
+  aslında `/etc/x` olan `~/../../etc/x`'i kapsamaz. Nöbetçi'nin yerini bilemediği bir klasörün
+  (başka bir kullanıcının `~bob`'u, `%APPDATA%`) üstüne tırmanan bir yol böyle bir kuralla asla
+  geçmez. Yasaklayan, her zaman sorduran ve seviyeyi yükselten kuralların ise iki yazılıştan biriyle
+  — ya da sistemin aynı dosya diye okuduğu `//etc/x`, `\\?\C:\x` veya sonunda nokta olan bir ad gibi
+  yazılışlardan biriyle — eşleşmesi yeter; böylece klasörlerine tırmanarak giren bir yolu da
+  yakalarlar ve projeye göre yazılmış böyle bir kural (`src/secrets/*`) aynı dosyayı tam yoluyla
+  yazıldığında da yakalar. Göreli bir yol için "tekrar sorma" izni yalnızca o dosyayı kapsar, başka
+  bir klasördeki aynı adı değil; bir Glob isteği de klasörünün altına yazılmış deseniyle
+  (`/work/app/src/**/*.rs`) gösterilir ve eşleştirilir.
 
 Şablonlar iyi bir başlangıç: `npm test`'e ve salt okuyan git komutlarına izin ver, `git push --force`
 ve paket yayınlamayı yasakla, Claude'u `.env` dosyalarından uzak tut, `rm -rf`'yi her zaman
@@ -579,7 +610,8 @@ KRİTİK say, MCP araçları için her seferinde sor.
 
 **Proje güveni** (Ayarlar → Kurallar) — *güvenilir*: DÜŞÜK istekler tavan izin veriyorsa
 kendiliğinden geçer; *normal*: varsayılan; *sıkı*: her istek bir seviye yüksek sayılır (ORTA
-YÜKSEK'e, YÜKSEK KRİTİK'e çıkar). İç içe klasörlerde en özel olan geçerlidir.
+YÜKSEK'e, YÜKSEK KRİTİK'e çıkar). İç içe klasörlerde en özel olan geçerlidir. Tırnak ya da
+boşluklarla yapıştırılan veya içe aktarılan bir klasör (`"C:\src\app"`) önce temizlenir.
 
 **Otomatik izin tavanı** (Ayarlar → Güvenlik) — *Kapalı*, *Sadece DÜŞÜK* (varsayılan) ya da
 *DÜŞÜK + ORTA*. Kuralların, güvenilir projelerin ve oturum izinlerinin sensiz onaylayabileceği en yüksek riski
@@ -592,13 +624,15 @@ ayar dosyası onu kaldıramaz.
   <img src="docs/media/tr/settings-history.png" width="720" alt="Ayarlar'daki Geçmiş sayfası: kayıt anahtarı ve dosya boyutu, son 30 günün toplamları ve günlük kararlar grafiğinin başı">
 </p>
 
-Her izin isteği kayda geçer: ne zaman, hangi proje ve araç, hedef (en fazla 4.000 karakter,
-sırlar maskeli), risk ve bulgular, karar, kararı kimin verdiği ve ne kadar sürdüğü — süresi dolan,
-terminale giden ya da cevabı Claude Code'a hiç ulaşmayan istekler dahil. Arayabilir,
-filtreleyebilir, günlük grafiklere ve en sık görülen projelere, bulgulara ve araçlara
-bakabilirsin; eşleşen her şeyi CSV ya da JSON olarak dışa aktarabilirsin. CSV virgülle ya da —
-noktalı virgül bekleyen dillerdeki tablo programları için (örneğin Türkçe Excel) — noktalı virgülle
-ayrılır ve açması güvenlidir: formül gibi okunacak hücreler etkisiz hâle getirilir.
+Her izin isteği kayda geçer: ne zaman, hangi proje ve araç, hedef (en fazla 4.000 karakter, sırlar
+maskeli), risk ve bulgular, karar, kararı kimin verdiği ve ne kadar sürdüğü — süresi dolan,
+terminale giden ya da cevabı Claude Code'a hiç ulaşmayan istekler dahil. Arayabilir (`İ`, `I`, `ı`
+ve `i` aynı harf sayılır; `İNFRA` yazınca `infra-scripts` de bulunur), filtreleyebilir, günlük
+grafiklere — gün, yaz saati geçişleri dahil senin yerel takvim günündür — ve en sık görülen
+projelere, bulgulara ve araçlara bakabilirsin; eşleşen her şeyi CSV ya da JSON olarak dışa
+aktarabilirsin. CSV virgülle ya da — noktalı virgül bekleyen dillerdeki tablo programları için
+(örneğin Türkçe Excel) — noktalı virgülle ayrılır ve açması güvenlidir: formül gibi okunacak
+hücreler etkisiz hâle getirilir.
 
 Geçmiş, Nöbetçi'nin veri klasöründeki `audit.jsonl` dosyasında durur (bkz.
 [Geliştirme](#geliştirme)); dosya 10 MB'a ulaşınca (ayarlanabilir) eski kayıtlar `audit.1.jsonl`'e
@@ -645,7 +679,9 @@ ve okuyabileceğin gerekçelerdir.
 Özen gösterdiği şeyler: kart tam olarak neyin çalışacağını gösterir; YÜKSEK ve KRİTİK onaylar
 Rust'ın zorladığı bir basılı tutma ister; onaylar "İzin ver" butonunun üzerinde yapılmış fiziksel
 bir fare tıklamasından gelmelidir — bir tıklama, bir onay, az önce açılmış bir kartta asla — yani
-bir betik ajan adına "İzin ver"e basamaz; relay ile uygulama sadece senin hesabının açabildiği bir
+bir betik ajan adına "İzin ver"e basamaz (Linux'ta X11 bir programın gerçek fare üzerinden
+tıklamasına izin verdiği için bu denetim orada yalnızca bir yavaşlatıcıdır; YÜKSEK ve KRİTİK
+istekler orada terminalde onaylanır); relay ile uygulama sadece senin hesabının açabildiği bir
 named pipe (Windows) ya da Unix soketi (macOS, Linux) üzerinden konuşur ve relay karşı uçtaki
 uygulamanın senin hesabınla çalıştığını denetler; Nöbetçi'nin kendi dosyalarını değiştirmek,
 relay'ini değiştirmek ya da hook'larını kaldırmak her sistemde KRİTİK sayılır; geçmiş sırları
@@ -689,7 +725,8 @@ silmeden önce aynı komutu çalıştır (ya da bağlantıları Ayarlar'dan kald
 olarak durur; tam ekranda sessizlik çalışır; **Pencereye git** belirli bir pencereyi değil oturumun
 uygulamasını öne getirir. Linux'ta ada X11'de (bir bileşikleştiriciyle) ya da XWayland üzerinden
 Wayland'de çalışır; Wayland'de genel kısayollar, **Pencereye git** ve tam ekranda sessizlik yalnız
-X11 pencerelerini görür. Medya kartı MPRIS destekleyen her oynatıcıyla çalışır.
+X11 pencerelerini görür. Medya kartı MPRIS destekleyen her oynatıcıyla çalışır. Linux'ta YÜKSEK ve
+KRİTİK istekler adada değil, terminalde onaylanır.
 
 **macOS neden açmayı reddediyor?**
 Sürümler henüz Apple tarafından onaylanmıyor (notarize edilmiyor). SHA-256'yı doğrula, sonra bir
@@ -709,7 +746,8 @@ bulur; bulamazsa proje klasörünü açar.
 
 **Claude kendi isteklerini Nöbetçi üzerinden onaylayabilir mi?**
 Ada üzerinden hayır: onaylar fiziksel bir tıklamadan gelmeli, izin kısayolu varsayılan olarak
-kapalı ve sadece DÜŞÜK risk için, YÜKSEK ve KRİTİK ise basılı tutma istiyor. Ama onaylanmış bir
+kapalı ve sadece DÜŞÜK risk için, YÜKSEK ve KRİTİK ise basılı tutma istiyor — Linux'ta, bir program
+gerçek fare üzerinden tıklayabildiği için, bunlar adada hiç onaylanamıyor. Ama onaylanmış bir
 komutun başlattığı her şey senin yetkilerinle çalışır ve örneğin Claude Code'un ayarlarını,
 Nöbetçi'nin kendi ayarlarını değiştirebilir ya da hook'larını kaldırabilir — tam da bu yüzden böyle
 istekler KRİTİK sayılır. Ayrıntılar [tehdit modelinde](SECURITY.md).
@@ -757,9 +795,11 @@ Hook'lar kaldırılamazsa relay ve kayıt dosyası yerinde kalır; böylece Clau
 
 Tercihlerin ve ajandan (`%APPDATA%\Nobetci`) ve geçmişin (`%LOCALAPPDATA%\Nobetci\audit.jsonl`)
 yerinde kalır; yeniden kurarsan kaldığın yerden devam edersin. Bunları da silmek için kaldırma
-programında **Uygulama verilerini sil** kutusunu işaretle. Kurulu sürümün üstüne daha yeni (ya da
-daha eski) bir sürüm kurmak kaldırma değil güncellemedir: hook'lar, **Windows açılınca başlat** ve
-veriler kalır.
+programında **Uygulama verilerini sil** kutusunu işaretle. Kurulu sürümün üstüne daha yeni bir
+sürüm — ya da 2.4.1'den yeni bir kurulum programıyla daha eski bir sürüm — kurmak kaldırma değil
+güncellemedir: hook'lar, **Windows açılınca başlat** ve veriler kalır. 2.4.1'e ya da daha eskisine
+dönüp bunları korumak için onun kurulum programının gösterdiği sayfada **Kaldırma işlemini
+gerçekleştirme**'yi seç ([ayrıntılar](docs/kurulum.md#8-güncelleme)).
 
 ### macOS
 
@@ -801,9 +841,9 @@ npm run pack:linux   # .deb ve AppImage, release/ klasörüne
 Geliştirme sunucusu çalışırken:
 
 - `http://127.0.0.1:1420/?demo=critical` adayı sahte oturumlar ve isteklerle gösterir. Diğer
-  demolar: `low`, `write`, `hidden`, `deny-menu`, `batch`, `question`, `plan`, `overview`,
-  `session`, `assistant`, `compact`, `empty`, `tour`, `mascots`, `reactions`. Adada başka bir
-  maskotu görmek için `&theme=wolf` (ya da başka bir maskot) ekle.
+  demolar: `low`, `medium`, `write`, `hidden`, `deny-menu`, `batch`, `question`, `plan`,
+  `overview`, `session`, `assistant`, `compact`, `empty`, `tour`, `mascots`, `reactions`,
+  `installer-art`. Adada başka bir maskotu görmek için `&theme=wolf` (ya da başka bir maskot) ekle.
 - `http://127.0.0.1:1420/settings.html?tab=kurallar` Ayarlar'ı sahte verilerle açar. Sekmeler:
   `genel`, `claude`, `chatgpt`, `ajanlar`, `prompts`, `guvenlik`, `kurallar`, `bildirimler`,
   `gecmis`, `hakkinda`; hoş geldin sihirbazı için `hosgeldin`.

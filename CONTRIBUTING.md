@@ -64,6 +64,19 @@ A custom `CARGO_TARGET_DIR` (or a `target-dir` in a cargo config) works: the rel
 bundles wherever cargo put them. On a Mac, every bundle — not just `npm run pack:mac` — makes the
 disk image's background first, so a fresh clone can run `npm run tauri build` directly.
 
+`cargo build --release` on its own makes a *development* build of the app: without Tauri's
+`custom-protocol` feature the app loads its pages from the dev server at `http://localhost:1420`,
+and with no dev server running the island shows only "Could not connect to localhost". For a real
+app without an installer, run `npm run tauri build -- --no-bundle`, which builds the pages into
+`dist/` and turns the feature on, or do the same by hand:
+
+```sh
+npm run build                                                      # the relay, then the pages into dist/
+cargo build --release -p nobetci --features tauri/custom-protocol  # → target/release/nobetci
+```
+
+The `pack` scripts build the app the same way before they bundle it.
+
 ## Everyday commands
 
 | Command | What it does |
@@ -106,11 +119,13 @@ runs `cargo audit` whenever the Rust dependencies change and once a week.
 **In the browser** (`npm run dev`, or `npx vite` without Rust):
 
 - `/?demo=critical` shows the island with fake sessions and requests. The other demos are `low`,
-  `write`, `hidden` (whitespace obfuscation), `deny-menu`, `batch`, `question`, `plan`,
-  `overview`, `session`, `assistant`, `compact`, `empty`, `tour`, `mascots` (all seven mascots side
-  by side) and `reactions`. `&theme=wolf` (or any other mascot) picks the mascot, `&media=1`
-  fills the media card (`&media=art` with artwork), and `&still=1` holds the scene still for
-  screenshots.
+  `medium` (a MEDIUM card that a rule wanted to allow), `write`, `hidden` (whitespace obfuscation),
+  `deny-menu`, `batch`, `question`, `plan`, `overview`, `session`, `assistant`, `compact`, `empty`,
+  `tour`, `mascots` (all seven mascots side by side), `reactions` and `installer-art` (the Windows
+  installer's pictures, which `scripts/installer-art.mjs` captures). `&theme=wolf` (or any other
+  mascot) picks the mascot, `&media=1` fills the media card (`&media=art` with artwork),
+  `&holdApprovals=0` shows the cards as on Linux (HIGH and CRITICAL handed to the terminal instead
+  of held), and `&still=1` holds the scene still for screenshots.
 - `/settings.html?tab=kurallar` opens Settings with mock data. Tabs: `genel`, `claude`, `chatgpt`,
   `ajanlar`, `prompts`, `guvenlik`, `kurallar`, `bildirimler`, `gecmis`, `hakkinda`, plus
   `hosgeldin` for the welcome wizard. The mock in `src/settings/mock.ts` takes extra switches to
@@ -162,13 +177,20 @@ README image in English and Turkish into `docs/media/en/` and `docs/media/tr/`. 
 Linux, point `NOBETCI_EDGE` at Edge, Chrome or Chromium. Text is set in the system font, so
 regenerate every image on the same system to keep them alike, and at the same scale: the README
 shows them at 2× (`NOBETCI_SCALE=2`), and an image taken at 1× next to them looks blurred and
-sits at a different height. The island demos are held still (`&still=1`) and Settings is captured
-with reduced motion, so nothing is caught half-faded:
+sits at a different height.
+
+Each image is taken once its page is ready, not after a fixed time: the script talks to the browser
+through its DevTools pipe (`--remote-debugging-pipe`, no extra packages), waits for the load event,
+the fonts and every animation that ends, and keeps capturing until two captures in a row are the
+same picture — about six seconds an image. So that the same code gives the same pictures on any
+day, the island demos are held still (`&still=1`), pages are captured with reduced motion (the
+mascot lineups excepted), the page's clock shows 24 November 2026, 09:41 UTC until the page has
+loaded and stops 3.5 s later, `Math.random` is seeded, and the text caret is hidden:
 
 ```powershell
 npm run dev                                  # terminal 1
 $env:NOBETCI_SCALE = "2"                     # terminal 2 (sh: export NOBETCI_SCALE=2)
-npm run screenshots                          # everything
+npm run screenshots                          # every README image
 node scripts/screenshots.mjs tr critical     # just some languages and images
 ```
 

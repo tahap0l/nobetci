@@ -133,8 +133,8 @@ in the Claude desktop app — which never runs `PermissionRequest` — every app
    before.
 3. The island opens with an **approval card**: the whole command, its risk level and the reasons.
 4. Click **Allow** as usual. For HIGH and CRITICAL requests, keep the button pressed until the bar
-   fills. A card that has only just appeared ignores clicks for a moment, so a stray double-click
-   can't approve it.
+   fills (on Linux those are approved in the terminal instead: see [Linux](#linux)). A card that
+   has only just appeared ignores clicks for a moment, so a stray double-click can't approve it.
 
 You can also type a command into **Settings → Safety → Try the risk engine** to see how it's scored,
 without running anything.
@@ -167,10 +167,18 @@ next to the file; a reset leaves your hooks alone and doesn't bring the setup wi
 Download the new installer (check its fingerprint) and run it. Nöbetçi closes during the update;
 start it again when the installer is done.
 
-Installing another version over the current one — newer or older — is an update, not an
-uninstall: your settings, agenda and history, your Claude Code, Codex and Cursor hooks and
-**Start with Windows** are all kept, whichever version you update from. Only choosing to uninstall,
-on the page the installer shows when you run the version you already have, removes them.
+Installing another version over the current one is an update, not an uninstall: your settings,
+agenda and history, your Claude Code, Codex and Cursor hooks and **Start with Windows** are all
+kept, whichever version you update from. That holds for going back to an older version too, as
+long as the installer you run is newer than 2.4.1. Only choosing to uninstall, on the page the
+installer shows when you run the version you already have, removes them.
+
+The installers of 2.4.1 and earlier don't know this. To go back to one of them and keep
+everything, choose **Do not uninstall** on the page it shows. Its preselected choice, **Uninstall
+before installing**, removes the hooks and **Start with Windows** (your settings, agenda and history
+stay unless you tick **Delete the application data**): install the hooks again afterwards in
+**Settings → Claude Code**, **ChatGPT** and **Other agents**, and switch **Start with Windows** back
+on.
 
 If a new version changes what the hooks need, **Settings → Claude Code** (or **ChatGPT**, **Other
 agents**) says the connection is out of date; review the diff and update it there.
@@ -404,7 +412,10 @@ then `npm ci`, `npm test` and `npm run pack:mac` (→ `release/Nobetci-<version>
 On Linux: Rust, Node.js 22 or newer and the development packages listed in the
 [README](../README.md#build-from-source), then `npm ci`, `npm test` and `npm run pack:linux`.
 
-See [CONTRIBUTING.md](../CONTRIBUTING.md) for more.
+Build the app with these scripts, or with `npm run tauri build`. A plain `cargo build --release`
+makes a development build that loads its pages from a dev server at `http://localhost:1420` and,
+without one, shows only "Could not connect to localhost"; [CONTRIBUTING.md](../CONTRIBUTING.md#setting-up)
+shows how to build the app by hand. See [CONTRIBUTING.md](../CONTRIBUTING.md) for more.
 
 ## macOS
 
@@ -456,8 +467,8 @@ way on a Mac. This section covers what's different.
    xattr -dr com.apple.quarantine /Applications/Nobetci.app
    ```
 
-   (When an agent asks to run this, Nöbetçi scores it HIGH — here it's you, for an app you've
-   just verified.)
+   (When an agent asks to run this, Nöbetçi scores it CRITICAL, because it changes Nöbetçi's own
+   app — here it's you, for an app you've just verified.)
 4. Allow notifications when macOS asks. You can change it later in **System Settings →
    Notifications**.
 
@@ -602,9 +613,15 @@ chmod +x Nobetci-x.y.z-linux-amd64.AppImage
 - **The island doesn't take the keyboard.** Clicking it leaves your terminal focused; only its text
   boxes (the assistant, the session search, the agenda, and the answer and note boxes on question
   and plan cards) take the keyboard, while you type in them.
+- **HIGH and CRITICAL are approved in the terminal.** X11 lets any program running as you click
+  through the real mouse, and nothing in such a click tells it from yours, so the island never
+  approves a HIGH or CRITICAL request on Linux. Its card says why and offers **Hand to terminal**
+  (**Hand to Cursor** for a Cursor request) and **Deny**: answer in the terminal, or in Cursor.
+  LOW and MEDIUM requests are approved on the island as everywhere else.
 - **The click guard** reads XInput2 raw events and asks the X server about the device behind every
   press: clicks from an XTEST device — what `xdotool` and similar tools use, including one a
-  program adds later — are refused.
+  program adds later — are refused. It can't catch a program that presses through the real mouse
+  device, which is why it only guards LOW and MEDIUM approvals here.
 - **Go to window** asks the window manager to raise the window that belongs to the session's
   process chain.
 - **The media card** works with every MPRIS player — Spotify, VLC, Firefox, Chromium, mpv with
@@ -630,7 +647,8 @@ on XWayland and sees only what X11 shows it:
   remote-desktop prompt; wlroots compositors (sway, Hyprland, river…) let any program inject
   through their virtual-pointer protocol, and there the guard can't tell such a click from yours.
 
-Logging in to an X11 session (where your desktop offers one) avoids all four.
+Logging in to an X11 session (where your desktop offers one) avoids all four. HIGH and CRITICAL
+requests are approved in the terminal on X11 too.
 
 ### Update
 
@@ -691,6 +709,9 @@ command.
 - **Start at login turned itself off.** Nöbetçi checks `~/.config/autostart/Nobetci.desktop` at
   every start; if your desktop's autostart settings removed it, the switch in **Settings →
   General** turns off to match. Switch it on again there.
+- **A HIGH or CRITICAL card has no Allow button.** That is on purpose on Linux (see
+  [What's different on Linux](#whats-different-on-linux)): choose **Hand to terminal** and answer
+  in the terminal, or deny the request.
 - **Approval refused: not a physical click.** Remote-desktop tools and `xdotool` send XTEST
   clicks, which the guard refuses. Use the real mouse, or switch off **Settings → Safety →
   Physical click guard** (LOW and MEDIUM only). If you swapped the mouse buttons (left-handed,
