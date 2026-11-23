@@ -256,7 +256,8 @@ enum LoginEntry {
 }
 
 /// Linux: reads Nöbetçi's XDG autostart entry, says whether the desktop
-/// switched it off, and points its `Exec=` at the program running now.
+/// switched it off, and points its `Exec=` at the program running now — the
+/// program alone: what the user wrote around it stays (`sys::login_entry_for`).
 #[cfg(target_os = "linux")]
 fn refresh_login_entry(app: &AppHandle) -> LoginEntry {
     // Where the autostart plugin keeps it, under the name it gives it.
@@ -278,7 +279,8 @@ fn refresh_login_entry(app: &AppHandle) -> LoginEntry {
         .map(std::path::PathBuf::from)
         .or_else(|| std::env::current_exe().ok())
         .map(|p| p.display().to_string());
-    if let Some(updated) = program.and_then(|program| sys::login_entry_for(&text, &program)) {
+    let exists = |path: &str| std::path::Path::new(path).exists();
+    if let Some(updated) = program.and_then(|program| sys::login_entry_for(&text, &program, exists)) {
         match std::fs::write(&file, updated) {
             Ok(()) => log::line("autostart: the login entry now starts this copy of Nöbetçi"),
             Err(err) => log::line(format!("autostart: could not refresh the login entry: {err}")),

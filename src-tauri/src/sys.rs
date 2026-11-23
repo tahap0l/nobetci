@@ -169,49 +169,221 @@ pub fn login_entry_switched_off(text: &str) -> bool {
     })
 }
 
-/// Linux: a login entry that starts `program`: the entry as it is when its
-/// `Exec=` already names it (None), otherwise with only that line rewritten,
-/// as the autostart plugin writes it. Every other line — the desktop's own
-/// keys, a delay, comments — stays.
+/// Linux: a login entry that starts `program`: None when its `Exec=` already
+/// does, however it is quoted; otherwise the entry with only the program in
+/// that line replaced (see `exec_starting`). Every other line — the
+/// desktop's own keys, a delay, comments — stays. `exists` says whether a
+/// path is there.
 #[cfg(any(target_os = "linux", test))]
-pub fn login_entry_for(text: &str, program: &str) -> Option<String> {
-    let current = entry_lines(text).find(|(key, _)| *key == "Exec").map(|(_, value)| value);
-    if current.is_some_and(|exec| exec.trim() == program) {
-        return None;
-    }
-    let exec = format!("Exec={program} ");
+pub fn login_entry_for(text: &str, program: &str, exists: impl Fn(&str) -> bool) -> Option<String> {
+    // As the autostart plugin writes it: `Exec=<program> <no arguments>`.
+    let written = format!("Exec={} ", exec_arg(program));
     let mut group = "";
-    let mut done = false;
+    let mut seen = false;
+    let mut changed = false;
     let mut out: Vec<String> = Vec::new();
     for line in text.lines() {
         let trimmed = line.trim();
         if trimmed.starts_with('[') {
-            if group == "[Desktop Entry]" && !done {
-                out.push(exec.clone());
-                done = true;
+            if group == "[Desktop Entry]" && !seen {
+                out.push(written.clone());
+                (seen, changed) = (true, true);
             }
             group = trimmed;
-        } else if group == "[Desktop Entry]"
-            && !done
-            && trimmed.split_once('=').is_some_and(|(k, _)| k.trim() == "Exec")
-        {
-            out.push(exec.clone());
-            done = true;
-            continue;
+        } else if group == "[Desktop Entry]" && !seen && !trimmed.starts_with('#') {
+            if let Some((key, value)) = line.split_once('=').filter(|(key, _)| key.trim() == "Exec") {
+                seen = true;
+                if let Some(value) = exec_starting(value, program, &exists) {
+                    out.push(format!("{key}={value}"));
+                    changed = true;
+                    continue;
+                }
+            }
         }
         out.push(line.to_string());
     }
-    if !done {
+    if !seen {
         if group != "[Desktop Entry]" {
             out.push("[Desktop Entry]".into());
         }
-        out.push(exec);
+        out.push(written);
+        changed = true;
+    }
+    if !changed {
+        return None;
     }
     let mut updated = out.join("\n");
     if text.ends_with('\n') {
         updated.push('\n');
     }
     Some(updated)
+}
+
+/// An `Exec=` value that starts `program`, made from `value` as written:
+/// None when it already does, or when it starts some other program that is
+/// still there (a wrapper script of the user's, `sh -c "sleep 10; …"`).
+/// Otherwise only the program is replaced — quoted if it must be — and what
+/// stands around it stays as written: `env GDK_SCALE=2` before it, its
+/// arguments after it.
+#[cfg(any(target_os = "linux", test))]
+fn exec_starting(value: &str, program: &str, exists: &dyn Fn(&str) -> bool) -> Option<String> {
+    let args = exec_args(value);
+    let Some(arg) = program_arg(&args) else {
+        return Some(format!("{} {} ", value.trim(), exec_arg(program)).trim_start().to_string());
+    };
+    if arg.value == program {
+        return None;
+    }
+    // The autostart plugin writes the path as it is, unquoted, so a path
+    // with a space in it reads as several arguments: take them together, up
+    // to the end of this program's path or of an AppImage's.
+    let raw = &value[arg.start..];
+    let (old, end) = match unquoted_path_len(raw, program) {
+        Some(len) if !raw.starts_with(['"', '\'']) && arg.start + len > arg.end => (&raw[..len], arg.start + len),
+        _ => (arg.value.as_str(), arg.end),
+    };
+    let file = old.rsplit('/').next().unwrap_or(old).to_lowercase();
+    let ours = old == program || file.ends_with(".appimage") || file.starts_with("nobetci");
+    // A bare command name (`sh`, `flatpak`) is looked up in PATH: there.
+    if !ours && (!old.starts_with('/') || exists(old)) {
+        return None;
+    }
+    Some(format!("{}{}{}", &value[..arg.start], exec_arg(program), &value[end..]))
+}
+
+/// The program among an `Exec=` value's arguments: after `env`, its options
+/// (with the name or folder `-u` and `-C` take) and the variables it sets.
+#[cfg(any(target_os = "linux", test))]
+fn program_arg(args: &[ExecArg]) -> Option<&ExecArg> {
+    let env = args.first().is_some_and(|a| a.value == "env");
+    let mut rest = args.iter().skip(usize::from(env));
+    while let Some(arg) = rest.next() {
+        let v = arg.value.as_str();
+        if env && matches!(v, "-u" | "--unset" | "-C" | "--chdir") {
+            rest.next();
+        } else if !(env && v.starts_with('-')) && !is_assignment(v) {
+            return Some(arg);
+        }
+    }
+    None
+}
+
+/// How long the path at the start of `raw` is, read as the plugin writes
+/// it (unquoted, spaces and all): `program` itself, or the first stretch
+/// that ends in `.AppImage` or in `program`'s own file name.
+#[cfg(any(target_os = "linux", test))]
+fn unquoted_path_len(raw: &str, program: &str) -> Option<usize> {
+    let ends_here = |len: usize| raw[len..].chars().next().is_none_or(char::is_whitespace);
+    if raw.starts_with(program) && ends_here(program.len()) {
+        return Some(program.len());
+    }
+    let name = format!("/{}", program.rsplit('/').next().unwrap_or(program));
+    raw.char_indices().map(|(at, c)| at + c.len_utf8()).find(|&len| {
+        let head = &raw[..len];
+        ends_here(len) && (head.to_lowercase().ends_with(".appimage") || head.ends_with(&name))
+    })
+}
+
+/// `NAME=value`, as `env` takes it.
+#[cfg(any(target_os = "linux", test))]
+fn is_assignment(arg: &str) -> bool {
+    arg.split_once('=').is_some_and(|(name, _)| {
+        name.starts_with(|c: char| c.is_ascii_alphabetic() || c == '_')
+            && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+    })
+}
+
+/// One argument of an `Exec=` value: what it says, and where it stands in
+/// the value as written.
+#[cfg(any(target_os = "linux", test))]
+struct ExecArg {
+    value: String,
+    start: usize,
+    end: usize,
+}
+
+/// The arguments of an `Exec=` value as the desktop reads it: the key file's
+/// escapes (`\s`, `\\`…) first, then the Exec quoting — whitespace outside
+/// quotes splits arguments; inside double quotes `\"`, `` \` ``, `\$` and
+/// `\\` stand for the character.
+#[cfg(any(target_os = "linux", test))]
+fn exec_args(value: &str) -> Vec<ExecArg> {
+    // The key file's escapes, each character with where it was written.
+    let mut chars: Vec<(char, usize, usize)> = Vec::new();
+    let mut it = value.char_indices().peekable();
+    while let Some((start, c)) = it.next() {
+        let escaped = match (c, it.peek().map(|&(_, next)| next)) {
+            ('\\', Some(next @ ('s' | 'n' | 't' | 'r' | '\\'))) => {
+                it.next();
+                Some(match next {
+                    's' => ' ',
+                    'n' => '\n',
+                    't' => '\t',
+                    'r' => '\r',
+                    _ => '\\',
+                })
+            }
+            _ => None,
+        };
+        let end = it.peek().map_or(value.len(), |&(at, _)| at);
+        chars.push((escaped.unwrap_or(c), start, end));
+    }
+    // The Exec quoting, read the way GLib and KDE split it (as a shell
+    // would): single quotes keep everything; outside quotes a backslash
+    // keeps the next character.
+    let mut args: Vec<ExecArg> = Vec::new();
+    let mut current: Option<ExecArg> = None;
+    let mut quote: Option<char> = None;
+    let mut i = 0;
+    while let Some(&(c, start, end)) = chars.get(i) {
+        i += 1;
+        if quote.is_none() && c.is_whitespace() {
+            args.extend(current.take());
+            continue;
+        }
+        let arg = current.get_or_insert(ExecArg { value: String::new(), start, end });
+        arg.end = end;
+        match (quote, c, chars.get(i).copied()) {
+            (None, '"' | '\'', _) => quote = Some(c),
+            (Some(q), _, _) if c == q => quote = None,
+            (None, '\\', Some((kept, _, kept_end)))
+            | (Some('"'), '\\', Some((kept @ ('"' | '`' | '$' | '\\'), _, kept_end))) => {
+                arg.value.push(kept);
+                arg.end = kept_end;
+                i += 1;
+            }
+            _ => arg.value.push(c),
+        }
+    }
+    args.extend(current);
+    args
+}
+
+/// `program` as an `Exec=` argument: as it is, or in double quotes when it
+/// holds a character the desktop would read otherwise — with the Exec escapes
+/// and then the key file's own (a `"` is written `\\"`, a `\` `\\\\`).
+#[cfg(any(target_os = "linux", test))]
+fn exec_arg(program: &str) -> String {
+    const RESERVED: &[char] =
+        &[' ', '\t', '\n', '"', '\'', '\\', '>', '<', '~', '|', '&', ';', '$', '*', '?', '#', '(', ')', '`'];
+    if !program.contains(RESERVED) {
+        return program.to_string();
+    }
+    let mut out = String::from("\"");
+    for c in program.chars() {
+        match c {
+            '"' | '`' | '$' => {
+                out.push_str(r"\\");
+                out.push(c);
+            }
+            '\\' => out.push_str(r"\\\\"),
+            '\n' => out.push_str(r"\n"),
+            '\t' => out.push_str(r"\t"),
+            _ => out.push(c),
+        }
+    }
+    out.push('"');
+    out
 }
 
 /// The `key=value` lines of a `.desktop` file's [Desktop Entry] group.
@@ -625,20 +797,82 @@ mod tests {
         }
         assert!(!login_entry_switched_off(&format!("{written}\nX-GNOME-Autostart-enabled=true")));
         assert!(!login_entry_switched_off("[Other Group]\nHidden=true\n"), "only the entry's own group counts");
+        let gone = |_: &str| false;
         // Already this program: left alone.
-        assert_eq!(login_entry_for(written, "/home/u/Apps/Nobetci.AppImage"), None);
+        assert_eq!(login_entry_for(written, "/home/u/Apps/Nobetci.AppImage", gone), None);
         // A moved AppImage: only Exec= changes; the user's delay and comment stay.
         let customised =
             "# mine\n[Desktop Entry]\nName=Nobetci\nExec=/old/Nobetci.AppImage \nX-GNOME-Autostart-Delay=10\n";
         assert_eq!(
-            login_entry_for(customised, "/new/Nobetci.AppImage").as_deref(),
+            login_entry_for(customised, "/new/Nobetci.AppImage", gone).as_deref(),
             Some("# mine\n[Desktop Entry]\nName=Nobetci\nExec=/new/Nobetci.AppImage \nX-GNOME-Autostart-Delay=10\n")
         );
         // An entry without Exec= gets one in its group.
         assert_eq!(
-            login_entry_for("[Desktop Entry]\nName=N\n[Extra]\nA=b\n", "/p/nobetci").as_deref(),
+            login_entry_for("[Desktop Entry]\nName=N\n[Extra]\nA=b\n", "/p/nobetci", gone).as_deref(),
             Some("[Desktop Entry]\nName=N\nExec=/p/nobetci \n[Extra]\nA=b\n")
         );
+    }
+
+    /// hooks-settings#2 (repair): what the user wrote around the program in
+    /// `Exec=` stays — `env`, arguments, quotes — and only a program path
+    /// that differs is replaced.
+    #[test]
+    fn a_customised_exec_line_keeps_what_the_user_wrote() {
+        let entry = |exec: &str| format!("[Desktop Entry]\nName=Nobetci\nExec={exec}\nX-GNOME-Autostart-Delay=10\n");
+        let gone: fn(&str) -> bool = |_| false;
+        // The review's three: already this program, so nothing to do.
+        for (exec, program) in [
+            ("env GDK_SCALE=2 /home/u/Apps/Nobetci.AppImage ", "/home/u/Apps/Nobetci.AppImage"),
+            ("/home/u/Apps/Nobetci.AppImage --minimized", "/home/u/Apps/Nobetci.AppImage"),
+            ("\"/home/u/My Apps/Nobetci.AppImage\"", "/home/u/My Apps/Nobetci.AppImage"),
+            ("env -u GTK_THEME LANG=tr_TR.UTF-8 /usr/bin/nobetci %U", "/usr/bin/nobetci"),
+        ] {
+            assert_eq!(login_entry_for(&entry(exec), program, gone), None, "{exec}");
+        }
+        // Moved: the program alone changes, quoted when it has a space.
+        for (exec, program, want) in [
+            (
+                "env GDK_SCALE=2 /old/Nobetci.AppImage --minimized",
+                "/new/My Apps/Nobetci.AppImage",
+                "env GDK_SCALE=2 \"/new/My Apps/Nobetci.AppImage\" --minimized",
+            ),
+            ("\"/old dir/Nobetci.AppImage\" --minimized", "/new/Nobetci.AppImage", "/new/Nobetci.AppImage --minimized"),
+            // The plugin writes a path unquoted: with a space in it, it reads
+            // as two arguments — taken together, and quoted from now on.
+            (
+                "/home/u/My Apps/Nobetci.AppImage ",
+                "/home/u/My Apps/Nobetci.AppImage",
+                "\"/home/u/My Apps/Nobetci.AppImage\" ",
+            ),
+            ("/home/u/Old Apps/Nobetci_2.4.0.AppImage ", "/home/u/Nobetci.AppImage", "/home/u/Nobetci.AppImage "),
+            ("/home/u/My Apps/nobetci --minimized", "/usr/bin/nobetci", "/usr/bin/nobetci --minimized"),
+            // Some other program that is gone: the entry would start nothing.
+            ("/home/u/gone/start-nobetci.sh", "/p/Nobetci.AppImage", "/p/Nobetci.AppImage"),
+        ] {
+            assert_eq!(login_entry_for(&entry(exec), program, gone), Some(entry(want)), "{exec}");
+        }
+        // A wrapper the user pointed it at is theirs while it is there; a
+        // command found in PATH is there.
+        let there: fn(&str) -> bool = |_| true;
+        for (exec, exists) in [
+            ("/home/u/bin/start-nobetci.sh", there),
+            ("sh -c \"sleep 10; /home/u/Nobetci.AppImage\"", gone),
+            ("flatpak run org.example.Wrapper", gone),
+        ] {
+            assert_eq!(login_entry_for(&entry(exec), "/p/Nobetci.AppImage", exists), None, "{exec}");
+        }
+        // Quoting as the desktop reads it, both ways.
+        for program in ["/opt/Nöbetçi/nobetci", "/a b/c", "/a\"b/c$d`e", "/a\\b c", "/tab\there"] {
+            let args = exec_args(&format!("{} --x", exec_arg(program)));
+            let read: Vec<&str> = args.iter().map(|a| a.value.as_str()).collect();
+            assert_eq!(read, [program, "--x"], "{}", exec_arg(program));
+        }
+        assert_eq!(exec_arg("/a b/c"), "\"/a b/c\"");
+        assert_eq!(exec_arg("/a\"b"), r#""/a\\"b""#);
+        let read: Vec<String> =
+            exec_args(r#"env A=1 "/x y/z" '/p q/r' a\sb "c\\\\d" e\"f"#).into_iter().map(|a| a.value).collect();
+        assert_eq!(read, ["env", "A=1", "/x y/z", "/p q/r", "a", "b", "c\\d", "e\"f"]);
     }
 
     #[test]
