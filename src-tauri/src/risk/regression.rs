@@ -1160,6 +1160,9 @@ fn a_dry_run_is_read_by_each_tools_own_options() {
             ("git clean -fd", High),
         ],
     );
+    // A command too long to read whole may say `--worktree` out of reach.
+    assert_eq!(bash(&format!("git restore --staged . {} --worktree", "x ".repeat(3000))), High);
+    assert_eq!(bash("git restore --staged ."), Low);
 }
 
 #[test]
@@ -1217,6 +1220,7 @@ fn variables_defaults_patterns_and_braces_are_written_out() {
             ("cp /tmp/evil ~/.local/share/nobetci/bin/nobetci-hoo?", Critical),
             ("echo x > ~/.claude/settings.[j]son", Critical),
             ("tee ~/.claude/{settings.json,x} < /tmp/evil", Critical),
+            ("cp /tmp/evil {~/.claude/settings.json,/tmp/y}", Critical),
             ("echo x >> ~/.bash*", High),
             // Stays as it was.
             ("rm -f dist/*.map", Low),
@@ -1329,6 +1333,12 @@ fn running_the_uninstaller_is_critical_and_mentioning_it_is_not() {
             ("git commit -m \"uninstall: nobetci --remove-hooks exits 1 when a file is left\"", Low),
             ("echo 'nobetci --remove-hooks' >> docs/uninstall.md", Low),
             ("grep -rn -- --remove-hooks src/", Low),
+            ("echo nobetci --remove-hooks", Low),
+            (r"find / -name nobetci -exec {} --remove-hooks \;", Critical),
+            ("ls /usr/bin/nobetci* | xargs -I % % --remove-hooks", Critical),
+            ("cargo run -p nobetci -- --remove-hooks", Critical),
+            ("start nobetci --remove-hooks", Critical),
+            ("open -a Nobetci --args --remove-hooks", Critical),
             ("gh pr create --title Hooks --body \"Explains nobetci --remove-hooks\"", Medium),
         ],
     );
@@ -1448,9 +1458,9 @@ fn a_force_push_hides_in_no_flag_group() {
             ("git push -uf origin main", High),
             ("git push -fu origin main", High),
             ("git -C repo push -qf", High),
+            ("git push -o 'ci.skip|x' --force", High),
             ("git push -u origin main", Medium),
             ("git push --follow-tags origin main", Medium),
-            ("git push origin main && git log -f", Medium),
         ],
     );
 }

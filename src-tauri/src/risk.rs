@@ -481,8 +481,8 @@ static COMMAND_RULES: LazyLock<Vec<Rule>> = LazyLock::new(|| {
             High,
             ("Zorla push: uzak geçmişi eziyor", "Force push: overwrites remote history"),
             Tag::None,
-            // `-f` alone or in a group (`-uf`, `-fu`), never past the command.
-            &format!(r"{GIT}push\b[^\n;&|]*(\s--force(-with-lease)?\b|\s-[a-z]*f[a-z]*\b|\s\+\S+)"),
+            // `-f` alone or in a group (`-uf`, `-fu`).
+            &format!(r"{GIT}push\b[^\n]*(\s--force(-with-lease)?\b|\s-[a-z]*f[a-z]*\b|\s\+\S+)"),
         ),
         rule(
             "git_destructive",
@@ -925,6 +925,11 @@ const SEGMENT_REACH: usize = 4096;
 /// The command a match sits in, up to the next `;`, `&`, `|` or line break,
 /// and no further than SEGMENT_REACH either way.
 fn segment(text: &str, at: Range<usize>) -> &str {
+    segment_and_cut(text, at).0
+}
+
+/// `segment`, and whether the reach cut it short of the command's ends.
+fn segment_and_cut(text: &str, at: Range<usize>) -> (&str, bool) {
     let mut lo = at.start.saturating_sub(SEGMENT_REACH);
     while !text.is_char_boundary(lo) {
         lo += 1;
@@ -935,7 +940,8 @@ fn segment(text: &str, at: Range<usize>) -> &str {
     }
     let start = text[lo..at.start].rfind([';', '&', '|', '\n']).map_or(lo, |i| lo + i + 1);
     let end = text[at.end..hi].find([';', '&', '|', '\n']).map_or(hi, |i| at.end + i);
-    &text[start..end]
+    let cut = start == lo && lo > 0 || end == hi && hi < text.len();
+    (&text[start..end], cut)
 }
 
 /// `--dry-run`, `git clean -n` and a draft release change nothing yet. Each
@@ -953,9 +959,13 @@ fn dry_run(text: &str, at: Range<usize>) -> bool {
     })
 }
 
-/// `git restore --staged` without `--worktree` puts the index back; the work stays.
+/// `git restore --staged` without `--worktree` puts the index back; the work
+/// stays. A command too long to read whole may say `--worktree` out of reach.
 fn only_unstages(text: &str, at: Range<usize>) -> bool {
-    let cmd = segment(text, at);
+    let (cmd, cut) = segment_and_cut(text, at);
+    if cut {
+        return false;
+    }
     let short = |w: &str, c: char| w.starts_with('-') && !w.starts_with("--") && w.contains(c);
     let staged = cmd.split_whitespace().any(|w| w == "--staged" || short(w, 'S'));
     let worktree = cmd.split_whitespace().any(|w| w == "--worktree" || short(w, 'W'));

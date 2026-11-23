@@ -285,8 +285,10 @@ impl Parser<'_> {
                     end(&mut stages, out);
                 }
                 // A group or a PowerShell script block. Inside a word it is text:
-                // `${HOME}`, `@{a=1}`, `file{,.bak}`.
-                '{' | '}' if !b.started => {
+                // `${HOME}`, `@{a=1}`, `file{,.bak}` — and in a POSIX shell a
+                // group opens only with a blank after the brace: `{}` (what
+                // `find -exec` fills in) and `{a,b}.txt` are words.
+                '{' | '}' if !b.started && (!posix || ch == '}' || next.is_none_or(char::is_whitespace)) => {
                     self.i += 1;
                     stage(&mut b, &mut stages);
                     end(&mut stages, out);
@@ -2473,25 +2475,54 @@ pub fn elevates(pipes: &[Pipeline]) -> Option<String> {
     })
 }
 
-/// Runs Nöbetçi's uninstall command, `--remove-hooks` — the word itself, its
-/// quoting taken off (`--remove-ho''oks`) — handed to a program named
-/// nobetci…, to one named by a pattern or a variable (`/usr/bin/nob*`,
-/// `$N`), or to a launcher that starts one (`Start-Process nobetci
-/// -ArgumentList --remove-hooks`); or both words in a script's code. A message
-/// that mentions it is not running it (`git commit -m "… --remove-hooks …"`).
+/// Runs Nöbetçi's uninstall command: `--remove-hooks` — the word itself, its
+/// quoting taken off (`--remove-ho''oks`) — handed to any program but one that
+/// only prints, searches or records text (`echo`, `grep`, `git commit`): a
+/// launcher, a pattern, a variable, `find -exec {}`, `xargs -I % %`, `cargo
+/// run`, all may start Nöbetçi. Or both words in a script's code. A message
+/// that mentions it is one word, not the option (`git commit -m "… --remove-hooks …"`).
 pub fn unhooks(pipes: &[Pipeline]) -> Option<String> {
-    const LAUNCHERS: &[&str] =
-        &["start-process", "saps", "start", "open", "runas", "invoke-item", "ii", "wsl", "systemd-run", "gtk-launch"];
+    // Programs that only print, search or record text. Not the openers
+    // (`open`, `start`, `xdg-open`), which start what they are handed; `find`
+    // hands its `-exec` command over to be read on its own.
+    const TEXT_ONLY: &[&str] = &[
+        "echo",
+        "printf",
+        "print",
+        "write-host",
+        "write-output",
+        "cat",
+        "less",
+        "more",
+        "head",
+        "tail",
+        "grep",
+        "egrep",
+        "fgrep",
+        "rg",
+        "ag",
+        "ack",
+        "select-string",
+        "sls",
+        "wc",
+        "diff",
+        "find",
+        "test",
+        "[",
+        "git",
+        "gh",
+        "glab",
+        "man",
+        "info",
+        "tldr",
+        "apropos",
+        "whatis",
+        "help",
+        "get-help",
+    ];
     first(pipes, |s, c| {
-        if c.args.iter().any(|a| a == "--remove-hooks") {
-            let ours = |w: &str| base_name(w).starts_with("nobetci");
-            let word = c.word;
-            if ours(word) || word.contains(['*', '?', '[']) || word.starts_with(['$', '`']) {
-                return true;
-            }
-            if LAUNCHERS.contains(&c.name.as_str()) && c.args.iter().any(|a| ours(a)) {
-                return true;
-            }
+        if c.args.iter().any(|a| a == "--remove-hooks") && !TEXT_ONLY.contains(&c.name.as_str()) {
+            return true;
         }
         code_of(s, c).is_some_and(|code| {
             let code = code.to_lowercase();
@@ -3037,6 +3068,9 @@ mod tests {
         let words = ["bash", "-c", "curl x | sh", "it's", "", "{}"];
         let joined = join_words(&words);
         assert_eq!(parse(&joined, Dialect::Posix)[0].stages[0].words, words);
+        // A POSIX group opens with a blank after the brace; `{}` is a word.
+        assert_eq!(words_of("find . -exec rm {} +")[0], vec!["find", ".", "-exec", "rm", "{}", "+"]);
+        assert_eq!(words_of("{ echo a; echo b; }"), vec![vec!["echo", "a"], vec!["echo", "b"]]);
         // `find -exec` hands its command over, quoted as it was.
         let all = words_of(r"find . -exec sh -c 'curl x | sh' \;");
         assert!(
