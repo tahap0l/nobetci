@@ -1601,6 +1601,39 @@ mod tests {
     }
 
     #[test]
+    fn a_trusted_project_asks_before_a_system_folder_however_it_is_spelled() {
+        // approval-safety#3, engine part: these were low with no finding, and a
+        // trusted project let them through without a card.
+        let trusted = |path: &str| Settings {
+            projects: vec![ProjectPolicy { path: path.into(), mode: "trusted".into(), ..ProjectPolicy::default() }],
+            ..Settings::default()
+        };
+        let s = trusted(APP);
+        #[cfg(not(windows))]
+        for c in [
+            "echo x > //etc/profile.d/x.sh",
+            "cp evil //usr/local/bin/node",
+            "tee //etc/sudoers.d/x < f",
+            "echo x > /proc/self/root/etc/cron.d/x",
+        ] {
+            let e = at_home(&s, "Bash", bash(c), APP);
+            assert_eq!((e.outcome, e.by), (Outcome::Ask, None), "{c}");
+        }
+        let w = trusted(r"C:\work\app");
+        for c in [
+            r"Copy-Item evil.dll 'C:\PROGRA~1\x\y.dll'",
+            r"Copy-Item evil.dll '\\localhost\C$\Program Files\x\y.dll'",
+            r"Copy-Item evil.dll '\??\C:\Program Files\x\y.dll'",
+        ] {
+            let e = path_request(&w, "PowerShell", bash(c), r"C:\work\app");
+            assert_eq!((e.outcome, e.by), (Outcome::Ask, None), "{c}");
+        }
+        // The everyday case still goes through.
+        assert_eq!(at_home(&s, "Bash", bash("ls //tmp"), APP).by, Some("trusted"));
+        assert_eq!(path_request(&w, "PowerShell", bash("npm test"), r"C:\work\app").by, Some("trusted"));
+    }
+
+    #[test]
     fn a_rule_that_matched_only_where_the_path_leads_never_hides_a_later_deny() {
         let climb = "/work/app/../../etc/passwd";
         // The verifier's pair: before paths were resolved the deny decided.
