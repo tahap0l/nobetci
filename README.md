@@ -272,8 +272,8 @@ X11 — a compositing window manager, because the island is a transparent window
 and Cinnamon composite by themselves; on Xfce turn on **Window Manager Tweaks → Compositor**, and
 on a bare window manager run a compositor such as `picom`. Without one, Nöbetçi cuts its window
 down to the island (square corners, no shadow; up to 2.4.1 it showed as a black box at the top of
-the screen), and the desktop mascot sits on a black square, so start a compositor or switch the
-mascot off.
+the screen), and the desktop mascot's window down to the mascot and a narrow edge around it (up to
+2.4.1 it sat on a black square); a compositor gives both their full look.
 
 1. Download `Nobetci-x.y.z-linux-amd64.deb` (Debian, Ubuntu, Mint…) or
    `Nobetci-x.y.z-linux-amd64.AppImage` (any distribution) and `SHA256SUMS.txt` from the
@@ -589,12 +589,19 @@ How patterns match:
   `Write /work/app/*` doesn't cover `/work/app/../../etc/hosts`, and `Write ~/*` doesn't cover
   `~/../../etc/x`, which is `/etc/x`. A path that climbs above a folder Nöbetçi can't place (another
   user's `~bob`, `%APPDATA%`) is never let through that way. Deny, always-ask and raising rules
-  match either spelling — and the ones the system reads as the same file, such as `//etc/x`,
-  `\\?\C:\x` or a name with a trailing dot — so they also catch a path that climbs into their
+  match the path as written or where it leads, so they also catch a path that climbs into their
   folder, and one written from the project (`src/secrets/*`) catches the same file spelled in full.
-  A "don't ask again" grant for a relative path covers that one file, not the same name in another
-  folder, and a Glob request is shown and matched as its pattern under its folder
-  (`/work/app/src/**/*.rs`).
+  They also match these other spellings of it: repeated leading slashes (`//etc/x`), a process's
+  root folder on Linux (`/proc/self/root/etc/x`), `/private/etc/x` on macOS, Windows device and
+  object-manager paths (`\\?\C:\x`, `\\.\C:\x`, `\??\C:\x`, `\\?\UNC\server\share\x`), this
+  computer's administrative shares (`\\localhost\C$\x`, `\\127.0.0.1\C$\x`), trailing dots, spaces
+  and `::$DATA` on Windows names (`C:\Windows.\x`), and an 8.3 short name of a folder or file the
+  rule names (`C:\PROGRA~1\x` for `C:\Program Files\*`). Nothing else: links, junctions, mount
+  points, substituted drives, a share reached by the computer's own name and short names of
+  folders the rule doesn't name aren't followed, and a rule on a command matches the command's
+  text as written. A "don't ask again" grant for a relative path covers that one file, not the
+  same name in another folder, and a Glob request is shown and matched as its pattern under its
+  folder (`/work/app/src/**/*.rs`).
 
 The templates are a good start: allow `npm test` and read-only git commands, forbid
 `git push --force` and package publishing, keep Claude away from `.env` files, make `rm -rf`
@@ -627,7 +634,8 @@ for example), and is safe to open: cells that would be read as formulas are defu
 The history lives in `audit.jsonl` in Nöbetçi's data folder (see [Development](#development)),
 rolls over to `audit.1.jsonl` at 10 MB (adjustable), and can be switched off or cleared in
 **Settings → History**. A damaged line is skipped, never the whole file, and on macOS and Linux
-only your account can read it.
+only your account can read it — except on a file system without Unix permissions (FAT, exFAT, some
+network shares), where Nöbetçi uses the folder as it is and says so in its log.
 
 ### Hotkeys
 

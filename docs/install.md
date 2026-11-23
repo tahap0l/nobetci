@@ -579,7 +579,7 @@ troubleshooting (sections 4–7 and 11) work the same way on Linux.
 | --- | --- |
 | Distribution | x86-64 with WebKitGTK 4.1: Ubuntu 22.04+, Debian 12+, Fedora 38+, Arch… |
 | Desktop | X11, or Wayland through XWayland (GNOME, KDE Plasma, Xfce, Cinnamon…) — see [Wayland](#wayland) |
-| Compositor | On X11, a compositing window manager: the island is a transparent window. GNOME, KDE Plasma and Cinnamon have one built in; on Xfce turn on **Window Manager Tweaks → Compositor**; on a bare window manager run one such as `picom`. Without one, Nöbetçi cuts its window down to the island (square corners, no shadow), but the desktop mascot sits on a black square |
+| Compositor | On X11, a compositing window manager: the island is a transparent window. GNOME, KDE Plasma and Cinnamon have one built in; on Xfce turn on **Window Manager Tweaks → Compositor**; on a bare window manager run one such as `picom`. Without one, Nöbetçi cuts its window down to the island (square corners, no shadow), and the desktop mascot's down to the mascot and a narrow edge around it |
 | Tray | GNOME needs the AppIndicator extension (Ubuntu has it already); most other desktops have a tray |
 
 ### Install
@@ -609,10 +609,13 @@ chmod +x Nobetci-x.y.z-linux-amd64.AppImage
 
 - **The window runs through X11.** Under Wayland, Nöbetçi starts itself on XWayland so the island
   can sit at the top of the screen and stay above other windows. Programs it opens for you — a link
-  in your browser, VS Code, the file manager — start the way they always do, natively on Wayland.
+  in your browser, VS Code, the file manager — start the way they always do, natively on Wayland,
+  and from the AppImage they get your desktop's own settings, not the ones the AppImage set up for
+  itself (its GTK theme and modules, its GStreamer plugins).
 - **The island doesn't take the keyboard.** Clicking it leaves your terminal focused; only its text
   boxes (the assistant, the session search, the agenda, and the answer and note boxes on question
-  and plan cards) take the keyboard, while you type in them.
+  and plan cards) take the keyboard, while you type in them. When you leave the box — close it, or
+  let the island fold — the keyboard goes back to the window that had it before.
 - **HIGH and CRITICAL are approved in the terminal.** X11 lets any program running as you click
   through the real mouse, and nothing in such a click tells it from yours, so the island never
   approves a HIGH or CRITICAL request on Linux. Its card says why and offers **Hand to terminal**
@@ -655,8 +658,9 @@ requests are approved in the terminal on X11 too.
 Download the new files and check them as above. Quit Nöbetçi from the tray, then install the new
 `.deb` with `sudo apt install ./Nobetci-x.y.z-linux-amd64.deb`, or replace the AppImage. If
 **Start at login** is on and the new AppImage has a different file name, start the new one once by
-hand: Nöbetçi points its login entry at the AppImage it was started from. Settings, agenda, history
-and hooks stay.
+hand: Nöbetçi points its login entry at the AppImage it was started from. Only that path changes in
+the entry's `Exec=` line; what you added around it (`env …`, `--minimized`) stays, and a wrapper
+script of your own there is left alone. Settings, agenda, history and hooks stay.
 
 ### Uninstall
 
@@ -698,17 +702,18 @@ command.
 
 - **A black box at the top of the screen, or square corners.** There is no compositor, so the
   island can't be transparent. Versions after 2.4.1 cut the window down to the island instead
-  (square corners, no shadow) and say so once in the log; the desktop mascot still shows on a
-  black square. Turn on your desktop's compositor or start one (`picom`, `xcompmgr`), and Nöbetçi
-  switches to the full look by itself; or switch the desktop mascot off.
+  (square corners, no shadow), and the desktop mascot's down to the mascot and a narrow edge around
+  it, and say so once in the log. Turn on your desktop's compositor or start one (`picom`,
+  `xcompmgr`), and Nöbetçi switches to the full look by itself.
 - **No tray icon on GNOME.** Install and enable the AppIndicator extension.
 - **No sounds from the AppImage.** AppImages up to 2.4.1 carry no GStreamer audio plugins; later
   ones do. Use the `.deb`, or a newer AppImage.
 - **Shortcuts, Go to window or full-screen quiet don't work.** You are probably on Wayland: see
   [Wayland](#wayland).
 - **Start at login turned itself off.** Nöbetçi checks `~/.config/autostart/Nobetci.desktop` at
-  every start; if your desktop's autostart settings removed it, the switch in **Settings →
-  General** turns off to match. Switch it on again there.
+  every start; if your desktop's autostart settings removed it or switched it off (`Hidden=true`,
+  `X-GNOME-Autostart-enabled=false`), the switch in **Settings → General** turns off to match.
+  Switch it on again there.
 - **A HIGH or CRITICAL card has no Allow button.** That is on purpose on Linux (see
   [What's different on Linux](#whats-different-on-linux)): choose **Hand to terminal** and answer
   in the terminal, or deny the request.

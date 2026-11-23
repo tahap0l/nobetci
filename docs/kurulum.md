@@ -585,7 +585,7 @@ Kurulum sihirbazı, Claude Code'a bağlama, deneme, önerilen ayarlar ve sorun g
 | --- | --- |
 | Dağıtım | WebKitGTK 4.1 olan x86-64: Ubuntu 22.04+, Debian 12+, Fedora 38+, Arch… |
 | Masaüstü | X11 ya da XWayland üzerinden Wayland (GNOME, KDE Plasma, Xfce, Cinnamon…) — bkz. [Wayland](#wayland) |
-| Bileşikleştirici | X11'de bileşikleştirme yapan bir pencere yöneticisi: ada saydam bir penceredir. GNOME, KDE Plasma ve Cinnamon'da hazır gelir; Xfce'de pencere yöneticisinin ince ayarlarındaki (**Window Manager Tweaks**) **Compositor** sekmesinden aç; yalın bir pencere yöneticisinde `picom` gibi birini çalıştır. Yoksa Nöbetçi penceresini adanın kendisine kırpar (köşeler kare, gölge yok), ama masaüstü maskotu siyah bir karenin üstünde durur |
+| Bileşikleştirici | X11'de bileşikleştirme yapan bir pencere yöneticisi: ada saydam bir penceredir. GNOME, KDE Plasma ve Cinnamon'da hazır gelir; Xfce'de pencere yöneticisinin ince ayarlarındaki (**Window Manager Tweaks**) **Compositor** sekmesinden aç; yalın bir pencere yöneticisinde `picom` gibi birini çalıştır. Yoksa Nöbetçi penceresini adanın kendisine (köşeler kare, gölge yok), masaüstü maskotunun penceresini de maskota ve çevresindeki dar bir kenara kırpar |
 | Tepsi | GNOME'da AppIndicator eklentisi gerekir (Ubuntu'da zaten var); diğer masaüstlerinin çoğunda tepsi var |
 
 ### Kurulum
@@ -614,10 +614,13 @@ chmod +x Nobetci-x.y.z-linux-amd64.AppImage
 
 - **Pencere X11 üzerinden çalışır.** Wayland'de Nöbetçi kendini XWayland'de başlatır; böylece ada
   ekranın üstüne yerleşip diğer pencerelerin üstünde kalabilir. Senin için açtığı programlar —
-  tarayıcıda bir bağlantı, VS Code, dosya yöneticisi — her zamanki gibi, doğrudan Wayland'de açılır.
+  tarayıcıda bir bağlantı, VS Code, dosya yöneticisi — her zamanki gibi, doğrudan Wayland'de açılır;
+  AppImage'dan açıldıklarında da AppImage'ın kendisi için kurduğu ayarları (GTK teması ve
+  modülleri, GStreamer eklentileri) değil, masaüstünün kendi ayarlarını alırlar.
 - **Ada klavyeyi almaz.** Ona tıklamak terminalini odakta bırakır; klavyeyi yalnızca yazı kutuları
   (asistan, oturum araması, ajanda ve soru ile plan kartlarındaki cevap ve not kutuları), sen
-  içlerine yazarken alır.
+  içlerine yazarken alır. Kutudan çıkınca — onu kapatınca ya da ada katlanınca — klavye önceden
+  kendisinde olan pencereye geri döner.
 - **YÜKSEK ve KRİTİK terminalde onaylanır.** X11, senin hesabınla çalışan her programın gerçek fare
   üzerinden tıklamasına izin verir ve böyle bir tıklamayı seninkinden ayıran hiçbir şey yoktur; bu
   yüzden ada Linux'ta YÜKSEK ya da KRİTİK bir isteği asla onaylamaz. Kartı nedenini söyler ve
@@ -661,8 +664,9 @@ KRİTİK istekler X11'de de terminalde onaylanır.
 Yeni dosyaları indirip yukarıdaki gibi doğrula. Nöbetçi'den tepsiden çık, sonra yeni `.deb`'i
 `sudo apt install ./Nobetci-x.y.z-linux-amd64.deb` ile kur ya da AppImage'ı değiştir. **Oturum
 açınca başlat** açıksa ve yeni AppImage'ın dosya adı farklıysa yenisini bir kez elle aç: Nöbetçi
-oturum açılış kaydını başlatıldığı AppImage'a yönlendirir. Ayarlar, ajanda, geçmiş ve hook'lar
-korunur.
+oturum açılış kaydını başlatıldığı AppImage'a yönlendirir. Kaydın `Exec=` satırında yalnızca bu yol
+değişir; onun çevresine senin eklediklerin (`env …`, `--minimized`) kalır, oraya kendi yazdığın
+bir sarmalayıcı betik koyduysan ona dokunulmaz. Ayarlar, ajanda, geçmiş ve hook'lar korunur.
 
 ### Kaldırma
 
@@ -703,10 +707,10 @@ hook hatası bildirir, Cursor da her kabuk ve MCP komutunu engeller.
 ### Linux'ta sorun giderme
 
 - **Ekranın üstünde siyah bir kutu ya da kare köşeler.** Bileşikleştirici yok, bu yüzden ada
-  saydam olamıyor. 2.4.1'den sonraki sürümler pencereyi adanın kendisine kırpar (köşeler kare,
-  gölge yok) ve bunu kayıt dosyasına bir kez yazar; masaüstü maskotu yine siyah bir karenin
-  üstünde görünür. Masaüstünün bileşikleştiricisini aç ya da bir tane başlat (`picom`,
-  `xcompmgr`); Nöbetçi tam görünüme kendiliğinden geçer. Ya da masaüstü maskotunu kapat.
+  saydam olamıyor. 2.4.1'den sonraki sürümler pencereyi adanın kendisine (köşeler kare, gölge
+  yok), masaüstü maskotunun penceresini de maskota ve çevresindeki dar bir kenara kırpar ve
+  bunu kayıt dosyasına bir kez yazar. Masaüstünün bileşikleştiricisini aç ya da bir tane başlat
+  (`picom`, `xcompmgr`); Nöbetçi tam görünüme kendiliğinden geçer.
 - **GNOME'da tepsi simgesi yok.** AppIndicator eklentisini kur ve etkinleştir.
 - **AppImage'dan ses gelmiyor.** 2.4.1'e kadarki AppImage'lar GStreamer ses eklentilerini taşımaz;
   sonrakiler taşır. `.deb`'i ya da daha yeni bir AppImage'ı kullan.
@@ -714,7 +718,8 @@ hook hatası bildirir, Cursor da her kabuk ve MCP komutunu engeller.
   Wayland'desin: bkz. [Wayland](#wayland).
 - **Oturum açınca başlat kendiliğinden kapandı.** Nöbetçi her açılışta
   `~/.config/autostart/Nobetci.desktop` dosyasına bakar; masaüstünün otomatik başlatma ayarları onu
-  kaldırdıysa **Ayarlar → Genel**'deki anahtar da buna uyup kapanır. Oradan yeniden aç.
+  kaldırdıysa ya da kapattıysa (`Hidden=true`, `X-GNOME-Autostart-enabled=false`) **Ayarlar →
+  Genel**'deki anahtar da buna uyup kapanır. Oradan yeniden aç.
 - **YÜKSEK ya da KRİTİK bir kartta İzin ver düğmesi yok.** Linux'ta bu bilerek böyle (bkz.
   [Linux'ta neler farklı](#linuxta-neler-farklı)): **Terminale bırak**'ı seçip terminalde cevap ver
   ya da isteği reddet.

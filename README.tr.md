@@ -273,8 +273,9 @@ bileşikleştirici (compositor) gerekir, çünkü ada saydam bir penceredir. GNO
 Cinnamon bunu kendileri yapar; Xfce'de pencere yöneticisinin ince ayarlarındaki (**Window Manager
 Tweaks**) **Compositor** sekmesinden bileşikleştirmeyi aç, yalın bir pencere yöneticisinde `picom`
 gibi bir bileşikleştirici çalıştır. Yoksa Nöbetçi penceresini adanın kendisine kırpar (köşeler kare,
-gölge yok; 2.4.1'e kadar ekranın üstünde siyah bir kutu görünüyordu) ve masaüstü maskotu siyah bir
-karenin üstünde durur; bu yüzden bir bileşikleştirici başlat ya da maskotu kapat.
+gölge yok; 2.4.1'e kadar ekranın üstünde siyah bir kutu görünüyordu), masaüstü maskotunun penceresini
+de maskota ve çevresindeki dar bir kenara kırpar (2.4.1'e kadar siyah bir karenin üstünde duruyordu);
+ikisinin de tam görünümü için bir bileşikleştirici gerekir.
 
 1. [Son sürümden](https://github.com/tahap0l/nobetci/releases/latest)
    `Nobetci-x.y.z-linux-amd64.deb` (Debian, Ubuntu, Mint…) ya da
@@ -596,13 +597,21 @@ Desenler nasıl eşleşir:
   dışarı tırmanamaz: `Write /work/app/*`, `/work/app/../../etc/hosts`'u kapsamaz; `Write ~/*` da
   aslında `/etc/x` olan `~/../../etc/x`'i kapsamaz. Nöbetçi'nin yerini bilemediği bir klasörün
   (başka bir kullanıcının `~bob`'u, `%APPDATA%`) üstüne tırmanan bir yol böyle bir kuralla asla
-  geçmez. Yasaklayan, her zaman sorduran ve seviyeyi yükselten kuralların ise iki yazılıştan biriyle
-  — ya da sistemin aynı dosya diye okuduğu `//etc/x`, `\\?\C:\x` veya sonunda nokta olan bir ad gibi
-  yazılışlardan biriyle — eşleşmesi yeter; böylece klasörlerine tırmanarak giren bir yolu da
-  yakalarlar ve projeye göre yazılmış böyle bir kural (`src/secrets/*`) aynı dosyayı tam yoluyla
-  yazıldığında da yakalar. Göreli bir yol için "tekrar sorma" izni yalnızca o dosyayı kapsar, başka
-  bir klasördeki aynı adı değil; bir Glob isteği de klasörünün altına yazılmış deseniyle
-  (`/work/app/src/**/*.rs`) gösterilir ve eşleştirilir.
+  geçmez. Yasaklayan, her zaman sorduran ve seviyeyi yükselten kuralların ise yolla yazıldığı ya da
+  vardığı hâliyle eşleşmesi yeter; böylece klasörlerine tırmanarak giren bir yolu da yakalarlar ve
+  projeye göre yazılmış böyle bir kural (`src/secrets/*`) aynı dosyayı tam yoluyla yazıldığında da
+  yakalar. Bu kurallar yolun şu başka yazılışlarıyla da eşleşir: baştaki fazladan eğik çizgiler
+  (`//etc/x`), Linux'ta bir sürecin kök klasörü (`/proc/self/root/etc/x`), macOS'ta `/private/etc/x`,
+  Windows aygıt ve nesne yöneticisi yolları (`\\?\C:\x`, `\\.\C:\x`, `\??\C:\x`,
+  `\\?\UNC\sunucu\paylasim\x`), bu bilgisayarın yönetim paylaşımları (`\\localhost\C$\x`,
+  `\\127.0.0.1\C$\x`), Windows adlarının sonundaki nokta, boşluk ve `::$DATA` (`C:\Windows.\x`) ve
+  kuralın adını verdiği bir klasörün ya da dosyanın 8.3 kısa adı (`C:\Program Files\*` için
+  `C:\PROGRA~1\x`). Başkası değil: bağlantılar (symlink), junction'lar, bağlama noktaları, subst
+  sürücüleri, bilgisayarın kendi adıyla ulaşılan paylaşımlar ve kuralın adını vermediği klasörlerin
+  kısa adları izlenmez; bir komut kuralı da komutun metniyle yazıldığı gibi eşleşir. Göreli bir yol
+  için "tekrar sorma" izni yalnızca o dosyayı kapsar, başka bir klasördeki aynı adı değil; bir Glob
+  isteği de klasörünün altına yazılmış deseniyle (`/work/app/src/**/*.rs`) gösterilir ve
+  eşleştirilir.
 
 Şablonlar iyi bir başlangıç: `npm test`'e ve salt okuyan git komutlarına izin ver, `git push --force`
 ve paket yayınlamayı yasakla, Claude'u `.env` dosyalarından uzak tut, `rm -rf`'yi her zaman
@@ -638,6 +647,8 @@ Geçmiş, Nöbetçi'nin veri klasöründeki `audit.jsonl` dosyasında durur (bkz
 [Geliştirme](#geliştirme)); dosya 10 MB'a ulaşınca (ayarlanabilir) eski kayıtlar `audit.1.jsonl`'e
 taşınır. **Ayarlar → Geçmiş**'ten kapatılabilir ya da temizlenebilir. Bozuk bir satır dosyanın
 tamamını değil yalnız kendini kaybettirir; macOS ve Linux'ta dosyayı yalnız senin hesabın okuyabilir.
+Unix izinleri olmayan bir dosya sistemi (FAT, exFAT, bazı ağ paylaşımları) bunun dışındadır: orada
+Nöbetçi klasörü olduğu gibi kullanır ve bunu kayıt dosyasına yazar.
 
 ### Kısayollar
 

@@ -126,11 +126,14 @@ the app, and not in what the relay understands.
 **Nothing HIGH or CRITICAL is approved automatically.** Rules, trusted projects and "don't ask
 again in this session" grants are capped in Rust (`src-tauri/src/rules.rs`). The auto-allow
 ceiling can be off, LOW or MEDIUM, and a hand-edited settings file can't raise it further
-(`src-tauri/src/settings.rs` sanitises it on load). A rule may re-score a false alarm, but a
-CRITICAL finding never drops below HIGH, and the cap also looks at the engine's own level: a
-request the engine scored HIGH that a rule lowered to LOW becomes a plain click — never an
-automatic pass, never something the allow hotkey or a batch approval can take. Rules may always
-deny.
+(`src-tauri/src/settings.rs` sanitises it on load). A settings file that can be read only in part
+can't widen anything either: when a rule that was switched on, or a project that wasn't trusted,
+can't be read, allow rules and rules that lower a risk to LOW are off and trusted projects count
+as normal until the file is fixed, and a ceiling that can't be read is off. A rule may re-score a
+false alarm, but a CRITICAL finding never drops below HIGH, and the cap also looks at the engine's
+own level: a request the engine scored HIGH that a rule lowered to LOW becomes a plain click —
+never an automatic pass, never something the allow hotkey or a batch approval can take. Rules may
+always deny.
 
 **Rules mean what they say.** A *starts with* pattern ends at a word boundary, glob patterns cross
 line breaks, and a loose pattern (*starts with*, *contains*, glob or empty) that allows or lowers a
@@ -143,11 +146,17 @@ the level and a "don't ask again" grant have to match the path both as written a
 leads once `..`, `.`, `~`, `$HOME` and relative parts are resolved — an allow rule for `/work/app/*`
 doesn't cover `/work/app/../../etc/hosts`, nor one for `~/*` cover `~/../../etc/x` — and a path that
 climbs above a folder Nöbetçi can't place (another user's `~bob`, `%APPDATA%`) never passes that
-way. Deny, always-ask and raising rules match the path as written or as resolved, and in the other
-spellings the system reads as the same file (`//etc/x`, `\\?\C:\x`, a name with a trailing dot or
-space). The first rule that matches decides, except that one which matched a path only where it
-leads, and doesn't deny, never hides a deny rule further down: resolving a path can't turn your deny
-into a question.
+way. Deny, always-ask and raising rules match the path as written or where it leads, and these
+other spellings of it: repeated leading slashes (`//etc/x`), a process's root folder on Linux
+(`/proc/self/root/etc/x`), `/private/etc/x` on macOS, Windows device and object-manager paths
+(`\\?\C:\x`, `\\.\C:\x`, `\??\C:\x`, `\\?\UNC\server\share\x`), this computer's administrative
+shares (`\\localhost\C$\x`, `\\127.0.0.1\C$\x`), trailing dots, spaces and `::$DATA` on Windows
+names (`C:\Windows.\x`), and an 8.3 short name of a folder or file the rule names (`C:\PROGRA~1\x`
+for `C:\Program Files\*`). Nothing else: links, junctions, mount points, substituted drives, a
+share reached by the computer's own name and short names of folders the rule doesn't name aren't
+followed, and a rule on a command matches the command's text as written. The first rule that
+matches decides, except that one which matched a path only where it leads, and doesn't deny, never
+hides a deny rule further down: resolving a path can't turn your deny into a question.
 
 **What you see is what runs.** The relay forwards every field of a permission request whole, up to
 64 KiB. Anything longer is cut, flagged and scored HIGH, with a finding telling you to review the
@@ -165,7 +174,8 @@ Write and edit requests show the whole content, and every edit of a multi-edit. 
   characters, line and paragraph separators, the zero-width no-break space, control characters
   and a lone carriage return — are shown as visible markers such as `⟦U+202E⟧`; in a command, or
   in content about to be written, they also score HIGH (a zero-width joiner inside an emoji or a
-  Persian or Indic word is ordinary text and doesn't);
+  Persian or Indic word is ordinary text and doesn't, nor do the tag characters that make the
+  England, Scotland and Wales flags; any other run of tag characters does);
 - runs of four or more blank lines, or 40 or more spaces, are collapsed into visible markers such
   as `⟦12 blank lines⟧` — no-break, wide and ideographic spaces count as blanks too; in a command,
   twelve blank lines or 120 spaces with more text after them score HIGH as an attempt to push part
@@ -270,17 +280,19 @@ command rather than run it unreviewed.
 a diff first, saves a dated backup, merges without touching other settings or other tools' hooks,
 writes only after an explicit click, and refuses if the file changed since the preview. What is
 written is exactly what the preview showed: the diff is computed on the file's own text, so any
-other reformatting would show in it too, the file keeps its key order, and a backup is announced
-only when there is a file to back up. Writes go to a temporary file that is renamed over the
-original — for a symbolic link, over the file it points to, so the link stays a link — and a file
-that can't be read or parsed is never overwritten. Codex's and Cursor's `hooks.json` are handled
+other reformatting would show in it too — a change of line endings is named at the top of the
+diff, which then shows each carriage return as `␍` — the file keeps its key order, and a backup is
+announced only when there is a file to back up. Writes go to a temporary file that is renamed over
+the original — for a symbolic link, over the file it points to, so the link stays a link — and a
+file that can't be read or parsed is never overwritten. Codex's and Cursor's `hooks.json` are handled
 the same way. When Claude Code keeps its settings elsewhere with an absolute `CLAUDE_CONFIG_DIR`,
 Nöbetçi writes `$CLAUDE_CONFIG_DIR/settings.json` instead, provided Nöbetçi itself sees that
 variable; Settings → Claude Code shows which file it uses.
 
 `nobetci --remove-hooks` is the one path without a preview. The Windows uninstaller runs it, and on
 macOS and Linux you run it by hand before deleting the app. It removes only Nöbetçi's own hook
-commands — never another tool's hook, even one that shares a matcher group with Nöbetçi's — from
+commands — those whose program is the relay, also when an older version wrote its Windows 8.3
+short name — never another tool's hook, even one that shares a matcher group with Nöbetçi's — from
 `~/.claude/settings.json`, Codex's `hooks.json` and `~/.cursor/hooks.json`, keeps a dated backup of
 each, and prints one line per file in a terminal on macOS and Linux (on Windows, where it has no
 console, `nobetci.log` notes each file it cleaned or couldn't clean). It exits with status 1 when a
@@ -302,7 +314,11 @@ settings (`settings.json` or `settings.local.json` in `~/.claude`, or in the fol
   `curl -o`, `wget -O`, `sed -i`, `chmod`, `rm`, `dd of=`, an editor or a one-liner in a scripting
   language — and a program Nöbetçi doesn't know, handed one of those paths, counts as writing
   there. Reading those files stays LOW;
-- `nobetci --remove-hooks`, by any path, is CRITICAL;
+- `nobetci --remove-hooks` is CRITICAL by any path and however it is run — piped into a shell,
+  through `xargs`, `$(…)` or a variable, or from an option of git, `script`, `tmux` or `env -S`
+  that runs commands. A line that only names it in text it prints, searches or records (`echo`,
+  `grep`, `git commit -m`, `gh pr create --body`), and runs nothing that is handed that text, isn't
+  scored CRITICAL for it;
 - stopping or uninstalling it (`taskkill`, `pkill`, `launchctl bootout`, `systemctl --user stop`,
   a package manager's remove…) is HIGH.
 
@@ -310,7 +326,11 @@ Paths are resolved against the session's folder first, so `.claude//settings.jso
 `..` and relative paths meet the same rules as the plain spelling, `~/..` and `$HOME/..` lead out
 of the home folder to where they really point (`~/../../etc/x` is `/etc/x`), and a `cd` earlier in
 the command is followed: `cd ~/.claude` and then `> settings.json` is a write to Claude Code's
-settings.
+settings. The other spellings a system accepts for a path count as that path too: repeated leading
+slashes (`//etc`) on Linux and macOS, a process's root folder (`/proc/self/root/…`) on Linux,
+Windows device and object-manager paths (`\\?\C:\…`, `\\.\C:\…`, `\??\C:\…`), this computer's
+administrative shares (`\\localhost\C$\…`), 8.3 short names such as `C:\PROGRA~1`, and Git Bash's
+`/c/…` — so a write into a system folder is HIGH in any of them, as it is in the plain spelling.
 
 **No telemetry; explicit provider requests only.** Nöbetçi has no analytics, crash reporting or
 update checks. Prompt drafts are not saved. Ollama receives the draft at the local Ollama service;
@@ -322,22 +342,30 @@ by the provider.
 **Secrets are masked in what lingers.** Before a request is written to the history, and before a
 notification is shown, its text goes through redaction: PEM private keys; tokens with a
 recognisable prefix (Anthropic and OpenAI style `sk-…` keys, GitHub, GitLab, Slack, AWS access key
-IDs, Google API keys, Stripe, npm, Hugging Face and more); JSON Web Tokens; `Authorization`,
-`Bearer` and cookie headers; Slack, Discord, Telegram and Teams webhook addresses; values of
-`password`, `secret`, `token`, `api_key`, `*_PASS`, `*_PWD` and similar in `key=value`,
-`key: value` and `--key value` form, quoted values whole; credentials on command lines
-(`curl -u user:…`, `mysql -p…`, `sshpass -p`, `redis-cli -a`, `docker login -p`, `openssl …
-pass:`); and passwords in URLs. A word like "token" or "password" in a sentence is left alone. The
-approval card is deliberately not redacted: you have to see exactly what you approve. The log file
-(`nobetci.log`) records what happened — request IDs, tool names, risk levels and decisions — but
-not the requests themselves. On macOS and Linux, Nöbetçi keeps its settings and data folders
-readable by your account only (0700) and writes the settings, the agenda, their dated copies, the
-history and the log for your account only (0600).
+IDs, Google API keys, Stripe, npm, Hugging Face and more); JSON Web Tokens; `Authorization` and
+`Bearer` headers, and the name=value pairs of cookie headers; Slack, Discord, Telegram and Teams
+webhook addresses; values of `password`, `secret`, `token`, `api_key`, `*_PASS`, `*_PWD`, `*_PW`
+(`DB_ADMIN_PASS` too) and similar in `key=value`, `key: value` and `--key value` form — also right
+after another `=` or `:`, as in `$env:API_TOKEN=…`, `--from-literal=password=…` or npm's
+`:_authToken=…` — quoted values whole; credentials on command lines (`-u user:…` for `curl`,
+`wget`, HTTPie, `xh`, `lftp`, `ftp` and `aria2c`, while `docker run -u 1000:1000` is left alone;
+`smbclient -U user%…`, `mysql -p…`, `sshpass -p`, `redis-cli -a`, `docker login -p`, `openssl …
+pass:`); and passwords in URLs, with or without a user name (`redis://:…@host`). A word like
+"token" or "password" in a sentence is left alone. A notification is masked first and shortened
+afterwards, so the cut can't leave the beginning of a secret showing. The approval card is
+deliberately not redacted: you have to see exactly what you approve. The log file (`nobetci.log`)
+records what happened — request IDs, tool names, risk levels and decisions — but not the requests
+themselves. On macOS and Linux, Nöbetçi keeps its settings and data folders readable by your
+account only (0700) and writes the settings, the agenda, their dated copies, the history and the
+log for your account only (0600). On a file system that can't hold those permissions (FAT, exFAT,
+some network shares) it uses its own folders as they are and says so in the log; a folder that
+belongs to another account is refused.
 
-**Formula-safe CSV.** Every exported cell is quoted, and a cell — or any line inside it — that
-starts with `=`, `+`, `-`, `@`, a tab or a carriage return gets a leading apostrophe, so a
-spreadsheet shows it as text instead of running it. The separator is a comma, or a semicolon for
-spreadsheets that expect one.
+**Formula-safe CSV.** Every exported cell is quoted, and wherever a spreadsheet could start a new
+cell inside it — at its start, at the start of a line in it, and after a comma or a semicolon, so a
+file opened with the other separator is covered too — text that starts with `=`, `+`, `-`, `@` or a
+tab gets a leading apostrophe, so a spreadsheet shows it as text instead of running it. The
+separator is a comma, or a semicolon for spreadsheets that expect one.
 
 ### What it does not protect against
 
@@ -383,7 +411,10 @@ pressing.
   HIGH and CRITICAL requests are approved in the terminal there; a LOW or MEDIUM approval on the
   island is only as safe as the programs you run. An agent's request to run a program that fakes
   input — `xdotool`, `ydotool`, `xte`, `xinput create-master`, a script that loads XTest or
-  uinput — is scored HIGH.
+  uinput — is scored HIGH, and so is a request that puts such code in a file, through the Write
+  or Edit tools or a command's redirection (`echo … > c.py`, a here-document): code that loads
+  XTest, uinput, pyautogui, pynput, robotjs, nut-js, `SendInput` or `SendKeys` (a document such as
+  a `.md` or `.txt` file is left alone).
 - On Linux under Wayland, input the compositor itself injects reaches XWayland as ordinary pointer
   input. GNOME and KDE inject only after a remote-desktop prompt, but wlroots compositors (sway,
   Hyprland, river…) let any program inject through their virtual-pointer protocol, and the guard
