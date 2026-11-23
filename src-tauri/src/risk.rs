@@ -1417,14 +1417,16 @@ fn is_absolute(path: &str) -> bool {
     path.starts_with('/') || path.starts_with('\\') || (b.len() > 2 && b[1] == b':')
 }
 
-/// The root a path starts from, and the rest: `/`, `//` (a network share),
-/// `C:`, `~`, `~user`, or an environment variable — `$HOME`, `${XDG_DATA_HOME}`,
-/// `%APPDATA%`, `$env:LOCALAPPDATA`. Empty for a relative path.
+/// The root a path starts from, and the rest: `/`, `\\` (a network share, and
+/// `//` where Windows reads it so — Linux and macOS read any run of leading
+/// slashes as one, `//etc` is /etc), `C:`, `~`, `~user`, or an environment
+/// variable — `$HOME`, `${XDG_DATA_HOME}`, `%APPDATA%`, `$env:LOCALAPPDATA`.
+/// Empty for a relative path.
 fn split_root(path: &str) -> (&str, &str) {
     let b = path.as_bytes();
     let var_end =
         |from: usize| path[from..].find(|c: char| !(c.is_alphanumeric() || c == '_')).map_or(path.len(), |i| from + i);
-    let end = if path.starts_with("//") || path.starts_with("\\\\") {
+    let end = if path.starts_with("\\\\") || (SHARE_SLASHES && path.starts_with("//")) {
         2
     } else if matches!(b.first(), Some(b'/' | b'\\')) {
         1
@@ -1445,6 +1447,11 @@ fn split_root(path: &str) -> (&str, &str) {
     };
     path.split_at(end)
 }
+
+/// Whether two forward slashes start a network share (`//server/share`), as
+/// on Windows. On Linux and macOS they are the root folder:
+/// `echo x > //etc/cron.d/x` writes /etc/cron.d/x.
+const SHARE_SLASHES: bool = cfg!(windows);
 
 /// Whether a path starts from a root of its own (`split_root`): where it leads
 /// does not depend on the folder it is read in.
@@ -1470,6 +1477,8 @@ pub(crate) fn resolve(base: &str, path: &str) -> String {
     if path.is_empty() {
         return String::new();
     }
+    let plain = windows_plain(path);
+    let path = plain.as_deref().unwrap_or(path);
     let folder = path.len() > 1 && path.ends_with(['/', '\\']);
     let (mut root, rest) = split_root(path);
     let mut parts: Vec<&str> = Vec::new();
@@ -1478,9 +1487,9 @@ pub(crate) fn resolve(base: &str, path: &str) -> String {
         based = resolve("", base);
         let (broot, brest) = split_root(&based);
         root = broot;
-        push_parts(&mut parts, brest, fixed_root(root));
+        push_parts(&mut parts, brest, fixed_root(root), root == "/");
     }
-    push_parts(&mut parts, rest, fixed_root(root));
+    push_parts(&mut parts, rest, fixed_root(root), root == "/");
     let root = root.replace('\\', "/");
     let mut out = match root.as_str() {
         "" => String::new(),
@@ -1503,7 +1512,10 @@ pub(crate) fn resolve(base: &str, path: &str) -> String {
 
 /// Appends the parts of `rest`, applying `.` and `..`. Under a fixed root a
 /// `..` at the top goes nowhere (`/..` is `/`); anywhere else it is kept.
-fn push_parts<'a>(parts: &mut Vec<&'a str>, rest: &'a str, fixed: bool) {
+/// Below `/` (`system_root`) on Linux and macOS, a process's root folder is
+/// `/` itself: `/proc/self/root/etc` is /etc, and so are `thread-self`'s and a
+/// numbered process's outside a container, where they all lead.
+fn push_parts<'a>(parts: &mut Vec<&'a str>, rest: &'a str, fixed: bool, system_root: bool) {
     for c in rest.split(['/', '\\']) {
         match c {
             "" | "." => {}
@@ -1514,9 +1526,68 @@ fn push_parts<'a>(parts: &mut Vec<&'a str>, rest: &'a str, fixed: bool) {
                     parts.push("..");
                 }
             }
-            _ => parts.push(c),
+            _ => {
+                parts.push(c);
+                if system_root && !SHARE_SLASHES && is_process_root(parts) {
+                    parts.clear();
+                }
+            }
         }
     }
+}
+
+/// `proc/<self, thread-self or a process number>/root`.
+fn is_process_root(parts: &[&str]) -> bool {
+    match parts {
+        ["proc", who, "root"] => {
+            matches!(*who, "self" | "thread-self") || (!who.is_empty() && who.bytes().all(|b| b.is_ascii_digit()))
+        }
+        _ => false,
+    }
+}
+
+/// The plain path a Windows device, object-manager or share spelling of a
+/// drive path names, which Windows writes all the same: `\\?\C:\x`,
+/// `\\.\C:\x` and `\??\C:\x` are C:\x, `\\?\UNC\srv\share` is \\srv\share,
+/// and a drive's administrative share on this computer (`\\localhost\C$\x`,
+/// `\\127.0.0.1\C$\x`) is the drive. None for any other path: a device that
+/// is not a drive (`\\.\PhysicalDrive0`) keeps its spelling. Read so on every
+/// system; elsewhere these spellings name nothing worth less.
+fn windows_plain(path: &str) -> Option<String> {
+    let lower = path.to_ascii_lowercase();
+    let device = ["\\\\?\\", "//?/", "\\\\.\\", "//./", "\\??\\", "/??/"].iter().find(|p| lower.starts_with(**p));
+    let named = match device {
+        Some(prefix) => {
+            let rest = &path[prefix.len()..];
+            let b = rest.as_bytes();
+            if rest.get(..4).is_some_and(|unc| unc.eq_ignore_ascii_case("unc\\") || unc.eq_ignore_ascii_case("unc/")) {
+                format!("\\\\{}", &rest[4..])
+            } else if b.len() >= 2 && b[0].is_ascii_alphabetic() && b[1] == b':' {
+                rest.to_string()
+            } else {
+                return None;
+            }
+        }
+        None => path.to_string(),
+    };
+    let share = named.strip_prefix("\\\\").or_else(|| named.strip_prefix("//"));
+    let Some(share) = share else { return device.map(|_| named) };
+    let (host, rest) = share.split_once(['/', '\\']).unwrap_or((share, ""));
+    let local = host.eq_ignore_ascii_case("localhost")
+        || host.eq_ignore_ascii_case("0--1.ipv6-literal.net")
+        || host.strip_prefix("127.").is_some_and(|ip| {
+            ip.split('.').count() == 3
+                && ip.split('.').all(|n| (1..=3).contains(&n.len()) && n.bytes().all(|b| b.is_ascii_digit()))
+        });
+    let b = rest.as_bytes();
+    let drive = b.len() >= 2
+        && b[0].is_ascii_alphabetic()
+        && b[1] == b'$'
+        && b.get(2).is_none_or(|c| matches!(c, b'/' | b'\\'));
+    if local && drive {
+        return Some(format!("{}:/{}", b[0] as char, rest.get(3..).unwrap_or("")));
+    }
+    device.map(|_| named)
 }
 
 /// Whether a path still has a `..` in it: one that climbs above a root the
@@ -1790,7 +1861,8 @@ fn check_derived(raw: &str, name: &str, at: Place, off: &Disabled, found: &mut F
     found.derived += 1;
     let shown = excerpt(raw);
     let mut here = Found::default();
-    scan(write_rules(name, at.cwd, at.home, true), name, off, &mut here);
+    // In Git Bash's `/c/…` spelling too: `/c/PROGRA~1` is C:\Program Files.
+    scan_path(write_rules(name, at.cwd, at.home, true), name, name, off, &mut here);
     config_dir_writes(name, at.home, at.claude, off, &mut here);
     for f in here.findings {
         found.findings.push(Finding { excerpt: shown.clone(), ..f });
@@ -1927,6 +1999,12 @@ fn windows_alias(path: &str) -> Option<String> {
 /// Names the path rules know by the folder they lie in: what a pattern or an
 /// 8.3 alias in a written path may stand for.
 const PLACE_NAMES: &[&str] = &[
+    // Windows' own folders: `C:\PROGRA~1` is C:\Program Files.
+    "windows",
+    "program files",
+    "program files (x86)",
+    "programdata",
+    "system32",
     "settings.json",
     "settings.local.json",
     "hooks.json",
@@ -3663,6 +3741,106 @@ mod tests {
         assert_eq!(write(r"C:\Users\dev\other\notes.txt", "x"), Medium);
         let a = assess("Write", &json!({ "file_path": "src/x.ts", "content": "" }), CWD, false);
         assert_eq!(a.level, Low, "relative paths are inside cwd");
+    }
+
+    /// A request run in /home/dev/app by a user whose home is /home/dev.
+    fn at_app(tool: &str, input: Value) -> Assessment {
+        assess_in(tool, &input, "/home/dev/app", false, &Disabled::new(), "/home/dev")
+    }
+
+    fn is_system_write(a: &Assessment) -> bool {
+        a.level >= High && a.findings.iter().any(|f| f.category == "system_files")
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn leading_slashes_and_a_process_root_reach_the_system_folders() {
+        // approval-safety#3: Linux and macOS read `//etc` as /etc, and a
+        // process's root folder is /. These were low with no finding, which a
+        // trusted project let through without a card.
+        for c in [
+            "echo x > //usr/local/bin/git",
+            "cp evil //usr/local/bin/node",
+            "mv evil //usr/local/bin/node",
+            "tee //etc/sudoers.d/x < f",
+            "echo x > //etc/profile.d/x.sh",
+            "echo x > ///etc/cron.d/x",
+            "cd //etc && echo x > cron.d/x",
+            "echo x > /proc/self/root/etc/cron.d/x",
+            "cp evil /proc/1/root/usr/local/bin/git",
+            "echo x > /proc/self/root/../../etc/cron.d/x",
+        ] {
+            let a = at_app("Bash", json!({ "command": c }));
+            assert!(is_system_write(&a), "{c}: {:?} {:?}", a.level, labels(&a));
+        }
+        for path in ["//etc/cron.d/x", "///usr/local/bin/git", "/proc/thread-self/root/etc/cron.d/x"] {
+            let a = at_app("Write", json!({ "file_path": path, "content": "x" }));
+            assert!(is_system_write(&a), "{path}: {:?}", a.level);
+        }
+        assert_eq!(resolve("/w", "//etc//x"), "/etc/x");
+        assert_eq!(resolve("/proc/self", "root/etc/x"), "/etc/x");
+        assert_eq!(resolve("/w", "/proc/self/rootfs/x"), "/proc/self/rootfs/x");
+        // Everyday commands with two slashes, and /proc itself, stay low.
+        for c in [
+            "ls //tmp",
+            "cat //etc/hosts",
+            "echo hi > //tmp/x",
+            "curl -s https://example.com//a -o out.txt",
+            "ls /proc/self/fd",
+            "cat /proc/self/root/etc/os-release",
+        ] {
+            assert_eq!(at_app("Bash", json!({ "command": c })).level, Low, "{c}");
+        }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn two_slashes_start_a_share_on_windows() {
+        assert_eq!(resolve(CWD, "//srv/share/x"), "//srv/share/x");
+        assert_eq!(resolve(CWD, "/proc/self/root/x"), "/proc/self/root/x");
+    }
+
+    #[test]
+    fn windows_spellings_of_a_system_folder_reach_it() {
+        // Device and object-manager paths, this computer's administrative
+        // share and 8.3 names lead to Program Files as surely as its name.
+        let off = Disabled::new();
+        for c in [
+            r"Copy-Item evil.dll 'C:\PROGRA~1\x\y.dll'",
+            r"Copy-Item evil.dll '\\?\C:\Program Files\x\y.dll'",
+            r"Copy-Item evil.dll '\??\C:\Program Files\x\y.dll'",
+            r"Copy-Item evil.dll '\\localhost\C$\Program Files\x\y.dll'",
+            r"Copy-Item evil.dll '\\?\UNC\127.0.0.1\c$\ProgramData\x\y.dll'",
+        ] {
+            let a = assess_in("PowerShell", &json!({ "command": c }), CWD, false, &off, r"C:\Users\dev");
+            assert!(is_system_write(&a), "{c}: {:?} {:?}", a.level, labels(&a));
+        }
+        let a =
+            assess_in("Bash", &json!({ "command": "cp evil /c/PROGRA~1/x/y.dll" }), CWD, false, &off, "/c/Users/dev");
+        assert!(is_system_write(&a), "Git Bash: {:?} {:?}", a.level, labels(&a));
+        for path in [
+            r"C:\PROGRA~1\x\y.dll",
+            r"C:\PROGRA~2\x\y.dll",
+            r"\\.\C:\Program Files\x\y.dll",
+            r"\\localhost\C$\Windows\x.dll",
+        ] {
+            let a =
+                assess_in("Write", &json!({ "file_path": path, "content": "x" }), CWD, false, &off, r"C:\Users\dev");
+            assert!(is_system_write(&a), "{path}: {:?}", a.level);
+        }
+        assert_eq!(resolve(CWD, r"\??\C:\Users\dev\project\x.rs"), "C:/Users/dev/project/x.rs");
+        assert_eq!(resolve(CWD, r"\\LOCALHOST\d$"), "d:/");
+        // A device that is not a drive, and another computer's share, keep
+        // their spelling.
+        assert!(resolve(CWD, r"\\.\PhysicalDrive0").starts_with("//"));
+        assert_eq!(resolve(CWD, r"\\fileserver\C$\x"), "//fileserver/C$/x");
+        // The project's own files in these spellings, and a short name of an
+        // ordinary folder, stay low.
+        for path in [r"\\?\C:\Users\dev\project\src\main.rs", r"C:\Users\dev\project\DOCUME~1\notes.md"] {
+            let a =
+                assess_in("Write", &json!({ "file_path": path, "content": "x" }), CWD, false, &off, r"C:\Users\dev");
+            assert_eq!(a.level, Low, "{path}");
+        }
     }
 
     #[test]
