@@ -1199,6 +1199,10 @@ pub fn run() {
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
 
+            // The run's first lines in the log: what follows belongs to it.
+            log::line(format!("--- Nöbetçi {} started ---", env!("CARGO_PKG_VERSION")));
+            settings::log_load_problem();
+
             let handle = app.handle().clone();
             tray::build(&handle)?;
             // The island's webview exists already (tauri.conf.json); these two
@@ -1219,7 +1223,6 @@ pub fn run() {
             gate.set_active(true);
             island::spawn_cursor_poll(handle.clone(), gate.clone());
 
-            log::line(format!("--- Nöbetçi {} started ---", env!("CARGO_PKG_VERSION")));
             *handle.state::<Shared>().hotkeys.lock().unwrap() = hotkeys::apply(&handle, &loaded.hotkeys);
             hooks::ensure_hook_exe(&handle);
             inputguard::start(&handle);

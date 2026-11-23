@@ -199,7 +199,17 @@ fn command_for(exe: &str, event: &str) -> String {
 
 /// The path as both Git Bash and PowerShell run it, if there is one.
 fn both_shells_path(exe: &str) -> Option<String> {
-    bare_path(exe).or_else(|| short_path(exe).as_deref().and_then(bare_path))
+    bare_path(exe).or_else(|| with_short_folders(exe, short_path))
+}
+
+/// `exe` with its folders in their 8.3 short form (`short`), when that is a
+/// bare path. The file name stays as it is — `nobetci-hook.exe` needs no
+/// shortening — so the command still names the relay; its own short name
+/// (`NOBETC~1.EXE`) would not, and older versions that wrote it left hooks
+/// nothing recognised as Nöbetçi's (see `short_alias`).
+fn with_short_folders(exe: &str, short: impl Fn(&str) -> Option<String>) -> Option<String> {
+    let (folders, name) = exe.rsplit_once(['/', '\\'])?;
+    bare_path(&format!("{}/{name}", short(folders)?))
 }
 
 /// Whether the hooks can only run in Git Bash (Windows; never elsewhere).
@@ -252,8 +262,30 @@ pub(crate) fn runs_relay(command: &str) -> bool {
     let rest = command.trim_start();
     let rest = rest.strip_prefix('&').map(str::trim_start).unwrap_or(rest);
     let program = first_word(rest);
-    let name = program.rsplit(['/', '\\']).next().unwrap_or_default();
-    name.eq_ignore_ascii_case(RELAY) || name.eq_ignore_ascii_case(&format!("{RELAY}.exe"))
+    let mut parts = program.rsplit(['/', '\\']);
+    let name = parts.next().unwrap_or_default();
+    name.eq_ignore_ascii_case(RELAY) || name.eq_ignore_ascii_case(&format!("{RELAY}.exe")) || short_alias(name, parts)
+}
+
+/// Whether `name`, in the folders `parents` (innermost first), is the relay
+/// under its Windows 8.3 short name: an `XXXXXX~N.EXE` in Nöbetçi's own
+/// `Nobetci\bin`. Versions up to 2.4.1 wrote `…/Nobetci/bin/NOBETC~1.EXE` for
+/// a profile path with spaces; nothing else lives in that folder.
+fn short_alias<'a>(name: &str, mut parents: impl Iterator<Item = &'a str>) -> bool {
+    let Some(stem) =
+        name.len().checked_sub(4).filter(|_| name.to_ascii_lowercase().ends_with(".exe")).map(|n| &name[..n])
+    else {
+        return false;
+    };
+    let eight_three = stem.split_once('~').is_some_and(|(head, number)| {
+        (1..=6).contains(&head.len())
+            && head.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-'))
+            && !number.is_empty()
+            && number.chars().all(|c| c.is_ascii_digit())
+    });
+    eight_three
+        && parents.next().is_some_and(|folder| folder.eq_ignore_ascii_case("bin"))
+        && parents.next().is_some_and(|folder| folder.eq_ignore_ascii_case("nobetci"))
 }
 
 /// The first shell word of `s` with its quoting removed: '…', "…", and `\'` or
@@ -877,21 +909,50 @@ fn text_of(bytes: Option<&[u8]>) -> String {
 /// the changed middle is shown as one block instead.
 const LCS_CELLS: usize = 4_000_000;
 
+/// Which line endings a text uses: (CRLF, bare LF).
+fn endings(text: &str) -> (bool, bool) {
+    let crlf = text.matches("\r\n").count();
+    (crlf > 0, text.matches('\n').count() > crlf)
+}
+
+/// A line of the diff, its carriage return (if it is shown) as a visible ␍.
+fn shown(line: &str) -> std::borrow::Cow<'_, str> {
+    match line.strip_suffix('\r') {
+        Some(rest) => format!("{rest}\u{240D}").into(),
+        None => line.into(),
+    }
+}
+
 /// A line diff with three lines of context: `  ` kept, `- ` removed, `+ ` added.
 /// Settings files are short, so a plain LCS over the lines between the common
 /// head and tail is the simplest honest diff.
+///
+/// A rewrite writes one kind of line ending throughout (`Layout`). When that
+/// changes any line's ending — a file that mixes CRLF and LF — line endings
+/// count as part of the lines, a carriage return shows as ␍, and a note on
+/// top says so: no byte changes behind a line shown as unchanged.
 pub(crate) fn unified_diff(before: &str, after: &str) -> String {
-    let a: Vec<&str> = before.lines().collect();
-    let b: Vec<&str> = after.lines().collect();
+    let (was, now) = (endings(before), endings(after));
+    let mixed = |e: (bool, bool)| e.0 && e.1;
+    let endings_change = mixed(was) || mixed(now) || (was != (false, false) && now != (false, false) && was != now);
+    fn lines(text: &str, with_endings: bool) -> Vec<&str> {
+        if with_endings {
+            text.split_inclusive('\n').map(|l| l.strip_suffix('\n').unwrap_or(l)).collect()
+        } else {
+            text.lines().collect()
+        }
+    }
+    let a: Vec<&str> = lines(before, endings_change);
+    let b: Vec<&str> = lines(after, endings_change);
     let head = a.iter().zip(&b).take_while(|(x, y)| x == y).count();
     let tail = a[head..].iter().rev().zip(b[head..].iter().rev()).take_while(|(x, y)| x == y).count();
     let (mid_a, mid_b) = (&a[head..a.len() - tail], &b[head..b.len() - tail]);
 
-    let mut out: Vec<String> = a[..head].iter().map(|l| format!("  {l}")).collect();
+    let mut out: Vec<String> = a[..head].iter().map(|l| format!("  {}", shown(l))).collect();
     let (n, m) = (mid_a.len(), mid_b.len());
     if (n + 1).saturating_mul(m + 1) > LCS_CELLS {
-        out.extend(mid_a.iter().map(|l| format!("- {l}")));
-        out.extend(mid_b.iter().map(|l| format!("+ {l}")));
+        out.extend(mid_a.iter().map(|l| format!("- {}", shown(l))));
+        out.extend(mid_b.iter().map(|l| format!("+ {}", shown(l))));
     } else {
         let mut lcs = vec![vec![0u32; m + 1]; n + 1];
         for i in (0..n).rev() {
@@ -902,21 +963,21 @@ pub(crate) fn unified_diff(before: &str, after: &str) -> String {
         let (mut i, mut j) = (0usize, 0usize);
         while i < n && j < m {
             if mid_a[i] == mid_b[j] {
-                out.push(format!("  {}", mid_a[i]));
+                out.push(format!("  {}", shown(mid_a[i])));
                 i += 1;
                 j += 1;
             } else if lcs[i + 1][j] >= lcs[i][j + 1] {
-                out.push(format!("- {}", mid_a[i]));
+                out.push(format!("- {}", shown(mid_a[i])));
                 i += 1;
             } else {
-                out.push(format!("+ {}", mid_b[j]));
+                out.push(format!("+ {}", shown(mid_b[j])));
                 j += 1;
             }
         }
-        out.extend(mid_a[i..].iter().map(|l| format!("- {l}")));
-        out.extend(mid_b[j..].iter().map(|l| format!("+ {l}")));
+        out.extend(mid_a[i..].iter().map(|l| format!("- {}", shown(l))));
+        out.extend(mid_b[j..].iter().map(|l| format!("+ {}", shown(l))));
     }
-    out.extend(a[a.len() - tail..].iter().map(|l| format!("  {l}")));
+    out.extend(a[a.len() - tail..].iter().map(|l| format!("  {}", shown(l))));
 
     // Keep three lines of context around each change so the panel stays readable.
     let changed: Vec<usize> =
@@ -931,6 +992,15 @@ pub(crate) fn unified_diff(before: &str, after: &str) -> String {
         keep[lo..hi].fill(true);
     }
     let mut result = String::new();
+    if endings_change {
+        let note = match (now.0, is_tr()) {
+            (true, true) => "Satır sonları baştan sona CRLF olacak; \u{240D} bir CR'yi gösterir.",
+            (true, false) => "Line endings become CRLF throughout; \u{240D} marks a CR.",
+            (false, true) => "Satır sonları baştan sona LF olacak; \u{240D} bir CR'yi gösterir.",
+            (false, false) => "Line endings become LF throughout; \u{240D} marks a CR.",
+        };
+        result.push_str(&format!("@@ {note} @@\n"));
+    }
     let mut gap = false;
     for (idx, line) in out.iter().enumerate() {
         if keep[idx] {
@@ -1153,6 +1223,110 @@ mod tests {
         let theirs = json!({ "hooks": { "Stop": [{ "hooks": [{ "type": "command", "command": "~/bin/log-nobetci-hook.sh" }] }] } });
         assert_eq!(without_ours(&theirs).unwrap(), theirs);
         assert!(installed_events(&theirs).0.is_empty());
+    }
+
+    /// hooks-settings#0: with a space in the profile path, versions up to 2.4.1
+    /// wrote the relay under its 8.3 name (…/Nobetci/bin/NOBETC~1.EXE). Those
+    /// entries are Nöbetçi's for status, update and removal; new ones keep
+    /// the file's own name and shorten only the folders.
+    #[test]
+    fn a_relay_written_with_its_short_name_is_still_ours() {
+        let old = "C:/Users/JOHNDO~1/AppData/Local/Nobetci/bin/NOBETC~1.EXE";
+        for ours in [
+            format!("{old} Stop"),
+            format!("\"{old}\" PermissionRequest"),
+            "C:/Users/JOHNDO~1/AppData/Local/nobetci/BIN/nobetc~2.exe Stop".to_string(),
+            r"C:\Users\JOHNDO~1\AppData\Local\Nobetci\bin\NOBETC~1.EXE Stop".to_string(),
+        ] {
+            assert!(runs_relay(&ours), "{ours}");
+        }
+        for theirs in [
+            "C:/tools/NOBETC~1.EXE Stop",
+            "C:/Users/x/Nobetci/NOBETC~1.EXE Stop",
+            "C:/Users/x/Nobetci/bin/notes~1.txt Stop",
+            "C:/Users/x/Nobetci/bin/NOBETCIHOOK.EXE Stop",
+            "C:/Users/x/Nobetci/bin/TOOLONGNAME~1.EXE Stop",
+            "C:/Users/x/Nobetci/bin/AB~X.EXE Stop",
+        ] {
+            assert!(!runs_relay(theirs), "{theirs}");
+        }
+        // Status, update and removal all see it.
+        let installed = serde_json::json!({
+            "model": "opus",
+            "hooks": {
+                "Stop": [{ "hooks": [
+                    { "type": "command", "command": format!("{old} Stop"), "timeout": 10 },
+                    { "type": "command", "command": "other.exe" }
+                ] }],
+                "PermissionRequest": [{ "hooks": [{ "type": "command", "command": format!("{old} PermissionRequest") }] }]
+            },
+            "statusLine": { "type": "command", "command": format!("{old} statusline"), "padding": 0 }
+        });
+        let (events, stale) = installed_events(&installed);
+        assert_eq!(events, ["Stop", "PermissionRequest", STATUS_LINE], "{events:?}");
+        assert!(stale, "an update rewrites them in the current form");
+        assert_eq!(status_line_owner(&installed), StatusLineOwner::Ours);
+        let updated = merged(&installed, &["Stop".to_string()]);
+        let stop: Vec<&str> = updated["hooks"]["Stop"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .flat_map(|group| group["hooks"].as_array().unwrap())
+            .filter_map(|h| h["command"].as_str())
+            .collect();
+        assert_eq!(stop.iter().filter(|c| runs_relay(c)).count(), 1, "replaced, not doubled: {stop:?}");
+        assert!(stop.contains(&"other.exe"));
+        let removed = without_ours(&installed).unwrap();
+        assert!(installed_events(&removed).0.is_empty(), "{removed}");
+        assert_eq!(removed["hooks"]["Stop"][0]["hooks"][0]["command"], "other.exe");
+        assert_eq!(removed["model"], "opus");
+    }
+
+    #[test]
+    fn only_the_folders_are_shortened() {
+        let short = |folders: &str| Some(folders.replace("John Doe", "JOHNDO~1"));
+        assert_eq!(
+            with_short_folders(r"C:\Users\John Doe\AppData\Local\Nobetci\bin\nobetci-hook.exe", short).as_deref(),
+            Some("C:/Users/JOHNDO~1/AppData/Local/Nobetci/bin/nobetci-hook.exe")
+        );
+        let command = format!("{} Stop", with_short_folders(r"C:\Users\John Doe\x\nobetci-hook.exe", short).unwrap());
+        assert!(runs_relay(&command), "{command}");
+        // No short form, or one that still needs quotes: no bare path.
+        assert_eq!(with_short_folders(r"C:\Users\John Doe\nobetci-hook.exe", |_| None), None);
+        assert_eq!(with_short_folders(r"C:\Users\a&b\nobetci-hook.exe", |f| Some(f.to_string())), None);
+        assert_eq!(with_short_folders("nobetci-hook.exe", short), None);
+    }
+
+    /// hooks-settings#3: a file whose lines end in CRLF and LF alike is written
+    /// with one of them throughout, and the diff shows every line that changes.
+    #[test]
+    fn a_line_ending_that_changes_shows_in_the_diff() {
+        let before = "{\r\n  \"model\": \"opus\",\n  \"theme\": \"dark\"\n}\n";
+        let current: Value = serde_json::from_str(before).unwrap();
+        let next = merged(&current, &["Stop".to_string()]);
+        let change =
+            Change::new(PathBuf::from("settings.json"), Some(before.as_bytes().to_vec()), &current, &next, true, true);
+        let after = String::from_utf8(change.after.clone()).unwrap();
+        assert_eq!(after.matches("\r\n").count(), after.matches('\n').count(), "CRLF throughout");
+        let diff = &change.diff;
+        assert!(diff.starts_with("@@ "), "{diff}");
+        assert!(diff.contains("CRLF"), "{diff}");
+        assert!(diff.contains("-   \"model\": \"opus\",\n"), "{diff}");
+        assert!(diff.contains("+   \"model\": \"opus\",\u{240D}\n"), "{diff}");
+        assert!(diff.contains("-   \"theme\": \"dark\"\n"), "{diff}");
+        // A file that is CRLF throughout stays CRLF and diffs as before.
+        let uniform = before.replace("\r\n", "\n").replace('\n', "\r\n");
+        let current: Value = serde_json::from_str(&uniform).unwrap();
+        let next = merged(&current, &["Stop".to_string()]);
+        let change =
+            Change::new(PathBuf::from("settings.json"), Some(uniform.into_bytes()), &current, &next, true, true);
+        assert!(!change.diff.contains('\u{240D}') && !change.diff.starts_with("@@"), "{}", change.diff);
+        assert!(
+            change.diff.contains("    \"theme\": \"dark\"") || change.diff.contains("  \"theme\""),
+            "{}",
+            change.diff
+        );
+        assert_eq!(unified_diff("a\r\nb\n", "a\r\nb\n"), if is_tr() { "Değişiklik yok." } else { "No change." });
     }
 
     #[test]

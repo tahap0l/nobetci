@@ -463,6 +463,19 @@ pub struct LoadProblem {
     pub defaulted: Vec<String>,
     /// Where the file's bytes were kept, when a copy could be made.
     pub kept: Option<PathBuf>,
+    /// What was held back for this run so that nothing the file restricted is
+    /// let through on its own (`salvage`).
+    pub held: Held,
+}
+
+/// What a partly read settings file has held back until it is fixed.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Held {
+    /// A rule or project could not be read: allow rules and rules that lower
+    /// the risk to LOW are off, and trusted projects count as normal.
+    pub permissive: bool,
+    /// The limit for automatic approvals could not be read: it is "none".
+    pub auto_allow: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -489,10 +502,17 @@ static PROBLEM: OnceLock<LoadProblem> = OnceLock::new();
 pub fn load() -> Settings {
     let loaded = load_from(&settings_path());
     if let Some(problem) = loaded.problem {
-        crate::log::line(problem.log_line());
         let _ = PROBLEM.set(problem);
     }
     loaded.settings
+}
+
+/// Writes what went wrong reading settings.json at start to the log, if
+/// anything did: called once the log's "started" line is written.
+pub fn log_load_problem() {
+    if let Some(problem) = PROBLEM.get() {
+        crate::log::line(problem.log_line());
+    }
 }
 
 /// What went wrong reading settings.json at start, in the UI language; None
@@ -513,7 +533,19 @@ impl LoadProblem {
             }
             _ => "starting from defaults".into(),
         };
-        format!("settings.json could not be read ({}); {used}; {kept}; not saving over it until restart", self.error)
+        let mut held = String::new();
+        if self.held.permissive {
+            held.push_str(
+                "; allow rules and rules that lower a risk to LOW are off and trusted projects count as normal",
+            );
+        }
+        if self.held.auto_allow {
+            held.push_str("; nothing is approved automatically");
+        }
+        format!(
+            "settings.json could not be read ({}); {used}{held}; {kept}; not saving over it until restart",
+            self.error
+        )
     }
 
     /// For the settings window, which already says that nothing is saved until
@@ -527,6 +559,24 @@ impl LoadProblem {
                 format!("Şunlar okunamadı ve varsayılan değerlerinde kaldı: {list}. Geri kalan her şey okundu.")
             } else {
                 format!("These couldn't be read and kept their default values: {list}. Everything else was read.")
+            });
+        }
+        if self.held.permissive {
+            out.push(' ');
+            out.push_str(if tr {
+                "Dosya düzelene kadar izin kuralları ve riski DÜŞÜK'e indiren kurallar kapalı, güvenilir projeler normal \
+                 sayılıyor: dosyanın kısıtladığı hiçbir şey kendiliğinden geçmez."
+            } else {
+                "Until the file is fixed, allow rules and rules that lower a risk to LOW are off and trusted projects \
+                 count as normal, so nothing the file restricted is let through on its own."
+            });
+        }
+        if self.held.auto_allow {
+            out.push(' ');
+            out.push_str(if tr {
+                "Otomatik onay sınırı okunamadığı için hiçbir şey otomatik onaylanmıyor."
+            } else {
+                "The limit for automatic approvals couldn't be read, so nothing is approved automatically."
             });
         }
         out.push(' ');
@@ -570,7 +620,13 @@ fn load_from(path: &Path) -> Loaded {
             let kept = keep_unreadable(path, None);
             return Loaded {
                 settings: returning_defaults(),
-                problem: Some(LoadProblem { kind: ProblemKind::Read, error: err.to_string(), defaulted: vec![], kept }),
+                problem: Some(LoadProblem {
+                    kind: ProblemKind::Read,
+                    error: err.to_string(),
+                    defaulted: vec![],
+                    kept,
+                    held: Held::default(),
+                }),
             };
         }
     };
@@ -586,6 +642,7 @@ fn load_from(path: &Path) -> Loaded {
             error,
             defaulted: vec![],
             kept: keep_unreadable(path, Some(&bytes)),
+            held: Held::default(),
         }),
     };
     let map = match serde_json::from_slice::<Value>(text) {
@@ -596,7 +653,7 @@ fn load_from(path: &Path) -> Loaded {
     match serde_json::from_value::<Settings>(Value::Object(map.clone())) {
         Ok(settings) => Loaded { settings: settings.sanitized(), problem: None },
         Err(err) => {
-            let (mut settings, defaulted) = salvage(&map);
+            let (mut settings, defaulted, held) = salvage(&map);
             // Somebody who has a settings file has met the welcome already.
             settings.onboarded = true;
             Loaded {
@@ -606,6 +663,7 @@ fn load_from(path: &Path) -> Loaded {
                     error: err.to_string(),
                     defaulted,
                     kept: keep_unreadable(path, Some(&bytes)),
+                    held,
                 }),
             }
         }
@@ -619,15 +677,28 @@ fn returning_defaults() -> Settings {
 }
 
 /// Every value of `file` that fits on its own over the defaults: top-level
-/// keys, list items (whole items only) and the keys of a nested object
-/// (hotkeys). Returns the settings and what was left at its default.
-fn salvage(file: &Map<String, Value>) -> (Settings, Vec<String>) {
+/// keys, list items and the keys of a nested object (hotkeys). Returns the
+/// settings, what was left at its default, and what is held back.
+///
+/// Salvage must never widen what the file allowed. Rules are first-match and
+/// the most specific project wins, so a deny rule or a strict project that is
+/// dropped would hand its requests to an allow rule further down or a trusted
+/// folder above. A rule or project that does not read whole is therefore read
+/// field by field (`salvage_item`) and kept when everything that decides what
+/// it does was read. One that cannot be kept turns off, for this run, every
+/// allow rule and every rule that lowers a risk to LOW, and makes trusted
+/// projects count as normal; only a rule that was off anyway, or a trusted
+/// project, goes without that. An automatic-approval limit that cannot be
+/// read is "none". Saving is refused meanwhile, so the file keeps them all.
+fn salvage(file: &Map<String, Value>) -> (Settings, Vec<String>, Held) {
     let fits = |object: &Map<String, Value>| serde_json::from_value::<Settings>(Value::Object(object.clone())).is_ok();
     let mut merged = match serde_json::to_value(Settings::default()) {
         Ok(Value::Object(map)) => map,
         _ => Map::new(),
     };
     let mut defaulted = Vec::new();
+    // A rule or project was lost that may have restricted something.
+    let mut lost = false;
     for (key, value) in file {
         let with = |merged: &Map<String, Value>, value: Value| {
             let mut candidate = merged.clone();
@@ -647,8 +718,17 @@ fn salvage(file: &Map<String, Value>) -> (Settings, Vec<String>) {
                 for (i, item) in items.iter().enumerate() {
                     if fits(&with(&merged, Value::Array(vec![item.clone()]))) {
                         kept.push(item.clone());
-                    } else {
-                        defaulted.push(format!("{key}[{i}]"));
+                        continue;
+                    }
+                    match salvage_item(key, item) {
+                        Some((item, fields)) => {
+                            defaulted.extend(fields.into_iter().map(|field| format!("{key}[{i}].{field}")));
+                            kept.push(item);
+                        }
+                        None => {
+                            defaulted.push(format!("{key}[{i}]"));
+                            lost |= restricts(key, item);
+                        }
                     }
                 }
                 Some(Value::Array(kept))
@@ -675,11 +755,83 @@ fn salvage(file: &Map<String, Value>) -> (Settings, Vec<String>) {
             None => {
                 defaulted.retain(|d| !d.starts_with(&format!("{key}[")) && !d.starts_with(&format!("{key}.")));
                 defaulted.push(key.clone());
+                lost |= matches!(key.as_str(), "rules" | "projects");
             }
         }
     }
-    let settings = serde_json::from_value(Value::Object(merged)).unwrap_or_default();
-    (settings, defaulted)
+    let mut settings: Settings = serde_json::from_value(Value::Object(merged)).unwrap_or_default();
+    let mut held = Held::default();
+    if lost {
+        for rule in settings.rules.iter_mut().filter(|r| r.enabled && matches!(r.action.as_str(), "allow" | "low")) {
+            rule.enabled = false;
+            held.permissive = true;
+        }
+        for project in settings.projects.iter_mut().filter(|p| p.mode == "trusted") {
+            project.mode = "normal".into();
+            held.permissive = true;
+        }
+    }
+    if defaulted.iter().any(|d| d == "autoAllowMax") {
+        settings.auto_allow_max = "none".into();
+        held.auto_allow = true;
+    }
+    (settings, defaulted, held)
+}
+
+/// A rule (`key` "rules") or project ("projects") that does not read whole,
+/// read field by field over its defaults: kept, with the fields that fell
+/// back listed, only when everything that decides what it does was read — a
+/// rule's action, tool, pattern, mode and project, and whether it is on unless
+/// it only ever restricts (deny, ask, critical); a project's path and mode.
+/// Its id, name, message or note may fall back.
+fn salvage_item(key: &str, item: &Value) -> Option<(Value, Vec<String>)> {
+    fn fields_of<T: Serialize>(value: T) -> Map<String, Value> {
+        serde_json::to_value(value).ok().and_then(|v| v.as_object().cloned()).unwrap_or_default()
+    }
+    let given = item.as_object()?;
+    let (mut built, decides): (Map<String, Value>, &[&str]) = match key {
+        "rules" => {
+            let restricts =
+                given.get("action").and_then(Value::as_str).is_some_and(|a| matches!(a, "deny" | "ask" | "critical"));
+            let decides: &[&str] = if restricts {
+                &["action", "tool", "pattern", "mode", "project"]
+            } else {
+                &["action", "tool", "pattern", "mode", "project", "enabled"]
+            };
+            (fields_of(UserRule::default()), decides)
+        }
+        "projects" => (fields_of(ProjectPolicy::default()), &["path", "mode"]),
+        _ => return None,
+    };
+    let reads = |fields: &Map<String, Value>| {
+        let value = Value::Object(fields.clone());
+        match key {
+            "rules" => serde_json::from_value::<UserRule>(value).is_ok(),
+            _ => serde_json::from_value::<ProjectPolicy>(value).is_ok(),
+        }
+    };
+    let mut fell_back = Vec::new();
+    for (name, value) in given {
+        let mut trial = built.clone();
+        trial.insert(name.clone(), value.clone());
+        if reads(&trial) {
+            built = trial;
+        } else {
+            fell_back.push(name.clone());
+        }
+    }
+    (!fell_back.iter().any(|name| decides.contains(&name.as_str()))).then_some((Value::Object(built), fell_back))
+}
+
+/// Whether leaving out `item` of `key` could let something through that the
+/// file restricted: anything but a rule that was off anyway or a trusted
+/// project (losing one only takes trust away).
+fn restricts(key: &str, item: &Value) -> bool {
+    match key {
+        "rules" => item.get("enabled") != Some(&Value::Bool(false)),
+        "projects" => item.get("mode").and_then(Value::as_str) != Some("trusted"),
+        _ => false,
+    }
 }
 
 /// Keeps the bytes of a settings file that could not be used, next to it as
@@ -1232,6 +1384,130 @@ mod tests {
         assert_eq!(std::fs::read(problem.kept.as_ref().unwrap()).unwrap(), file.as_bytes());
         assert!(problem.message(&path, false).contains("rules[1]"));
         let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// What a request comes to under `s`, in `cwd`.
+    fn decide(s: &Settings, cwd: &str, command: &str) -> crate::rules::Outcome {
+        let input = serde_json::json!({ "command": command });
+        let grants = crate::rules::SessionGrants::default();
+        let request = crate::rules::Request { tool: "Bash", input: &input, cwd, session: "s", truncated: false };
+        crate::rules::evaluate(&request, s, &grants).outcome
+    }
+
+    fn load_text(name: &str, text: &str) -> Loaded {
+        let dir = scratch(name);
+        let path = dir.join("settings.json");
+        std::fs::write(&path, text).unwrap();
+        let loaded = load_from(&path);
+        let _ = std::fs::remove_dir_all(dir);
+        loaded
+    }
+
+    /// hooks-settings#1: a broken field in a deny rule or a strict project
+    /// costs that field, not the rule — the file's restrictions stay in force.
+    #[test]
+    fn a_restriction_with_a_broken_note_still_restricts() {
+        use crate::rules::Outcome;
+        let loaded = load_text(
+            "keep-deny",
+            r#"{
+                "autoAllowMax": "medium",
+                "rules": [
+                    { "id": "no-push", "tool": "Bash", "pattern": "git push", "mode": "prefix", "action": "deny", "message": null },
+                    { "id": "git-ok", "tool": "Bash", "pattern": "git", "mode": "prefix", "action": "allow", "name": 3 }
+                ],
+                "projects": [
+                    { "path": "/work", "mode": "trusted" },
+                    { "path": "/work/prod", "mode": "strict", "note": null }
+                ]
+            }"#,
+        );
+        let s = &loaded.settings;
+        assert_eq!(
+            s.rules.iter().map(|r| (r.id.as_str(), r.enabled)).collect::<Vec<_>>(),
+            [("no-push", true), ("git-ok", true)]
+        );
+        assert_eq!((s.rules[0].message.as_str(), s.rules[1].name.as_str()), ("", ""));
+        assert_eq!(s.projects.iter().map(|p| p.mode.as_str()).collect::<Vec<_>>(), ["trusted", "strict"]);
+        let problem = loaded.problem.unwrap();
+        for field in ["rules[0].message", "rules[1].name", "projects[1].note"] {
+            assert!(problem.defaulted.iter().any(|d| d == field), "{field}: {:?}", problem.defaulted);
+        }
+        assert_eq!(problem.held, Held::default(), "nothing was lost, nothing is held back");
+        assert_eq!(decide(s, "/srv/app", "git push origin main"), Outcome::Deny, "what the file meant");
+        assert_eq!(decide(s, "/srv/app", "git status"), Outcome::Allow);
+        assert_eq!(decide(s, "/work/prod/api", "ls"), Outcome::Ask, "strict, as the file meant");
+        assert_eq!(decide(s, "/work/api", "ls"), Outcome::Allow, "trusted, as the file meant");
+    }
+
+    /// hooks-settings#1: a rule or project that cannot be kept turns off what
+    /// could let its requests through instead: allow and lower-to-LOW rules,
+    /// and trust.
+    #[test]
+    fn a_lost_restriction_holds_back_what_could_let_its_requests_through() {
+        use crate::rules::Outcome;
+        let text = r#"{
+            "autoAllowMax": "medium",
+            "rules": [
+                { "id": "no-push", "tool": "Bash", "pattern": 5, "action": "deny" },
+                { "id": "git-ok", "tool": "Bash", "pattern": "git", "mode": "prefix", "action": "allow" },
+                { "id": "calm", "tool": "Bash", "pattern": "ls", "mode": "prefix", "action": "low" },
+                { "id": "loud", "tool": "Bash", "pattern": "curl", "mode": "prefix", "action": "high" }
+            ],
+            "projects": [{ "path": "/work", "mode": "trusted" }, { "path": 7, "mode": "strict" }]
+        }"#;
+        let loaded = load_text("lost", text);
+        let s = &loaded.settings;
+        let on: Vec<(&str, bool)> = s.rules.iter().map(|r| (r.id.as_str(), r.enabled)).collect();
+        assert_eq!(on, [("git-ok", false), ("calm", false), ("loud", true)], "a rule that raises the risk stays");
+        assert_eq!(s.projects.iter().map(|p| p.mode.as_str()).collect::<Vec<_>>(), ["normal"]);
+        assert_eq!(decide(s, "/srv/app", "git push origin main"), Outcome::Ask, "asked, never allowed");
+        assert_eq!(decide(s, "/work/api", "ls"), Outcome::Ask, "no trust while it is held back");
+        let problem = loaded.problem.unwrap();
+        assert_eq!(problem.held, Held { permissive: true, auto_allow: false });
+        assert!(
+            problem.defaulted.iter().any(|d| d == "rules[0]") && problem.defaulted.iter().any(|d| d == "projects[1]")
+        );
+        let (en, tr) =
+            (problem.message(Path::new("settings.json"), false), problem.message(Path::new("settings.json"), true));
+        assert!(en.contains("allow rules and rules that lower a risk to LOW are off"), "{en}");
+        assert!(tr.contains("izin kuralları ve riski DÜŞÜK'e indiren kurallar kapalı"), "{tr}");
+        assert!(problem.log_line().contains("trusted projects count as normal"));
+
+        // A whole list that is not a list is lost too.
+        let loaded =
+            load_text("lost-list", r#"{ "rules": "oops", "projects": [{ "path": "/work", "mode": "trusted" }] }"#);
+        assert_eq!(loaded.settings.projects[0].mode, "normal");
+        assert!(loaded.problem.unwrap().held.permissive);
+    }
+
+    /// Losing a rule that was off anyway, or a trusted project, takes nothing
+    /// away from what the file restricted: nothing is held back.
+    #[test]
+    fn losing_an_unused_rule_or_a_trusted_project_holds_nothing_back() {
+        let loaded = load_text(
+            "harmless",
+            r#"{
+                "rules": [
+                    { "id": "off", "enabled": false, "pattern": 5, "action": "deny" },
+                    { "id": "git-ok", "tool": "Bash", "pattern": "git", "mode": "prefix", "action": "allow" }
+                ],
+                "projects": [{ "path": 7, "mode": "trusted" }, { "path": "/work", "mode": "trusted" }]
+            }"#,
+        );
+        assert!(loaded.settings.rules.iter().all(|r| r.enabled));
+        assert_eq!(loaded.settings.projects[0].mode, "trusted");
+        assert_eq!(loaded.problem.unwrap().held, Held::default());
+    }
+
+    /// An automatic-approval limit that cannot be read approves nothing on its own.
+    #[test]
+    fn an_unreadable_auto_allow_limit_is_none() {
+        let loaded = load_text("auto", r#"{ "autoAllowMax": 5, "holdMs": 900 }"#);
+        assert_eq!(loaded.settings.auto_allow_max, "none");
+        let problem = loaded.problem.unwrap();
+        assert!(problem.held.auto_allow);
+        assert!(problem.message(Path::new("s.json"), false).contains("nothing is approved automatically"));
     }
 
     #[test]
