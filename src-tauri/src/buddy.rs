@@ -367,15 +367,17 @@ pub fn resize(app: &AppHandle, percent: u32) {
 /// Linux without a compositing manager, where a window's transparent pixels
 /// show black: the mascot's window is cut to what the mascot draws, read from
 /// its pixels' alpha (`x11::painted`), so it shows the mascot and not a black
-/// square, and a click beside it reaches the window below. The cut covers
-/// every pose seen at the present size, with room around it (`grown`), so a
-/// blink, a breath or a turn of the head is not clipped. It is read again for
-/// a few seconds after anything that changes the drawing — a mood or reaction
-/// from the island, a drag, a new size, showing it; a still mascot costs
-/// nothing. With a compositor the window keeps its whole area.
+/// square, and a click beside it reaches the window below. It is read for a
+/// few seconds after anything that changes the drawing — a mood or reaction
+/// from the island, a drag, a new size, showing it — and the cut covers every
+/// pose seen meanwhile, with room around it (`Seen`), so a blink, a breath or
+/// a turn of the head is not clipped; a still mascot costs nothing. Reading
+/// waits for the page (`ready`): until it paints, the window holds whatever X
+/// gave it. With a compositor the window keeps its whole area.
 #[cfg(target_os = "linux")]
 pub mod cut {
     use std::os::raw::c_ulong;
+    use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::{Condvar, Mutex, Once, PoisonError};
     use std::time::{Duration, Instant};
 
@@ -389,6 +391,10 @@ pub mod cut {
     /// Until when the cut is to be read again.
     static UNTIL: Mutex<Option<Instant>> = Mutex::new(None);
     static WAKE: Condvar = Condvar::new();
+    /// Whether the mascot's page has said it is there (`buddy_ready`).
+    static READY: AtomicBool = AtomicBool::new(false);
+    /// Whether the next read starts the cut afresh.
+    static FRESH: AtomicBool = AtomicBool::new(false);
 
     /// Something may have changed the mascot's drawing.
     pub fn again(app: &AppHandle) {
@@ -401,14 +407,27 @@ pub mod cut {
         });
     }
 
+    /// The mascot's page is there and draws from now on: what was read before
+    /// it — the window as X made it — does not count.
+    pub fn ready(app: &AppHandle) {
+        READY.store(true, Ordering::Relaxed);
+        FRESH.store(true, Ordering::Relaxed);
+        again(app);
+    }
+
     fn run(app: &AppHandle) {
         let mut cut = Cut::default();
         loop {
             {
                 let mut until = UNTIL.lock().unwrap_or_else(PoisonError::into_inner);
-                while until.is_none_or(|t| Instant::now() >= t) {
-                    *until = None;
-                    until = WAKE.wait(until).unwrap_or_else(PoisonError::into_inner);
+                if until.is_none_or(|t| Instant::now() >= t) {
+                    // Each stretch of reading starts from what is drawn then,
+                    // so a read gone wrong does not stay in the cut for good.
+                    FRESH.store(true, Ordering::Relaxed);
+                    while until.is_none_or(|t| Instant::now() >= t) {
+                        *until = None;
+                        until = WAKE.wait(until).unwrap_or_else(PoisonError::into_inner);
+                    }
                 }
             }
             cut.apply(app);
@@ -427,8 +446,8 @@ pub mod cut {
         applied: Option<Option<Rects>>,
         /// Whether the log has said the mascot is cut.
         told: bool,
-        /// Every pixel drawn at the window's present size so far.
-        seen: Option<crate::x11::Painted>,
+        /// What the mascot drew while it was read.
+        seen: super::Seen,
     }
 
     impl Cut {
@@ -441,34 +460,23 @@ pub mod cut {
                 self.xid = crate::x11::own_window(&win.title().unwrap_or_default());
             }
             let Some(xid) = self.xid else { return };
+            if FRESH.swap(false, Ordering::Relaxed) {
+                self.seen.forget();
+            }
             // Under Wayland, XWayland's windows are always composited.
             let composited = std::env::var_os("WAYLAND_DISPLAY").is_some() || crate::x11::compositing().unwrap_or(true);
             let want = if composited {
-                self.seen = None;
+                self.seen.forget();
                 None
             } else {
-                let Some(now) = crate::x11::painted(xid) else { return };
-                // Nothing drawn yet (the page is still loading): cutting the
-                // window to nothing would hide the mascot until the next
-                // change, so it keeps the shape it has.
-                if !now.mask.contains(&true) {
+                // Before the page is there, the window shows what X gave it.
+                if !READY.load(Ordering::Relaxed) {
                     return;
                 }
-                let seen = match self.seen.take() {
-                    Some(mut seen) if (seen.width, seen.height) == (now.width, now.height) => {
-                        seen.mask.iter_mut().zip(&now.mask).for_each(|(was, is)| *was |= *is);
-                        seen
-                    }
-                    _ => now,
-                };
-                let by = (seen.width / 16).max(4);
-                let cut = crate::x11::Painted {
-                    width: seen.width,
-                    height: seen.height,
-                    mask: super::grown(&seen.mask, seen.width, seen.height, by),
-                };
-                self.seen = Some(seen);
-                Some(cut.rects())
+                let Some(now) = crate::x11::painted(xid) else { return };
+                // A read that tells nothing keeps the shape the window has.
+                let Some(mask) = self.seen.add(now.width, now.height, &now.mask) else { return };
+                Some(crate::x11::Painted { mask, ..now }.rects())
             };
             if self.applied.as_ref() == Some(&want) {
                 return;
@@ -483,6 +491,44 @@ pub mod cut {
                 self.applied = Some(want);
             }
         }
+    }
+}
+
+/// Every pixel the mascot drew at its window's present size while the cut
+/// was read (see `cut`), row by row.
+#[cfg(any(target_os = "linux", test))]
+#[derive(Default)]
+struct Seen {
+    size: (usize, usize),
+    mask: Vec<bool>,
+}
+
+#[cfg(any(target_os = "linux", test))]
+impl Seen {
+    /// Only what is drawn from now on counts.
+    fn forget(&mut self) {
+        self.mask.clear();
+    }
+
+    /// Adds a read of the window's pixels (`now`, `width` × `height`) and
+    /// returns what to cut the window to: every pixel drawn so far, with
+    /// room around it. None when the read tells nothing, and the window
+    /// keeps the shape it has: nothing is drawn (the page is still loading;
+    /// a cut to nothing would hide the mascot until the next change), or
+    /// nearly everything is — the window as X made it, before the page
+    /// painted, which no pose of the mascot fills.
+    fn add(&mut self, width: usize, height: usize, now: &[bool]) -> Option<Vec<bool>> {
+        let drawn = now.iter().filter(|drawn| **drawn).count();
+        if drawn == 0 || drawn * 10 >= now.len() * 9 || now.len() != width * height {
+            return None;
+        }
+        if self.size == (width, height) && self.mask.len() == now.len() {
+            self.mask.iter_mut().zip(now).for_each(|(was, is)| *was |= *is);
+        } else {
+            self.size = (width, height);
+            self.mask = now.to_vec();
+        }
+        Some(grown(&self.mask, width, height, (width / 16).max(4)))
     }
 }
 
@@ -553,7 +599,7 @@ pub fn buddy_ready(app: AppHandle) {
     let _ = app.emit_to(crate::island::WINDOW_LABEL, "buddy-ready", ());
     // The page draws from now on: the cut follows what it draws.
     #[cfg(target_os = "linux")]
-    cut::again(&app);
+    cut::ready(&app);
 }
 
 /// Ctrl + wheel on the mascot: grows or shrinks it by `step` percent.
@@ -632,6 +678,40 @@ mod tests {
         }
         assert_eq!(grown(&mask, w, h, 0), mask, "no margin: the same pixels");
         assert!(grown(&vec![false; w * h], w, h, 3).iter().all(|d| !d), "nothing drawn: nothing kept");
+    }
+
+    /// item 7 (repair): live without a window manager, the first read came
+    /// before the page painted — the window opaque from edge to edge — and
+    /// the cut stayed the whole window. Such a read, like an empty one, says
+    /// nothing; the mascot's real pose makes the cut.
+    #[test]
+    fn a_window_the_page_has_not_painted_yet_is_not_the_cut() {
+        let (w, h) = (24, 30);
+        let block = |w: usize, h: usize, xs: std::ops::Range<usize>, ys: std::ops::Range<usize>| -> Vec<bool> {
+            (0..w * h).map(|i| xs.contains(&(i % w)) && ys.contains(&(i / w))).collect()
+        };
+        let mut seen = Seen::default();
+        assert_eq!(seen.add(w, h, &vec![true; w * h]), None, "opaque from edge to edge");
+        let mut nearly = vec![true; w * h];
+        nearly[..w].fill(false);
+        assert_eq!(seen.add(w, h, &nearly), None, "all but a line");
+        assert_eq!(seen.add(w, h, &vec![false; w * h]), None, "nothing drawn yet");
+        let pose = block(w, h, 8..16, 10..26);
+        assert_eq!(seen.add(w, h, &pose), Some(grown(&pose, w, h, 4)));
+        // Another pose while it is read adds to the cut; an opaque read
+        // later changes nothing.
+        let wings = block(w, h, 2..22, 14..18);
+        let both: Vec<bool> = pose.iter().zip(&wings).map(|(a, b)| *a || *b).collect();
+        assert_eq!(seen.add(w, h, &wings), Some(grown(&both, w, h, 4)));
+        assert_eq!(seen.add(w, h, &vec![true; w * h]), None);
+        assert_eq!(seen.add(w, h, &pose), Some(grown(&both, w, h, 4)));
+        // Reading anew starts from what is drawn then.
+        seen.forget();
+        assert_eq!(seen.add(w, h, &pose), Some(grown(&pose, w, h, 4)));
+        // Another size: only what is drawn at it counts.
+        let small = block(16, 20, 4..12, 6..18);
+        assert_eq!(seen.add(16, 20, &small), Some(grown(&small, 16, 20, 4)));
+        assert_eq!(seen.add(16, 21, &small), None, "a read that does not match its size");
     }
 
     /// X reports each new size at the old top-left before the move, and quick
