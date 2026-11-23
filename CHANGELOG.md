@@ -9,115 +9,224 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 A full audit of 2.4.1 — the code, the real app on Linux, every screen in both languages and all
 seven themes, the installers, the website and the documents — turned up the problems below. This
-release fixes them, and improves a few things along the way.
+release fixes them, and improves a few things along the way. One change is in how you approve: on
+Linux, HIGH and CRITICAL requests are now approved in the terminal (the first point under
+Security).
+
+**What was tested where.** Everything was built and its tests run on Linux, and the app was tried
+there on X11, on a virtual display. Code that exists only for Windows or macOS was compiled and
+linted for those systems, but none of it has run on them yet, not even its unit tests:
+
+- Windows: the relay's pipe hardening and the flush before the pipe closes; the click guard's
+  handling of swapped buttons, of touchpads without a device handle and of buttons a program
+  holds down; the island's window style (out of Alt-Tab, never taking the focus) and the keyboard
+  going back to the window you were in; **Go to window**; the hook commands written for user
+  folders with `$` or a backtick; each row's local time in a CSV export; the ChatGPT Web
+  registration scripts; and the installer and uninstaller, which were only compiled with NSIS.
+- macOS: placing the island and the desktop mascot on screens with different scaling, the desktop
+  mascot never taking the keyboard, the menu bar icon, the media card's running check and time
+  limits, the Apple Events entitlement, and the click guard's handling of a button a program holds
+  down.
+
+The Windows path rules (device paths, 8.3 names, `::$DATA`) are text rules and were tested on
+Linux. On Linux, the desktop mascot's cut without a compositor was checked through the window
+shape X reports, not by eye on a real desktop. The new release jobs have not run yet.
 
 ### Security
 
-- **The Linux click guard can't be fooled by a pointer added later.** Every press is now judged by
-  the device it came from at the moment it happens, so a virtual (XTEST) pointer a program adds
-  after Nöbetçi started (`xinput create-master`) counts as synthetic, like any other. Nöbetçi also
-  sees the button's release now, so Rust measures the hold on Linux too.
+- **On Linux, HIGH and CRITICAL requests are approved in the terminal.** X11 lets any program you
+  run press a button through the real mouse device, and nothing in such a press tells it apart
+  from your hand. So on Linux (X11 and XWayland) the island approves no HIGH or CRITICAL request:
+  the card says why and offers the hand-off — **Hand to terminal**, or **Hand to Cursor** for a
+  Cursor request — and **Deny**, and Rust refuses any approval of it from the island, whether a
+  click, a hold or a key. The level that counts is the one on the card, after your rules. LOW and
+  MEDIUM requests are still approved on the island, with a click the guard accepts: presses from
+  virtual (XTEST) devices count as synthetic, including a pointer a program adds after Nöbetçi
+  started (`xinput create-master`). Settings → Safety and the documents say the same. Windows and
+  macOS are unchanged.
+- **A program's press spoils the click.** Every mouse button a program holds down is followed
+  until it is let go, and a real press made meanwhile approves nothing. A program's press of any
+  button counts — a wheel button mapped to the click on Linux, either button on Windows whatever
+  the swap setting says. The guard follows swapped buttons (left-handed mouse settings on Windows,
+  X11 button maps on Linux), so the press it records is the one that acts as the primary click.
 - **One click answers one card.** A card accepts no approval in its first 350 ms, and the press
-  behind an approval must begin after the card appeared. The second click of a double-click, or
-  the release of a hold, meant for the card before can no longer approve the next request unread
-  — and no longer raises a false "a program tried to approve" alarm either.
-- **Nöbetçi guards itself on every system.** `nobetci --remove-hooks` is now CRITICAL, by any path.
-  Writing to Nöbetçi's folders on Windows, macOS and Linux (`~/.config/nobetci`,
-  `~/.local/share/nobetci` and `~/.local/state/nobetci` were not covered before), its installed
-  programs or its relay is CRITICAL however the command writes — a redirection, `cp`, `curl -o`,
-  `sed -i`, an editor or a one-liner. Stopping or uninstalling it is HIGH, and so is
-  `systemctl --user stop nobetci`. Writing Codex's or Cursor's hook files is CRITICAL.
-- **Rules can't be slipped past with a line break.** Glob patterns now cross line breaks, a
-  *starts with* pattern ends at a word boundary (`npm test` no longer matches `npm testing`), and
-  a loose rule that allows or lowers a request doesn't cover a command that chains another one
-  (`npm test` + a new line + `rm -rf ~`). Deny rules still match anywhere.
+  behind an approval must begin after the card appeared and land on the Allow button inside the
+  visible island. The second click of a double-click, or the release of a hold, meant for the card
+  before can no longer approve the next request unread — and no longer raises a false "a program
+  tried to approve" alarm either.
+- **Nöbetçi guards itself on every system.** `nobetci --remove-hooks` is CRITICAL however it is
+  run — by any path, piped into a shell, through `xargs`, `$(…)` or a variable, or from an option
+  of git, `script`, `tmux` or `env -S` — while a line that only prints, searches or records it (an
+  `echo`, a `grep`, a commit message) isn't. Writing to Nöbetçi's folders on Windows, macOS and
+  Linux (`~/.config/nobetci`, `~/.local/share/nobetci` and `~/.local/state/nobetci` were not
+  covered before), its installed programs, its relay or its socket's fallback folder is CRITICAL
+  however the command writes — a redirection, `cp`, `curl -o`, `sed -i`, an editor, a one-liner,
+  PowerShell's .NET file calls — and variables, braces, globs, Windows' 8.3 short names, `::$DATA`
+  and trailing dots or spaces no longer get a write past these names. Stopping or uninstalling it
+  is HIGH, and so is `systemctl --user stop nobetci`. Writing Codex's or Cursor's hook files, or
+  Codex's `config.toml`, is CRITICAL.
+- **Rules can't be slipped past.** Glob patterns cross line breaks, and a *starts with* pattern
+  ends at a word boundary (`npm test` no longer matches `npm testing`). A loose rule that allows or
+  lowers a request doesn't cover a command that runs another one — after a new line, `;`, `&&`,
+  `||`, `|` or `&`, in backticks or `$( )`, or inside the brackets PowerShell, fish and zsh run
+  commands in (`( )`, `@( )`, `{ }`, `=( )`, glob qualifiers) — so it now also leaves
+  `git show stash@{0}` to you unless its pattern spells the braces out. A regular-expression allow
+  covers only what it matches: `^git (status|diff)` no longer allows `git status; rm …`. A path
+  counts where it leads: an allow rule or a "don't ask again" grant must match the path both as
+  written and where `..`, `~` or `$HOME` take it, while deny, always-ask and raising rules match
+  either — and these other spellings of it: `//etc/x`, `/proc/self/root/…`, `/private/etc/…`,
+  `\\?\C:\x`, `\\.\C:\x`, `\??\C:\x`, `\\localhost\C$\x`, trailing dots, spaces or `::$DATA`, and
+  8.3 short names of the folders a rule names, but not links, junctions or mounted folders. Deny
+  rules still match anywhere, and a rule that matched a path only where it leads never hides a deny
+  rule further down.
 - **The allow hotkey and batch approval go by the engine's own level.** A HIGH request that a rule
-  lowered to LOW is a plain click, never something the hotkey or the batch row's **Allow all**
-  can take. The hotkey works only right after a real press of the shortcut, and the batch allows
-  exactly the requests its row lists.
+  lowered to LOW is a plain click, never something the hotkey or the batch row's **Allow all** can
+  take. The hotkey works only right after a real press of the shortcut, and the batch allows
+  exactly the requests its row lists, only once the whole list has been on screen.
 - **The risk engine reads commands as commands.**
   - Paths are resolved first: `.claude//settings.json`, `./`, `..` and relative paths no longer
-    turn a CRITICAL write into a LOW one, and `../../usr/local/bin` counts as a system folder.
+    turn a CRITICAL write into a LOW one, `../../usr/local/bin` counts as a system folder, and
+    Claude Code's settings count in the folder `CLAUDE_CONFIG_DIR` names too. The other spellings a
+    system accepts count as the path too — `//etc` on Linux and macOS, `/proc/self/root/…` on
+    Linux, `\\?\C:\…`, `\??\C:\…`, `\\localhost\C$\…`, 8.3 short names such as `C:\PROGRA~1`, Git
+    Bash's `/c/…` — so a write into a system folder is HIGH in any of them.
+  - A file copied or moved into a folder is judged under its own name there; archives unpacked
+    into a folder, copies of a folder's contents and folders moved or deleted reach what they
+    hold; Perl, Ruby and awk one-liners, here-documents fed to an interpreter and PowerShell's .NET
+    file calls count as writes; and recursive deletes are judged by where they land (`cd`, `..`,
+    `$HOME/*`, `Get-ChildItem | Remove-Item`).
   - Download-and-run in its everyday forms is CRITICAL: `bash -c "$(curl …)"` (Homebrew's
     installer), `bash <(curl …)`, `source <(curl …)`, `eval "$(curl …)"`, a shell by path or
-    through `env`, and a download run on a later line.
+    through `env`, and a download kept in a variable and run. A download saved and run on a later
+    line, or unpacked with `tar` or `unzip` and then run, is HIGH.
   - Caught now: `crontab -` and `systemctl --user enable`; shell writes to Claude Code's settings,
-    git hooks, `core.hooksPath` and shell profiles; recursive deletes with long options,
-    `find -exec rm` and PowerShell's `-Recurse` aliases; every abbreviation of
-    `-EncodedCommand` and base64 piped into a shell; `doas`, `pkexec`, `run0` and `su`; and
-    `git restore .`, `git checkout -f` and `git clean --force`, which throw work away.
+    git hooks, `core.hooksPath` and shell startup files, `$PROFILE`, `.bash_aliases`,
+    `.zshrc.local`, oh-my-zsh's custom folder and fish functions included; recursive deletes with
+    long options, `find -exec rm` and PowerShell's `-Recurse` aliases; every abbreviation of
+    `-EncodedCommand`, base64 piped into a shell, and a payload decoded from a here-string, a file
+    or `iex([Convert]::FromBase64String(…))`; `doas`, `pkexec`, `run0` and `su`; `git push -uf`;
+    and `git restore .`, `git checkout -f` and `git clean --force`, which throw work away.
+  - Programs that fake keyboard and mouse input are HIGH — `xdotool` (unless it only looks),
+    `xte`, `ydotool`, `wtype`, `xinput` adding or moving pointers, and code that loads XTest,
+    uinput, pyautogui, pynput, robotjs, nut-js, `SendInput` or `SendKeys`, whether it runs or is
+    written to a file (a document such as a `.md` file excepted) — while their help, read-only
+    queries and mentions stay LOW. On Linux that sends them to the terminal.
+  - A request too tangled to read in full — nested too deep (`bash -c` inside `eval` inside …),
+    handing over too much, thousands of `cd`s — is HIGH, can't be switched off and is never
+    approved automatically; it can no longer make Nöbetçi run out of memory.
   - MCP tools are read by the words of their name (`push_files`, `apply_migration`,
-    `wipe_device`…), and SQL, command, path and URL arguments are read too. A tool Nöbetçi doesn't
-    know is shown and matched with all of its arguments.
+    `wipe_device`…), and SQL, command, path and URL arguments are read too, as are tools that
+    download, export or save to a path, destination keys, SQL in query tools, Serena's and
+    JetBrains' path keys, `file://` addresses and argument arrays. A tool Nöbetçi doesn't know is
+    shown and matched with all of its arguments and is never approved automatically; only Bash and
+    PowerShell run their `command`, and only WebFetch its `url`.
   - More invisible characters are caught — U+061C, U+2060, the soft hyphen, Hangul fillers, tag
-    characters, line separators, control characters — and no-break and wide spaces count as
-    blank lines.
+    characters, variation selectors, line separators, control characters — and no-break and wide
+    spaces count as blank lines. Tag characters pass only as the England, Scotland and Wales
+    flags, and variation selectors and joiners only where emoji or joining scripts use them.
   - "A secret and a way out" stays locked on even when the categories it is made of are switched
     off.
 - **The card shows what will be written, all of it.** Write and edit cards show the whole content
   and every edit of a multi-edit, not the first 1,200 bytes. A request that was cut is marked as
-  cut in the command box. Every invisible, direction-changing or control character is shown as a
-  marker and can no longer reorder what the box displays. MCP cards name the tool's server and
-  pretty-print the arguments.
-- **Redaction catches more and masks less.** `curl -u user:password`, `*_PASS` and `*_PWD`
-  variables, `mysql -p…`, `sshpass -p`, `redis-cli -a`, `docker login -p`, OpenSSL passwords,
-  quoted values in full, Slack, Discord, Telegram and Teams webhook addresses, cookie headers and
-  more vendor tokens are now masked in the history and notifications; "token" or "password" in an
-  ordinary sentence no longer is.
-- **The history is private.** On macOS and Linux its folder and files are readable by your account
-  only.
+  cut in the command box, and one too large for the channel (over 1 MiB) now reaches the card, cut
+  and HIGH, instead of going silently to the terminal. Every invisible, direction-changing or
+  control character is shown as a marker and can no longer reorder what the box displays. MCP
+  cards name the tool's server and pretty-print the arguments.
+- **Redaction catches more and masks less.** `curl -u user:password` (and the same flag of `wget`,
+  HTTPie, `xh`, `lftp`, `ftp` and `aria2c`), names ending in `_PASS`, `_PWD` or `_PW`
+  (`DB_ADMIN_PASS` too), `mysql -p…`, `sshpass -p`, `redis-cli -a`, `docker login -p`, OpenSSL
+  passwords, `$env:API_TOKEN=…`, `--from-literal=password=…`, npm's `_authToken`, a URL password
+  with no user name, quoted values in full, Slack, Discord, Telegram and Teams webhook addresses,
+  the name=value pairs of cookie headers and more vendor tokens are now masked in the history and
+  notifications. "Token" or "password" in an ordinary sentence no longer is, and
+  `docker run -u 1000:1000` or the rest of a command after a cookie header stays as written. A
+  notification is masked before it is shortened, so its cut can't show the start of a secret.
+- **Your files are private.** On macOS and Linux, Nöbetçi's settings and data folders and the
+  files in them — settings, agenda, history, log and their copies — are readable by your account
+  only. On a file system without Unix permissions (FAT, exFAT, some network shares) they are used
+  as they are, and the log says so.
+- **A settings file read only in part lets nothing more through.** If a rule that was on, or a
+  project that wasn't trusted, can't be read, allow rules and rules that lower a risk to LOW are
+  off and trusted projects count as normal until the file is fixed, and an auto-allow ceiling that
+  can't be read is off; the settings window says so.
 - **Settings import takes only Nöbetçi settings.** Importing `~/.claude/settings.json` by mistake
   used to reset every rule, project and shortcut; such files are now refused, and exports carry a
   marker that says what they are.
 - **Windows:** the relay opens the pipe without letting the other end impersonate you, and an
   answer is flushed before the pipe closes, so a rule's instant decision is never lost.
 - **Only the island answers approvals.** The settings window and the desktop mascot can no longer
-  call the approval commands.
+  call the approval commands, and the desktop mascot can't send the island events.
+- **Linux notifications show text as written.** Where the notification server reads markup, a
+  command in a notification can no longer turn into a link or formatting.
+- **Dependencies.** rustix moves to 1.1.6, past RUSTSEC-2026-0486.
 - **Release pipeline.** Releases start only by hand from `main`; the build jobs run with a
-  read-only token and no signing secrets; Apple's signing secrets are used only by Apple's own
-  tools; the Windows installer now carries the signed programs byte for byte once signing is on;
-  and a new workflow checks the Rust dependencies with `cargo audit` on every change and every week.
+  read-only token and no signing secrets, and Windows signing runs in jobs of its own that run
+  nothing from the repository, npm or cargo, so the SignPath token never shares a job with
+  third-party code; Apple's signing secrets are used only by Apple's own tools; the Windows
+  installer now carries the signed programs byte for byte once signing is on; and a new workflow
+  checks the Rust dependencies with `cargo audit` on every change and every week.
 
 ### Fixed
 
 - **Updating on Windows no longer removes your hooks.** Running a new installer over an old one
   used to uninstall the old version first and take the Claude Code, Codex and Cursor hooks and
-  **Start with Windows** with it. An upgrade or a downgrade now keeps them, and the data too.
+  **Start with Windows** with it. An update now keeps them, and the data too, and so does going
+  back to an older version with an installer newer than 2.4.1. To go back to 2.4.1 or earlier,
+  choose **Do not uninstall** on the page its installer shows.
 - **Uninstalling on Windows is safer.** It asks about a running Nöbetçi before anything is touched
   (Cancel really changes nothing); if the hooks can't be removed it keeps the relay and the log
-  and says what to finish by hand; **Delete the application data** now deletes your settings,
-  agenda, history and log; the machine-wide **Start with Windows** entry is removed when possible;
-  and the installer falls back to English, not Turkish, on other Windows languages.
+  and says what to finish by hand: which hook files to clean (also under `CLAUDE_CONFIG_DIR` or
+  `CODEX_HOME`), and to delete only the relay folder and the log, so your history stays;
+  **Delete the application data** now deletes your settings, agenda, history and log; the ChatGPT
+  Web bridge's browser registration is removed (an update keeps it); the machine-wide **Start with
+  Windows** entry is removed when possible; and the installer falls back to English, not Turkish,
+  on other Windows languages.
 - **Cursor isn't blocked when Nöbetçi is closed.** When Nöbetçi gives no answer — closed, paused,
   handed back, queue full or timed out — Cursor now asks you itself instead of refusing every
   shell and MCP command. A relay that can't run at all still makes Cursor refuse.
 - **Denying no longer stops Claude.** A plain deny — the button, a reason, the hotkey or a rule —
   lets Claude read your message and carry on another way; **Deny and stop Claude** ends its turn.
-  Before, every deny ended the turn.
+  Before, every deny ended the turn. Codex and Cursor can't be stopped from a hook, so their cards
+  offer the reasons without **Deny and stop**.
 - **Session notifications are sent again.** With the default settings they never were; now a
   notification comes whenever the island isn't open (the compact pill counts as not showing it).
 - **The resting island goes quiet.** The owl falls asleep after three minutes of calm and the
   island stops drawing (it used to cost about 12 % CPU forever); far from the island, the cursor
-  is checked less often.
-- **The assistant opened with the shortcut closes again** with Esc, ✕, the shortcut or the toggle.
+  is checked less often. Quiet hours take effect on time, without waiting for a Claude event, and
+  the strip at the top of the screen always wakes the island (it could stop reacting after a
+  pause).
+- **The assistant opened with the shortcut closes again** with Esc, ✕, the shortcut or the toggle,
+  and while it isn't on screen it takes no keys and sends nothing on Enter.
 - **ChatGPT Web reaches the island.** The bridge's messages were dropped by the app since 2.1.4;
-  its guide is in English and Turkish now, registers without changing the PowerShell policy, has an
-  unregister script, and the extension backs off while Nöbetçi is closed.
+  its guide is in English and Turkish now (the Turkish one opens from a Turkish interface),
+  registers without changing the PowerShell policy, works when your Windows user folder has
+  letters outside ASCII, has an unregister script, and the extension backs off while Nöbetçi is
+  closed.
 - **No more lost data.**
   - An unreadable `settings.json` is copied aside as `settings.json.unreadable-…`, the window says
-    so, and nothing is saved over the original until you restart.
-  - An agenda file with a byte-order mark or one bad entry keeps its other entries; one that can't
-    be read at all is copied aside before anything is saved.
-  - A save that fails says so instead of "Saved", and a failed agenda change is undone on screen.
+    so, and nothing is saved over the original until you restart. If only a few values are bad,
+    every value that still reads is kept — deny rules and strict projects stay in force — and the
+    window says which were left at their defaults.
+  - An agenda file with a byte-order mark or a bad entry keeps everything else, and is copied
+    aside before anything is saved over it. A file that can't be read is never written over, and
+    the agenda card says it couldn't read `agenda.json` instead of showing an empty day. A full
+    agenda (300 items) makes room by dropping the oldest finished item, and otherwise says it is
+    full instead of silently dropping old items.
+  - An import or a reset keeps the settings it replaces as `settings.json.bak-…`, two saves at once
+    can no longer mix their contents, and a settings file saved by Notepad imports.
+  - A save that fails says so instead of "Saved", a reset or an import whose save fails says the
+    settings are in effect until Nöbetçi restarts but weren't saved, and a failed agenda change is
+    undone on screen.
 - **Long approval cards keep their buttons.** The findings scroll and the buttons stay pinned to the
-  bottom of the island; the card no longer jumps or flashes a hint while it settles.
+  bottom of the island; the card no longer jumps or flashes a hint while it settles, and a cut
+  multi-edit shows one scroll hint, clear of the line that says the request was cut.
 - **Right-click → Reload is gone.** The webview's own menu and reload keys could drop a waiting
   request; text fields keep their copy-and-paste menu, and waiting cards come back if the island
   ever reloads.
 - **The approval card.**
   - The 1/N in the header is a real pager: look at the queued requests without answering them.
-  - The batch row lists what it will allow and never appears under the pointer where another
-    button was.
+  - The batch row lists what it will allow, has room for six requests before it scrolls, and never
+    appears under the pointer where another button was.
   - "Don't ask again" says what it covers: this exact command, changes to this file, this address
     or this tool with these arguments.
   - Why an action was refused ("hold the button", "LOW only for the hotkey") is shown on the card.
@@ -127,109 +236,185 @@ release fixes them, and improves a few things along the way.
     counts from its release.
   - While a card waits, header buttons that can't act look disabled and say why, and **Pause**
     notes the handed-back requests on the session's timeline.
-  - Themed scrollbars and checkbox, readable hints, and MEDIUM and HIGH that no longer look alike.
+  - Long commands wrap at spaces and the command, preview and plan boxes grow into free room; an
+    edit shows the new text first, then what it replaces, and says so when it replaces every
+    occurrence; text after a collapsed run of blank lines keeps its indentation; a highlight after
+    a dotted İ no longer lands a few letters off.
+  - Cursor cards say **Hand to Cursor**, and Claude app cards **Hand to Claude**. When one of them
+    takes a request over — handed back, paused or timed out — the timeline names it instead of the
+    terminal, and so does the history for a request you handed back.
+  - Themed scrollbars and checkbox, readable hints, and MEDIUM in yellow and HIGH in red-orange.
   - The pulsing CRITICAL badge stops when the island isn't open and under reduced motion.
 - **Question and plan cards.** A question with spaces around it can be answered; a typed answer
-  and a highlighted option no longer both look chosen; unanswered questions below are pointed out.
-  Plans show nested lists, numbered lists that start anywhere, italics, links, rules and tables.
+  and a highlighted option no longer both look chosen; unanswered questions below are pointed out;
+  and what you typed on a question or plan card survives looking at another request. Plans show
+  nested lists, numbered lists that start anywhere, italics, links with their titles, rules, code
+  blocks with their language, and tables with every column.
 - **Cards that stayed or vanished.** A card whose session moved on is dropped; a card arriving
   during the greeting no longer leaves the island stuck; after a suspend or clock change an
-  expired card is handed to the terminal at once instead of waiting.
+  expired card is handed to the terminal at once instead of waiting. An answer that never reached
+  the agent (it had stopped waiting) shows as **Not delivered** on the session's timeline and no
+  longer counts as approved or denied.
 - **The island's views.** The session view no longer grows on every update, opening a diff no
   longer squashes the file list, more than five sessions can be scrolled to, rows react to every
-  click, the empty view and the session list replace each other, a paused island stops showing
-  "Working", and the weekly limit's reset shows its day.
+  click and light up on hover in every theme, secondary text is easier to read, the empty view and
+  the session list replace each other, a paused island stops showing "Working" and offers Resume,
+  and the weekly limit's reset shows its day. The pill shows a long message in full on hover and
+  `+N` for sessions beyond four, a right or middle click on it no longer opens the island, and
+  opening or folding the island no longer flashes the pill's text over the cards or leaves the
+  mascot hanging below the pill. Slash commands work in capitals, and the session search takes the
+  keyboard on Windows and Linux.
 - **The island's cards.** The focus timer's ring no longer covers its button, and the end of a
-  focus session is heard and shown; the system card turns amber at 85 %; the agenda's add row
-  is wide enough to read and items can be edited; a reminder in the past is pointed out and fires
-  once on the night clocks change; Turkish wind speed is "km/sa"; the snow icon is visible.
+  focus session is heard and shown, and sends a desktop notification when notifications are on;
+  the system card's rings turn red at 85 %, and a hanging GPU driver can no longer pile up
+  processes behind it; the agenda's add row is wide enough to read, items can be edited, and
+  refusal notes wrap instead of being cut off; a reminder in the past is pointed out and fires
+  once on the night clocks change; the music card says when it is off (with a button to turn it
+  on) or when nothing plays, and reads the player only while it or the pill's widget line is on
+  screen; the calendar works with the keyboard and names both months of a week that spans two;
+  Turkish wind speed is "km/sa"; the snow icon is visible.
 - **The assistant.** Tab completion and ↑ history stick, all targets can be scrolled to, a long
   answer scrolls with its Copy button, the Turkish key hint fits, Esc closes the prompt library,
-  `/play`, `/next` and `/prev` work with the media card switched off, and Linux shows no dictation
-  button it can't use.
-- **Searching in Turkish.** İ, I, ı and i match each other in the session search and the risk
-  categories.
+  `/play`, `/next` and `/prev` work with the media card switched off on a player that is already
+  running (with none, the assistant says so), and Linux shows no dictation button it can't use.
+  It says when an app may already have sent your message — ChatGPT, Claude, Perplexity, Copilot
+  and Grok on the web, the ChatGPT and Perplexity apps — instead of telling you to press send.
+- **Searching in Turkish.** İ, I, ı and i match each other in the session search, the history
+  search and the risk categories.
 - **Settings window.**
   - Dialogs and the history drawer are opaque in every theme and keep the keyboard inside; the
     page behind can't be changed while a diff is open, and changing the hook events invalidates
     an open preview, so what is written is what you reviewed.
-  - Button text is readable in all seven themes, the whole window takes the mascot's colours, and
-    a click no longer replays the page's entrance animation.
-  - Quiet hours with the same start and end now say they never apply (and point to Do not
-    disturb), and follow the UI language's clock.
+  - Button text is readable in all seven themes, the whole window takes the mascot's colours, the
+    risk levels take the island's, a click no longer replays the page's entrance animation, and
+    nothing is cut off in small windows.
+  - Quiet hours with the same start and end now say they never apply — in the General tab's
+    summary too — and point to Do not disturb, and times follow the UI language's clock.
   - The rule editor checks a regular expression with the same engine the rules use, warns before
-    an empty pattern covers every tool, and asks before discarding edits.
-  - Project paths are applied on Enter or when you leave the field, quotes and spaces are removed
-    with a notice, and Undo restores the row as it was.
-  - The shortcut recorder registers the key your layout labels (Windows, Linux); on a Mac it says
-    that keys go by position.
+    an empty pattern covers every tool, explains how file paths are matched and when a deny rule
+    further down decides, and asks before discarding edits; the template menu no longer stacks
+    copies.
+  - Project paths are stored when you finish them — Enter, leaving the field, a folder pick, a tab
+    change or closing the window — never half-typed during a redraw or a minimise; quotes and
+    spaces around them are removed (with a notice while you type), in imported settings too, and
+    Undo restores the row as it was.
+  - The shortcut recorder registers the key your layout labels (Windows, Linux) and on a Mac says
+    that keys go by position; Tab and Shift+Tab move on instead of being recorded, and a shortcut
+    needs Ctrl, Alt or Super/⌘ (F1–F24 excepted).
   - The risk testers build requests the way the real engine sees them, with a working folder that
     fits your system.
-  - The history's stats survive a reload, its chart, durations and empty states are right, and
-    the list starts where the stats start.
+  - The history's stats survive a reload, its chart, durations and empty states are right, its day
+    bars follow daylight saving, the list starts where the stats start, the target gets its room
+    (MCP tools as server › tool, the full text on hover), and the filters are never cut off.
   - The health check knows a status line that belongs to someone else and explains `PreToolUse`;
     hooks can't be installed while the relay is missing, and they go to
-    `$CLAUDE_CONFIG_DIR/settings.json` when Claude Code keeps its settings there.
-  - The first-run wizard shows its errors, ticks only the steps you did, and a late start-up
-    event no longer reopens or resets it; **Reset to defaults** no longer brings it back.
+    `$CLAUDE_CONFIG_DIR/settings.json` when Claude Code keeps its settings there and Nöbetçi itself
+    sees that variable (Settings → Claude Code shows the file); on Windows the page says when hooks
+    can run only where Claude Code uses Git Bash.
+  - For other agents, the Cursor note says Cursor asks you itself when Nöbetçi gives no answer, a
+    "Connected" message no longer outlives hooks removed outside the window, connecting no longer
+    promises a backup when there is no file, and a review that changes nothing shows no backup line.
+  - The first-run wizard shows its errors, ticks only the steps you did — a health check with gaps
+    counts as skipped — and a late start-up event no longer reopens or resets it; **Reset to
+    defaults** no longer brings it back.
+  - Prompt Studio's model name no longer snaps back or merges while you type; Esc on an inline
+    question ("Clear history…", "Reset to defaults…") cancels it instead of closing the window; and
+    the assistant's app list says which apps may send your message as soon as they open.
   - macOS and Linux get their own wording where Windows' made no sense, and messages follow a
     language switch.
+- **Start with Windows / at login follows the system.** Switched off or removed in Task Manager,
+  Login Items or your desktop's autostart settings, it shows as off instead of coming back, and a
+  change that fails is reported.
 - **Hooks are installed and removed precisely.** Only Nöbetçi's own hook commands are touched —
-  never another tool's hook in the same group — the file keeps its key order, a symlinked
-  `settings.json` is written through the link, the backup named in the preview is the one written
-  (and none is announced when there was no file), and `nobetci --remove-hooks` reports failure
-  with its exit code.
+  never another tool's hook in the same group, while a relay path an older version wrote in
+  Windows' 8.3 short form still counts as Nöbetçi's — the file keeps its key order, a symlinked
+  `settings.json` is written through the link, the preview is worked out on the file's own text
+  and layout (a change of line endings is named at its top) and a file that needs no change isn't
+  rewritten, the backup named in the preview is the one written (and none is announced when there
+  was no file), and `nobetci --remove-hooks` reports failure with its exit code.
 - **History.** Every outcome is recorded: requests too large for the channel, questions and plans
-  handed straight to the terminal, and answers that never reached the agent. One damaged line no
-  longer hides the whole file, a failed roll-over no longer drops the decision, and the history is
-  read once and kept, not parsed three times per refresh.
+  handed straight to the terminal, and answers that never reached the agent, marked **Not
+  delivered**. One damaged line no longer hides the whole file, a failed roll-over no longer drops
+  the decision, a history file emptied or replaced is read again from the start, and the history
+  is read once and kept, not parsed three times per refresh, without stalling the island while
+  History loads.
 - **Mascots.**
   - The island's canvas is wider than the mascot, so wings, tails, manes and huffs are no longer
     cut off.
   - Reactions blend into each other, a hop retriggered in mid-air continues from where it was,
-    hops crouch before they jump, the dizzy spin no longer whips back, and blinks and level of
-    detail no longer pop.
-  - Reduced motion is honoured by the island's mascot, the desktop mascot and the greeting.
-  - The installer's owl ends its cheer on a clean frame; the desktop mascot opens the island on a
-    double-click without frowning or getting dizzy.
+    hops crouch before they jump and land with a squash, the cheer flutters and settles, eyes close
+    into a smile from below, the dizzy spin no longer whips back or shows face markings on the back
+    of the head, and blinks and level of detail no longer pop.
+  - Reduced motion is honoured by the island's mascot, the small heads in the session list, the
+    pill and the gallery, the desktop mascot and the greeting, and under it the island opens
+    without overshooting.
+  - The desktop mascot draws nothing while it sleeps, while it is hidden and while Nöbetçi is
+    paused (it used to redraw about 15 times a second); Ctrl+wheel resizing keeps its feet where
+    they are; it shows a grabbing cursor while you hold it; and a double-click opens the island
+    without poking, frowning or getting dizzy first.
+  - The installer's owl ends its cheer on a clean frame.
   - The mood fits Claude's questions and **Pause**; the small mascots in the list and the pill
     move smoothly.
 - **English and Turkish everywhere.** "1 session", not "1 sessions"; no Turkish-only error
   messages in the browser preview or the website's demo.
 - **macOS.** The island and the desktop mascot open at the right place and size on screens with
-  different scaling; the desktop mascot never takes the keyboard; the media card no longer starts
-  a player that was just closed, and a stuck player can't pile up `osascript` processes; the menu
-  bar icon follows light and dark mode.
-- **Linux.** The AppImage plays the island's sounds (it now carries GStreamer, and is about 11–15 MB
-  bigger); clicking the island no longer takes the keyboard from your terminal; programs opened
-  from Nöbetçi no longer inherit its X11 setting; a media player with an odd bus name can't crash
-  the media card; the `.deb` no longer lists its dependencies twice; a missing compositor is
-  written to the log.
+  different scaling (after the update the desktop mascot may move, or go back to its corner,
+  once); the desktop mascot never takes the keyboard; the media card no longer starts a player
+  that was just closed, and a stuck player can't pile up `osascript` processes; the menu bar icon
+  follows light and dark mode.
+- **Linux.**
+  - The AppImage plays the island's sounds (it now carries GStreamer, and is about 11–15 MB
+    bigger), and programs it opens get your desktop's own GTK and GStreamer settings rather than
+    the AppImage's; programs opened from Nöbetçi no longer inherit its X11 setting either.
+  - Clicking the island no longer takes the keyboard from your terminal; the assistant opened with
+    its shortcut takes your typing on the first try, and when you leave an island text box the
+    keyboard goes back to the window you were in.
+  - Without a compositor, the island's window is cut down to the island (square corners, no
+    shadow) and the desktop mascot's to the mascot, instead of black boxes, and the log says so
+    once.
+  - The desktop mascot's window takes the mascot's size; it was stuck at 200×200.
+  - A login entry your desktop switched off (`Hidden=true`) turns **Start at login** off, and a
+    moved AppImage is put into the entry's `Exec=` line without touching what you added there.
+  - The media card only talks to a player that is already running, and one with an odd bus name
+    can't crash it; the `.deb` no longer lists its dependencies twice.
+  - The relay's socket file is removed when Nöbetçi quits or is stopped (`SIGTERM`, `SIGINT`), on
+    macOS too.
 - **Windows.** The island stays out of Alt-Tab and never takes focus after it changes its window
-  flags; **Go to window** no longer opens the target app's menu bar; left-handed mouse settings
-  are followed by the click guard; a press without a device handle (some precision touchpads) is
-  written to the log.
+  flags, and when you leave an island text box the keyboard goes back to the window you were in;
+  **Go to window** no longer opens the target app's menu bar; a press without a device handle
+  (some precision touchpads) is written to the log; and a user folder with `$`, a backtick or other
+  shell characters no longer breaks the hooks.
 - **False alarms.** A download read as data (`curl … | python3 -m json.tool`), a commit message
-  about a "graceful shutdown", `--dry-run`, `.env.example`, `npm i -D rimraf`, emoji with joiners
+  about a "graceful shutdown" or one that mentions `sudo`, `--dry-run`, `.env.example`,
+  `npm i -D rimraf`, emoji with joiners, edits inside a project that lives under `/usr` or `/opt`,
   and files merely named `cookies` or `credentials` no longer score HIGH or CRITICAL.
 - **CSV export.** Choose a comma or a semicolon (for Excel in Turkish and other languages that
-  expect one); every line of a cell is formula-safe.
+  expect one); every line of a cell, and whatever follows a comma or a semicolon in it, is
+  formula-safe; and each row's time is the local time of that day, daylight saving included.
 
 ### Changed
 
 - **The documents tell it straight.** No release has been code-signed so far, v2.4.1 included,
   and the README, the code signing and privacy policies and the website now say so; uninstalling
-  is described for every system, including how to remove Codex and Cursor hooks on macOS and Linux;
-  the installation guide covers Codex, Cursor, Wayland's limits, the compositor Linux needs, the
-  Claude desktop app's wait and touchpads that the click guard refuses.
+  is described for every system, including how to remove Codex and Cursor hooks on macOS and
+  Linux and how to unregister the ChatGPT Web bridge; the installation guide covers Codex, Cursor,
+  Wayland's limits, the compositor Linux needs, the Claude desktop app's wait and touchpads that
+  the click guard refuses. They also say that on Linux HIGH and CRITICAL requests are approved in
+  the terminal, how to go back to 2.4.1 without losing the hooks, and which spellings of a path a
+  deny rule catches.
 - **Releases.** The notes list the Linux files and say whether the release is signed and
   notarized, and every file also comes without the version in its name
   (`Nobetci-setup.exe`, `Nobetci-macos-universal.dmg`, `Nobetci-linux-amd64.deb`,
   `Nobetci-linux-amd64.AppImage`) for links that always fetch the newest one.
 - **macOS.** A Big Sur–style icon, a disk image whose labels are readable in light and dark mode,
-  and the name Nöbetçi in Finder and the Dock (the app on disk is still `Nobetci.app`).
+  and the name Nöbetçi in Finder and the Dock (the app on disk is still `Nobetci.app`). The app is
+  signed with the Apple Events entitlement that the media card's AppleScript needs under macOS's
+  hardened runtime.
 - **The website** speaks your language from the first paint, covers 2.4 (questions, plans, batch
-  approval, Codex and Cursor), works on phones, and has bilingual policy and 404 pages.
+  approval, Codex and Cursor), works on phones (the live demo pans, pauses off screen and has a
+  Pause button), shows a new link-preview image, carries its security policy in the pages
+  themselves, and has bilingual policy and 404 pages; the demo's cards and deny reasons follow the
+  page language.
 - **Focus length** is 5 to 180 minutes everywhere.
 
 ### Added
@@ -239,6 +424,11 @@ release fixes them, and improves a few things along the way.
 - **Livelier mascots**: an occasional glance, head tilt or ear and tail flick when idle; ears,
   tails, manes and tentacles that follow the body; brows on the hawk and eagle that show their
   mood; and an octopus whose skirt and tentacles sway.
+- **The history keeps what the risk engine said.** When one of your rules changed a request's
+  level, the history keeps the engine's own level too: Settings → History shows it beside the
+  decided one, and the CSV export has an `engine_level` column (`motor_riski` in Turkish). Findings
+  recorded from now on are shown in the language you use, whichever one was on when they were
+  recorded.
 
 ## [2.4.1] - 2026-11-19
 
