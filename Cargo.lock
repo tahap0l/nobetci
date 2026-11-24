@@ -2489,7 +2489,7 @@ dependencies = [
 name = "nobetci"
 version = "2.5.0"
 dependencies = [
- "base64 0.22.1",
+ "base64 0.23.1",
  "block2",
  "dbus",
  "keyring",
