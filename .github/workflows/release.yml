@@ -103,10 +103,10 @@ jobs:
       - name: Check Rust formatting
         run: cargo fmt --all --check
 
-      # The app's build script bundles target/release/nobetci-hook.exe as a
+      # The app's build script bundles target/release/nobi-hook.exe as a
       # resource, so the relay has to exist before clippy and the tests compile it.
       - name: Build the relay
-        run: cargo build --release --locked -p nobetci-hook
+        run: cargo build --release --locked -p nobi-hook
 
       - name: Clippy
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
@@ -125,8 +125,8 @@ jobs:
         with:
           name: windows-app
           path: |
-            target/release/nobetci.exe
-            target/release/nobetci-hook.exe
+            target/release/nobi.exe
+            target/release/nobi-hook.exe
           if-no-files-found: error
           retention-days: 7
 
@@ -174,7 +174,7 @@ jobs:
         with:
           api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
           organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
-          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG || 'nobetci' }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG || 'nobi' }}
           signing-policy-slug: ${{ vars.SIGNPATH_POLICY_SLUG || 'release-signing' }}
           artifact-configuration-slug: app
           parameters: |
@@ -229,15 +229,15 @@ jobs:
       - name: Put the programs where Tauri expects them
         run: |
           New-Item -ItemType Directory -Force src/target/release | Out-Null
-          foreach ($name in 'nobetci.exe', 'nobetci-hook.exe') {
+          foreach ($name in 'nobi.exe', 'nobi-hook.exe') {
             $file = Get-ChildItem signed-app -Recurse -Filter $name | Select-Object -First 1
             if (-not $file) { throw "$name is missing from the signed programs." }
             Copy-Item $file.FullName "src/target/release/$name"
             # SignPath refuses a file whose product name or version is off; fail here first.
             $vi = (Get-Item "src/target/release/$name").VersionInfo
             "::notice::$name ProductName=$($vi.ProductName) ProductVersion=$($vi.ProductVersion)"
-            if ($vi.ProductName -ne 'Nobetci' -or $vi.ProductVersion -ne $env:VERSION) {
-              throw "$name says $($vi.ProductName) $($vi.ProductVersion), not Nobetci $env:VERSION."
+            if ($vi.ProductName -ne 'Nobi' -or $vi.ProductVersion -ne $env:VERSION) {
+              throw "$name says $($vi.ProductName) $($vi.ProductVersion), not Nobi $env:VERSION."
             }
             $sig = Get-AuthenticodeSignature "src/target/release/$name"
             "{0}: {1} {2}" -f $name, $sig.Status, $sig.SignerCertificate.Subject
@@ -260,13 +260,13 @@ jobs:
       # Bundles what is already in target/release; nothing is compiled again.
       # The installer must carry exactly the bytes that came back from signing:
       # without --no-binary-patching, `tauri bundle` would write the bundle type
-      # into nobetci.exe in place and break its signature (only Tauri's updater
-      # reads that mark, and Nöbetçi has none). The hashes prove nothing else
+      # into nobi.exe in place and break its signature (only Tauri's updater
+      # reads that mark, and Nobi has none). The hashes prove nothing else
       # touched the programs either.
       - name: Build the installer
         working-directory: src
         run: |
-          $programs = 'target/release/nobetci.exe', 'target/release/nobetci-hook.exe'
+          $programs = 'target/release/nobi.exe', 'target/release/nobi-hook.exe'
           $before = $programs | ForEach-Object { (Get-FileHash $_ -Algorithm SHA256).Hash }
           npx tauri bundle --bundles nsis --no-binary-patching
           if ($LASTEXITCODE -ne 0) { throw "tauri bundle failed ($LASTEXITCODE)." }
@@ -289,7 +289,7 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: windows-setup
-          path: src/release/Nobetci-${{ needs.build.outputs.version }}-setup.exe
+          path: src/release/Nobi-${{ needs.build.outputs.version }}-setup.exe
           if-no-files-found: error
           retention-days: 7
 
@@ -313,7 +313,7 @@ jobs:
         with:
           api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
           organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
-          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG || 'nobetci' }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG || 'nobi' }}
           signing-policy-slug: ${{ vars.SIGNPATH_POLICY_SLUG || 'release-signing' }}
           artifact-configuration-slug: installer
           parameters: |
@@ -332,13 +332,13 @@ jobs:
 
       - name: Check the signature and write the checksum
         run: |
-          $name = "Nobetci-$env:VERSION-setup.exe"
+          $name = "Nobi-$env:VERSION-setup.exe"
           $path = Join-Path release $name
           if (-not (Test-Path $path)) { throw "$path is missing." }
           $vi = (Get-Item $path).VersionInfo
           "::notice::$name ProductName=$($vi.ProductName) ProductVersion=$($vi.ProductVersion)"
-          if ($vi.ProductName -ne 'Nobetci' -or $vi.ProductVersion -ne $env:VERSION) {
-            throw "$name says $($vi.ProductName) $($vi.ProductVersion), not Nobetci $env:VERSION."
+          if ($vi.ProductName -ne 'Nobi' -or $vi.ProductVersion -ne $env:VERSION) {
+            throw "$name says $($vi.ProductName) $($vi.ProductVersion), not Nobi $env:VERSION."
           }
           $sig = Get-AuthenticodeSignature $path
           "{0}: {1} {2}" -f $name, $sig.Status, $sig.SignerCertificate.Subject
@@ -356,8 +356,8 @@ jobs:
         with:
           name: release-windows
           path: |
-            release/Nobetci-${{ needs.build.outputs.version }}-setup.exe
-            release/Nobetci-${{ needs.build.outputs.version }}-setup.exe.sha256
+            release/Nobi-${{ needs.build.outputs.version }}-setup.exe
+            release/Nobi-${{ needs.build.outputs.version }}-setup.exe.sha256
           if-no-files-found: error
           retention-days: 7
 
@@ -399,7 +399,7 @@ jobs:
         run: npm ci
 
       - name: Build the relay
-        run: cargo build --release --locked -p nobetci-hook
+        run: cargo build --release --locked -p nobi-hook
 
       - name: Tests
         run: cargo test --workspace --locked
@@ -428,7 +428,7 @@ jobs:
   # from src-tauri/entitlements.plist), the app is notarized and stapled, and
   # the image is put back together with its Finder look and signed, as Tauri
   # does. Never run here: check the first signed release's log and the result
-  # of `spctl -a -vv Nobetci.app` on a Mac.
+  # of `spctl -a -vv Nobi.app` on a Mac.
   sign-macos:
     name: Sign and notarize the disk image (macOS)
     needs: [build, build-macos]
@@ -456,7 +456,7 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           set -euo pipefail
-          name="Nobetci-${VERSION}-macos-universal.dmg"
+          name="Nobi-${VERSION}-macos-universal.dmg"
           test -f "in/$name" || { echo "in/$name is missing; did npm run pack:mac name it differently?"; exit 1; }
           mkdir -p release
           echo "notarized=false" >> "$GITHUB_OUTPUT"
@@ -467,7 +467,7 @@ jobs:
           fi
 
           # The certificate lives in a keychain of its own for this job only.
-          keychain="$RUNNER_TEMP/nobetci-signing.keychain-db"
+          keychain="$RUNNER_TEMP/nobi-signing.keychain-db"
           keychain_password=$(openssl rand -hex 24)
           trap 'security delete-keychain "$keychain" 2>/dev/null || true' EXIT
           security create-keychain -p "$keychain_password" "$keychain"
@@ -489,22 +489,22 @@ jobs:
           hdiutil convert "in/$name" -format UDRW -o "$RUNNER_TEMP/rw.dmg"
           hdiutil resize -size "$(( $(stat -f%z "$RUNNER_TEMP/rw.dmg") / 1048576 + 64 ))m" "$RUNNER_TEMP/rw.dmg"
           mount=$(hdiutil attach "$RUNNER_TEMP/rw.dmg" -nobrowse -noautoopen | grep -o '/Volumes/.*' | head -1)
-          app="$mount/Nobetci.app"
-          test -d "$app" || { echo "Nobetci.app is not in the disk image."; exit 1; }
+          app="$mount/Nobi.app"
+          test -d "$app" || { echo "Nobi.app is not in the disk image."; exit 1; }
 
           # Inside out: the relay (a resource, which Tauri does not sign), then the app.
           sign() {
             codesign --force --timestamp --options runtime --preserve-metadata=entitlements \
               --keychain "$keychain" --sign "$APPLE_SIGNING_IDENTITY" "$@"
           }
-          sign "$app/Contents/Resources/nobetci-hook"
+          sign "$app/Contents/Resources/nobi-hook"
           sign "$app"
           codesign --verify --deep --strict --verbose=2 "$app"
           codesign --display --entitlements - "$app"
 
           if [[ -n "$APPLE_ID" && -n "$APPLE_PASSWORD" && -n "$APPLE_TEAM_ID" ]]; then
-            ditto -c -k --keepParent "$app" "$RUNNER_TEMP/Nobetci.zip"
-            xcrun notarytool submit "$RUNNER_TEMP/Nobetci.zip" \
+            ditto -c -k --keepParent "$app" "$RUNNER_TEMP/Nobi.zip"
+            xcrun notarytool submit "$RUNNER_TEMP/Nobi.zip" \
               --apple-id "$APPLE_ID" --password "$APPLE_PASSWORD" --team-id "$APPLE_TEAM_ID" --wait
             xcrun stapler staple "$app"
             echo "notarized=true" >> "$GITHUB_OUTPUT"
@@ -519,7 +519,7 @@ jobs:
       - name: Write the checksum
         run: |
           set -euo pipefail
-          name="Nobetci-${VERSION}-macos-universal.dmg"
+          name="Nobi-${VERSION}-macos-universal.dmg"
           (cd release && shasum -a 256 "$name" > "$name.sha256" && cat "$name.sha256")
 
       - name: Upload the release files
@@ -575,7 +575,7 @@ jobs:
         run: npm ci
 
       - name: Build the relay
-        run: cargo build --release --locked -p nobetci-hook
+        run: cargo build --release --locked -p nobi-hook
 
       - name: Tests
         run: cargo test --workspace --locked
@@ -587,7 +587,7 @@ jobs:
       - name: Check the AppImage carries the audio plugins
         run: |
           set -euo pipefail
-          appimage=$(ls "$GITHUB_WORKSPACE"/release/Nobetci-*-linux-amd64.AppImage)
+          appimage=$(ls "$GITHUB_WORKSPACE"/release/Nobi-*-linux-amd64.AppImage)
           cd "$RUNNER_TEMP"
           "$appimage" --appimage-extract > /dev/null
           for plugin in libgstapp.so libgstautodetect.so libgstaudioconvert.so libgstaudioresample.so libgstpulseaudio.so libgstalsa.so; do
@@ -601,7 +601,7 @@ jobs:
         run: |
           set -euo pipefail
           cd release
-          for name in "Nobetci-${TAG#v}-linux-amd64.deb" "Nobetci-${TAG#v}-linux-amd64.AppImage"; do
+          for name in "Nobi-${TAG#v}-linux-amd64.deb" "Nobi-${TAG#v}-linux-amd64.AppImage"; do
             test -f "$name" || { echo "release/$name is missing; did npm run pack:linux name it differently?"; exit 1; }
             sha256sum "$name" > "$name.sha256"
             cat "$name.sha256"
@@ -645,9 +645,9 @@ jobs:
           cat ./*.sha256 > SHA256SUMS.txt
           rm ./*.sha256
           for name in setup.exe macos-universal.dmg linux-amd64.deb linux-amd64.AppImage; do
-            cp "Nobetci-${VERSION}-${name}" "Nobetci-${name}"
-            hash=$(grep -F "  Nobetci-${VERSION}-${name}" SHA256SUMS.txt | cut -d' ' -f1)
-            echo "${hash}  Nobetci-${name}" >> SHA256SUMS.txt
+            cp "Nobi-${VERSION}-${name}" "Nobi-${name}"
+            hash=$(grep -F "  Nobi-${VERSION}-${name}" SHA256SUMS.txt | cut -d' ' -f1)
+            echo "${hash}  Nobi-${name}" >> SHA256SUMS.txt
           done
           cat SHA256SUMS.txt
           sha256sum --check SHA256SUMS.txt
@@ -689,14 +689,14 @@ jobs:
         run: |
           set -euo pipefail
           files=(
-            "out/Nobetci-${VERSION}-setup.exe"
-            "out/Nobetci-${VERSION}-macos-universal.dmg"
-            "out/Nobetci-${VERSION}-linux-amd64.deb"
-            "out/Nobetci-${VERSION}-linux-amd64.AppImage"
-            out/Nobetci-setup.exe
-            out/Nobetci-macos-universal.dmg
-            out/Nobetci-linux-amd64.deb
-            out/Nobetci-linux-amd64.AppImage
+            "out/Nobi-${VERSION}-setup.exe"
+            "out/Nobi-${VERSION}-macos-universal.dmg"
+            "out/Nobi-${VERSION}-linux-amd64.deb"
+            "out/Nobi-${VERSION}-linux-amd64.AppImage"
+            out/Nobi-setup.exe
+            out/Nobi-macos-universal.dmg
+            out/Nobi-linux-amd64.deb
+            out/Nobi-linux-amd64.AppImage
             out/SHA256SUMS.txt
           )
 
@@ -738,6 +738,6 @@ jobs:
           if [[ "$TAG" == *-* ]]; then flags+=(--prerelease); fi
           gh release create "$TAG" "${files[@]}" \
             --repo "$GITHUB_REPOSITORY" \
-            --title "Nöbetçi $TAG" \
+            --title "Nobi $TAG" \
             --notes-file out/RELEASE_NOTES.md \
             "${flags[@]}"

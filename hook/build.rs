@@ -5,10 +5,10 @@ fn main() {
     #[cfg(windows)]
     if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows") {
         let mut res = tauri_winres::WindowsResource::new();
-        res.set("ProductName", "Nobetci")
-            .set("FileDescription", "Nobetci hook relay")
-            .set("OriginalFilename", "nobetci-hook.exe")
-            .set("LegalCopyright", "MIT License, Nobetci contributors");
+        res.set("ProductName", "Nobi")
+            .set("FileDescription", "Nobi hook relay")
+            .set("OriginalFilename", "nobi-hook.exe")
+            .set("LegalCopyright", "MIT License, Nobi contributors");
         res.compile().expect("compile the relay's version resource");
     }
 }

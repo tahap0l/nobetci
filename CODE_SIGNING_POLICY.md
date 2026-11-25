@@ -5,7 +5,7 @@
 Free code signing provided by [SignPath.io](https://signpath.io), certificate by
 [SignPath Foundation](https://signpath.org).
 
-> **Status:** Nöbetçi has applied for SignPath Foundation's open-source code signing. No release
+> **Status:** Nobi has applied for SignPath Foundation's open-source code signing. No release
 > has been code-signed so far, v2.5.0 included, which is why SmartScreen may warn about the
 > installer. Once the application is accepted and signing is switched on, every Windows release is
 > signed as described below, and this note is updated with the first signed version. Until then,
@@ -19,11 +19,11 @@ On Windows, each release signs three files:
 
 | File | What it is |
 |---|---|
-| `nobetci.exe` | The app |
-| `nobetci-hook.exe` | The relay Claude Code starts for each hook event |
-| `Nobetci-<version>-setup.exe` | The installer that carries both (also published as `Nobetci-setup.exe`, the same file) |
+| `nobi.exe` | The app |
+| `nobi-hook.exe` | The relay Claude Code starts for each hook event |
+| `Nobi-<version>-setup.exe` | The installer that carries both (also published as `Nobi-setup.exe`, the same file) |
 
-Every signed file carries the product name **Nobetci** and the version being released, and SignPath
+Every signed file carries the product name **Nobi** and the version being released, and SignPath
 refuses a file that doesn't. Only files built from this repository's source are signed under this
 policy.
 
@@ -75,7 +75,7 @@ The SignPath settings the workflow expects are in [`.signpath/`](.signpath/).
 
 | Role | Members |
 |---|---|
-| Committers and reviewers | [tahap0l](https://github.com/tahap0l) ([all contributors](https://github.com/tahap0l/nobetci/graphs/contributors)) |
+| Committers and reviewers | [tahap0l](https://github.com/tahap0l) ([all contributors](https://github.com/tahap0l/nobi/graphs/contributors)) |
 | Approvers | [tahap0l](https://github.com/tahap0l) |
 
 - **Committers** may change the source code directly.
@@ -93,11 +93,11 @@ requested by the user or the person installing or operating it.
 The features that reach the network are all off until you turn them on: Prompt Studio's Ollama or
 OpenAI review, the island assistant's **Ask here**, and the weather card (Open-Meteo, once you pick a
 city). Opening an AI app or website from the assistant hands your message to that app or your
-browser; Nöbetçi does not send it. Details are in the [privacy policy](PRIVACY.md).
+browser; Nobi does not send it. Details are in the [privacy policy](PRIVACY.md).
 
 ## Changes to your system
 
-Nöbetçi installs for the current user only. It adds its hooks to `~/.claude/settings.json` — and, if
+Nobi installs for the current user only. It adds its hooks to `~/.claude/settings.json` — and, if
 you connect them, to Codex's and Cursor's hook files — only after showing you the exact change and a
 dated backup, and only when you click to apply it. The Windows uninstaller takes those entries out
 again, each file after another backup, and removes the app, the relay and, if you registered it,
@@ -109,11 +109,11 @@ the ChatGPT Web bridge's browser registration. On macOS and Linux the
 On Windows, right-click the file → **Properties → Digital Signatures**, or run:
 
 ```powershell
-Get-AuthenticodeSignature .\Nobetci-<version>-setup.exe | Format-List Status, SignerCertificate
+Get-AuthenticodeSignature .\Nobi-<version>-setup.exe | Format-List Status, SignerCertificate
 ```
 
 An unsigned release shows `NotSigned`. Check it against the release's `SHA256SUMS.txt` instead: the
-value from `Get-FileHash .\Nobetci-<version>-setup.exe -Algorithm SHA256` must be the one listed
+value from `Get-FileHash .\Nobi-<version>-setup.exe -Algorithm SHA256` must be the one listed
 there.
 
 If you find a file signed under this policy that was not built from this repository, or anything
@@ -127,7 +127,7 @@ else that looks wrong, report it privately as described in [SECURITY.md](SECURIT
 [SignPath Foundation](https://signpath.org) tarafından sağlanmaktadır.
 (Free code signing provided by SignPath.io, certificate by SignPath Foundation.)
 
-> **Durum:** Nöbetçi, SignPath Foundation'ın açık kaynak kod imzalama programına başvurdu.
+> **Durum:** Nobi, SignPath Foundation'ın açık kaynak kod imzalama programına başvurdu.
 > Şimdiye kadarki sürümlerin hiçbiri (v2.5.0 dahil) kod imzalı değil; Windows'ta SmartScreen bu
 > yüzden uyarı gösterebilir. Başvuru kabul edilip imzalama açılınca her Windows sürümü aşağıda
 > anlatıldığı gibi imzalanır; bu not ilk imzalı sürümle güncellenir. O zamana kadar her indirdiğin
@@ -140,11 +140,11 @@ Windows'ta her sürümde üç dosya imzalanır:
 
 | Dosya | Ne olduğu |
 |---|---|
-| `nobetci.exe` | Uygulama |
-| `nobetci-hook.exe` | Claude Code'un her kanca olayında çalıştırdığı aktarıcı |
-| `Nobetci-<sürüm>-setup.exe` | İkisini taşıyan kurulum dosyası (aynı dosya `Nobetci-setup.exe` adıyla da yayımlanır) |
+| `nobi.exe` | Uygulama |
+| `nobi-hook.exe` | Claude Code'un her kanca olayında çalıştırdığı aktarıcı |
+| `Nobi-<sürüm>-setup.exe` | İkisini taşıyan kurulum dosyası (aynı dosya `Nobi-setup.exe` adıyla da yayımlanır) |
 
-İmzalanan her dosyada ürün adı **Nobetci** ve yayımlanan sürüm yazar; yazmayan dosyayı SignPath
+İmzalanan her dosyada ürün adı **Nobi** ve yayımlanan sürüm yazar; yazmayan dosyayı SignPath
 reddeder. Bu politika kapsamında yalnızca bu deponun kaynak kodundan derlenen dosyalar imzalanır.
 
 Kurulum dosyası iki imzalı programı bayt bayt aynen taşır: `tauri bundle --no-binary-patching` ile
@@ -194,7 +194,7 @@ erişilebilirken depodan, npm'den ya da cargo'dan hiçbir şey çalışmaz.
 
 | Rol | Üyeler |
 |---|---|
-| Kod yazanlar ve gözden geçirenler | [tahap0l](https://github.com/tahap0l) ([katkıda bulunanlar](https://github.com/tahap0l/nobetci/graphs/contributors)) |
+| Kod yazanlar ve gözden geçirenler | [tahap0l](https://github.com/tahap0l) ([katkıda bulunanlar](https://github.com/tahap0l/nobi/graphs/contributors)) |
 | Onaylayıcılar | [tahap0l](https://github.com/tahap0l) |
 
 - **Kod yazanlar** kaynak kodu doğrudan değiştirebilir.
@@ -212,11 +212,11 @@ sistemlerine hiçbir bilgi aktarmaz.
 Ağa çıkan özelliklerin hepsi sen açana kadar kapalıdır: Mesaj Atölyesi'nin Ollama veya OpenAI
 incelemesi, ada asistanının **Burada sor** seçeneği ve hava durumu kartı (şehir seçince Open-Meteo).
 Asistandan bir yapay zekâ uygulaması ya da sitesi açıldığında mesajın o uygulamaya ya da tarayıcına
-verilir; Nöbetçi göndermez. Ayrıntılar [gizlilik politikasında](PRIVACY.md).
+verilir; Nobi göndermez. Ayrıntılar [gizlilik politikasında](PRIVACY.md).
 
 ## Sistemindeki değişiklikler
 
-Nöbetçi yalnızca o anki kullanıcı için kurulur. Kancalarını `~/.claude/settings.json` dosyasına —
+Nobi yalnızca o anki kullanıcı için kurulur. Kancalarını `~/.claude/settings.json` dosyasına —
 bağlarsan Codex'in ve Cursor'un kanca dosyalarına da — ancak değişikliğin tamamını ve tarihli bir
 yedeği gösterdikten sonra, sen uygula dediğinde ekler. Windows'taki kaldırma aracı bu girdileri her
 dosyanın yedeğini alarak geri çıkarır; uygulamayı, aktarıcıyı ve kaydettiysen ChatGPT Web
@@ -228,11 +228,11 @@ köprüsünün tarayıcı kaydını siler. macOS ve Linux'ta aynısını nasıl 
 Windows'ta dosyaya sağ tıkla → **Özellikler → Dijital İmzalar**, ya da şunu çalıştır:
 
 ```powershell
-Get-AuthenticodeSignature .\Nobetci-<sürüm>-setup.exe | Format-List Status, SignerCertificate
+Get-AuthenticodeSignature .\Nobi-<sürüm>-setup.exe | Format-List Status, SignerCertificate
 ```
 
 İmzasız bir sürümde durum `NotSigned` görünür. O zaman dosyayı sürümdeki `SHA256SUMS.txt` ile
-doğrula: `Get-FileHash .\Nobetci-<sürüm>-setup.exe -Algorithm SHA256` komutunun verdiği değer orada
+doğrula: `Get-FileHash .\Nobi-<sürüm>-setup.exe -Algorithm SHA256` komutunun verdiği değer orada
 yazanla aynı olmalı.
 
 Bu politikayla imzalanmış ama bu depodan derlenmemiş bir dosya ya da başka bir tuhaflık görürsen

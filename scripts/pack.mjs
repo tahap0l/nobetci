@@ -2,10 +2,10 @@
 // it ships under. The Store flavor is kept in release/store so it cannot be
 // mistaken for the regular online installer.
 //
-//   Windows  release/Nobetci-<version>-setup.exe  (+ Nobetci-setup.exe)
-//   Store    release/store/Nobetci-<version>-setup.exe
-//   macOS    release/Nobetci-<version>-macos-<universal|arm64|x64>.dmg
-//   Linux    release/Nobetci-<version>-linux-<amd64|arm64>.deb and .AppImage
+//   Windows  release/Nobi-<version>-setup.exe  (+ Nobi-setup.exe)
+//   Store    release/store/Nobi-<version>-setup.exe
+//   macOS    release/Nobi-<version>-macos-<universal|arm64|x64>.dmg
+//   Linux    release/Nobi-<version>-linux-<amd64|arm64>.deb and .AppImage
 
 import { execFileSync } from "node:child_process";
 import { readFileSync, mkdirSync, copyFileSync, readdirSync, statSync, existsSync } from "node:fs";
@@ -78,14 +78,14 @@ function ship(src, names) {
 
 if (process.platform === "darwin") {
   const dmg = newest("dmg", ".dmg");
-  // Tauri names it Nobetci_<version>_<universal|aarch64|x64>.dmg.
+  // Tauri names it Nobi_<version>_<universal|aarch64|x64>.dmg.
   const arch = /_universal\.dmg$/.test(dmg) ? "universal" : /_aarch64\.dmg$/.test(dmg) ? "arm64" : "x64";
-  ship(dmg, [`Nobetci-${version}-macos-${arch}.dmg`]);
+  ship(dmg, [`Nobi-${version}-macos-${arch}.dmg`]);
 } else if (process.platform === "linux") {
-  // Tauri names them nobetci_<version>_amd64.deb and nobetci_<version>_amd64.AppImage.
+  // Tauri names them nobi_<version>_amd64.deb and nobi_<version>_amd64.AppImage.
   const arch = process.arch === "arm64" ? "arm64" : "amd64";
-  ship(newest("deb", ".deb"), [`Nobetci-${version}-linux-${arch}.deb`]);
-  ship(newest("appimage", ".AppImage"), [`Nobetci-${version}-linux-${arch}.AppImage`]);
+  ship(newest("deb", ".deb"), [`Nobi-${version}-linux-${arch}.deb`]);
+  ship(newest("appimage", ".AppImage"), [`Nobi-${version}-linux-${arch}.AppImage`]);
 } else {
-  ship(newest("nsis", "-setup.exe"), [`Nobetci-${version}-setup.exe`, "Nobetci-setup.exe"]);
+  ship(newest("nsis", "-setup.exe"), [`Nobi-${version}-setup.exe`, "Nobi-setup.exe"]);
 }

@@ -36,7 +36,7 @@ jobs:
       - run: npx --no-install vite build
         env:
           CF_PAGES: "1"
-          NOBETCI_WEBSITE_BASE: /${{ github.event.repository.name }}/
+          NOBI_WEBSITE_BASE: /${{ github.event.repository.name }}/
       # GitHub Pages sends no custom headers and would publish _headers as a
       # plain file. The pages carry their policy in <meta> tags instead (see
       # website/public/_headers for what that covers and what it cannot).

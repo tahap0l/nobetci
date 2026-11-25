@@ -1,6 +1,6 @@
 // History of every permission decision, as JSON lines in audit.jsonl (rolling
-// over to audit.1.jsonl) in the app's data folder: %LOCALAPPDATA%\Nobetci,
-// ~/Library/Application Support/Nobetci, ~/.local/share/nobetci.
+// over to audit.1.jsonl) in the app's data folder: %LOCALAPPDATA%\Nobi,
+// ~/Library/Application Support/Nobi, ~/.local/share/nobi.
 //
 // One line per request: what was asked, how risky it looked, what happened and
 // who decided — a person, a rule, a trusted project, a session grant, or nobody
@@ -717,7 +717,7 @@ mod tests {
     use super::*;
 
     fn tmp(name: &str) -> PathBuf {
-        let d = std::env::temp_dir().join(format!("nobetci-audit-{name}-{}", std::process::id()));
+        let d = std::env::temp_dir().join(format!("nobi-audit-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&d);
         d
     }
@@ -726,7 +726,7 @@ mod tests {
         Entry {
             ts,
             id: format!("id{ts}"),
-            project: "nobetci".into(),
+            project: "nobi".into(),
             tool: "Bash".into(),
             level: level.into(),
             decision: decision.into(),
@@ -760,7 +760,7 @@ mod tests {
         let paged = log.query(&Filter { limit: 1, offset: 1, ..Filter::default() });
         assert_eq!((paged.total, paged.entries.len()), (3, 1));
 
-        assert_eq!(log.projects(), vec![("nobetci".to_string(), 3)]);
+        assert_eq!(log.projects(), vec![("nobi".to_string(), 3)]);
         assert_eq!(log.query_up_to(&Filter::default(), usize::MAX).entries.len(), 3);
 
         let s = log.stats(7, 0, None);
@@ -916,7 +916,7 @@ mod tests {
         assert_eq!(header.split(';').count(), 14);
         assert!(!header.contains(','));
         let row = csv.lines().nth(1).unwrap();
-        assert!(row.starts_with("\"1970-01-01 00:00:00\";\"nobetci\";"), "{row}");
+        assert!(row.starts_with("\"1970-01-01 00:00:00\";\"nobi\";"), "{row}");
         assert_eq!(
             (separator(Some(";")), separator(Some(",")), separator(Some("\t")), separator(None)),
             (';', ',', ',', ',')
@@ -966,7 +966,7 @@ mod tests {
         assert_eq!(text("nothing-like-this"), Vec::<u64>::new());
         // So does the project filter.
         assert_eq!(hits(Filter { project: "izmir-API".into(), ..Filter::default() }), [4]);
-        assert_eq!(hits(Filter { project: "nobetci".into(), ..Filter::default() }), [1, 2, 3]);
+        assert_eq!(hits(Filter { project: "nobi".into(), ..Filter::default() }), [1, 2, 3]);
         let _ = std::fs::remove_dir_all(dir);
     }
 

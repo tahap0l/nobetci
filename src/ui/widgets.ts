@@ -484,8 +484,8 @@ function buildAgenda(openDay: { day: string }) {
       ? items.map(row)
       : unreadable
         ? [h("li", { class: "agenda-empty agenda-unreadable", role: "alert", text: local(
-          "Nöbetçi agenda.json dosyasını okuyamıyor; okuyabilene kadar üzerine hiçbir şey yazmaz. Dosyanın iznini ya da içeriğini kontrol et — düzelince ajandan burada görünür.",
-          "Nöbetçi can't read agenda.json, and won't write over it until it can. Check the file's permissions or contents — once it can be read, your agenda shows up here.",
+          "Nobi agenda.json dosyasını okuyamıyor; okuyabilene kadar üzerine hiçbir şey yazmaz. Dosyanın iznini ya da içeriğini kontrol et — düzelince ajandan burada görünür.",
+          "Nobi can't read agenda.json, and won't write over it until it can. Check the file's permissions or contents — once it can be read, your agenda shows up here.",
         ) })]
         : [h("li", { class: "agenda-empty", text: local("Ekle'ye bas, yaz, Enter ile kaydet. Saat verirsen hatırlatırım.", "Press Add, type, save with Enter. Give it a time and I'll remind you.") })]));
     // An item changed elsewhere while being edited here: let go of the old copy.

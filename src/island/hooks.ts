@@ -43,14 +43,14 @@ interface HookPayload {
   policy?: "trusted" | "normal" | "strict";
   /** Whether a session grant would be honoured for this request (set by Rust). */
   grantable?: boolean;
-  nobetci_parents?: { pid: number; name: string }[];
-  nobetci_quiet?: QuietReason;
+  nobi_parents?: { pid: number; name: string }[];
+  nobi_quiet?: QuietReason;
   /** The relay had to cut a field of this event. */
-  nobetci_truncated?: boolean;
+  nobi_truncated?: boolean;
   /** Set by Rust on a waiting request: a permission, or Claude's question or plan. */
-  nobetci_kind?: "permission" | "question" | "plan";
+  nobi_kind?: "permission" | "question" | "plan";
   /** PostToolUse of a file edit: what changed (the relay's summary). */
-  nobetci_change?: {
+  nobi_change?: {
     file: string;
     added: number;
     removed: number;
@@ -62,7 +62,7 @@ interface HookPayload {
    * Only on a request handed back by `approval_pending` (C-11), when Rust says
    * how long it has been waiting already: the card's countdown starts from there.
    */
-  nobetci_waited_ms?: number;
+  nobi_waited_ms?: number;
   /** StatusLine (Claude Code's status line, via the relay). */
   model?: string;
   context_used?: number | null;
@@ -184,7 +184,7 @@ function terminalName(p: HookPayload): string {
   if (p.entrypoint === "claude-vscode") return "VS Code";
   if (p.wt_session) return "Windows Terminal";
   if (p.vscode_pid || p.term_program === "vscode") return "VS Code";
-  const names = (p.nobetci_parents ?? []).map((x) => x.name.toLowerCase());
+  const names = (p.nobi_parents ?? []).map((x) => x.name.toLowerCase());
   if (names.includes("code.exe")) return "VS Code";
   if (names.includes("windowsterminal.exe")) return "Windows Terminal";
   if (names.some((n) => n.startsWith("cursor"))) return "Cursor";
@@ -209,7 +209,7 @@ function sessionFor(p: HookPayload): Session {
   const base = lastPathComponent(cwd) || t("session.generic");
   const name = existing?.name ?? uniqueName(id, p.agent_name ? `${p.agent_name} · ${base}` : base);
   const s = State.touch(id, cwd, name);
-  if (p.nobetci_parents?.length) s.parents = p.nobetci_parents.map((x) => x.pid);
+  if (p.nobi_parents?.length) s.parents = p.nobi_parents.map((x) => x.pid);
   const term = terminalName(p);
   if (term) s.terminal = term;
   if (p.agent_name) s.agent = p.agent_name;
@@ -222,7 +222,7 @@ function releaseApprovals(sessionId: string, done?: HookPayload): boolean {
   let released = false;
   for (const a of [...State.approvals]) {
     if (a.sessionId !== sessionId) continue;
-    if (match && !sameCall(a.signature, match, done.nobetci_truncated === true)) continue;
+    if (match && !sameCall(a.signature, match, done.nobi_truncated === true)) continue;
     State.removeApproval(a.requestId);
     void Bridge.approvalDecline(a.requestId, "resolved");
     released = true;
@@ -253,7 +253,7 @@ function notifyText(text: string): string {
 }
 
 function applyQuiet(p: HookPayload) {
-  if (p.nobetci_quiet !== undefined) State.quiet = p.nobetci_quiet ?? null;
+  if (p.nobi_quiet !== undefined) State.quiet = p.nobi_quiet ?? null;
   Sound.quiet = State.isQuiet;
 }
 
@@ -391,7 +391,7 @@ function handle(island: Island, p: HookPayload) {
     case "PostToolUse":
     case "PostToolUseFailure": {
       releaseApprovals(s.id, p);
-      const c = event === "PostToolUse" ? p.nobetci_change : undefined;
+      const c = event === "PostToolUse" ? p.nobi_change : undefined;
       if (c && c.file) {
         State.addChange(s, { ...c, t: Date.now() });
         const what = c.created ? t("step.created", { file: lastPathComponent(c.file) }) : lastPathComponent(c.file);
@@ -499,8 +499,8 @@ function onPermissionRequest(island: Island, p: HookPayload, restored = false): 
 
   const s = sessionFor(p);
   const now = Date.now();
-  const kind = p.nobetci_kind ?? "permission";
-  const waited = restored && typeof p.nobetci_waited_ms === "number" && p.nobetci_waited_ms > 0 ? p.nobetci_waited_ms : 0;
+  const kind = p.nobi_kind ?? "permission";
+  const waited = restored && typeof p.nobi_waited_ms === "number" && p.nobi_waited_ms > 0 ? p.nobi_waited_ms : 0;
   State.approvals.push({
     kind,
     input: p.tool_input ?? {},

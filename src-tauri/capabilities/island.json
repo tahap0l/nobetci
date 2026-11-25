@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "island",
-  "description": "The island: the only window that answers requests. Its events, the mascot's mood and reactions it sends out, and the commands in permissions/windows.toml. Everything that touches the OS goes through Nöbetçi's own commands.",
+  "description": "The island: the only window that answers requests. Its events, the mascot's mood and reactions it sends out, and the commands in permissions/windows.toml. Everything that touches the OS goes through Nobi's own commands.",
   "windows": ["island"],
   "permissions": [
     "island-commands",

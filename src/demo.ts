@@ -15,7 +15,7 @@ import { h } from "./ui/dom";
 
 const L = (tr: string, en: string) => (getLang() === "tr" ? tr : en);
 const HOME = "C:\\Users\\dev\\src";
-const P = { app: `${HOME}\\nobetci`, web: `${HOME}\\shop-web`, ml: `${HOME}\\ml-pipeline` };
+const P = { app: `${HOME}\\nobi`, web: `${HOME}\\shop-web`, ml: `${HOME}\\ml-pipeline` };
 
 function finding(category: string, level: RiskFinding["level"], tr: string, en: string, excerpt = ""): RiskFinding {
   return { category, level, label: L(tr, en), excerpt };
@@ -72,7 +72,7 @@ function sessions(island: Island) {
   ev("a", P.app, {
     hook_event_name: "SessionStart",
     wt_session: "demo",
-    nobetci_parents: [{ pid: 10, name: "claude.exe" }, { pid: 9, name: "WindowsTerminal.exe" }],
+    nobi_parents: [{ pid: 10, name: "claude.exe" }, { pid: 9, name: "WindowsTerminal.exe" }],
   });
   ev("a", P.app, { hook_event_name: "UserPromptSubmit", prompt: L("ayarlar penceresini sekmeli yap", "make the settings window tabbed") });
   ev("a", P.app, { hook_event_name: "PreToolUse", tool_name: "Read", tool_input: { file_path: "src/settings/main.ts" } });
@@ -116,7 +116,7 @@ function question(island: Island) {
     session_id: "a",
     cwd: P.app,
     tool_name: "AskUserQuestion",
-    nobetci_kind: "question",
+    nobi_kind: "question",
     tool_input: {
       questions: [
         {
@@ -148,7 +148,7 @@ function plan(island: Island) {
     session_id: "a",
     cwd: P.app,
     tool_name: "ExitPlanMode",
-    nobetci_kind: "plan",
+    nobi_kind: "plan",
     tool_input: {
       plan: L(
         "## Ayarlar penceresini sekmeli yap\n\n1. `src/settings/main.ts` içinde sekme gezgini kur\n2. Her bölümü **kendi dosyasına** taşı\n3. Seçili sekmeyi hatırla\n\n### Testler\n- [ ] Sekme geçişleri\n- [ ] Klavye ile gezinme\n\n> Mevcut ayar dosyası değişmez.",
@@ -170,7 +170,7 @@ function workDone(island: Island) {
       cwd: P.app,
       tool_name: created ? "Write" : "Edit",
       tool_input: { file_path: file },
-      nobetci_change: {
+      nobi_change: {
         file,
         added: lines.filter((l) => l.startsWith("+")).length,
         removed: lines.filter((l) => l.startsWith("-")).length,
@@ -312,7 +312,7 @@ export function runDemo(island: Island, name: string) {
   if (params.has("media")) {
     State.settings.islandMedia = true;
     Bridge.islandMedia = async () => ({
-      title: "Night Watch", artist: "Nöbetçi", source: "Spotify.exe", playing: true,
+      title: "Night Watch", artist: "Nobi", source: "Spotify.exe", playing: true,
       artwork: params.get("media") === "art" ? DEMO_ART : null,
       canPrevious: true, canToggle: true, canNext: true,
       positionMs: 83_000, durationMs: 214_000, canSeek: true,

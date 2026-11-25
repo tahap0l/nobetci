@@ -1,9 +1,9 @@
-// Windows: the named pipe `\\.\pipe\nobetci-<sid>`, one instance per connection.
+// Windows: the named pipe `\\.\pipe\nobi-<sid>`, one instance per connection.
 //
 // Named pipes share one machine-wide namespace. The SID in the name keeps two
 // accounts apart, an explicit DACL lets only this user (and SYSTEM) open it,
 // remote clients are refused, and `first_pipe_instance` means we never serve on
-// a name somebody else got to first. nobetci-hook additionally checks that the
+// a name somebody else got to first. nobi-hook additionally checks that the
 // process serving the pipe runs as the same user before it sends anything.
 
 use std::ffi::c_void;
@@ -44,11 +44,11 @@ impl Conn for NamedPipeServer {
     }
 }
 
-/// `\\.\pipe\nobetci-<sid>` — must match nobetci-hook's `pipe_path()` exactly.
+/// `\\.\pipe\nobi-<sid>` — must match nobi-hook's `pipe_path()` exactly.
 fn pipe_name() -> String {
     let key = crate::win_user::current_user_sid()
         .unwrap_or_else(|| std::env::var("USERNAME").unwrap_or_else(|_| "user".into()));
-    format!(r"\\.\pipe\nobetci-{key}")
+    format!(r"\\.\pipe\nobi-{key}")
 }
 
 /// Security attributes for the pipe: only this user (and SYSTEM) may open it.

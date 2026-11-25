@@ -1,17 +1,17 @@
-// Nöbetçi website: the language button, navigation, scroll reveals and the small
+// Nobi website: the language button, navigation, scroll reveals and the small
 // motions. Plain script, no build step. Every string is in i18n.js, which also
 // chose the visitor's language before the page was painted.
 
 const root = document.documentElement;
-const I18N = window.NobetciI18n;
-const BASE = I18N?.base ?? document.querySelector('meta[name="nobetci-base"]')?.content ?? "/";
+const I18N = window.NobiI18n;
+const BASE = I18N?.base ?? document.querySelector('meta[name="nobi-base"]')?.content ?? "/";
 const reduced = matchMedia("(prefers-reduced-motion: reduce)");
 
 // ── Language ────────────────────────────────────────────────────────────────
 let language = I18N?.lang ?? root.lang ?? "tr";
 const listeners = new Set();
 const t = (key) => (I18N ? I18N.t(language, key) : key);
-window.NobetciSite = {
+window.NobiSite = {
   base: BASE,
   lang: () => language,
   t,
@@ -33,7 +33,7 @@ function setLanguage(next, remember = false) {
   I18N?.apply(next);
   labelToggles();
   if (remember) {
-    try { localStorage.setItem("nobetci-lang", next); } catch { /* optional */ }
+    try { localStorage.setItem("nobi-lang", next); } catch { /* optional */ }
   }
   labelDownload();
   syncMenu();

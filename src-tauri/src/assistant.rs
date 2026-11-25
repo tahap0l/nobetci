@@ -303,7 +303,7 @@ pub async fn assistant_open(app: AppHandle, target: String, prompt: String) -> R
 }
 
 /// Starts the system's own dictation into the island's text box: Windows voice
-/// typing (Win+H), macOS Dictation. Nöbetçi never hears the audio; the system
+/// typing (Win+H), macOS Dictation. Nobi never hears the audio; the system
 /// types the words into the focused field. Linux has no system dictation.
 #[tauri::command]
 pub fn assistant_dictate(app: AppHandle) -> Result<(), String> {
@@ -359,7 +359,7 @@ pub fn assistant_dictate(app: AppHandle) -> Result<(), String> {
 }
 
 fn assistant_instructions() -> &'static str {
-    "You are the personal assistant in Nöbetçi, a small panel at the top of the user's screen. \
+    "You are the personal assistant in Nobi, a small panel at the top of the user's screen. \
      Answer in the language the user writes in. Be brief and practical: a few sentences or a short \
      list, plain text without Markdown tables or headings. If the question needs more room, say so \
      in one line and suggest opening it in a full AI app."

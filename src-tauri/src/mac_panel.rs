@@ -3,7 +3,7 @@
 // A click on an ordinary window makes its app the active one, which pulls the
 // keyboard away from the terminal the user was typing in. Panels can opt out:
 // an NSPanel with the "non-activating" style takes clicks — and, when the user
-// wants to type into the island, the keyboard — without activating Nöbetçi.
+// wants to type into the island, the keyboard — without activating Nobi.
 //
 // Tauri builds both as plain windows, so their class is switched to a small
 // NSPanel subclass at launch, the same technique the tauri-nspanel plugin uses.
@@ -11,9 +11,9 @@
 // longer applies afterwards — so tao's set_focusable must never be called on
 // these windows (it would look for an instance variable the class lacks). The
 // subclasses answer for themselves instead:
-//   * NobetciIslandPanel may become the key window (so text fields work), never
+//   * NobiIslandPanel may become the key window (so text fields work), never
 //     the main window;
-//   * NobetciMascotPanel never becomes either: the mascot only shows.
+//   * NobiMascotPanel never becomes either: the mascot only shows.
 
 use std::sync::OnceLock;
 
@@ -37,7 +37,7 @@ extern "C-unwind" fn no(_this: &AnyObject, _cmd: Sel) -> Bool {
 fn panel_class(keyboard: bool) -> Option<&'static AnyClass> {
     static ISLAND: OnceLock<Option<usize>> = OnceLock::new();
     static MASCOT: OnceLock<Option<usize>> = OnceLock::new();
-    let (cell, name) = if keyboard { (&ISLAND, c"NobetciIslandPanel") } else { (&MASCOT, c"NobetciMascotPanel") };
+    let (cell, name) = if keyboard { (&ISLAND, c"NobiIslandPanel") } else { (&MASCOT, c"NobiMascotPanel") };
     let addr = cell.get_or_init(|| {
         let superclass = AnyClass::get(c"NSPanel")?;
         let class = match ClassBuilder::new(name, superclass) {

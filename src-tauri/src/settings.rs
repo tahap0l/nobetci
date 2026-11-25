@@ -1,5 +1,5 @@
-// Preferences, stored as plain JSON in settings.json: %APPDATA%\Nobetci on
-// Windows, ~/Library/Application Support/Nobetci on macOS, ~/.config/nobetci on
+// Preferences, stored as plain JSON in settings.json: %APPDATA%\Nobi on
+// Windows, ~/Library/Application Support/Nobi on macOS, ~/.config/nobi on
 // Linux. Credentials are kept separately in the OS credential store, never in
 // this file.
 //
@@ -19,9 +19,9 @@ use std::sync::{Mutex, OnceLock, PoisonError};
 /// Support (macOS). ASCII on purpose: the hook path lands in
 /// ~/.claude/settings.json and is run through a shell (Git Bash on Windows).
 #[cfg(not(target_os = "linux"))]
-const DIR: &str = "Nobetci";
+const DIR: &str = "Nobi";
 
-/// Every hook event Nöbetçi understands, in the order Settings lists them.
+/// Every hook event Nobi understands, in the order Settings lists them.
 pub const ALL_EVENTS: &[&str] = &[
     "SessionStart",
     "SessionEnd",
@@ -393,21 +393,21 @@ fn clean_model(model: &str, default: &str) -> String {
     }
 }
 
-/// %APPDATA%\Nobetci — preferences.
+/// %APPDATA%\Nobi — preferences.
 #[cfg(windows)]
 pub fn config_dir() -> PathBuf {
     let base = std::env::var_os("APPDATA").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("."));
     base.join(DIR)
 }
 
-/// %LOCALAPPDATA%\Nobetci — where nobetci-hook.exe, the log and the history live.
+/// %LOCALAPPDATA%\Nobi — where nobi-hook.exe, the log and the history live.
 #[cfg(windows)]
 pub fn local_dir() -> PathBuf {
     let base = std::env::var_os("LOCALAPPDATA").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("."));
     base.join(DIR)
 }
 
-/// ~/Library/Application Support/Nobetci — everything: preferences, the relay,
+/// ~/Library/Application Support/Nobi — everything: preferences, the relay,
 /// the log, the history and the relay socket.
 #[cfg(target_os = "macos")]
 pub fn config_dir() -> PathBuf {
@@ -419,16 +419,16 @@ pub fn local_dir() -> PathBuf {
     config_dir()
 }
 
-/// $XDG_CONFIG_HOME/nobetci (~/.config/nobetci) — the preferences.
+/// $XDG_CONFIG_HOME/nobi (~/.config/nobi) — the preferences.
 #[cfg(target_os = "linux")]
 pub fn config_dir() -> PathBuf {
-    xdg("XDG_CONFIG_HOME", ".config").join("nobetci")
+    xdg("XDG_CONFIG_HOME", ".config").join("nobi")
 }
 
-/// $XDG_DATA_HOME/nobetci (~/.local/share/nobetci) — the relay, the log and the history.
+/// $XDG_DATA_HOME/nobi (~/.local/share/nobi) — the relay, the log and the history.
 #[cfg(target_os = "linux")]
 pub fn local_dir() -> PathBuf {
-    xdg("XDG_DATA_HOME", ".local/share").join("nobetci")
+    xdg("XDG_DATA_HOME", ".local/share").join("nobi")
 }
 
 /// An XDG base folder: the variable when it holds an absolute path, else under home.
@@ -441,7 +441,7 @@ fn xdg(var: &str, fallback: &str) -> PathBuf {
 }
 
 /// The relay's file name: what Claude Code runs on every hook event.
-pub const HOOK_EXE: &str = if cfg!(windows) { "nobetci-hook.exe" } else { "nobetci-hook" };
+pub const HOOK_EXE: &str = if cfg!(windows) { "nobi-hook.exe" } else { "nobi-hook" };
 
 pub fn hook_exe_path() -> PathBuf {
     local_dir().join("bin").join(HOOK_EXE)
@@ -496,7 +496,7 @@ pub struct Loaded {
 }
 
 /// The problem with settings.json at start, if any. While there is one, nothing
-/// is saved over the file until Nöbetçi restarts (`save` refuses).
+/// is saved over the file until Nobi restarts (`save` refuses).
 static PROBLEM: OnceLock<LoadProblem> = OnceLock::new();
 
 pub fn load() -> Settings {
@@ -588,12 +588,12 @@ impl LoadProblem {
         });
         out.push(' ');
         out.push_str(match (self.kind, tr) {
-            (ProblemKind::Read, true) => "Dosya yeniden okunabilir olunca Nöbetçi'yi yeniden başlat.",
-            (ProblemKind::Read, false) => "Restart Nöbetçi once the file can be read again.",
+            (ProblemKind::Read, true) => "Dosya yeniden okunabilir olunca Nobi'yi yeniden başlat.",
+            (ProblemKind::Read, false) => "Restart Nobi once the file can be read again.",
             (_, true) => {
-                "Dosyayı düzelt ya da sıfırdan başlamak için başka bir yere taşı, sonra Nöbetçi'yi yeniden başlat."
+                "Dosyayı düzelt ya da sıfırdan başlamak için başka bir yere taşı, sonra Nobi'yi yeniden başlat."
             }
-            (_, false) => "Fix the file, or move it elsewhere to start over, then restart Nöbetçi.",
+            (_, false) => "Fix the file, or move it elsewhere to start over, then restart Nobi.",
         });
         out
     }
@@ -874,7 +874,7 @@ impl std::fmt::Display for SaveError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Unreadable => {
-                f.write_str("settings.json could not be read at start, so it is left as it is until Nöbetçi restarts")
+                f.write_str("settings.json could not be read at start, so it is left as it is until Nobi restarts")
             }
             Self::Io(err) => err.fmt(f),
         }
@@ -941,9 +941,9 @@ pub fn keep_copy() -> Option<PathBuf> {
 
 /// Every exported file carries this key, so an import can tell it apart from
 /// other JSON (Claude Code's own settings.json above all).
-pub const EXPORT_MARKER: &str = "nobetciSettings";
+pub const EXPORT_MARKER: &str = "nobiSettings";
 
-/// Top-level keys of Claude Code's settings.json. Nöbetçi's settings have none
+/// Top-level keys of Claude Code's settings.json. Nobi's settings have none
 /// of them, so a file that does is never imported.
 const CLAUDE_KEYS: &[&str] = &["hooks", "permissions", "env", "model", "statusLine"];
 
@@ -960,27 +960,27 @@ pub fn export_json(settings: &Settings) -> Result<String, String> {
     Ok(text)
 }
 
-/// Reads a file picked for import. Only Nöbetçi's own settings are accepted:
-/// a file with the export marker, or at least three of Nöbetçi's keys, and in
-/// either case none of Claude Code's (`not_nobetci_settings` otherwise). A BOM
+/// Reads a file picked for import. Only Nobi's own settings are accepted:
+/// a file with the export marker, or at least three of Nobi's keys, and in
+/// either case none of Claude Code's (`not_nobi_settings` otherwise). A BOM
 /// is fine, as it is for settings.json itself.
 pub fn parse_import(bytes: &[u8]) -> Result<Settings, String> {
     let invalid = |err: String| {
         if crate::i18n::is_tr() {
-            format!("Geçerli bir Nöbetçi ayar dosyası değil: {err}")
+            format!("Geçerli bir Nobi ayar dosyası değil: {err}")
         } else {
-            format!("Not a valid Nöbetçi settings file: {err}")
+            format!("Not a valid Nobi settings file: {err}")
         }
     };
     let value: Value = serde_json::from_slice(strip_bom(bytes)).map_err(|e| invalid(e.to_string()))?;
-    let Value::Object(map) = value else { return Err("not_nobetci_settings".into()) };
-    if !is_nobetci_settings(&map) {
-        return Err("not_nobetci_settings".into());
+    let Value::Object(map) = value else { return Err("not_nobi_settings".into()) };
+    if !is_nobi_settings(&map) {
+        return Err("not_nobi_settings".into());
     }
     serde_json::from_value::<Settings>(Value::Object(map)).map_err(|e| invalid(e.to_string()))
 }
 
-fn is_nobetci_settings(map: &Map<String, Value>) -> bool {
+fn is_nobi_settings(map: &Map<String, Value>) -> bool {
     if CLAUDE_KEYS.iter().any(|key| map.contains_key(*key)) {
         return false;
     }
@@ -1002,7 +1002,7 @@ pub(crate) fn strip_bom(bytes: &[u8]) -> &[u8] {
     bytes.strip_prefix(BOM).unwrap_or(bytes)
 }
 
-/// Creates one of Nöbetçi's own folders, private to the user on Unix (0700),
+/// Creates one of Nobi's own folders, private to the user on Unix (0700),
 /// and tightens one that already exists (`tighten`).
 pub(crate) fn private_dir(dir: &Path) -> std::io::Result<()> {
     #[cfg(unix)]
@@ -1234,7 +1234,7 @@ mod tests {
     }
 
     fn scratch(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("nobetci-settings-{name}-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("nobi-settings-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         dir
@@ -1558,10 +1558,10 @@ mod tests {
         std::fs::create_dir_all(&dotfiles).unwrap();
         std::fs::create_dir_all(&config).unwrap();
         std::fs::set_permissions(&config, std::fs::Permissions::from_mode(0o755)).unwrap();
-        let real = dotfiles.join("nobetci.json");
+        let real = dotfiles.join("nobi.json");
         std::fs::write(&real, br#"{"holdMs":800}"#).unwrap();
         let link = config.join("settings.json");
-        std::os::unix::fs::symlink("../dotfiles/nobetci.json", &link).unwrap();
+        std::os::unix::fs::symlink("../dotfiles/nobi.json", &link).unwrap();
 
         save_to(&link, &Settings { hold_ms: 1500, ..Settings::default() }).unwrap();
         assert!(std::fs::symlink_metadata(&link).unwrap().file_type().is_symlink(), "the link must stay a link");
@@ -1597,29 +1597,29 @@ mod tests {
             ..Settings::default()
         };
         let text = export_json(&s).unwrap();
-        assert!(text.starts_with("{\n  \"nobetciSettings\": 1,"), "{}", text.chars().take(60).collect::<String>());
+        assert!(text.starts_with("{\n  \"nobiSettings\": 1,"), "{}", text.chars().take(60).collect::<String>());
         let back = parse_import(text.as_bytes()).unwrap();
         assert_eq!((back.hold_ms, &back.rules), (1700, &s.rules));
         // With a BOM, as Notepad or PowerShell 5 would save an edited copy.
         let mut bom = vec![0xEF, 0xBB, 0xBF];
         bom.extend_from_slice(text.as_bytes());
         assert_eq!(parse_import(&bom).unwrap().hold_ms, 1700);
-        // Nöbetçi's own settings.json (no marker) has every key.
+        // Nobi's own settings.json (no marker) has every key.
         let plain = serde_json::to_string(&s).unwrap();
         assert_eq!(parse_import(plain.as_bytes()).unwrap().hold_ms, 1700);
-        // An older or hand-made file with a few of Nöbetçi's keys.
+        // An older or hand-made file with a few of Nobi's keys.
         assert_eq!(parse_import(br#"{"holdMs":900,"inputGuard":true,"language":"tr"}"#).unwrap().hold_ms, 900);
     }
 
     #[test]
-    fn an_import_refuses_anything_that_is_not_nobetci_settings() {
+    fn an_import_refuses_anything_that_is_not_nobi_settings() {
         for foreign in [
             // Claude Code's own settings.json, the file most likely picked by mistake.
             &br#"{"model":"opus","permissions":{"allow":[]},"hooks":{}}"#[..],
             br#"{"env":{"A":"1"}}"#,
             br#"{"statusLine":{"type":"command","command":"x"}}"#,
-            // Even with the marker and Nöbetçi's keys, a Claude key gives it away.
-            br#"{"nobetciSettings":1,"holdMs":900,"hooks":{}}"#,
+            // Even with the marker and Nobi's keys, a Claude key gives it away.
+            br#"{"nobiSettings":1,"holdMs":900,"hooks":{}}"#,
             // Codex / Cursor hook files.
             br#"{"version":1,"hooks":{"stop":[]}}"#,
             b"{}",
@@ -1628,21 +1628,13 @@ mod tests {
             b"[1,2,3]",
             b"\"settings\"",
         ] {
-            assert_eq!(
-                parse_import(foreign).unwrap_err(),
-                "not_nobetci_settings",
-                "{}",
-                String::from_utf8_lossy(foreign)
-            );
+            assert_eq!(parse_import(foreign).unwrap_err(), "not_nobi_settings", "{}", String::from_utf8_lossy(foreign));
         }
-        // A Nöbetçi file with a broken value: Rust's own words, not a silent default.
-        let err = parse_import(br#"{"nobetciSettings":1,"holdMs":"slow"}"#).unwrap_err();
+        // A Nobi file with a broken value: Rust's own words, not a silent default.
+        let err = parse_import(br#"{"nobiSettings":1,"holdMs":"slow"}"#).unwrap_err();
         assert!(err.contains("holdMs") || err.contains("invalid type"), "{err}");
-        assert!(
-            err.starts_with("Not a valid Nöbetçi settings file") || err.starts_with("Geçerli bir Nöbetçi"),
-            "{err}"
-        );
+        assert!(err.starts_with("Not a valid Nobi settings file") || err.starts_with("Geçerli bir Nobi"), "{err}");
         let err = parse_import(b"{ not json").unwrap_err();
-        assert!(err.contains("Nöbetçi"), "{err}");
+        assert!(err.contains("Nobi"), "{err}");
     }
 }

@@ -1,7 +1,7 @@
 // Fails when a tracked text file contains invisible or direction-changing
 // characters: zero-width spaces, bidi controls, BOMs in the middle of a file,
 // invisible fillers and operators, tag characters, stray control characters.
-// Nöbetçi flags these in commands as an obfuscation trick; its own source must be
+// Nobi flags these in commands as an obfuscation trick; its own source must be
 // free of them. Run: `npm run check:invisible` (CI runs it too).
 //
 // Every file git treats as text is scanned, whatever its name (installer

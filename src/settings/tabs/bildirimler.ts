@@ -651,7 +651,7 @@ function render(): HTMLElement {
             small: true,
             icon: "play",
             onClick: async () => {
-              const shown = await api.notify("approval", "Nöbetçi", t("toasts.testBody"), false);
+              const shown = await api.notify("approval", "Nobi", t("toasts.testBody"), false);
               testResult = shown ? "toasts.sent" : shown === false ? "toasts.notShown" : "toasts.onlyInApp";
               rerender("bildirimler");
             },

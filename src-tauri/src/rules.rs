@@ -716,7 +716,7 @@ fn evaluate_at(
         match rule.action.as_str() {
             "deny" => {
                 let message = if rule.message.trim().is_empty() {
-                    format!("{}: {name}", pick("Denied by a Nöbetçi rule", "Nöbetçi kuralı reddetti"))
+                    format!("{}: {name}", pick("Denied by a Nobi rule", "Nobi kuralı reddetti"))
                 } else {
                     rule.message.clone()
                 };
@@ -1344,7 +1344,7 @@ mod tests {
         assert_eq!(long_name_spellings(r"C:\PROGRA~1\x", r"C:\Program Files\*"), [r"C:\Program Files\x"]);
         assert!(short_name("PROGRA~1").is_some_and(|s| s.fits("Program Files") && s.fits("ProgramData")));
         assert!(short_name("SETTIN~1.JSO").is_some_and(|s| s.fits("settings.json") && !s.fits("settings")));
-        assert!(short_name("NBETI~1").is_some_and(|s| !s.fits("Nobetci")));
+        assert!(short_name("NBETI~1").is_some_and(|s| !s.fits("Nöbetçi")));
         assert!(short_name("N_BET_~1").is_some_and(|s| s.fits("Nöbetçi")));
         for not_short in ["PROGRAM~1", "PROGRA~", "PROGRA~X", "~1", "A~1.JSON", "PRO*~1", "notes.txt"] {
             assert!(short_name(not_short).is_none(), "{not_short}");

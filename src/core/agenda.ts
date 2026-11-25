@@ -8,7 +8,7 @@ let items: AgendaItem[] = [];
 let loaded = false;
 const listeners = new Set<() => void>();
 /**
- * agenda.json is there but Nöbetçi cannot read it (C-23): the card says so
+ * agenda.json is there but Nobi cannot read it (C-23): the card says so
  * rather than show an empty day, and Rust saves nothing over the file.
  */
 let unreadable = false;
@@ -112,8 +112,8 @@ export const Agenda = {
 /** What Rust answers a change while agenda.json cannot be read (agenda.rs), for the browser preview. */
 function demoRefusal(): string {
   return document.documentElement.lang === "en" || location.search.includes("lang=en")
-    ? "Nöbetçi couldn't read agenda.json, so it doesn't save over it. Check the file, then try again."
-    : "Nöbetçi agenda.json dosyasını okuyamadı, bu yüzden üzerine kaydetmiyor. Dosyayı kontrol edip yeniden dene.";
+    ? "Nobi couldn't read agenda.json, so it doesn't save over it. Check the file, then try again."
+    : "Nobi agenda.json dosyasını okuyamadı, bu yüzden üzerine kaydetmiyor. Dosyayı kontrol edip yeniden dene.";
 }
 
 function demoItems(): AgendaItem[] {

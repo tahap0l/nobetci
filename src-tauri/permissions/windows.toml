@@ -1,4 +1,4 @@
-# What each of Nöbetçi's windows may ask Rust to do (C-13).
+# What each of Nobi's windows may ask Rust to do (C-13).
 #
 # This folder exists, so Tauri checks every app command against the windows'
 # capabilities (capabilities/*.json): a window can call only what its

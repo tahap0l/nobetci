@@ -8,7 +8,7 @@
 // button pauses or plays the tour for everyone.
 
 (() => {
-  const site = window.NobetciSite;
+  const site = window.NobiSite;
   if (!site) return;
   const { base } = site;
   const L = (tr, en) => (site.lang() === "tr" ? tr : en);
@@ -172,10 +172,10 @@
       el("h3", { text: L("Maskot", "Mascot") }), themes,
       el("p", { class: "lab-note", text: L("Simülasyon: bilgisayarında komut çalışmaz, veri gönderilmez.", "A simulation: nothing runs on your computer and nothing is sent.") }));
     if (!labStage) {
-      labFrame = el("iframe", { class: "stage-frame", title: L("Nöbetçi canlı demo", "Nöbetçi live demo") });
+      labFrame = el("iframe", { class: "stage-frame", title: L("Nobi canlı demo", "Nobi live demo") });
       labView = el("div", { class: "stage-view" }, el("div", { class: "frame-box" }, labFrame));
       labStage = el("div", { class: "stage lab-stage" },
-        el("div", { class: "stage-bar", "aria-hidden": "true" }, el("i"), el("span", { text: "Nöbetçi" })),
+        el("div", { class: "stage-bar", "aria-hidden": "true" }, el("i"), el("span", { text: "Nobi" })),
         labView,
         el("span", { class: "stage-hint" }, el("span", { class: "live-dot", "aria-hidden": "true" }),
           el("span", { text: hintText() })));
@@ -198,7 +198,7 @@
       }, { rootMargin: "300px" }).observe(labStage);
     } else {
       labStage.querySelector(".stage-hint span:last-child").textContent = hintText();
-      labFrame.title = L("Nöbetçi canlı demo", "Nöbetçi live demo");
+      labFrame.title = L("Nobi canlı demo", "Nobi live demo");
     }
     lab.replaceChildren(side, labStage);
     for (const pressed of side.querySelectorAll('[aria-pressed="true"]')) reveal(pressed);

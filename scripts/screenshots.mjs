@@ -10,11 +10,11 @@
 // so a full run never brings back files nothing uses.
 //
 // Environment:
-//   NOBETCI_URL    dev server to capture (default http://127.0.0.1:1420)
-//   NOBETCI_EDGE   path to msedge.exe (default: where Windows installs it); on
+//   NOBI_URL    dev server to capture (default http://127.0.0.1:1420)
+//   NOBI_EDGE   path to msedge.exe (default: where Windows installs it); on
 //                  macOS and Linux, the path to Edge, Chrome or Chromium
-//   NOBETCI_SCALE  device scale factor, e.g. 2 for high-DPI images (default 1)
-//   NOBETCI_OUT    output directory, relative to the repo root (default docs/media)
+//   NOBI_SCALE  device scale factor, e.g. 2 for high-DPI images (default 1)
+//   NOBI_OUT    output directory, relative to the repo root (default docs/media)
 //
 // Dependency-free on purpose: Node built-ins and the Edge that ships with Windows.
 // Text is set in the system font, so images taken on another system differ in type.
@@ -43,12 +43,12 @@ import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const outRoot = resolve(root, process.env.NOBETCI_OUT || "docs/media");
+const outRoot = resolve(root, process.env.NOBI_OUT || "docs/media");
 
-const base = (process.env.NOBETCI_URL || "http://127.0.0.1:1420").replace(/\/*$/, "/");
-const scale = Number(process.env.NOBETCI_SCALE || 1);
+const base = (process.env.NOBI_URL || "http://127.0.0.1:1420").replace(/\/*$/, "/");
+const scale = Number(process.env.NOBI_SCALE || 1);
 const edge =
-  process.env.NOBETCI_EDGE ||
+  process.env.NOBI_EDGE ||
   [
     "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
     "C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe",
@@ -409,16 +409,16 @@ async function main() {
   if (!edge || !existsSync(edge)) {
     fail(
       process.platform === "win32"
-        ? "Microsoft Edge not found. Set NOBETCI_EDGE to the full path of msedge.exe."
-        : "Set NOBETCI_EDGE to the full path of Edge, Chrome or Chromium.",
+        ? "Microsoft Edge not found. Set NOBI_EDGE to the full path of msedge.exe."
+        : "Set NOBI_EDGE to the full path of Edge, Chrome or Chromium.",
     );
   }
-  if (!Number.isFinite(scale) || scale <= 0) fail(`NOBETCI_SCALE must be a positive number, got "${process.env.NOBETCI_SCALE}".`);
+  if (!Number.isFinite(scale) || scale <= 0) fail(`NOBI_SCALE must be a positive number, got "${process.env.NOBI_SCALE}".`);
   if (!(await serverUp(base))) {
-    fail(`No dev server at ${base} — start one with \`npm run dev\`, or point NOBETCI_URL at yours.`);
+    fail(`No dev server at ${base} — start one with \`npm run dev\`, or point NOBI_URL at yours.`);
   }
 
-  const profiles = mkdtempSync(join(tmpdir(), "nobetci-shots-"));
+  const profiles = mkdtempSync(join(tmpdir(), "nobi-shots-"));
   console.log(`\n  Capturing ${base} with ${edge}\n`);
 
   const failed = [];

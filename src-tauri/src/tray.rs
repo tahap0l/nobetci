@@ -7,10 +7,10 @@ use tauri::{AppHandle, Emitter, Wry};
 use crate::i18n::pick;
 use crate::island::WINDOW_LABEL;
 
-const TRAY_ID: &str = "nobetci";
+const TRAY_ID: &str = "nobi";
 
 fn menu(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
-    let open = MenuItem::with_id(app, "open", pick("Open Nöbetçi", "Nöbetçi'yi aç"), true, None::<&str>)?;
+    let open = MenuItem::with_id(app, "open", pick("Open Nobi", "Nobi'yi aç"), true, None::<&str>)?;
     let settings = MenuItem::with_id(app, "settings", pick("Settings…", "Ayarlar…"), true, None::<&str>)?;
     let pause = MenuItem::with_id(app, "pause", pick("Pause / resume", "Duraklat / devam et"), true, None::<&str>)?;
     let dnd =
@@ -29,17 +29,18 @@ fn menu(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
 }
 
 pub fn build(app: &AppHandle) -> tauri::Result<()> {
-    let mut builder = TrayIconBuilder::with_id(TRAY_ID).tooltip("Nöbetçi").menu(&menu(app)?).on_menu_event(
-        |app: &AppHandle, event| match event.id.as_ref() {
-            "quit" => app.exit(0),
-            "settings" => crate::show_settings_window(app, None),
-            "dnd" => crate::toggle_dnd(app),
-            "buddy" => crate::toggle_buddy(app),
-            id => {
-                let _ = app.emit_to(WINDOW_LABEL, "tray", id.to_string());
+    let mut builder =
+        TrayIconBuilder::with_id(TRAY_ID).tooltip("Nobi").menu(&menu(app)?).on_menu_event(|app: &AppHandle, event| {
+            match event.id.as_ref() {
+                "quit" => app.exit(0),
+                "settings" => crate::show_settings_window(app, None),
+                "dnd" => crate::toggle_dnd(app),
+                "buddy" => crate::toggle_buddy(app),
+                id => {
+                    let _ = app.emit_to(WINDOW_LABEL, "tray", id.to_string());
+                }
             }
-        },
-    );
+        });
 
     // macOS: a monochrome template the menu bar tints itself, for light, dark
     // and coloured menu bars alike; drawn 18 pt tall, so 36 px stays sharp on

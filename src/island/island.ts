@@ -1,6 +1,6 @@
 // The island: DOM shell, open/close animation, owl placement, input and the
 // frame loop. The loop only runs while something is moving, and never while the
-// island is hidden — a sleeping Nöbetçi costs no CPU.
+// island is hidden — a sleeping Nobi costs no CPU.
 
 import { OwlEngine, prefersReducedMotion, type OwlEmote, type OwlMood } from "../baykus/owl";
 import { applyMascotPalette } from "../core/mascot-theme";
@@ -430,7 +430,7 @@ export class Island {
     this.fsm.reveal();
   }
 
-  /** Another Nöbetçi window needs the top of the screen; a waiting card stays. */
+  /** Another Nobi window needs the top of the screen; a waiting card stays. */
   yieldToSettings() {
     if (State.approvals.length || State.mode !== "expanded") return;
     this.collapse();

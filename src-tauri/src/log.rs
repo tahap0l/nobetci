@@ -1,6 +1,6 @@
-// Small append-only log, nobetci.log in Nöbetçi's data folder
-// (%LOCALAPPDATA%\Nobetci on Windows, ~/Library/Application Support/Nobetci on
-// macOS, ~/.local/share/nobetci on Linux). Nothing leaves the machine. On Linux
+// Small append-only log, nobi.log in Nobi's data folder
+// (%LOCALAPPDATA%\Nobi on Windows, ~/Library/Application Support/Nobi on
+// macOS, ~/.local/share/nobi on Linux). Nothing leaves the machine. On Linux
 // and macOS the folder and the file are the user's alone (0700 / 0600): the log
 // names projects and paths. Where the file system cannot keep them private, the
 // log is still written and says so (`settings::tighten`); where it cannot be
@@ -14,7 +14,7 @@ pub fn line(message: impl AsRef<str>) {
     let stamp = crate::sys::local_time().stamp();
     let dir = settings::local_dir();
     let written = settings::private_dir(&dir).and_then(|()| {
-        let path = dir.join("nobetci.log");
+        let path = dir.join("nobi.log");
         // Keep it from growing forever: start fresh past ~1 MB.
         if std::fs::metadata(&path).map(|m| m.len() > 1_000_000).unwrap_or(false) {
             let _ = std::fs::remove_file(&path);
@@ -27,7 +27,7 @@ pub fn line(message: impl AsRef<str>) {
         Ok(())
     });
     if let Err(err) = written {
-        eprintln!("{stamp} {} (nobetci.log could not be written: {err})", message.as_ref());
+        eprintln!("{stamp} {} (nobi.log could not be written: {err})", message.as_ref());
         for note in settings::take_loose() {
             eprintln!("{stamp} {note}");
         }
@@ -59,10 +59,10 @@ mod tests {
     #[test]
     fn the_log_is_private_even_when_an_older_version_made_it() {
         use std::os::unix::fs::PermissionsExt;
-        let dir = std::env::temp_dir().join(format!("nobetci-log-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("nobi-log-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        let path = dir.join("nobetci.log");
+        let path = dir.join("nobi.log");
         std::fs::write(&path, b"old\n").unwrap();
         std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
         super::open(&path).unwrap();

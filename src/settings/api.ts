@@ -1,5 +1,5 @@
 // The settings window talks to Rust through `api`, which is the real Bridge
-// inside Nöbetçi. In a plain browser under `npm run dev` it is swapped for an
+// inside Nobi. In a plain browser under `npm run dev` it is swapped for an
 // in-memory mock (dynamic import, so production builds never contain it).
 //
 // A few commands the settings window uses changed shape (hook previews that may
@@ -86,13 +86,13 @@ async function invokeOrThrow<T>(cmd: string, args?: Record<string, unknown>): Pr
   return invoke<T>(cmd, args);
 }
 
-/** Like the Bridge's own calls: null outside Nöbetçi, or when Rust fails (logged). */
+/** Like the Bridge's own calls: null outside Nobi, or when Rust fails (logged). */
 async function invokeOrNull<T>(cmd: string, args?: Record<string, unknown>): Promise<T | null> {
   if (!IS_TAURI) return null;
   try {
     return await invoke<T>(cmd, args);
   } catch (err) {
-    console.error(`[nobetci] ${cmd} failed`, err);
+    console.error(`[nobi] ${cmd} failed`, err);
     return null;
   }
 }
@@ -103,7 +103,7 @@ const settingsCommands = {
   saveSettings: (settings: Settings) => invokeOrThrow<Settings>("save_settings", { settings }),
   boot: () => Bridge.boot() as Promise<BootInfo | null>,
   hooksStatus: () => Bridge.hooksStatus() as Promise<HookStatus | null>,
-  /** A page of the history; null outside Nöbetçi or when Rust fails (logged). */
+  /** A page of the history; null outside Nobi or when Rust fails (logged). */
   auditQuery: (filter: AuditFilter) => Bridge.auditQuery(filter) as Promise<HistoryPage | null>,
   /**
    * Back to the defaults. Rust puts them in effect (and says so with
@@ -187,7 +187,7 @@ const CODES = [
   "relay_missing",
   "settings_unreadable",
   "save_failed",
-  "not_nobetci_settings",
+  "not_nobi_settings",
 ] as const;
 export type ErrCode = (typeof CODES)[number];
 
@@ -220,7 +220,7 @@ export function errText(err: unknown): string {
       return t("err.settingsUnreadable");
     case "save_failed":
       return c.detail ? t("err.saveFailedDetail", { detail: c.detail }) : t("err.saveFailed");
-    case "not_nobetci_settings":
-      return t("err.notNobetci");
+    case "not_nobi_settings":
+      return t("err.notNobi");
   }
 }

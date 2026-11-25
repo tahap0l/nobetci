@@ -377,7 +377,7 @@ pub fn make_non_activating(win: &WebviewWindow, _kind: Floating) {
     keep_out_of_the_way(win);
 }
 
-/// macOS: Nöbetçi runs as an accessory app (no Dock icon, not in Cmd-Tab, see
+/// macOS: Nobi runs as an accessory app (no Dock icon, not in Cmd-Tab, see
 /// `lib.rs`), and the floating windows follow you to every Space as
 /// non-activating panels: a click on them leaves the terminal the active app.
 /// Only the island's panel can become the key window, when the user types into

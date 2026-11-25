@@ -9,7 +9,7 @@
     <parameter name="version" required="true" />
   </parameters>
   <zip-file>
-    <pe-file path="Nobetci-${version}-setup.exe" product-name="Nobetci" product-version="${version}">
+    <pe-file path="Nobi-${version}-setup.exe" product-name="Nobi" product-version="${version}">
       <authenticode-sign />
     </pe-file>
   </zip-file>

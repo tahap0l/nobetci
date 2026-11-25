@@ -1,7 +1,7 @@
-//! The Linux half of the relay: the Unix socket Nöbetçi listens on, and the
+//! The Linux half of the relay: the Unix socket Nobi listens on, and the
 //! parent-process chain.
 //!
-//! The socket is `~/.local/state/nobetci/nobetci.sock`, or `/tmp/nobetci-<uid>/`
+//! The socket is `~/.local/state/nobi/nobi.sock`, or `/tmp/nobi-<uid>/`
 //! when the home path is too long for a socket. The app keeps the folder at 0700
 //! and the socket at 0600, so another account cannot reach it in the first place.
 //! Before sending anything we still check two things, both cheap: the socket file
@@ -36,12 +36,12 @@ const MAX_SOCKET_PATH: usize = 107;
 
 /// Must match the app's `pipe::unix_socket::socket_path()` exactly.
 fn socket_path() -> Option<PathBuf> {
-    let preferred = home()?.join(".local/state/nobetci/nobetci.sock");
+    let preferred = home()?.join(".local/state/nobi/nobi.sock");
     if preferred.as_os_str().len() <= MAX_SOCKET_PATH {
         return Some(preferred);
     }
     let uid = unsafe { libc::getuid() };
-    Some(PathBuf::from(format!("/tmp/nobetci-{uid}/nobetci.sock")))
+    Some(PathBuf::from(format!("/tmp/nobi-{uid}/nobi.sock")))
 }
 
 /// Connects to the app. No socket, a stale one, or one that is not ours: `None`,
@@ -135,7 +135,7 @@ mod tests {
     #[test]
     fn the_socket_lives_under_home_or_a_private_tmp_folder() {
         let path = socket_path().unwrap();
-        assert!(path.ends_with("nobetci.sock"));
+        assert!(path.ends_with("nobi.sock"));
         assert!(path.as_os_str().len() <= MAX_SOCKET_PATH);
     }
 }

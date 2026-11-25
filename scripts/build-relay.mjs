@@ -1,5 +1,5 @@
-// Builds nobetci-hook (the relay Claude Code runs on every hook event) in
-// release mode, where the app bundle picks it up: target/release/nobetci-hook
+// Builds nobi-hook (the relay Claude Code runs on every hook event) in
+// release mode, where the app bundle picks it up: target/release/nobi-hook
 // (.exe on Windows). Runs before `tauri dev`, `tauri build` and the tests —
 // see the pre-scripts in package.json.
 //
@@ -8,12 +8,12 @@
 // (`tauri build --target universal-apple-darwin`) both architectures are built
 // and merged with lipo, so the bundled relay runs on Apple silicon and Intel
 // alike. Any other cross target is built for that target and copied into place.
-// `npm run pack:mac` also says so outright (NOBETCI_RELAY=universal), so a
+// `npm run pack:mac` also says so outright (NOBI_RELAY=universal), so a
 // universal app can never end up with a single-architecture relay.
 //
 // The relay always goes to <repo>/target, even when CARGO_TARGET_DIR (or a
 // cargo config) moves cargo's own output elsewhere: the platform configs in
-// src-tauri bundle ../target/release/nobetci-hook from there.
+// src-tauri bundle ../target/release/nobi-hook from there.
 //
 //   node scripts/build-relay.mjs
 
@@ -23,15 +23,15 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const exe = process.platform === "win32" ? "nobetci-hook.exe" : "nobetci-hook";
+const exe = process.platform === "win32" ? "nobi-hook.exe" : "nobi-hook";
 const target = join(root, "target");
 const out = join(target, "release");
 
 const run = (cmd, args) => execFileSync(cmd, args, { cwd: root, stdio: "inherit" });
-const build = (...extra) => run("cargo", ["build", "--release", "-p", "nobetci-hook", "--target-dir", target, ...extra]);
+const build = (...extra) => run("cargo", ["build", "--release", "-p", "nobi-hook", "--target-dir", target, ...extra]);
 
 /**
- * Cargo makes target/release/nobetci-hook a hard link to its own native build
+ * Cargo makes target/release/nobi-hook a hard link to its own native build
  * in target/release/deps. Writing a cross-built relay through that link would
  * replace the native build too, and cargo, finding it up to date, would never
  * build it again: every later native package would carry the wrong
@@ -45,7 +45,7 @@ function freshFile(path) {
 
 const host = /host: (\S+)/.exec(execFileSync("rustc", ["-vV"], { encoding: "utf8" }))?.[1] ?? "";
 const triple =
-  process.env.NOBETCI_RELAY === "universal" ? "universal-apple-darwin" : (process.env.TAURI_ENV_TARGET_TRIPLE ?? "");
+  process.env.NOBI_RELAY === "universal" ? "universal-apple-darwin" : (process.env.TAURI_ENV_TARGET_TRIPLE ?? "");
 
 if (!triple || triple === host) {
   build();

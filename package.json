@@ -1,7 +1,7 @@
 {
-  "name": "nobetci",
+  "name": "nobi",
   "private": true,
-  "version": "2.5.0",
+  "version": "3.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -14,7 +14,7 @@
     "test": "cargo test --workspace",
     "pack": "tauri build && node scripts/pack.mjs",
     "pack:store:offline": "tauri build --config src-tauri/tauri.store.conf.json && node scripts/pack.mjs --store",
-    "pack:mac": "NOBETCI_RELAY=universal tauri build --target universal-apple-darwin && node scripts/pack.mjs",
+    "pack:mac": "NOBI_RELAY=universal tauri build --target universal-apple-darwin && node scripts/pack.mjs",
     "pack:linux": "tauri build && node scripts/pack.mjs",
     "lint": "cargo clippy --workspace --all-targets -- -D warnings && tsc --noEmit",
     "fmt": "cargo fmt --all",
@@ -36,12 +36,12 @@
   "description": "A watchful owl for AI coding agents — monitors Claude Code, Codex and Cursor sessions and permission requests.",
   "license": "MIT",
   "author": "Esat Taha Polat (tahap0l)",
-  "homepage": "https://github.com/tahap0l/nobetci",
+  "homepage": "https://github.com/tahap0l/nobi",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/tahap0l/nobetci.git"
+    "url": "git+https://github.com/tahap0l/nobi.git"
   },
   "bugs": {
-    "url": "https://github.com/tahap0l/nobetci/issues"
+    "url": "https://github.com/tahap0l/nobi/issues"
   }
 }

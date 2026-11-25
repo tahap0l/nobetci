@@ -44,7 +44,7 @@ type Range = "7" | "30" | "90";
 /** A message is either one of ours or a Rust error, both put in words on render (so a language switch follows). */
 type Msg = { kind: "ok" | "error" | "info"; key?: MsgKey; vars?: Record<string, string>; err?: unknown };
 
-const SEP_KEY = "nobetci.settings.csvSeparator";
+const SEP_KEY = "nobi.settings.csvSeparator";
 
 function storedSeparator(): CsvSeparator {
   try {
@@ -274,7 +274,7 @@ function topFindings(s: AuditStats | null): [string, number][] {
 /** Rust's note that stands in for a missing target, or "". Only a request too
  *  large to read (pipe.rs `too_long`) has one: it was never scored, so it has no
  *  kind and no target, and with no answer (decision none) its message is
- *  Nöbetçi's note on why. Any other message is what Claude was told, or a note
+ *  Nobi's note on why. Any other message is what Claude was told, or a note
  *  on the decision, never a target: only the drawer shows it, under its label. */
 function oversizeNote(e: HistoryEntry): string {
   return !e.target && !e.kind && e.decision === "none" ? e.message : "";
@@ -323,7 +323,7 @@ function openDetail(index: number) {
   fact(t("hist.f.by"), byLabel(e.by));
   fact(t("hist.f.rule"), e.rule, true);
   // With no answer delivered (timed out, handed to the terminal, too large,
-  // undelivered…) Claude was told nothing: the text is Nöbetçi's note on why.
+  // undelivered…) Claude was told nothing: the text is Nobi's note on why.
   fact(e.decision === "none" ? t("hist.f.note") : t("hist.f.message"), e.message);
   fact(t("hist.f.duration"), e.ms ? fmtDuration(e.ms) : null);
   fact(t("hist.f.session"), e.session, true);

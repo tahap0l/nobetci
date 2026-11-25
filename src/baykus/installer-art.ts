@@ -91,7 +91,7 @@ function sidebarBackground(ctx: CanvasRenderingContext2D) {
   ctx.textAlign = "center";
   ctx.fillStyle = "#f2f2f5";
   ctx.font = "700 21px 'Segoe UI', system-ui, sans-serif";
-  ctx.fillText("Nöbetçi", w / 2, 246);
+  ctx.fillText("Nobi", w / 2, 246);
   const line = ctx.createLinearGradient(w / 2 - 34, 0, w / 2 + 34, 0);
   line.addColorStop(0, "rgba(245, 165, 36, 0)");
   line.addColorStop(0.5, "rgba(245, 165, 36, 0.8)");
@@ -167,7 +167,7 @@ function dmgBackground(ctx: CanvasRenderingContext2D) {
   ctx.textAlign = "center";
   ctx.fillStyle = "#f2f2f5";
   ctx.font = "700 24px -apple-system, 'SF Pro Display', 'Segoe UI', system-ui, sans-serif";
-  ctx.fillText("Nöbetçi", w / 2, 68);
+  ctx.fillText("Nobi", w / 2, 68);
   const line = ctx.createLinearGradient(w / 2 - 40, 0, w / 2 + 40, 0);
   line.addColorStop(0, "rgba(245, 165, 36, 0)");
   line.addColorStop(0.5, "rgba(245, 165, 36, 0.8)");
@@ -215,10 +215,10 @@ function dmgBackground(ctx: CanvasRenderingContext2D) {
   // 28 points off the bottom, so this sits above that.)
   ctx.fillStyle = "rgba(242, 242, 245, 0.88)";
   ctx.font = "600 14px -apple-system, 'SF Pro Text', 'Segoe UI', system-ui, sans-serif";
-  ctx.fillText("Kurmak için Nöbetçi'yi Applications klasörüne sürükle", w / 2, 322);
+  ctx.fillText("Kurmak için Nobi'yi Applications klasörüne sürükle", w / 2, 322);
   ctx.fillStyle = "rgba(242, 242, 245, 0.5)";
   ctx.font = "400 12.5px -apple-system, 'SF Pro Text', 'Segoe UI', system-ui, sans-serif";
-  ctx.fillText("Drag Nöbetçi to Applications to install", w / 2, 342);
+  ctx.fillText("Drag Nobi to Applications to install", w / 2, 342);
 }
 
 /** One tile: the sidebar's own background under that rectangle, then the owl. */

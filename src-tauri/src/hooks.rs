@@ -9,7 +9,7 @@
 // written in the file's own layout (indent, line endings, BOM), so whatever else
 // a rewrite would change is visible too.
 //
-// Uninstall removes Nöbetçi's own commands and nothing else: a matcher group
+// Uninstall removes Nobi's own commands and nothing else: a matcher group
 // shared with somebody else's hook keeps that hook, every other key keeps its
 // place, and a settings.json that is a symlink stays one.
 //
@@ -50,8 +50,11 @@ pub const HOOK_EVENTS: &[(&str, u64)] = &[
 ];
 
 /// The relay's file name without `.exe`. A hook command whose program is this
-/// file is Nöbetçi's; one that merely mentions it is not.
-const RELAY: &str = "nobetci-hook";
+/// file is Nobi's; one that merely mentions it is not.
+const RELAY: &str = "nobi-hook";
+/// The relay's name before 3.0 (Nöbetçi). Its entries are still ours: shown as
+/// out of date, replaced by an update and taken out by a removal.
+const LEGACY_RELAY: &str = "nobetci-hook";
 
 /// Error for a write whose preview is unknown or no longer matches the file.
 pub(crate) const STALE: &str = "stale_preview";
@@ -65,11 +68,11 @@ pub struct HookStatus {
     pub settings_path: String,
     pub hook_path: String,
     pub hook_ready: bool,
-    /// Events that currently have a Nöbetçi entry.
+    /// Events that currently have a Nobi entry.
     pub events: Vec<String>,
     /// Some entry points at a different relay path (an older install location).
     pub stale: bool,
-    /// settings.json has a status line that is not ours; Nöbetçi leaves it alone.
+    /// settings.json has a status line that is not ours; Nobi leaves it alone.
     pub foreign_status_line: bool,
     /// Windows: no spelling of the relay's path runs in both Git Bash and
     /// PowerShell, so the hooks run only where Claude Code uses Git Bash.
@@ -159,14 +162,14 @@ fn parse_settings(bytes: &[u8], path: &str) -> Result<Value, String> {
     }
     match serde_json::from_slice::<Value>(text) {
         Ok(v) if v.is_object() => Ok(v),
-        Ok(_) if is_tr() => Err(format!("{path} bir JSON nesnesi değil — Nöbetçi dokunmayacak.")),
-        Ok(_) => Err(format!("{path} isn't a JSON object — Nöbetçi won't touch it.")),
+        Ok(_) if is_tr() => Err(format!("{path} bir JSON nesnesi değil — Nobi dokunmayacak.")),
+        Ok(_) => Err(format!("{path} isn't a JSON object — Nobi won't touch it.")),
         Err(err) if is_tr() => Err(format!(
-            "{path} geçerli bir JSON değil ({err}). Düzeltip ya da taşıyıp tekrar dene — Nöbetçi üzerine yazmayacak."
+            "{path} geçerli bir JSON değil ({err}). Düzeltip ya da taşıyıp tekrar dene — Nobi üzerine yazmayacak."
         )),
-        Err(err) => Err(format!(
-            "{path} isn't valid JSON ({err}). Fix or move it, then try again — Nöbetçi won't overwrite it."
-        )),
+        Err(err) => {
+            Err(format!("{path} isn't valid JSON ({err}). Fix or move it, then try again — Nobi won't overwrite it."))
+        }
     }
 }
 
@@ -203,10 +206,10 @@ fn both_shells_path(exe: &str) -> Option<String> {
 }
 
 /// `exe` with its folders in their 8.3 short form (`short`), when that is a
-/// bare path. The file name stays as it is — `nobetci-hook.exe` needs no
+/// bare path. The file name stays as it is — `nobi-hook.exe` needs no
 /// shortening — so the command still names the relay; its own short name
 /// (`NOBETC~1.EXE`) would not, and older versions that wrote it left hooks
-/// nothing recognised as Nöbetçi's (see `short_alias`).
+/// nothing recognised as Nobi's (see `short_alias`).
 fn with_short_folders(exe: &str, short: impl Fn(&str) -> Option<String>) -> Option<String> {
     let (folders, name) = exe.rsplit_once(['/', '\\'])?;
     bare_path(&format!("{}/{name}", short(folders)?))
@@ -254,9 +257,9 @@ fn command_for(exe: &str, event: &str) -> String {
     single_quoted(exe, event)
 }
 
-/// Whether a hook command runs Nöbetçi's relay: its program — quoted, bare, or
-/// after PowerShell's `&` (Codex on Windows) — is a file named nobetci-hook or
-/// nobetci-hook.exe. A command that only mentions the relay (a script named
+/// Whether a hook command runs Nobi's relay: its program — quoted, bare, or
+/// after PowerShell's `&` (Codex on Windows) — is a file named nobi-hook or
+/// nobi-hook.exe. A command that only mentions the relay (a script named
 /// after it, an `echo`) belongs to somebody else and is never touched.
 pub(crate) fn runs_relay(command: &str) -> bool {
     let rest = command.trim_start();
@@ -264,12 +267,15 @@ pub(crate) fn runs_relay(command: &str) -> bool {
     let program = first_word(rest);
     let mut parts = program.rsplit(['/', '\\']);
     let name = parts.next().unwrap_or_default();
-    name.eq_ignore_ascii_case(RELAY) || name.eq_ignore_ascii_case(&format!("{RELAY}.exe")) || short_alias(name, parts)
+    [RELAY, LEGACY_RELAY]
+        .iter()
+        .any(|relay| name.eq_ignore_ascii_case(relay) || name.eq_ignore_ascii_case(&format!("{relay}.exe")))
+        || short_alias(name, parts)
 }
 
 /// Whether `name`, in the folders `parents` (innermost first), is the relay
-/// under its Windows 8.3 short name: an `XXXXXX~N.EXE` in Nöbetçi's own
-/// `Nobetci\bin`. Versions up to 2.4.1 wrote `…/Nobetci/bin/NOBETC~1.EXE` for
+/// under its Windows 8.3 short name: an `XXXXXX~N.EXE` in Nobi's own
+/// `Nobi\bin`. Versions up to 2.4.1 wrote `…/Nobi/bin/NOBETC~1.EXE` for
 /// a profile path with spaces; nothing else lives in that folder.
 fn short_alias<'a>(name: &str, mut parents: impl Iterator<Item = &'a str>) -> bool {
     let Some(stem) =
@@ -285,7 +291,9 @@ fn short_alias<'a>(name: &str, mut parents: impl Iterator<Item = &'a str>) -> bo
     });
     eight_three
         && parents.next().is_some_and(|folder| folder.eq_ignore_ascii_case("bin"))
-        && parents.next().is_some_and(|folder| folder.eq_ignore_ascii_case("nobetci"))
+        && parents
+            .next()
+            .is_some_and(|folder| folder.eq_ignore_ascii_case("nobi") || folder.eq_ignore_ascii_case("nobetci"))
 }
 
 /// The first shell word of `s` with its quoting removed: '…', "…", and `\'` or
@@ -316,7 +324,7 @@ fn entry_is_ours(entry: &Value) -> bool {
     entry.get("hooks").and_then(Value::as_array).is_some_and(|hooks| hooks.iter().any(hook_is_ours))
 }
 
-/// `list` (one event's matcher groups) without Nöbetçi's commands; None when
+/// `list` (one event's matcher groups) without Nobi's commands; None when
 /// none was there. A group loses only our commands, and goes only when nothing
 /// else was in it.
 fn strip_ours(list: &[Value]) -> Option<Vec<Value>> {
@@ -343,21 +351,21 @@ fn strip_ours(list: &[Value]) -> Option<Vec<Value>> {
 
 fn not_an_object(what: &str) -> String {
     if is_tr() {
-        format!("{what} ayarı bir JSON nesnesi değil — Nöbetçi dokunmayacak.")
+        format!("{what} ayarı bir JSON nesnesi değil — Nobi dokunmayacak.")
     } else {
-        format!("The {what} setting isn't a JSON object — Nöbetçi won't touch it.")
+        format!("The {what} setting isn't a JSON object — Nobi won't touch it.")
     }
 }
 
 fn not_a_list(what: &str) -> String {
     if is_tr() {
-        format!("{what} bir liste değil — Nöbetçi bu ayarı ezmeyecek.")
+        format!("{what} bir liste değil — Nobi bu ayarı ezmeyecek.")
     } else {
-        format!("{what} isn't a list — Nöbetçi won't overwrite it.")
+        format!("{what} isn't a list — Nobi won't overwrite it.")
     }
 }
 
-/// Settings with Nöbetçi's entries for exactly `events` (none: every entry of
+/// Settings with Nobi's entries for exactly `events` (none: every entry of
 /// ours removed, whatever event it is under). Nothing that is not ours changes:
 /// other hooks stay, in their groups; keys keep their order; a value that is not
 /// the shape we would write into is refused, never overwritten.
@@ -428,7 +436,7 @@ fn with_events(existing: &Value, events: &[String]) -> Result<Value, String> {
     Ok(Value::Object(root))
 }
 
-/// Settings with every Nöbetçi entry removed, and nothing else changed.
+/// Settings with every Nobi entry removed, and nothing else changed.
 fn without_ours(existing: &Value) -> Result<Value, String> {
     with_events(existing, &[])
 }
@@ -538,7 +546,7 @@ pub fn apply(install: bool, fingerprint: &str) -> Result<Option<String>, String>
     apply_reviewed(fingerprint, install, &settings_path())
 }
 
-/// Removes every Nöbetçi entry, with a dated backup, without a preview: the
+/// Removes every Nobi entry, with a dated backup, without a preview: the
 /// uninstaller's `--remove-hooks`. None when there was nothing of ours.
 pub fn remove_for_uninstall() -> Result<Option<String>, String> {
     let change = prepare(false, &[])?;
@@ -714,7 +722,7 @@ pub(crate) fn write_change(change: &Change) -> Result<Option<PathBuf>, WriteErro
     if let Some(dir) = target.parent().filter(|d| !d.as_os_str().is_empty()) {
         std::fs::create_dir_all(dir).map_err(|e| io_failure(path, e))?;
     }
-    let temp = settings::temp_beside(&target, "nobetci");
+    let temp = settings::temp_beside(&target, "nobi");
     let result = (|| {
         settings::write_private(&temp, &change.after).map_err(|e| io_failure(path, e))?;
         keep_mode(&target, &temp);
@@ -745,9 +753,9 @@ fn keep_mode(old: &Path, new: &Path) {
     let _ = (old, new);
 }
 
-/// Copies the relay (nobetci-hook) into Nöbetçi's data folder on launch:
-/// %LOCALAPPDATA%\Nobetci\bin on Windows, ~/Library/Application Support/Nobetci/bin
-/// on macOS, ~/.local/share/nobetci/bin on Linux. In a bundled install it comes
+/// Copies the relay (nobi-hook) into Nobi's data folder on launch:
+/// %LOCALAPPDATA%\Nobi\bin on Windows, ~/Library/Application Support/Nobi/bin
+/// on macOS, ~/.local/share/nobi/bin on Linux. In a bundled install it comes
 /// from the app resources; in `tauri dev` it sits next to the app in the
 /// workspace target directory.
 ///
@@ -807,7 +815,7 @@ fn install_relay(src: &Path, dest: &Path) {
     // copy is fine, it is the same relay.
     if let Err(err) = std::fs::copy(src, dest) {
         if !dest.exists() {
-            crate::log::line(format!("could not install nobetci-hook.exe: {err}"));
+            crate::log::line(format!("could not install nobi-hook.exe: {err}"));
         }
     }
 }
@@ -836,7 +844,7 @@ fn install_relay(src: &Path, dest: &Path) {
         .and_then(|_| std::fs::rename(&temp, dest));
     if let Err(err) = result {
         let _ = std::fs::remove_file(&temp);
-        crate::log::line(format!("could not install nobetci-hook: {err}"));
+        crate::log::line(format!("could not install nobi-hook: {err}"));
     }
 }
 
@@ -1039,7 +1047,7 @@ pub(crate) struct TempHome {
 impl TempHome {
     pub(crate) fn new(name: &str) -> TempHome {
         let lock = home_lock();
-        let dir = std::env::temp_dir().join(format!("nobetci-{name}-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("nobi-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let vars = ["HOME", "USERPROFILE", "LOCALAPPDATA", "XDG_DATA_HOME", "CLAUDE_CONFIG_DIR", "CODEX_HOME"];
@@ -1107,7 +1115,7 @@ mod tests {
     #[test]
     fn unreadable_content_is_an_error_never_an_empty_object() {
         // This is the whole bug: returning {} here meant `merged()` produced a
-        // file containing nothing but Nöbetçi's hooks, and the write replaced
+        // file containing nothing but Nobi's hooks, and the write replaced
         // everything the user had.
         for bad in [&b"{ not json"[..], &b"[1,2,3]"[..], &b"\"a string\""[..]] {
             assert!(parse_settings(bad, WHERE).is_err(), "content we cannot use must refuse, not come back empty");
@@ -1200,34 +1208,35 @@ mod tests {
     #[test]
     fn a_foreign_command_that_only_mentions_the_relay_is_not_ours() {
         for ours in [
-            "'/Users/a/Library/Application Support/Nobetci/bin/nobetci-hook' Stop",
-            r"'/Users/o'\''neil/nobetci-hook' Stop",
-            "C:/Users/afrap/AppData/Local/Nobetci/bin/nobetci-hook.exe Stop",
-            r#""C:/Users/a b/AppData/Local/Nobetci/bin/nobetci-hook.exe" Stop"#,
-            r"& 'C:\Users\x\AppData\Local\Nobetci\bin\nobetci-hook.exe' codex Stop",
-            r"& 'C:\Users\o''neil\AppData\Local\Nobetci\bin\nobetci-hook.exe' codex Stop",
-            "/home/dev/.local/share/nobetci/bin/nobetci-hook statusline",
-            "nobetci-hook Stop",
+            "'/Users/a/Library/Application Support/Nobi/bin/nobi-hook' Stop",
+            r"'/Users/o'\''neil/nobi-hook' Stop",
+            "C:/Users/afrap/AppData/Local/Nobi/bin/nobi-hook.exe Stop",
+            r#""C:/Users/a b/AppData/Local/Nobi/bin/nobi-hook.exe" Stop"#,
+            r"& 'C:\Users\x\AppData\Local\Nobi\bin\nobi-hook.exe' codex Stop",
+            r"& 'C:\Users\o''neil\AppData\Local\Nobi\bin\nobi-hook.exe' codex Stop",
+            "/home/dev/.local/share/nobi/bin/nobi-hook statusline",
+            "nobi-hook Stop",
         ] {
             assert!(runs_relay(ours), "{ours}");
         }
         for theirs in [
-            "~/bin/notify-nobetci-hook-events.sh",
-            "echo nobetci-hook",
-            "bash -c 'nobetci-hook Stop'",
-            "/opt/nobetci-hook-wrapper Stop",
+            "~/bin/notify-nobi-hook-events.sh",
+            "echo nobi-hook",
+            "bash -c 'nobi-hook Stop'",
+            "/opt/nobi-hook-wrapper Stop",
             "",
         ] {
             assert!(!runs_relay(theirs), "{theirs}");
         }
-        let theirs = json!({ "hooks": { "Stop": [{ "hooks": [{ "type": "command", "command": "~/bin/log-nobetci-hook.sh" }] }] } });
+        let theirs =
+            json!({ "hooks": { "Stop": [{ "hooks": [{ "type": "command", "command": "~/bin/log-nobi-hook.sh" }] }] } });
         assert_eq!(without_ours(&theirs).unwrap(), theirs);
         assert!(installed_events(&theirs).0.is_empty());
     }
 
     /// hooks-settings#0: with a space in the profile path, versions up to 2.4.1
-    /// wrote the relay under its 8.3 name (…/Nobetci/bin/NOBETC~1.EXE). Those
-    /// entries are Nöbetçi's for status, update and removal; new ones keep
+    /// wrote the relay under its 8.3 name (…/Nobi/bin/NOBETC~1.EXE). Those
+    /// entries are Nobi's for status, update and removal; new ones keep
     /// the file's own name and shorten only the folders.
     #[test]
     fn a_relay_written_with_its_short_name_is_still_ours() {
@@ -1237,16 +1246,21 @@ mod tests {
             format!("\"{old}\" PermissionRequest"),
             "C:/Users/JOHNDO~1/AppData/Local/nobetci/BIN/nobetc~2.exe Stop".to_string(),
             r"C:\Users\JOHNDO~1\AppData\Local\Nobetci\bin\NOBETC~1.EXE Stop".to_string(),
+            "C:/Users/JOHNDO~1/AppData/Local/Nobi/bin/NOBI-H~1.EXE Stop".to_string(),
+            // Nöbetçi's relay under its own name, before 3.0.
+            "C:/Users/dev/AppData/Local/Nobetci/bin/nobetci-hook.exe Stop".to_string(),
+            "/home/dev/.local/share/nobetci/bin/nobetci-hook PreToolUse".to_string(),
         ] {
             assert!(runs_relay(&ours), "{ours}");
         }
         for theirs in [
             "C:/tools/NOBETC~1.EXE Stop",
             "C:/Users/x/Nobetci/NOBETC~1.EXE Stop",
-            "C:/Users/x/Nobetci/bin/notes~1.txt Stop",
-            "C:/Users/x/Nobetci/bin/NOBETCIHOOK.EXE Stop",
-            "C:/Users/x/Nobetci/bin/TOOLONGNAME~1.EXE Stop",
-            "C:/Users/x/Nobetci/bin/AB~X.EXE Stop",
+            "/usr/bin/nobetci-hook-wrapper.sh Stop",
+            "C:/Users/x/Nobi/bin/notes~1.txt Stop",
+            "C:/Users/x/Nobi/bin/NOBIHOOK.EXE Stop",
+            "C:/Users/x/Nobi/bin/TOOLONGNAME~1.EXE Stop",
+            "C:/Users/x/Nobi/bin/AB~X.EXE Stop",
         ] {
             assert!(!runs_relay(theirs), "{theirs}");
         }
@@ -1286,15 +1300,15 @@ mod tests {
     fn only_the_folders_are_shortened() {
         let short = |folders: &str| Some(folders.replace("John Doe", "JOHNDO~1"));
         assert_eq!(
-            with_short_folders(r"C:\Users\John Doe\AppData\Local\Nobetci\bin\nobetci-hook.exe", short).as_deref(),
-            Some("C:/Users/JOHNDO~1/AppData/Local/Nobetci/bin/nobetci-hook.exe")
+            with_short_folders(r"C:\Users\John Doe\AppData\Local\Nobi\bin\nobi-hook.exe", short).as_deref(),
+            Some("C:/Users/JOHNDO~1/AppData/Local/Nobi/bin/nobi-hook.exe")
         );
-        let command = format!("{} Stop", with_short_folders(r"C:\Users\John Doe\x\nobetci-hook.exe", short).unwrap());
+        let command = format!("{} Stop", with_short_folders(r"C:\Users\John Doe\x\nobi-hook.exe", short).unwrap());
         assert!(runs_relay(&command), "{command}");
         // No short form, or one that still needs quotes: no bare path.
-        assert_eq!(with_short_folders(r"C:\Users\John Doe\nobetci-hook.exe", |_| None), None);
-        assert_eq!(with_short_folders(r"C:\Users\a&b\nobetci-hook.exe", |f| Some(f.to_string())), None);
-        assert_eq!(with_short_folders("nobetci-hook.exe", short), None);
+        assert_eq!(with_short_folders(r"C:\Users\John Doe\nobi-hook.exe", |_| None), None);
+        assert_eq!(with_short_folders(r"C:\Users\a&b\nobi-hook.exe", |f| Some(f.to_string())), None);
+        assert_eq!(with_short_folders("nobi-hook.exe", short), None);
     }
 
     /// hooks-settings#3: a file whose lines end in CRLF and LF alike is written
@@ -1347,17 +1361,17 @@ mod tests {
     #[test]
     fn the_command_runs_in_git_bash_and_powershell() {
         assert_eq!(
-            command_for(r"C:\Users\afrap\AppData\Local\Nobetci\bin\nobetci-hook.exe", "Stop"),
-            "C:/Users/afrap/AppData/Local/Nobetci/bin/nobetci-hook.exe Stop"
+            command_for(r"C:\Users\afrap\AppData\Local\Nobi\bin\nobi-hook.exe", "Stop"),
+            "C:/Users/afrap/AppData/Local/Nobi/bin/nobi-hook.exe Stop"
         );
         // A path that does not exist has no short form; it gets Git Bash's quoting.
         assert_eq!(
-            command_for(r"C:\Users\a b\NoSuchFolder\nobetci-hook.exe", "Stop"),
-            r"'C:/Users/a b/NoSuchFolder/nobetci-hook.exe' Stop"
+            command_for(r"C:\Users\a b\NoSuchFolder\nobi-hook.exe", "Stop"),
+            r"'C:/Users/a b/NoSuchFolder/nobi-hook.exe' Stop"
         );
         assert_eq!(
-            command_for(r"C:\Users\ca$h\NoSuchFolder\nobetci-hook.exe", "Stop"),
-            r"'C:/Users/ca$h/NoSuchFolder/nobetci-hook.exe' Stop"
+            command_for(r"C:\Users\ca$h\NoSuchFolder\nobi-hook.exe", "Stop"),
+            r"'C:/Users/ca$h/NoSuchFolder/nobi-hook.exe' Stop"
         );
     }
 
@@ -1366,24 +1380,21 @@ mod tests {
         // What the Windows fallback writes: single quotes, where Git Bash expands
         // nothing (double quotes would turn C:/Users/ca$h into C:/Users/ca).
         assert_eq!(
-            single_quoted("C:/Users/ca$h/AppData/Local/Nobetci/bin/nobetci-hook.exe", "Stop"),
-            "'C:/Users/ca$h/AppData/Local/Nobetci/bin/nobetci-hook.exe' Stop"
+            single_quoted("C:/Users/ca$h/AppData/Local/Nobi/bin/nobi-hook.exe", "Stop"),
+            "'C:/Users/ca$h/AppData/Local/Nobi/bin/nobi-hook.exe' Stop"
         );
         assert_eq!(single_quoted("C:/Users/a`b/x.exe", "Stop"), "'C:/Users/a`b/x.exe' Stop");
-        assert!(runs_relay(&single_quoted("C:/Users/o'neil/AppData/Local/Nobetci/bin/nobetci-hook.exe", "Stop")));
+        assert!(runs_relay(&single_quoted("C:/Users/o'neil/AppData/Local/Nobi/bin/nobi-hook.exe", "Stop")));
     }
 
     #[test]
     fn a_bare_path_is_written_only_when_no_shell_reads_anything_in_it() {
         assert_eq!(
-            bare_path(r"C:\Users\afrap\AppData\Local\Nobetci\bin\nobetci-hook.exe").as_deref(),
-            Some("C:/Users/afrap/AppData/Local/Nobetci/bin/nobetci-hook.exe")
+            bare_path(r"C:\Users\afrap\AppData\Local\Nobi\bin\nobi-hook.exe").as_deref(),
+            Some("C:/Users/afrap/AppData/Local/Nobi/bin/nobi-hook.exe")
         );
-        assert_eq!(bare_path(r"C:\Users\Şükrü\nobetci-hook.exe").as_deref(), Some("C:/Users/Şükrü/nobetci-hook.exe"));
-        assert_eq!(
-            bare_path(r"C:\Users\JOHNDO~1\nobetci-hook.exe").as_deref(),
-            Some("C:/Users/JOHNDO~1/nobetci-hook.exe")
-        );
+        assert_eq!(bare_path(r"C:\Users\Şükrü\nobi-hook.exe").as_deref(), Some("C:/Users/Şükrü/nobi-hook.exe"));
+        assert_eq!(bare_path(r"C:\Users\JOHNDO~1\nobi-hook.exe").as_deref(), Some("C:/Users/JOHNDO~1/nobi-hook.exe"));
         for odd in [
             r"C:\Users\a b\x.exe",
             r"C:\Users\o'neil\x.exe",
@@ -1407,11 +1418,11 @@ mod tests {
     #[test]
     fn the_command_quotes_the_path_for_sh() {
         assert_eq!(
-            command_for("/Users/a/Library/Application Support/Nobetci/bin/nobetci-hook", "Stop"),
-            "'/Users/a/Library/Application Support/Nobetci/bin/nobetci-hook' Stop"
+            command_for("/Users/a/Library/Application Support/Nobi/bin/nobi-hook", "Stop"),
+            "'/Users/a/Library/Application Support/Nobi/bin/nobi-hook' Stop"
         );
         // A quote in the path cannot end the quoting early.
-        assert_eq!(command_for("/Users/o'neil/nobetci-hook", "Stop"), r"'/Users/o'\''neil/nobetci-hook' Stop");
+        assert_eq!(command_for("/Users/o'neil/nobi-hook", "Stop"), r"'/Users/o'\''neil/nobi-hook' Stop");
         assert!(!git_bash_only());
     }
 
@@ -1506,7 +1517,7 @@ mod tests {
 
         // Install.
         let plan = preview(true, &all_events()).expect("a BOM must not stop the preview");
-        assert!(plan.diff.contains("nobetci-hook"), "the diff must show what changes");
+        assert!(plan.diff.contains("nobi-hook"), "the diff must show what changes");
         let shown_backup = plan.backup.clone().expect("there is a file to back up");
         assert_eq!(apply(false, &plan.fingerprint).unwrap_err(), STALE, "a preview applies only to its direction");
         let backup = apply(true, &plan.fingerprint).expect("install should succeed").expect("a backup");
@@ -1583,7 +1594,7 @@ mod tests {
             let plan = preview(true, &["Stop".to_string()]).unwrap();
             apply(true, &plan.fingerprint).unwrap();
             assert!(std::fs::symlink_metadata(&path).unwrap().file_type().is_symlink(), "still a link");
-            assert!(String::from_utf8(std::fs::read(&real).unwrap()).unwrap().contains("nobetci-hook"));
+            assert!(String::from_utf8(std::fs::read(&real).unwrap()).unwrap().contains("nobi-hook"));
             assert_eq!(std::fs::metadata(&real).unwrap().permissions().mode() & 0o777, 0o644, "mode kept");
             assert_eq!(std::fs::read_dir(&dotfiles).unwrap().count(), 1, "no temporary file left there");
             std::fs::remove_file(&path).unwrap();
@@ -1604,8 +1615,7 @@ mod tests {
         assert!(!entry_is_stale("PreToolUse", &fresh));
         let old = json!({ "hooks": [{ "type": "command", "command": hook_command("PreToolUse"), "timeout": 10 }] });
         assert!(entry_is_stale("PreToolUse", &old), "the desktop app's approvals need the long timeout");
-        let moved =
-            json!({ "hooks": [{ "type": "command", "command": "C:/old/nobetci-hook.exe Stop", "timeout": 10 }] });
+        let moved = json!({ "hooks": [{ "type": "command", "command": "C:/old/nobi-hook.exe Stop", "timeout": 10 }] });
         assert!(entry_is_stale("Stop", &moved));
     }
 
@@ -1625,7 +1635,7 @@ mod tests {
         assert_eq!(without_ours(&theirs).unwrap()["statusLine"], theirs["statusLine"]);
         assert!(without_ours(&free).unwrap().get("statusLine").is_none());
         // Nor one that merely mentions the relay.
-        let wrapper = json!({ "statusLine": { "type": "command", "command": "~/bin/wrap-nobetci-hook.sh" } });
+        let wrapper = json!({ "statusLine": { "type": "command", "command": "~/bin/wrap-nobi-hook.sh" } });
         assert_eq!(status_line_owner(&wrapper), StatusLineOwner::Theirs);
     }
 }

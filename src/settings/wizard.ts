@@ -438,7 +438,7 @@ function rail(): HTMLElement {
       "div",
       { class: "wz-brand" },
       owlMark(28),
-      h("div", { class: "brand-text" }, h("strong", { text: "Nöbetçi" }), h("span", { text: t("wz.setup") })),
+      h("div", { class: "brand-text" }, h("strong", { text: "Nobi" }), h("span", { text: t("wz.setup") })),
     ),
     list,
   );

@@ -3,13 +3,15 @@
 <p align="center"><img src="docs/media/en/idle-island.png" width="720" alt="The expanded island with the wolf mascot: five card tabs (Media, Agenda, Calendar, Weather and System), a playing track and the focus timer above the session list"></p>
 
 
-<img src="src-tauri/icons/128x128@2x.png" width="96" height="96" alt="Nöbetçi's owl">
+<img src="src-tauri/icons/128x128@2x.png" width="96" height="96" alt="Nobi's owl">
 
-# Nöbetçi
+# Nobi
 
-**A watchful owl for Claude Code, Codex and Cursor.**
+**Nobi — AI agent guard.** A watchful owl for Claude Code, Codex and Cursor.
 
-[![CI](https://github.com/tahap0l/nobetci/actions/workflows/ci.yml/badge.svg)](https://github.com/tahap0l/nobetci/actions/workflows/ci.yml)
+<sub>Formerly **Nöbetçi** (Turkish for “the one on watch”). Renamed in 3.0; an existing install moves over by itself.</sub>
+
+[![CI](https://github.com/tahap0l/nobi/actions/workflows/ci.yml/badge.svg)](https://github.com/tahap0l/nobi/actions/workflows/ci.yml)
 ![Windows 10 | 11](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D4)
 ![macOS 11+](https://img.shields.io/badge/macOS-11%2B-555555)
 ![Linux](https://img.shields.io/badge/Linux-x86__64-555555)
@@ -22,16 +24,16 @@
 
 ## Download and use
 
-**[Latest Windows, macOS and Linux installers](https://github.com/tahap0l/nobetci/releases/latest)**
+**[Latest Windows, macOS and Linux installers](https://github.com/tahap0l/nobi/releases/latest)**
 
-[Website](https://tahap0l.github.io/nobetci/) · [Interactive web demo](https://tahap0l.github.io/nobetci/demo/)
+[Website](https://tahap0l.github.io/nobi/) · [Interactive web demo](https://tahap0l.github.io/nobi/demo/)
 
-Nöbetçi sits at the top of the screen. Click the compact island to open your agent sessions and cards. Permission requests open the approval card first.
+Nobi sits at the top of the screen. Click the compact island to open your agent sessions and cards. Permission requests open the approval card first.
 
 - **Agent monitoring.** Track Claude Code, Codex, and Cursor sessions and supported permission requests. On Windows, you can also see ChatGPT response status from Chrome or Edge (the bridge registers on Windows only). [ChatGPT Web setup](integrations/chatgpt-web/README.md)
 - **Five island tabs.** **Media** (with the focus timer), **Agenda**, **Calendar**, **Weather** and **System**: click a tab, or scroll or swipe through the cards. Browse weeks with the calendar arrows and see the selected city's conditions and temperature in a table.
 - **Media and focus.** The player shows what is playing, with the artwork blurred behind the card, a live time bar you can click to seek, and play, pause, next and previous. It follows the system media controls on Windows (Spotify, browsers…), Spotify and Music on macOS, and every MPRIS player on Linux (Spotify, VLC, browsers…). The 25-minute focus timer can be paused or reset. Choose a weather city and enable media under **Settings → General → Island widgets**.
-- **An assistant on the island.** Press `Ctrl+Alt+Space` (or the ✦ button), write what you want and send it to ChatGPT, Claude, Gemini, Perplexity, Copilot, Grok, DeepSeek or Mistral — the app or website opens, and your message is on the clipboard too. ChatGPT, Claude, Perplexity, Copilot and Grok on the web, and the ChatGPT and Perplexity apps, get the message as they open and may answer right away (on the web it travels in the page address, so your browser history keeps it); the Claude app only puts it in its text box for you to send; Gemini, DeepSeek, Mistral and the Copilot app open without it, so you paste it, as you do with a message too long for an address. **Here** answers on the island itself with your Prompt Studio model. Slash commands control Nöbetçi from the same box: `/pause`, `/dnd`, `/focus 25`, `/play`, `/next`, `/prev`, `/settings` (the media commands work even with the media card off, on a player that is already running); ↑ and ↓ bring back earlier messages. Esc, ✕ or the shortcut close it again.
+- **An assistant on the island.** Press `Ctrl+Alt+Space` (or the ✦ button), write what you want and send it to ChatGPT, Claude, Gemini, Perplexity, Copilot, Grok, DeepSeek or Mistral — the app or website opens, and your message is on the clipboard too. ChatGPT, Claude, Perplexity, Copilot and Grok on the web, and the ChatGPT and Perplexity apps, get the message as they open and may answer right away (on the web it travels in the page address, so your browser history keeps it); the Claude app only puts it in its text box for you to send; Gemini, DeepSeek, Mistral and the Copilot app open without it, so you paste it, as you do with a message too long for an address. **Here** answers on the island itself with your Prompt Studio model. Slash commands control Nobi from the same box: `/pause`, `/dnd`, `/focus 25`, `/play`, `/next`, `/prev`, `/settings` (the media commands work even with the media card off, on a player that is already running); ↑ and ↓ bring back earlier messages. Esc, ✕ or the shortcut close it again.
 - **Voice and ready-made prompts.** The 🎙 button starts your system's dictation (Windows voice typing, macOS Dictation; Linux has none, so there is no button there); **Prompt ideas** gives beginners about twenty fill-in-the-blanks prompts. If the Claude, ChatGPT, Perplexity or Copilot app is installed, the assistant opens it instead of the browser (**Settings → General → Assistant → Use installed apps**).
 - **Agenda, calendar, weather and system.** Note what to do on a day, with an optional reminder time; see busy days on the calendar; an animated forecast for the next twelve hours; and live CPU, RAM and GPU load.
 
@@ -42,7 +44,7 @@ Nöbetçi sits at the top of the screen. Click the compact island to open your a
   <img src="docs/media/en/card-system.png" width="49%" alt="The System tab: processor, memory and graphics load as rings, and a minute of processor history">
 </p>
 
-- **Claude Code everywhere.** Sessions from the terminal, VS Code and the **Code tab of the Claude desktop app** all show on the island; the card tells you where each one runs. The desktop app never runs Claude Code's `PermissionRequest` hook, so there Nöbetçi asks from `PreToolUse` for commands, edits, web fetches and MCP tools — see [Never holds Claude Code hostage](#never-holds-claude-code-hostage) for what that costs when nobody is at the screen.
+- **Claude Code everywhere.** Sessions from the terminal, VS Code and the **Code tab of the Claude desktop app** all show on the island; the card tells you where each one runs. The desktop app never runs Claude Code's `PermissionRequest` hook, so there Nobi asks from `PreToolUse` for commands, edits, web fetches and MCP tools — see [Never holds Claude Code hostage](#never-holds-claude-code-hostage) for what that costs when nobody is at the screen.
 - **Questions and plans on the island.** When Claude asks a multiple-choice question or wants its plan approved, the card shows it: pick an answer (or write your own), approve the plan or send it back with a note.
 - **What changed, and how much is left.** The session view lists the files each session edited, with lines added and removed and the diff a click away. With the opt-in status line, it also shows context use, cost, and your 5-hour and weekly plan limits.
 - **Seven mascots.** The owl, a wolf, a hawk, an octopus, a lion, a canary and an eagle move and react the same way: they wave at a permission request, bristle at a risky one, hop when a session finishes and doze when nothing is running. Choose one under **Settings → General → Appearance**; it also sets the card colors and transitions. Try the reactions in the web demo.
@@ -54,17 +56,17 @@ Nöbetçi sits at the top of the screen. Click the compact island to open your a
 
 <p align="center"><img src="docs/media/en/reactions.png" width="720" alt="Six mascots reacting to decisions: the owl, wolf and canary beaming under a green tick after an approval; the owl, lion and hawk frowning under a red cross after a denial"></p>
 
-Nöbetçi is a small owl on a black island at the top of your screen. It watches Claude Code, Codex
+Nobi is a small owl on a black island at the top of your screen. It watches Claude Code, Codex
 and Cursor sessions, records submitted prompts and surfaces supported permission requests. Claude
 Code has the full safety review; Codex and Cursor support depends on each agent's hook API.
 Permission cards show what would run, how risky it looks and why, so you can decide without hunting
 for the right terminal. 
 
 <p align="center">
-  <img src="docs/media/en/critical.png" width="720" alt="Nöbetçi's approval card for a CRITICAL request: a command that pipes a downloaded script into bash and sends AWS credentials to a remote host, with the risky parts highlighted and four findings listed, a Deny button and a Hold · Allow button">
+  <img src="docs/media/en/critical.png" width="720" alt="Nobi's approval card for a CRITICAL request: a command that pipes a downloaded script into bash and sends AWS credentials to a remote host, with the risky parts highlighted and four findings listed, a Deny button and a Hold · Allow button">
 </p>
 
-*Nöbetçi* (say "nuh-bet-CHEE") is Turkish for "the one on watch".
+*Nobi* (say "nuh-bet-CHEE") is Turkish for "the one on watch".
 
 ## Why
 
@@ -73,7 +75,7 @@ the one you aren't looking at, or one of four running side by side. So prompts e
 unseen, or get approved on reflex — and in a terminal prompt, `npm test` and `curl … | bash` look
 exactly the same.
 
-Nöbetçi moves that decision to one place you can always see. It reads each request the way a
+Nobi moves that decision to one place you can always see. It reads each request the way a
 careful reviewer would, tells you what stands out and why, and makes the dangerous ones take a
 deliberate press-and-hold instead of a click (on Linux, an answer in the terminal). When nothing
 needs you, it folds away into the top edge of the screen.
@@ -135,15 +137,15 @@ needs you, it folds away into the top edge of the screen.
   the OpenAI API. Review and copy the result yourself — it is never sent to an agent automatically.
 - **And the rest.** Global hotkeys, a hook health check through the real relay, a choice of which
   hook events to listen to, per-category risk switches, island placement, settings import and
-  export (an import takes only Nöbetçi's own settings files, and both an import and a reset keep a
+  export (an import takes only Nobi's own settings files, and both an import and a reset keep a
   dated copy of the settings they replace), and an English or Turkish UI that follows your system
   language.
 
 ### 🔒 Privacy
 
 - **No telemetry or accounts.** Outside an explicit prompt review, an assistant question you send
-  with **Here**, and the weather card once you pick a city, Nöbetçi makes no network requests.
-  Sending a message to an AI app opens that app or your browser; Nöbetçi itself sends nothing — but
+  with **Here**, and the weather card once you pick a city, Nobi makes no network requests.
+  Sending a message to an AI app opens that app or your browser; Nobi itself sends nothing — but
   for ChatGPT, Claude, Perplexity, Copilot and Grok on the web the message is in the page address,
   so the service gets it as the page opens and your browser history keeps it. Ollama uses its local
   service by default; Ollama models marked **cloud** may forward the draft. OpenAI receives it only
@@ -171,8 +173,8 @@ download against `SHA256SUMS.txt`. What is signed, how a release is approved and
 ```mermaid
 flowchart LR
     CC["Claude Code<br/>(terminal or IDE)"]
-    R["nobetci-hook<br/>small relay"]
-    subgraph APP["Nöbetçi (tray / menu bar app)"]
+    R["nobi-hook<br/>small relay"]
+    subgraph APP["Nobi (tray / menu bar app)"]
         direction TB
         E["Risk engine + your rules<br/>(Rust)"]
         I["Island<br/>approval card"]
@@ -185,9 +187,9 @@ flowchart LR
     R -- "decision JSON on stdout" --> CC
 ```
 
-Claude Code runs the relay, `nobetci-hook`, for every hook event Nöbetçi is registered for. The
+Claude Code runs the relay, `nobi-hook`, for every hook event Nobi is registered for. The
 relay passes the event on over a channel that only your account can open — a named pipe on
-Windows, a Unix socket in your Library folder on macOS and in `~/.local/state/nobetci` on Linux —
+Windows, a Unix socket in your Library folder on macOS and in `~/.local/state/nobi` on Linux —
 and exits. Only a permission request waits for an answer: the risk engine scores it, your rules
 get the first word, and a rule, a trusted project or a session grant can settle it on the spot.
 Everything else becomes a card on the island, and your decision travels back the same way. Codex
@@ -197,44 +199,44 @@ and Cursor use the same relay through their own hooks.
 
 | Situation | What happens |
 | --- | --- |
-| Nöbetçi isn't running | The relay finds nobody listening, exits at once with no output, and Claude Code asks in the terminal as usual. On Windows, a pipe that exists but is busy gets at most **300 ms**. |
+| Nobi isn't running | The relay finds nobody listening, exits at once with no output, and Claude Code asks in the terminal as usual. On Windows, a pipe that exists but is busy gets at most **300 ms**. |
 | The island can't show the card | The app gives the island **800 ms** to confirm that the card is on screen or queued. No confirmation: back to the terminal. |
 | Nobody answers | The app lets go after **108 s** and the relay after **110 s** (the hook itself is registered with a 120 s timeout). Claude Code then asks in the terminal. |
 | Paused, or six requests already waiting | New requests go straight to the terminal. |
 | Any other hook event | Fire and forget: connect, write, exit, within a hard 2 s budget. |
-| Cursor, and Nöbetçi gives no answer | Closed, paused, handed back, queue full or timed out: the relay answers "ask", and Cursor asks you itself. Nöbetçi's Cursor permission hooks are fail-closed, though: if the relay itself can't run (for example after its folder was deleted), Cursor blocks shell and MCP commands until the hooks are removed. |
-| The Claude desktop app | It never runs the `PermissionRequest` hook, so Nöbetçi asks from `PreToolUse`, which fires before the app's own check. Every command, edit, web fetch and MCP call that could ask waits for the island, **including ones your Claude permission rules already allow**. Nobody answering means up to **108 s** before the app's own behaviour takes over. Before leaving a desktop-app session to run unattended, pause Nöbetçi from the tray (requests then pass straight back), or let LOW requests through with a trusted project or rules. |
+| Cursor, and Nobi gives no answer | Closed, paused, handed back, queue full or timed out: the relay answers "ask", and Cursor asks you itself. Nobi's Cursor permission hooks are fail-closed, though: if the relay itself can't run (for example after its folder was deleted), Cursor blocks shell and MCP commands until the hooks are removed. |
+| The Claude desktop app | It never runs the `PermissionRequest` hook, so Nobi asks from `PreToolUse`, which fires before the app's own check. Every command, edit, web fetch and MCP call that could ask waits for the island, **including ones your Claude permission rules already allow**. Nobody answering means up to **108 s** before the app's own behaviour takes over. Before leaving a desktop-app session to run unattended, pause Nobi from the tray (requests then pass straight back), or let LOW requests through with a trusted project or rules. |
 
 ## Install
 
 > 📖 The [installation guide](docs/install.md) goes through every step in detail, plus updating,
 > uninstalling and troubleshooting.
 
-Nöbetçi runs on **Windows 10 and 11** (64-bit), on **macOS 11 or later** (Apple silicon and
+Nobi runs on **Windows 10 and 11** (64-bit), on **macOS 11 or later** (Apple silicon and
 Intel) and on **Linux** (x86-64, X11 or Wayland). It needs [Claude Code](https://code.claude.com/docs/en/overview)
 running on the same system — Claude Code inside WSL or a container keeps its settings elsewhere
 and isn't covered.
 
 Below, `x.y.z` stands for the version you download. Releases after 2.4.1 also carry each file
-without the version in its name (`Nobetci-setup.exe`, `Nobetci-macos-universal.dmg`,
-`Nobetci-linux-amd64.deb`, `Nobetci-linux-amd64.AppImage`), listed in `SHA256SUMS.txt` too.
+without the version in its name (`Nobi-setup.exe`, `Nobi-macos-universal.dmg`,
+`Nobi-linux-amd64.deb`, `Nobi-linux-amd64.AppImage`), listed in `SHA256SUMS.txt` too.
 
 ### Windows
 
 The Microsoft Edge WebView2 runtime is part of Windows 11 and current Windows 10; the installer
 fetches it if it's missing.
 
-1. Download `Nobetci-x.y.z-setup.exe` and `SHA256SUMS.txt` from the
-   [latest release](https://github.com/tahap0l/nobetci/releases/latest).
+1. Download `Nobi-x.y.z-setup.exe` and `SHA256SUMS.txt` from the
+   [latest release](https://github.com/tahap0l/nobi/releases/latest).
 2. Check that the installer is the one that was published:
 
    ```powershell
-   Get-FileHash .\Nobetci*setup.exe -Algorithm SHA256
+   Get-FileHash .\Nobi*setup.exe -Algorithm SHA256
    Get-Content .\SHA256SUMS.txt
    ```
 
    The two hashes must be identical (upper or lower case doesn't matter).
-3. Run the installer. It installs for your Windows account only, into `%LOCALAPPDATA%\Nobetci`,
+3. Run the installer. It installs for your Windows account only, into `%LOCALAPPDATA%\Nobi`,
    and needs no administrator rights. It speaks Turkish on a Turkish Windows and English
    everywhere else. Add `/S` for a silent install.
 
@@ -245,57 +247,57 @@ fetches it if it's missing.
 
 ### macOS
 
-1. Download `Nobetci-x.y.z-macos-universal.dmg` and `SHA256SUMS.txt` from the
-   [latest release](https://github.com/tahap0l/nobetci/releases/latest).
+1. Download `Nobi-x.y.z-macos-universal.dmg` and `SHA256SUMS.txt` from the
+   [latest release](https://github.com/tahap0l/nobi/releases/latest).
 2. Check the disk image in Terminal:
 
    ```sh
-   shasum -a 256 ~/Downloads/Nobetci-x.y.z-macos-universal.dmg
+   shasum -a 256 ~/Downloads/Nobi-x.y.z-macos-universal.dmg
    cat ~/Downloads/SHA256SUMS.txt
    ```
 
-3. Open the disk image and drag the owl into **Applications**. (Finder may call it Nöbetçi or
-   Nobetci; on disk it is always `/Applications/Nobetci.app`.)
+3. Open the disk image and drag the owl into **Applications**. (Finder may call it Nobi or
+   Nobi; on disk it is always `/Applications/Nobi.app`.)
 4. Open it from Applications. The app isn't notarized by Apple yet, so the first time macOS
    refuses: choose **Done**, then go to **System Settings → Privacy & Security**, scroll to the
    line saying the app was blocked and click **Open Anyway**. (On macOS 14 and earlier,
    Control-click the app → **Open** → **Open** works too.)
 
-Nöbetçi lives in the menu bar, with no Dock icon. The [installation guide](docs/install.md#macos)
+Nobi lives in the menu bar, with no Dock icon. The [installation guide](docs/install.md#macos)
 has the details.
 
 ### Linux
 
-Nöbetçi runs on X11 and, through XWayland, on Wayland desktops (GNOME, KDE Plasma, Xfce,
+Nobi runs on X11 and, through XWayland, on Wayland desktops (GNOME, KDE Plasma, Xfce,
 Cinnamon…). It needs WebKitGTK 4.1, which current Ubuntu, Debian, Fedora and Arch ship, and — on
 X11 — a compositing window manager, because the island is a transparent window. GNOME, KDE Plasma
 and Cinnamon composite by themselves; on Xfce turn on **Window Manager Tweaks → Compositor**, and
-on a bare window manager run a compositor such as `picom`. Without one, Nöbetçi cuts its window
+on a bare window manager run a compositor such as `picom`. Without one, Nobi cuts its window
 down to the island (square corners, no shadow; up to 2.4.1 it showed as a black box at the top of
 the screen), and the desktop mascot's window down to the mascot and a narrow edge around it (up to
 2.4.1 it sat on a black square); a compositor gives both their full look.
 
-1. Download `Nobetci-x.y.z-linux-amd64.deb` (Debian, Ubuntu, Mint…) or
-   `Nobetci-x.y.z-linux-amd64.AppImage` (any distribution) and `SHA256SUMS.txt` from the
-   [latest release](https://github.com/tahap0l/nobetci/releases/latest).
+1. Download `Nobi-x.y.z-linux-amd64.deb` (Debian, Ubuntu, Mint…) or
+   `Nobi-x.y.z-linux-amd64.AppImage` (any distribution) and `SHA256SUMS.txt` from the
+   [latest release](https://github.com/tahap0l/nobi/releases/latest).
 2. Check the download (each file you downloaded must say `OK`):
 
    ```sh
    sha256sum --check --ignore-missing SHA256SUMS.txt
    ```
 
-3. Install the package with `sudo apt install ./Nobetci-x.y.z-linux-amd64.deb`, or make the
-   AppImage executable (`chmod +x Nobetci-*.AppImage`) and run it.
+3. Install the package with `sudo apt install ./Nobi-x.y.z-linux-amd64.deb`, or make the
+   AppImage executable (`chmod +x Nobi-*.AppImage`) and run it.
 
-Nöbetçi lives in the system tray. On GNOME the tray needs the *AppIndicator* extension (Ubuntu has
-it already). The relay's socket is `~/.local/state/nobetci/nobetci.sock`, settings are in
-`~/.config/nobetci`, the history in `~/.local/share/nobetci`.
+Nobi lives in the system tray. On GNOME the tray needs the *AppIndicator* extension (Ubuntu has
+it already). The relay's socket is `~/.local/state/nobi/nobi.sock`, settings are in
+`~/.config/nobi`, the history in `~/.local/share/nobi`.
 
-On a **Wayland** session (the default on current Ubuntu, Fedora and KDE Plasma) Nöbetçi's window
+On a **Wayland** session (the default on current Ubuntu, Fedora and KDE Plasma) Nobi's window
 runs on XWayland, and three things only see X11 windows: global shortcuts work only while an X11
 window has the focus, **Go to window** can't find terminals that run natively on Wayland (it opens
 the session's folder instead), and quiet in full screen doesn't notice native Wayland apps.
-Programs Nöbetçi opens for you — links, VS Code, the file manager — still start natively on
+Programs Nobi opens for you — links, VS Code, the file manager — still start natively on
 Wayland. The [installation guide](docs/install.md#linux) has the details.
 
 **On Linux, HIGH and CRITICAL requests are approved in the terminal.** X11 lets any program running
@@ -310,16 +312,16 @@ You need [Rust](https://rustup.rs) with the MSVC toolchain, Node.js 22 or newer,
 "Desktop development with C++" workload.
 
 ```powershell
-git clone https://github.com/tahap0l/nobetci.git
-cd nobetci
+git clone https://github.com/tahap0l/nobi.git
+cd nobi
 npm ci
 npm test         # builds the relay, then the Rust tests: risk engine, rules, relay, history…
-npm run pack     # → release\Nobetci-<version>-setup.exe
+npm run pack     # → release\Nobi-<version>-setup.exe
 ```
 
 On a Mac you need the Xcode Command Line Tools (`xcode-select --install`), Rust with both Apple
 targets (`rustup target add aarch64-apple-darwin x86_64-apple-darwin`) and Node.js 22 or newer;
-`npm run pack:mac` builds `release/Nobetci-<version>-macos-universal.dmg`.
+`npm run pack:mac` builds `release/Nobi-<version>-macos-universal.dmg`.
 
 On Linux you need Rust, Node.js 22 or newer and the WebKitGTK development packages
 (`sudo apt install libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxi-dev libxdo-dev libdbus-1-dev libssl-dev`
@@ -330,15 +332,15 @@ and `patchelf` first, or its sounds won't play.
 
 ## First run
 
-Start Nöbetçi from the Start menu (on a Mac, from Applications). The owl says hello at the top of
-the screen — on a Mac just below the menu bar — then the island folds away and Nöbetçi keeps watch
+Start Nobi from the Start menu (on a Mac, from Applications). The owl says hello at the top of
+the screen — on a Mac just below the menu bar — then the island folds away and Nobi keeps watch
 from the notification area (the menu bar on a Mac). On the very first launch a short
 welcome wizard opens as well: pick a language, connect Claude Code, run a health check, set the
 safety basics, done. You can skip it — everything in it is also in Settings.
 
-Nöbetçi can only see Claude Code once its hooks are in `~/.claude/settings.json` (or in
+Nobi can only see Claude Code once its hooks are in `~/.claude/settings.json` (or in
 `$CLAUDE_CONFIG_DIR/settings.json`, if you keep Claude Code's settings in a folder of your own and
-Nöbetçi sees that variable too; **Settings → Claude Code** shows which file it uses). The wizard's
+Nobi sees that variable too; **Settings → Claude Code** shows which file it uses). The wizard's
 **Connect** step — or **Settings → Claude Code → Install hooks…** at any time — adds them the
 careful way:
 
@@ -346,7 +348,7 @@ careful way:
 - a dated backup is saved next to the file first (`settings.json.bak-YYYYMMDD-HHMMSS`);
 - your other settings and every other tool's hooks stay exactly as they were;
 - nothing is written until you click, and if the file changes between the preview and your click,
-  Nöbetçi refuses and shows you a fresh diff.
+  Nobi refuses and shows you a fresh diff.
 
 <p align="center">
   <img src="docs/media/en/wizard.png" width="720" alt="The welcome wizard that opens on first launch: five steps (Welcome, Connect, Health check, Safety, Done) and the language choice">
@@ -358,14 +360,14 @@ starts, so restart any session that was already running.
 
 Open **Settings → ChatGPT** to connect local ChatGPT Work and Codex, or **Settings → Other agents**
 for Cursor. Choose **Connect…**, review the settings-file diff and confirm. In ChatGPT desktop, review and trust
-the Nöbetçi hooks in **Settings → Hooks**. If the list is empty, add a local project in the
+the Nobi hooks in **Settings → Hooks**. If the list is empty, add a local project in the
 Codex view and refresh it. In the Codex CLI, use `/hooks`. **Health check**
 shows the relay test and the last event received from Codex separately. If Windows reports
 outdated entries, choose **Update connection…** and review the changed hooks in ChatGPT or
 Codex. Send a message in a new local chat and rerun **Health check** to verify delivery. Work Cloud
 does not run local hooks.
 Local Work and Codex prompt submissions and supported permission requests use the same hooks.
-Cursor prompt submissions and shell/MCP requests are tracked. When Nöbetçi gives no answer for a
+Cursor prompt submissions and shell/MCP requests are tracked. When Nobi gives no answer for a
 Cursor request (it is closed or paused, you handed the request back, or it timed out), Cursor asks
 you itself; only a relay that can't run at all makes Cursor block the command, because its
 permission hooks are fail-closed. Prompt text is shown in the timeline, but the agent hooks cannot
@@ -399,7 +401,7 @@ editor active, and on Windows neither shows up in Alt-Tab. Only the island's tex
 assistant, the session search, the agenda, and the answer and note boxes on question and plan
 cards — take the keyboard, while you type in them.
 
-The tray icon (the menu bar icon on a Mac) has **Open Nöbetçi**, **Settings…**, **Pause / resume**,
+The tray icon (the menu bar icon on a Mac) has **Open Nobi**, **Settings…**, **Pause / resume**,
 **Do not disturb on / off**, **Desktop mascot on / off** and **Quit**. Pausing hands every waiting request
 back to the terminal and notes it on the session's timeline. A hidden island costs next to nothing:
 the animation loop stops and the cursor poll parks.
@@ -430,7 +432,7 @@ the animation loop stops and the cursor poll parks.
 - **Don't ask again this session for …** is offered only where the auto-allow ceiling allows it:
   LOW with the default ceiling, LOW and MEDIUM with *LOW + MEDIUM*, never with the ceiling off. The
   box says what it covers — this exact command, changes to this file, this address, or this tool
-  with the same arguments — in that session, until Nöbetçi restarts. Each later request is still
+  with the same arguments — in that session, until Nobi restarts. Each later request is still
   scored, and anything above the ceiling comes back to you.
 - **Hand to terminal** lets Claude Code ask in the terminal instead.
 
@@ -478,10 +480,10 @@ On Linux, HIGH and CRITICAL requests are approved in the terminal instead of wit
   privacy permissions (`tccutil reset`) or erasing the unified log; formatting or overwriting a
   disk (including `diskutil erase…`); deleting the home folder, a drive or the root; deleting a
   GitHub repository or making it public; changing Claude Code's permission or hook settings, or
-  Codex's and Cursor's hook settings; changing Nöbetçi's own files, programs or relay — on
-  Windows, macOS and Linux, whichever command does the writing; removing Nöbetçi's hooks
-  (`nobetci --remove-hooks`); touching SSH `authorized_keys`.
-- **HIGH** — trying to stop or uninstall Nöbetçi; recursive deletes; force pushes, git commands
+  Codex's and Cursor's hook settings; changing Nobi's own files, programs or relay — on
+  Windows, macOS and Linux, whichever command does the writing; removing Nobi's hooks
+  (`nobi --remove-hooks`); touching SSH `authorized_keys`.
+- **HIGH** — trying to stop or uninstall Nobi; recursive deletes; force pushes, git commands
   that throw away uncommitted work (`git restore .`, `git checkout -f`, `git clean --force`) and
   other irreversible git operations; publishing packages or releases; `sudo`, `doas`, `pkexec`,
   `su`, `runas`, `gsudo` and AppleScript's `with administrator privileges`; persistence (scheduled
@@ -518,7 +520,7 @@ as data, not run) stay LOW. A command that writes a file — a redirect, `tee`, 
 `.claude//settings.json`, `./.git/hooks/pre-commit` or `../../usr/local/bin/git` meet the same rules
 as the plain spelling, and `~/../../etc/cron.d/x` or `$HOME/../..` land where they really lead.
 CRITICAL for Claude Code's settings files (in `~/.claude`, or in the folder `CLAUDE_CONFIG_DIR`
-names), Codex's and Cursor's hook files, Nöbetçi's own files and anything under `~/.ssh`; HIGH for
+names), Codex's and Cursor's hook files, Nobi's own files and anything under `~/.ssh`; HIGH for
 Claude Code hooks, agents, commands, skills and plugins, `.mcp.json`, git hooks and git config,
 shell profiles, startup folders and LaunchAgents, system files, secrets files (the macOS keychain
 included), and content that contains a private key or invisible characters; MEDIUM for CI workflows,
@@ -536,7 +538,7 @@ strings, LOW for plain `http://`.
 delete, remove, trash, destroy, drop, purge, wipe, terminate, revoke and the like; MEDIUM when it
 sends, posts, publishes, pushes, creates, updates, uploads, pays, deploys, migrates or runs
 something; LOW otherwise. Its arguments are checked too: a command, a URL, a file path or SQL
-(`DROP TABLE` in an `execute_sql` call is HIGH). A tool Nöbetçi doesn't know is shown and matched
+(`DROP TABLE` in an `execute_sql` call is HIGH). A tool Nobi doesn't know is shown and matched
 with all of its arguments.
 
 **Combinations** — a secret and a way out in the same request is CRITICAL, a request that had to be
@@ -582,12 +584,12 @@ How patterns match:
   and raising rules match anywhere.
 - **An empty pattern matches everything** for its tool (the "ask every time for MCP tools"
   template relies on it); the editor warns you before you save one for every tool.
-- **A path counts where it leads.** Nöbetçi works out where a path really leads: `..`, `.`, `~` and
+- **A path counts where it leads.** Nobi works out where a path really leads: `..`, `.`, `~` and
   `$HOME` (`%USERPROFILE%`) are resolved, and relative paths start from the session's folder. For a
   file, an allow rule or one that lowers the level (and a "don't ask again" grant) has to match the
   path both as written and where it leads, so `..` can't climb out of the folder a rule names:
   `Write /work/app/*` doesn't cover `/work/app/../../etc/hosts`, and `Write ~/*` doesn't cover
-  `~/../../etc/x`, which is `/etc/x`. A path that climbs above a folder Nöbetçi can't place (another
+  `~/../../etc/x`, which is `/etc/x`. A path that climbs above a folder Nobi can't place (another
   user's `~bob`, `%APPDATA%`) is never let through that way. Deny, always-ask and raising rules
   match the path as written or where it leads, so they also catch a path that climbs into their
   folder, and one written from the project (`src/secrets/*`) catches the same file spelled in full.
@@ -631,11 +633,11 @@ the most frequent projects, findings and tools, and export everything that match
 The CSV uses a comma, or a semicolon for spreadsheets in languages that expect one (Turkish Excel,
 for example), and is safe to open: cells that would be read as formulas are defused.
 
-The history lives in `audit.jsonl` in Nöbetçi's data folder (see [Development](#development)),
+The history lives in `audit.jsonl` in Nobi's data folder (see [Development](#development)),
 rolls over to `audit.1.jsonl` at 10 MB (adjustable), and can be switched off or cleared in
 **Settings → History**. A damaged line is skipped, never the whole file, and on macOS and Linux
 only your account can read it — except on a file system without Unix permissions (FAT, exFAT, some
-network shares), where Nöbetçi uses the folder as it is and says so in its log.
+network shares), where Nobi uses the folder as it is and says so in its log.
 
 ### Hotkeys
 
@@ -665,7 +667,7 @@ use Do not disturb.
 
 ## Security model
 
-Nöbetçi is a second pair of eyes, not a sandbox. The risk engine is a set of heuristics: it
+Nobi is a second pair of eyes, not a sandbox. The risk engine is a set of heuristics: it
 catches the obvious and the classic, a determined attacker can get past it, and LOW means
 "nothing obvious", never "safe". What it adds is visibility, friction for dangerous actions, and
 reasons you can read.
@@ -681,7 +683,7 @@ can't press Allow on the agent's behalf (on Linux, where X11 lets a program clic
 mouse, that check is only a speed bump, so HIGH and CRITICAL are approved in the terminal there);
 the relay and the app talk over a named pipe (Windows)
 or a Unix socket (macOS, Linux) that only your account can open, and the relay checks that the
-app on the other end runs as you; a request to change Nöbetçi's own files, swap its relay or
+app on the other end runs as you; a request to change Nobi's own files, swap its relay or
 remove its hooks is CRITICAL on every system; the history masks secrets, and its CSV export is
 formula-safe.
 
@@ -694,26 +696,26 @@ model and for how to report a vulnerability.
 **Does it slow Claude Code down, or block it?**
 No. The relay is a small native program: it connects, hands the event over and exits, with a hard
 2-second budget — and far less in practice (**Health check** shows the round trip on your
-machine). If Nöbetçi isn't running, the relay exits immediately. Only permission requests wait,
+machine). If Nobi isn't running, the relay exits immediately. Only permission requests wait,
 and only while a card is really on your screen, for at most 110 seconds before the terminal takes
 over.
 
 **Does it send anything anywhere?**
-Nöbetçi has no telemetry, crash reports, update checks or accounts. In **Settings → Prompt Studio**,
+Nobi has no telemetry, crash reports, update checks or accounts. In **Settings → Prompt Studio**,
 Ollama requests go to its local service by default; Ollama models marked **cloud** may forward them.
-If you select OpenAI and click **Improve**, the current draft is sent to the OpenAI API. Nöbetçi
+If you select OpenAI and click **Improve**, the current draft is sent to the OpenAI API. Nobi
 never forwards it to the selected agent or saves it to history. The assistant's **Here** uses the
 same provider, and the weather card asks Open-Meteo for the city you pick. The
 [privacy policy](PRIVACY.md) lists everything.
 
-**What happens if Nöbetçi is closed, paused or crashes?**
-Claude Code and Codex carry on as if Nöbetçi weren't installed: with nobody listening (or the
+**What happens if Nobi is closed, paused or crashes?**
+Claude Code and Codex carry on as if Nobi weren't installed: with nobody listening (or the
 island paused), the relay exits without output and they ask in the terminal. Cursor asks you
 itself. The one case that blocks is a Cursor hook whose relay can't run at all — see
 [Uninstall](#uninstall).
 
 **What happens when I uninstall it?**
-On Windows the uninstaller runs `nobetci.exe --remove-hooks`, which removes Nöbetçi's own entries
+On Windows the uninstaller runs `nobi.exe --remove-hooks`, which removes Nobi's own entries
 from `~/.claude/settings.json` and from Codex's and Cursor's `hooks.json` — each with a dated
 backup next to it — and touches nothing else. On a Mac and on Linux there is no uninstaller that
 can do it for you, so run the same command (or remove the connections in Settings) before you
@@ -735,64 +737,64 @@ walks through it.
 **Why do SmartScreen or Defender warn about it?**
 The installer isn't code-signed yet, so SmartScreen has no reputation for it. Check the SHA-256
 against the release, then choose **More info → Run anyway**. If Microsoft Defender flags a
-release, please [open an issue](https://github.com/tahap0l/nobetci/issues) — reporting the file to
+release, please [open an issue](https://github.com/tahap0l/nobi/issues) — reporting the file to
 Microsoft as a false positive helps too.
 
 **Does it work with VS Code, Cursor, Windows Terminal, Terminal.app or iTerm2?**
-Yes. Nöbetçi hooks into Claude Code itself, so it doesn't matter where a session runs. **Go to
+Yes. Nobi hooks into Claude Code itself, so it doesn't matter where a session runs. **Go to
 window** follows the session's process chain to the window (on a Mac, the app) it lives in, and
 opens the project folder if it can't find one.
 
-**Could Claude approve its own requests through Nöbetçi?**
+**Could Claude approve its own requests through Nobi?**
 Not through the island: approvals must come from a physical click, the allow hotkey is off by
 default and LOW-only, and HIGH and CRITICAL need a hold — on Linux, where a program could click
 through the real mouse, they can't be approved on the island at all. But whatever an approved command starts
-runs with your rights and could, for instance, edit Claude Code's settings, rewrite Nöbetçi's
+runs with your rights and could, for instance, edit Claude Code's settings, rewrite Nobi's
 own settings or remove its hooks — which is exactly why such requests are scored CRITICAL. The
 [threat model](SECURITY.md) has the details.
 
 **In the Claude desktop app, why do commands I already allowed wait for the island?**
-The desktop app never runs Claude Code's `PermissionRequest` hook, so Nöbetçi asks from
+The desktop app never runs Claude Code's `PermissionRequest` hook, so Nobi asks from
 `PreToolUse`, which comes before the app's own permission check and can't see your Claude allow
 list. A request nobody answers waits up to 108 s, then the app decides as it would have. Pause
-Nöbetçi before you leave such a session running unattended, or let LOW requests through with a
+Nobi before you leave such a session running unattended, or let LOW requests through with a
 trusted project or rules.
 
 ## Uninstall
 
-Nöbetçi's hooks live in other programs' settings files: `~/.claude/settings.json` for Claude
+Nobi's hooks live in other programs' settings files: `~/.claude/settings.json` for Claude
 Code, and — if you connected them — Codex's `hooks.json` (in `$CODEX_HOME`, or `~/.codex`) and
 `~/.cursor/hooks.json`. Take them out before the app goes. While the relay is still in place, a
 forgotten hook does no harm: Claude Code and Codex ask as they always did, and Cursor asks you
 itself. Once the relay is deleted, though, Claude Code reports a hook error on every step, and
-Cursor — whose permission hooks Nöbetçi registers fail-closed — blocks every shell and MCP
+Cursor — whose permission hooks Nobi registers fail-closed — blocks every shell and MCP
 command until its entries are removed.
 
-`nobetci --remove-hooks` removes only Nöbetçi's own entries from all three files, leaves every
+`nobi --remove-hooks` removes only Nobi's own entries from all three files, leaves every
 other setting and every other tool's hooks alone, and saves a dated backup next to each file
 (`settings.json.bak-…`, `hooks.json.bak-…`). It shows no diff — it is the uninstaller's command —
 but in a terminal on macOS and Linux it prints one line per file, and it exits with status 1 if a
 file couldn't be cleaned. On Windows it has no console: what it removed, or couldn't, goes to
-`%LOCALAPPDATA%\Nobetci\nobetci.log`, and the uninstaller reads the exit status.
-(If an agent asks to run it, Nöbetçi scores it CRITICAL: only you should.) To review each change
+`%LOCALAPPDATA%\Nobi\nobi.log`, and the uninstaller reads the exit status.
+(If an agent asks to run it, Nobi scores it CRITICAL: only you should.) To review each change
 instead, use **Settings → Claude Code → Remove…**, **Settings → ChatGPT → Remove connection…**
 and **Settings → Other agents → Remove connection…**.
 
 ### Windows
 
-Open **Settings → Apps → Installed apps** (**Apps & features** on Windows 10), find **Nobetci**
+Open **Settings → Apps → Installed apps** (**Apps & features** on Windows 10), find **Nobi**
 and choose **Uninstall**. The uninstaller:
 
-1. asks you to close Nöbetçi if it is running — **Cancel** there leaves everything as it was;
-2. runs `nobetci.exe --remove-hooks` (above) on the Claude Code, Codex and Cursor files;
-3. removes the app, the relay (`%LOCALAPPDATA%\Nobetci\bin`), the log, **Start with Windows** and,
+1. asks you to close Nobi if it is running — **Cancel** there leaves everything as it was;
+2. runs `nobi.exe --remove-hooks` (above) on the Claude Code, Codex and Cursor files;
+3. removes the app, the relay (`%LOCALAPPDATA%\Nobi\bin`), the log, **Start with Windows** and,
    if you set up the [ChatGPT Web bridge](integrations/chatgpt-web/README.md), its registration with
    Chrome and Edge (the extension itself you remove in the browser).
 
 If removing the hooks fails, the relay and the log stay where they are, so Claude Code, Codex and
 Cursor keep working, and a message says which entries to delete by hand.
 
-Your preferences and agenda (`%APPDATA%\Nobetci`) and history (`%LOCALAPPDATA%\Nobetci\audit.jsonl`)
+Your preferences and agenda (`%APPDATA%\Nobi`) and history (`%LOCALAPPDATA%\Nobi\audit.jsonl`)
 stay, so a reinstall picks up where you left off. Tick **Delete the application data** in the
 uninstaller to remove them too. Installing a newer version over the current one — or an older one
 with an installer newer than 2.4.1 — is an update, not an uninstall: hooks, **Start with Windows**
@@ -801,26 +803,26 @@ page its installer shows ([details](docs/install.md#8-update)).
 
 ### macOS
 
-1. In Terminal, run `/Applications/Nobetci.app/Contents/MacOS/nobetci --remove-hooks` — or remove
+1. In Terminal, run `/Applications/Nobi.app/Contents/MacOS/nobi --remove-hooks` — or remove
    each connection in Settings, as above.
 2. If **Start at login** is on, switch it off in **Settings → General**.
-3. Quit Nöbetçi from the menu bar and move it from Applications to the Bin.
+3. Quit Nobi from the menu bar and move it from Applications to the Bin.
 
-Your preferences, agenda, history and the relay stay in `~/Library/Application Support/Nobetci`;
+Your preferences, agenda, history and the relay stay in `~/Library/Application Support/Nobi`;
 delete that folder to remove every trace.
 
 ### Linux
 
-1. Run `nobetci --remove-hooks` (`.deb`), or `./Nobetci-x.y.z-linux-amd64.AppImage --remove-hooks`
+1. Run `nobi --remove-hooks` (`.deb`), or `./Nobi-x.y.z-linux-amd64.AppImage --remove-hooks`
    — or remove each connection in Settings, as above.
 2. If **Start at login** is on, switch it off in **Settings → General**
-   (it is `~/.config/autostart/Nobetci.desktop`).
-3. Quit Nöbetçi from the tray, then `sudo apt remove nobetci`, or delete the AppImage. The package
+   (it is `~/.config/autostart/Nobi.desktop`).
+3. Quit Nobi from the tray, then `sudo apt remove nobi`, or delete the AppImage. The package
    manager runs as root and can't take the hooks out of your home folder, which is why step 1
    comes first.
 
-Settings and the agenda stay in `~/.config/nobetci`, history, log and the relay in
-`~/.local/share/nobetci`, the socket's folder in `~/.local/state/nobetci`; delete all three to
+Settings and the agenda stay in `~/.config/nobi`, history, log and the relay in
+`~/.local/share/nobi`, the socket's folder in `~/.local/state/nobi`; delete all three to
 remove every trace.
 
 ## Development
@@ -848,10 +850,10 @@ With the dev server running:
   `gecmis`, `hakkinda`, plus `hosgeldin` for the welcome wizard.
 - Add `&lang=en` or `&lang=tr` to pick the language. In Settings, `&platform=macos` or
   `&platform=linux` shows the Mac or Linux wording.
-- In the browser console, `nobetci.inject({ … })` feeds the island a fake hook event.
+- In the browser console, `nobi.inject({ … })` feeds the island a fake hook event.
 
 ```text
-hook/                  nobetci-hook — the relay Claude Code, Codex and Cursor run on every hook event
+hook/                  nobi-hook — the relay Claude Code, Codex and Cursor run on every hook event
   src/win.rs · mac.rs · linux.rs   named pipe (Windows) / Unix socket (macOS, Linux), parent-process chain
   src/browser.rs       the ChatGPT Web bridge's native-messaging host
 src-tauri/src/
@@ -884,10 +886,10 @@ scripts/               installer packaging, icon generator, screenshots, checks
 
 | What | Windows | macOS | Linux |
 | --- | --- | --- | --- |
-| Preferences, agenda | `%APPDATA%\Nobetci\` | `~/Library/Application Support/Nobetci/` | `~/.config/nobetci/` |
-| History | `%LOCALAPPDATA%\Nobetci\audit.jsonl` (+ `audit.1.jsonl`) | `~/Library/Application Support/Nobetci/audit.jsonl` | `~/.local/share/nobetci/audit.jsonl` |
-| Log | `%LOCALAPPDATA%\Nobetci\nobetci.log` | `~/Library/Application Support/Nobetci/nobetci.log` | `~/.local/share/nobetci/nobetci.log` |
-| Relay | `%LOCALAPPDATA%\Nobetci\bin\nobetci-hook.exe` | `~/Library/Application Support/Nobetci/bin/nobetci-hook` | `~/.local/share/nobetci/bin/nobetci-hook` |
+| Preferences, agenda | `%APPDATA%\Nobi\` | `~/Library/Application Support/Nobi/` | `~/.config/nobi/` |
+| History | `%LOCALAPPDATA%\Nobi\audit.jsonl` (+ `audit.1.jsonl`) | `~/Library/Application Support/Nobi/audit.jsonl` | `~/.local/share/nobi/audit.jsonl` |
+| Log | `%LOCALAPPDATA%\Nobi\nobi.log` | `~/Library/Application Support/Nobi/nobi.log` | `~/.local/share/nobi/nobi.log` |
+| Relay | `%LOCALAPPDATA%\Nobi\bin\nobi-hook.exe` | `~/Library/Application Support/Nobi/bin/nobi-hook` | `~/.local/share/nobi/bin/nobi-hook` |
 | Claude Code hooks | `%USERPROFILE%\.claude\settings.json` | `~/.claude/settings.json` | `~/.claude/settings.json` |
 
 Backups of the Claude Code settings sit next to them as `settings.json.bak-*`; Codex's and

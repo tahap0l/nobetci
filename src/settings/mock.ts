@@ -77,35 +77,35 @@ const r = (id: string, level: RiskLevel, tr: string, en: string, re: RegExp, tag
 const RANK: Record<RiskLevel, number> = { low: 0, medium: 1, high: 2, critical: 3 };
 const byRank = (n: number): RiskLevel => (["low", "medium", "high", "critical"] as const)[Math.max(0, Math.min(3, n))];
 
-/** Where Nöbetçi keeps its settings, relay and history (risk.rs SELF_DIRS, simplified). */
-const SELF_DIRS = String.raw`(appdata[\\/]+(local|roaming)|%(local)?appdata%|\$env:(local)?appdata|application support|\.config|\.local[\\/]+(share|state))[\\/]+nobetci`;
+/** Where Nobi keeps its settings, relay and history (risk.rs SELF_DIRS, simplified). */
+const SELF_DIRS = String.raw`(appdata[\\/]+(local|roaming)|%(local)?appdata%|\$env:(local)?appdata|application support|\.config|\.local[\\/]+(share|state))[\\/]+nobi`;
 
 // Labels, levels and the order of the tables mirror risk.rs (a category's group
 // is the first table it appears in, as categories() does); patterns are simplified.
 const COMMAND: MockRule[] = [
   r(
-    "nobetci_self",
+    "nobi_self",
     "critical",
-    "Nöbetçi'nin kendi dosyalarını değiştiriyor",
-    "Changes Nöbetçi's own files",
+    "Nobi'nin kendi dosyalarını değiştiriyor",
+    "Changes Nobi's own files",
     new RegExp(
       String.raw`(>|\btee\b|set-content|out-file|add-content|\bcp\b|\bcopy\b|\bmv\b|\bmove\b|copy-item|move-item|\brm\b|\bdel\b|remove-item|sed\s+-i|\bchmod\b)[^\n;&|]*${SELF_DIRS}`,
       "i",
     ),
   ),
   r(
-    "nobetci_unhook",
+    "nobi_unhook",
     "critical",
-    "Nöbetçi'nin hook'larını kaldırıyor (ajanlar ona sormayı bırakır)",
-    "Removes Nöbetçi's hooks (agents stop asking it)",
-    /nobetci[\s\S]*--remove-hooks|--remove-hooks[\s\S]*nobetci/i,
+    "Nobi'nin hook'larını kaldırıyor (ajanlar ona sormayı bırakır)",
+    "Removes Nobi's hooks (agents stop asking it)",
+    /nobi[\s\S]*--remove-hooks|--remove-hooks[\s\S]*nobi/i,
   ),
   r(
-    "nobetci_kill",
+    "nobi_kill",
     "high",
-    "Nöbetçi'yi kapatmaya veya kaldırmaya çalışıyor",
-    "Tries to stop or uninstall Nöbetçi",
-    /(taskkill\b|stop-process\b|\bkill(all)?\b|\bpkill\b|\bsystemctl\s+(--user\s+)?(stop|kill|disable|mask|restart)\b|\blaunchctl\s+(bootout|unload|remove|kill|stop|disable)\b)[^\n]*nobetci|nobetci[\\/]+uninstall(\.exe)?\b/i,
+    "Nobi'yi kapatmaya veya kaldırmaya çalışıyor",
+    "Tries to stop or uninstall Nobi",
+    /(taskkill\b|stop-process\b|\bkill(all)?\b|\bpkill\b|\bsystemctl\s+(--user\s+)?(stop|kill|disable|mask|restart)\b|\blaunchctl\s+(bootout|unload|remove|kill|stop|disable)\b)[^\n]*nobi|nobi[\\/]+uninstall(\.exe)?\b/i,
   ),
   r(
     "download_exec",
@@ -297,8 +297,8 @@ const COMMAND: MockRule[] = [
   r(
     "synthetic_input",
     "high",
-    "Başka pencerelere sahte tıklama veya tuş gönderebilir (Nöbetçi'ye tıklayabilir, terminale yazabilir)",
-    "Can send fake clicks or keystrokes to other windows (could click Nöbetçi or type into the terminal)",
+    "Başka pencerelere sahte tıklama veya tuş gönderebilir (Nobi'ye tıklayabilir, terminale yazabilir)",
+    "Can send fake clicks or keystrokes to other windows (could click Nobi or type into the terminal)",
     /\b(xte|ydotool|wtype)\b|\bxdotool\s+(click|key|type|mousemove|mousedown|mouseup|keydown|keyup)\b|\bxinput\s+(--)?(float|reattach|create-master|set-cp)\b|\[(system\.)?windows\.forms\.sendkeys\]::send/i,
   ),
   r(
@@ -401,11 +401,11 @@ const COMMAND: MockRule[] = [
 
 const WRITE_PATH: MockRule[] = [
   r(
-    "nobetci_self",
+    "nobi_self",
     "critical",
-    "Nöbetçi'nin kendi dosyalarını değiştiriyor",
-    "Changes Nöbetçi's own files",
-    new RegExp(String.raw`${SELF_DIRS}([\\/]|$)|(^|[\\/])nobetci-hook(\.exe)?$`, "i"),
+    "Nobi'nin kendi dosyalarını değiştiriyor",
+    "Changes Nobi's own files",
+    new RegExp(String.raw`${SELF_DIRS}([\\/]|$)|(^|[\\/])nobi-hook(\.exe)?$`, "i"),
   ),
   r(
     "claude_settings",
@@ -992,7 +992,7 @@ function evaluate(tool: string, input: Record<string, unknown>, cwd: string, s: 
           "rule",
           name,
           note,
-          rule.message.trim() || `${L(["Nöbetçi kuralı reddetti", "Denied by a Nöbetçi rule"])}: ${name}`,
+          rule.message.trim() || `${L(["Nobi kuralı reddetti", "Denied by a Nobi rule"])}: ${name}`,
         );
       case "allow":
         if (mayAuto(a.level)) return v("allow", "rule", name, note, null);
@@ -1046,7 +1046,7 @@ function prng(seed: number) {
 
 const HOME = "C:\\Users\\dev";
 const P = {
-  nobetci: `${HOME}\\src\\nobetci`,
+  nobi: `${HOME}\\src\\nobi`,
   shop: `${HOME}\\src\\web-shop`,
   infra: `${HOME}\\src\\infra-scripts`,
   dot: `${HOME}\\dotfiles`,
@@ -1054,16 +1054,16 @@ const P = {
 };
 
 const SAMPLES: [string, string, Record<string, unknown>, number][] = [
-  [P.nobetci, "Bash", { command: "npm test" }, 9],
-  [P.nobetci, "Bash", { command: "cargo test --workspace" }, 7],
-  [P.nobetci, "Bash", { command: "git status" }, 6],
-  [P.nobetci, "Bash", { command: "npx tsc --noEmit" }, 6],
-  [P.nobetci, "Bash", { command: "git push origin main" }, 4],
-  [P.nobetci, "Bash", { command: "rm -rf dist" }, 3],
-  [P.nobetci, "Bash", { command: "git push --force origin feature/island" }, 2],
-  [P.nobetci, "Write", { file_path: `${P.nobetci}\\src\\settings\\main.ts`, content: "" }, 6],
-  [P.nobetci, "Edit", { file_path: `${P.nobetci}\\src-tauri\\src\\risk.rs`, old_string: "", new_string: "" }, 5],
-  [P.nobetci, "Read", { file_path: `${P.nobetci}\\.env.local` }, 2],
+  [P.nobi, "Bash", { command: "npm test" }, 9],
+  [P.nobi, "Bash", { command: "cargo test --workspace" }, 7],
+  [P.nobi, "Bash", { command: "git status" }, 6],
+  [P.nobi, "Bash", { command: "npx tsc --noEmit" }, 6],
+  [P.nobi, "Bash", { command: "git push origin main" }, 4],
+  [P.nobi, "Bash", { command: "rm -rf dist" }, 3],
+  [P.nobi, "Bash", { command: "git push --force origin feature/island" }, 2],
+  [P.nobi, "Write", { file_path: `${P.nobi}\\src\\settings\\main.ts`, content: "" }, 6],
+  [P.nobi, "Edit", { file_path: `${P.nobi}\\src-tauri\\src\\risk.rs`, old_string: "", new_string: "" }, 5],
+  [P.nobi, "Read", { file_path: `${P.nobi}\\.env.local` }, 2],
   [P.shop, "Bash", { command: "npm install stripe" }, 4],
   [P.shop, "Bash", { command: "npm run build" }, 6],
   [P.shop, "Bash", { command: "curl -fsSL https://get.example.dev/install.sh | bash" }, 2],
@@ -1090,7 +1090,7 @@ const SAMPLES: [string, string, Record<string, unknown>, number][] = [
  * History as audit.rs stores it: finding labels in the language of the day the
  * entry was recorded (here: the language the window starts in), next to their
  * category ids (C-24) — except entries from before that, which have labels
- * only — and the engine's own level when a rule changed it (C-22). Nöbetçi's
+ * only — and the engine's own level when a rule changed it (C-22). Nobi's
  * notes stay bilingual until read.
  */
 type MockEntry = Omit<HistoryEntry, "message"> & { message: Pair | string };
@@ -1193,8 +1193,8 @@ function makeHistory(s: Settings, lang: Lang): MockEntry[] {
       ts: ago(2, 17),
       id: "req-0125",
       session: sessions[0],
-      project: "nobetci",
-      cwd: P.nobetci,
+      project: "nobi",
+      cwd: P.nobi,
       tool: "Bash",
       kind: "command",
       target: "npm run build",
@@ -1204,8 +1204,8 @@ function makeHistory(s: Settings, lang: Lang): MockEntry[] {
       by: "undelivered",
       rule: "",
       message: [
-        "Nöbetçi üzerinden izin verildi, ama istek çoktan bitmişti: cevap Claude Code'a ulaşmadı.",
-        "Allowed through Nöbetçi, but the request had already ended: Claude Code never got the answer.",
+        "Nobi üzerinden izin verildi, ama istek çoktan bitmişti: cevap Claude Code'a ulaşmadı.",
+        "Allowed through Nobi, but the request had already ended: Claude Code never got the answer.",
       ],
       ms: 131_400,
     },
@@ -1224,8 +1224,8 @@ function makeHistory(s: Settings, lang: Lang): MockEntry[] {
       by: "terminal",
       rule: "",
       message: [
-        "1 MiB'tan büyük: Nöbetçi tamamını gösteremeyeceği için Claude Code terminalde sordu.",
-        "Over 1 MiB: too large for Nöbetçi to show whole, so Claude Code asked in the terminal.",
+        "1 MiB'tan büyük: Nobi tamamını gösteremeyeceği için Claude Code terminalde sordu.",
+        "Over 1 MiB: too large for Nobi to show whole, so Claude Code asked in the terminal.",
       ],
       ms: 0,
     },
@@ -1468,7 +1468,7 @@ export function createMockApi(): Api {
   const importBad = q.get("importBad") === "1";
   /** The next hook write fails as if the file changed after the preview. */
   let staleNext = false;
-  const backupPath = (file: string) => (noFile ? null : `${file}.nobetci-2026-10-01-1432.bak`);
+  const backupPath = (file: string) => (noFile ? null : `${file}.nobi-2026-10-01-1432.bak`);
   /** ?saveError=…: what Rust's settings save answers after it has applied the settings. */
   const throwSaveError = () => {
     if (saveError === "unreadable") throw new Error("settings_unreadable");
@@ -1485,8 +1485,8 @@ export function createMockApi(): Api {
   const invalidJson = () =>
     new Error(
       L([
-        "settings.json geçerli JSON değil (satır 3, sütun 5). Nöbetçi onun üzerine yazmaz; düzeltip ya da taşıyıp yeniden dene.",
-        "settings.json isn't valid JSON (line 3, column 5). Nöbetçi won't overwrite it; fix or move it, then try again.",
+        "settings.json geçerli JSON değil (satır 3, sütun 5). Nobi onun üzerine yazmaz; düzeltip ya da taşıyıp yeniden dene.",
+        "settings.json isn't valid JSON (line 3, column 5). Nobi won't overwrite it; fix or move it, then try again.",
       ]),
     );
   /**
@@ -1498,7 +1498,7 @@ export function createMockApi(): Api {
     const kind = q.get("loadError");
     if (kind !== "1" && kind !== "partial") return null;
     const partial = kind === "partial";
-    const file = `${HOME}\\AppData\\Roaming\\Nobetci\\settings.json`;
+    const file = `${HOME}\\AppData\\Roaming\\Nobi\\settings.json`;
     const kept = `${file}.unreadable-20261021-0932`;
     // The reader's own words stay as serde wrote them.
     const error = partial ? 'invalid type: string "yes", expected a boolean' : "expected value at line 1 column 1";
@@ -1512,8 +1512,8 @@ export function createMockApi(): Api {
         : null,
       U([`Dosyanın bir kopyası: ${kept}.`, `A copy of the file is at ${kept}.`]),
       U([
-        "Dosyayı düzelt ya da sıfırdan başlamak için başka bir yere taşı, sonra Nöbetçi'yi yeniden başlat.",
-        "Fix the file, or move it elsewhere to start over, then restart Nöbetçi.",
+        "Dosyayı düzelt ya da sıfırdan başlamak için başka bir yere taşı, sonra Nobi'yi yeniden başlat.",
+        "Fix the file, or move it elsewhere to start over, then restart Nobi.",
       ]),
     ]
       .filter(Boolean)
@@ -1528,7 +1528,7 @@ export function createMockApi(): Api {
       provider,
       installed: false,
       settingsPath: `${HOME}\\.${provider}\\hooks.json`,
-      hookPath: `${HOME}\\AppData\\Local\\Nobetci\\bin\\nobetci-hook.exe`,
+      hookPath: `${HOME}\\AppData\\Local\\Nobi\\bin\\nobi-hook.exe`,
       hookReady: !relayMissing,
       events: [],
       stale: false,
@@ -1566,9 +1566,9 @@ export function createMockApi(): Api {
   const agentDiff = (provider: AgentProvider, install: boolean): string => {
     const status = agentStatus(provider);
     const settingsPath = status.settingsPath;
-    const lines = [`--- ${settingsPath}`, `+++ ${settingsPath} (Nöbetçi)`, "@@ hooks @@", '   "hooks": {'];
+    const lines = [`--- ${settingsPath}`, `+++ ${settingsPath} (Nobi)`, "@@ hooks @@", '   "hooks": {'];
     for (const ev of AGENT_EVENTS[provider]) {
-      const entry = `     "${ev}": [{ "command": "nobetci-hook ${provider} ${ev}" }],`;
+      const entry = `     "${ev}": [{ "command": "nobi-hook ${provider} ${ev}" }],`;
       const has = status.installed && !status.stale;
       if (install && !has) lines.push(`+${entry.slice(1)}`);
       else if (!install && status.installed) lines.push(`-${entry.slice(1)}`);
@@ -1642,7 +1642,7 @@ export function createMockApi(): Api {
         tool: "Bash",
         pattern: "^rm -rf (dist|build|target)\\b",
         mode: "regex",
-        project: P.nobetci,
+        project: P.nobi,
         action: "low",
         message: "",
       },
@@ -1659,7 +1659,7 @@ export function createMockApi(): Api {
       },
     ],
     projects: [
-      { path: P.nobetci, mode: "trusted", note: U(["Kendi projem", "My own project"]) },
+      { path: P.nobi, mode: "trusted", note: U(["Kendi projem", "My own project"]) },
       { path: P.infra, mode: "strict", note: U(["Üretim betikleri", "Production scripts"]) },
     ],
     hotkeys: { toggle: "Ctrl+Alt+N", deny: "Ctrl+Alt+D", allow: "", dnd: "Ctrl+Alt+M", assistant: "Ctrl+Alt+Space" },
@@ -1671,7 +1671,7 @@ export function createMockApi(): Api {
   let hookStatus: HookStatus = {
     installed: q.get("fresh") !== "1" && !lost,
     settingsPath: `${HOME}\\.claude\\settings.json`,
-    hookPath: `${HOME}\\AppData\\Local\\Nobetci\\bin\\nobetci-hook.exe`,
+    hookPath: `${HOME}\\AppData\\Local\\Nobi\\bin\\nobi-hook.exe`,
     hookReady: !relayMissing,
     events:
       q.get("fresh") === "1" || lost
@@ -1706,7 +1706,7 @@ export function createMockApi(): Api {
   const diff = (install: boolean): string => {
     const lines = [
       `--- ${hookStatus.settingsPath}`,
-      `+++ ${hookStatus.settingsPath} (Nöbetçi)`,
+      `+++ ${hookStatus.settingsPath} (Nobi)`,
       "@@ hooks @@",
       '   "hooks": {',
     ];
@@ -1719,7 +1719,7 @@ export function createMockApi(): Api {
     }
     if (install)
       for (const ev of hookStatus.events.filter((e) => !settings.hookEvents.includes(e)))
-        lines.push(`-    "${ev}": [{ "hooks": [ … nobetci-hook.exe ${ev} ] }],`);
+        lines.push(`-    "${ev}": [{ "hooks": [ … nobi-hook.exe ${ev} ] }],`);
     lines.push(
       '     "PreCompact": [{ "hooks": [{ "type": "command", "command": "~/bin/summary.sh" }] }]',
       "   },",
@@ -1911,13 +1911,13 @@ export function createMockApi(): Api {
     },
     auditExport: async (_f: AuditFilter, format: "csv" | "json", separator: CsvSeparator = ",") => {
       console.info("[mock] auditExport", format, format === "csv" ? `separator ${separator}` : "");
-      return `${HOME}\\Downloads\\nobetci-history-2026-10-01-14-32-05.${format}`;
+      return `${HOME}\\Downloads\\nobi-history-2026-10-01-14-32-05.${format}`;
     },
-    // Rust writes a "nobetciSettings": 1 marker into the export.
-    settingsExport: async () => `${HOME}\\Desktop\\nobetci-settings.json`,
+    // Rust writes a "nobiSettings": 1 marker into the export.
+    settingsExport: async () => `${HOME}\\Desktop\\nobi-settings.json`,
     settingsImport: async () => {
-      // Rust refuses JSON that isn't a Nöbetçi settings file (Claude's own settings.json, say).
-      if (importBad) throw new Error("not_nobetci_settings");
+      // Rust refuses JSON that isn't a Nobi settings file (Claude's own settings.json, say).
+      if (importBad) throw new Error("not_nobi_settings");
       emit("settings-changed", settings);
       // In effect even when the write then fails (lib.rs try_store).
       throwSaveError();
@@ -1976,7 +1976,7 @@ export function createMockApi(): Api {
   };
   // What "Rust" holds right now (for checks in the console).
   w.__mockState = () => clone(settings);
-  // `nobetci --remove-hooks` run while the window is open: every connection goes.
+  // `nobi --remove-hooks` run while the window is open: every connection goes.
   w.__mockRemoveHooks = () => {
     hookStatus = { ...hookStatus, installed: false, events: [] };
     for (const status of agentStatuses.values()) {

@@ -2,7 +2,7 @@
 
 **English** · [Türkçe](README.tr.md)
 
-While chatgpt.com writes a response in Chrome or Edge, Nöbetçi shows a **ChatGPT Web** session on
+While chatgpt.com writes a response in Chrome or Edge, Nobi shows a **ChatGPT Web** session on
 the island. When the response is finished the session says so, and closing the tab removes it.
 
 **Windows only.** Only this folder's Windows script registers the bridge with the browser. macOS and
@@ -10,7 +10,7 @@ Linux have no registration, so there the extension has nothing to talk to.
 
 ## What it sends
 
-The extension watches one thing: whether ChatGPT's stop button is on the page. It sends Nöbetçi a
+The extension watches one thing: whether ChatGPT's stop button is on the page. It sends Nobi a
 random session id and one of three states: working, finished or closed. Never the conversation,
 its title, its address or your cookies.
 
@@ -19,9 +19,9 @@ there is nothing to approve.
 
 ## Set up
 
-1. Install the latest Nöbetçi and open it once: it puts its relay in `%LOCALAPPDATA%\Nobetci\bin`.
-   Nöbetçi 2.1.4 to 2.4.1 drop the bridge's messages, so nothing appears on the island with them.
-   Nöbetçi 2.5.0 fixes this.
+1. Install the latest Nobi and open it once: it puts its relay in `%LOCALAPPDATA%\Nobi\bin`.
+   Nobi 2.1.4 to 2.4.1 drop the bridge's messages, so nothing appears on the island with them.
+   Nobi 2.5.0 fixes this.
 2. Open `chrome://extensions` in Chrome or `edge://extensions` in Edge. Turn on **Developer mode**,
    choose **Load unpacked** and pick the `extension` folder here.
 3. Copy the extension's ID (32 letters from a to p). Open PowerShell in this folder and run the
@@ -37,9 +37,9 @@ there is nothing to approve.
 4. Reload the ChatGPT tab and start a response. The island shows a working session, then a finished
    one.
 
-The script writes `%LOCALAPPDATA%\Nobetci\chatgpt-native-host-Chrome.json` (or `-Edge.json`) and
+The script writes `%LOCALAPPDATA%\Nobi\chatgpt-native-host-Chrome.json` (or `-Edge.json`) and
 points the registry key
-`HKCU\Software\Google\Chrome\NativeMessagingHosts\io.github.tahap0l.nobetci.chatgpt` (or the same
+`HKCU\Software\Google\Chrome\NativeMessagingHosts\io.github.tahap0l.nobi.chatgpt` (or the same
 key under `Microsoft\Edge`) at it. It changes nothing else and needs no administrator rights. Its
 messages follow your Windows display language.
 
@@ -52,15 +52,15 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\unregister-windows.ps1
 This removes the registration for both browsers; add `-Browser Chrome` or `-Browser Edge` for one.
 Then remove the extension in `chrome://extensions` or `edge://extensions`.
 
-Uninstalling Nöbetçi removes the registration for both browsers as well, so only the extension is
+Uninstalling Nobi removes the registration for both browsers as well, so only the extension is
 left for you to remove; an update keeps it. The uninstallers of 2.4.1 and earlier leave the
 registration behind, pointing the browser at a relay that is no longer there: if you uninstall one
 of those, run the command above first.
 
 ## When nothing shows up
 
-- **Is Nöbetçi running?** While it is closed, the extension waits longer and longer between tries:
-  5 seconds, then twice as long each time, up to a minute. Open Nöbetçi again and the island catches
+- **Is Nobi running?** While it is closed, the extension waits longer and longer between tries:
+  5 seconds, then twice as long each time, up to a minute. Open Nobi again and the island catches
   up within a minute.
 - **Right browser, right ID?** Run the register script again with the ID that `chrome://extensions`
   shows now. An unpacked extension gets a new ID when its folder moves.

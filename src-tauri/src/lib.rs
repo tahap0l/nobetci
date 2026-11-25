@@ -1,4 +1,4 @@
-// Nöbetçi — app wiring and the commands the two windows call.
+// Nobi — app wiring and the commands the two windows call.
 //
 // Network access is limited to the explicit prompt-review provider call and the
 // opt-in weather card (widgets.rs). Optional API credentials use the OS vault.
@@ -20,6 +20,7 @@ mod log;
 mod mac_fullscreen;
 #[cfg(target_os = "macos")]
 mod mac_panel;
+mod migrate;
 mod pipe;
 mod prompts;
 mod quiet;
@@ -85,7 +86,7 @@ fn apply_geometry(app: &AppHandle, s: &Settings, collapsed: bool) {
 pub struct BootInfo {
     settings: Settings,
     system_lang: &'static str,
-    /// Hooks were installed the last time Nöbetçi saved its settings, but are not
+    /// Hooks were installed the last time Nobi saved its settings, but are not
     /// in ~/.claude/settings.json now (removed by hand, by an uninstall, by another tool).
     hooks_lost: bool,
     screen: ScreenInfo,
@@ -97,7 +98,7 @@ pub struct BootInfo {
     fullscreen_supported: bool,
     /// settings.json was there but could not be used at start: what happened and
     /// what to do. Defaults (or every value that could be read) are in use, and
-    /// nothing is saved over the file until Nöbetçi restarts. Null otherwise.
+    /// nothing is saved over the file until Nobi restarts. Null otherwise.
     settings_load_error: Option<String>,
     /// Whether the island may approve a request that needs a hold (HIGH and
     /// CRITICAL). False on Linux, where a program's fake click cannot be told
@@ -180,7 +181,7 @@ fn apply_settings(app: &AppHandle, next: Settings, autostart_is_the_os_state: bo
         i18n::apply(&next.language);
         tray::relabel(app);
         if let Some(win) = settings_window(app) {
-            let _ = win.set_title(pick("Nöbetçi — Settings", "Nöbetçi — Ayarlar"));
+            let _ = win.set_title(pick("Nobi — Settings", "Nobi — Ayarlar"));
         }
     }
     if prev.hotkeys != next.hotkeys || prev.language != next.language {
@@ -222,7 +223,7 @@ fn set_autostart(app: &AppHandle, on: bool) -> Result<(), String> {
 }
 
 /// At start, the "Start at login" switch follows the OS. A login entry removed
-/// outside Nöbetçi (Task Manager, Login Items, the desktop's autostart settings,
+/// outside Nobi (Task Manager, Login Items, the desktop's autostart settings,
 /// a cleanup tool) turns the setting off instead of being put back over that
 /// choice. On Linux the desktop may switch the entry off instead of removing it
 /// (`Hidden=true`, `X-GNOME-Autostart-enabled=false`), which counts the same;
@@ -235,7 +236,7 @@ fn reconcile_autostart(app: &AppHandle) {
     }
     let Some(manager) = app.try_state::<tauri_plugin_autostart::AutoLaunchManager>() else { return };
     let switched_off = |how: &str| {
-        log::line(format!("autostart: the login entry is {how} (changed outside Nöbetçi); the setting follows it"));
+        log::line(format!("autostart: the login entry is {how} (changed outside Nobi); the setting follows it"));
         let mut s = current(app);
         s.autostart = false;
         // A failed save is logged inside; the switch shows the truth meanwhile.
@@ -261,7 +262,7 @@ enum LoginEntry {
     SwitchedOff,
 }
 
-/// Linux: reads Nöbetçi's XDG autostart entry, says whether the desktop
+/// Linux: reads Nobi's XDG autostart entry, says whether the desktop
 /// switched it off, and points its `Exec=` at the program running now — the
 /// program alone: what the user wrote around it stays (`sys::login_entry_for`).
 #[cfg(target_os = "linux")]
@@ -288,7 +289,7 @@ fn refresh_login_entry(app: &AppHandle) -> LoginEntry {
     let exists = |path: &str| std::path::Path::new(path).exists();
     if let Some(updated) = program.and_then(|program| sys::login_entry_for(&text, &program, exists)) {
         match std::fs::write(&file, updated) {
-            Ok(()) => log::line("autostart: the login entry now starts this copy of Nöbetçi"),
+            Ok(()) => log::line("autostart: the login entry now starts this copy of Nobi"),
             Err(err) => log::line(format!("autostart: could not refresh the login entry: {err}")),
         }
     }
@@ -442,9 +443,9 @@ fn find_on_path(stem: &str) -> Option<std::path::PathBuf> {
 /// the folder, whose page is the English README.md.
 fn chatgpt_web_guide(turkish: bool) -> &'static str {
     if turkish {
-        "https://github.com/tahap0l/nobetci/blob/main/integrations/chatgpt-web/README.tr.md"
+        "https://github.com/tahap0l/nobi/blob/main/integrations/chatgpt-web/README.tr.md"
     } else {
-        "https://github.com/tahap0l/nobetci/tree/main/integrations/chatgpt-web"
+        "https://github.com/tahap0l/nobi/tree/main/integrations/chatgpt-web"
     }
 }
 
@@ -456,7 +457,7 @@ fn open_location(what: String) -> bool {
         return sys::open_url(chatgpt_web_guide(is_tr()));
     }
     let (path, select) = match what.as_str() {
-        "log" => (settings::local_dir().join("nobetci.log"), true),
+        "log" => (settings::local_dir().join("nobi.log"), true),
         "audit" => (settings::local_dir().join("audit.jsonl"), true),
         "settings" => (settings::settings_path(), true),
         "claude" => (hooks::settings_path(), true),
@@ -549,7 +550,7 @@ struct HealthReport {
     input_guard: bool,
     error: Option<String>,
     /// Claude Code only: whose status line settings.json has, "ours", "foreign"
-    /// or "none". A foreign one is never counted as missing: Nöbetçi leaves it be.
+    /// or "none". A foreign one is never counted as missing: Nobi leaves it be.
     #[serde(skip_serializing_if = "Option::is_none")]
     status_line: Option<&'static str>,
 }
@@ -599,7 +600,7 @@ async fn hooks_health(app: AppHandle, provider: Option<agent_hooks::Provider>) -
     if !report.relay_exists {
         report.error = Some(
             pick(
-                "The relay is missing; restarting Nöbetçi puts it back.",
+                "The relay is missing; restarting Nobi puts it back.",
                 "Relay bulunamadı; uygulamayı yeniden başlatmak onu tekrar yerleştirir.",
             )
             .into(),
@@ -863,7 +864,7 @@ async fn audit_export(
     };
     let name = format!(
         "{}-{}.{}",
-        pick("nobetci-history", "nobetci-gecmis"),
+        pick("nobi-history", "nobi-gecmis"),
         audit::local_stamp(audit::now_ms(), tz_offset_min).replace([' ', ':'], "-"),
         if json { "json" } else { "csv" }
     );
@@ -900,20 +901,20 @@ async fn settings_export(app: AppHandle) -> Result<Option<String>, String> {
         .dialog()
         .file()
         .set_title(pick("Export settings", "Ayarları dışa aktar"))
-        .set_file_name(pick("nobetci-settings.json", "nobetci-ayarlar.json"))
+        .set_file_name(pick("nobi-settings.json", "nobi-ayarlar.json"))
         .add_filter("JSON", &["json"]);
     if let Some(win) = settings_window(&app) {
         dialog = dialog.set_parent(&win);
     }
     let Some(path) = dialog.blocking_save_file().and_then(|p| p.into_path().ok()) else { return Ok(None) };
-    // Marked as Nöbetçi's, so an import can tell it from other JSON.
+    // Marked as Nobi's, so an import can tell it from other JSON.
     let body = settings::export_json(&current(&app))?;
     std::fs::write(&path, body).map_err(|e| e.to_string())?;
     Ok(Some(path.to_string_lossy().to_string()))
 }
 
-/// Loads preferences from a file. Only Nöbetçi's own settings are accepted
-/// (`not_nobetci_settings` for Claude Code's settings.json and any other JSON),
+/// Loads preferences from a file. Only Nobi's own settings are accepted
+/// (`not_nobi_settings` for Claude Code's settings.json and any other JSON),
 /// and everything is re-validated. Whether hooks are installed always comes
 /// from ~/.claude/settings.json, never from the file, and an import never brings
 /// the welcome wizard back. The settings it replaces are kept in a dated copy.
@@ -1062,7 +1063,7 @@ fn create_settings_window(app: &AppHandle) {
     let url = page_url(app, "settings.html");
     match WebviewWindowBuilder::new(app, "settings", url)
         .additional_browser_args(BROWSER_ARGS)
-        .title(pick("Nöbetçi — Settings", "Nöbetçi — Ayarlar"))
+        .title(pick("Nobi — Settings", "Nobi — Ayarlar"))
         .inner_size(1000.0, 740.0)
         .min_inner_size(760.0, 520.0)
         .resizable(true)
@@ -1128,7 +1129,7 @@ fn close_settings_window(app: AppHandle) {
 /// Command-line jobs that run instead of the app. Returns an exit code when one ran.
 ///
 /// `--remove-hooks` is what the Windows uninstaller calls (and what anybody can
-/// run by hand): it takes Nöbetçi's own entries out of Claude Code's
+/// run by hand): it takes Nobi's own entries out of Claude Code's
 /// settings.json and Codex's and Cursor's hooks.json, each with a dated backup,
 /// and leaves every other setting and every other tool's hooks as they are.
 /// Hooks pointing at a relay that no longer exists make each tool report an
@@ -1136,9 +1137,9 @@ fn close_settings_window(app: AppHandle) {
 ///
 /// Exit code 0: none of the three files has an entry of ours left (or it never
 /// had one). 1: at least one could not be cleaned — unreadable, changed while
-/// being written, a shape Nöbetçi will not overwrite — so the uninstaller keeps
+/// being written, a shape Nobi will not overwrite — so the uninstaller keeps
 /// the relay those entries still point at. Each file's outcome goes to stderr
-/// and nobetci.log.
+/// and nobi.log.
 pub fn cli() -> Option<i32> {
     if !std::env::args_os().skip(1).any(|a| a == "--remove-hooks") {
         return None;
@@ -1158,20 +1159,20 @@ fn remove_all_hooks(out: &mut impl Write) -> i32 {
             Ok(Some(backup)) => {
                 log::line(format!("uninstall: {name} hooks removed (backup {backup})"));
                 if is_tr() {
-                    format!("{name}: Nöbetçi'nin hook'ları kaldırıldı (yedek: {backup})")
+                    format!("{name}: Nobi'nin hook'ları kaldırıldı (yedek: {backup})")
                 } else {
-                    format!("{name}: Nöbetçi's hooks removed (backup: {backup})")
+                    format!("{name}: Nobi's hooks removed (backup: {backup})")
                 }
             }
-            Ok(None) if is_tr() => format!("{name}: kaldırılacak Nöbetçi hook'u yok"),
-            Ok(None) => format!("{name}: no Nöbetçi hooks to remove"),
+            Ok(None) if is_tr() => format!("{name}: kaldırılacak Nobi hook'u yok"),
+            Ok(None) => format!("{name}: no Nobi hooks to remove"),
             Err(err) => {
                 failed = true;
                 log::line(format!("uninstall: could not remove the {name} hooks: {err}"));
                 if is_tr() {
-                    format!("{name}: Nöbetçi'nin hook'ları kaldırılamadı: {err}")
+                    format!("{name}: Nobi'nin hook'ları kaldırılamadı: {err}")
                 } else {
-                    format!("{name}: couldn't remove Nöbetçi's hooks: {err}")
+                    format!("{name}: couldn't remove Nobi's hooks: {err}")
                 }
             }
         };
@@ -1181,13 +1182,15 @@ fn remove_all_hooks(out: &mut impl Write) -> i32 {
 }
 
 pub fn run() {
-    // Linux: X11 (XWayland under Wayland) for Nöbetçi itself; the programs it
+    // Linux: X11 (XWayland under Wayland) for Nobi itself; the programs it
     // starts keep the desktop's own choice (`sys::command`).
     #[cfg(target_os = "linux")]
     sys::use_x11();
 
     // Language first: default settings (deny reasons) depend on it.
     i18n::apply("auto");
+    // Before the first read: a Nöbetçi install's data comes over once (3.0).
+    let migrated = migrate::run().copied > 0;
     let loaded = settings::load();
     i18n::apply(&loaded.language);
     let gate = Arc::new(PollGate::new());
@@ -1276,7 +1279,7 @@ pub fn run() {
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
 
             // The run's first lines in the log: what follows belongs to it.
-            log::line(format!("--- Nöbetçi {} started ---", env!("CARGO_PKG_VERSION")));
+            log::line(format!("--- Nobi {} started ---", env!("CARGO_PKG_VERSION")));
             settings::log_load_problem();
 
             let handle = app.handle().clone();
@@ -1305,7 +1308,16 @@ pub fn run() {
             pipe::start(handle.clone());
             agenda::spawn_reminders(handle.clone());
             let reconcile = handle.clone();
-            std::thread::spawn(move || reconcile_autostart(&reconcile));
+            std::thread::spawn(move || {
+                // Nöbetçi's login entry goes; the copied switch makes Nobi's own.
+                // (Its uninstaller may already have removed it: a migration counts too.)
+                if (migrate::remove_legacy_login_entry() || migrated) && current(&reconcile).autostart {
+                    if let Err(err) = set_autostart(&reconcile, true) {
+                        log::line(format!("autostart: {err}"));
+                    }
+                }
+                reconcile_autostart(&reconcile);
+            });
 
             // First run: the welcome wizard, once the owl has said hello — unless
             // it was finished or skipped meanwhile (the settings page opens it
@@ -1313,6 +1325,16 @@ pub fn run() {
             // that could not be read is shown instead: until a restart, nothing
             // is saved over it.
             let unreadable = settings::load_problem().is_some();
+            if migrated && loaded.onboarded && !unreadable {
+                // Moved from Nöbetçi: its hooks still run the old relay and show
+                // as out of date on the Claude tab, one reviewed click away.
+                let tab = handle.clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(Duration::from_millis(4500));
+                    let app = tab.clone();
+                    let _ = tab.run_on_main_thread(move || show_settings_window(&app, Some("claude")));
+                });
+            }
             if !loaded.onboarded || unreadable {
                 let welcome = handle.clone();
                 std::thread::spawn(move || {
@@ -1330,7 +1352,7 @@ pub fn run() {
             Ok(())
         })
         .run(context())
-        .expect("error while running Nöbetçi");
+        .expect("error while running Nobi");
 }
 
 /// The app's configuration, assets and ACL. Expanded in this one place: on
@@ -1588,7 +1610,7 @@ mod tests {
         assert!(tr.ends_with("/integrations/chatgpt-web/README.tr.md"), "{tr}");
         assert!(en.ends_with("/integrations/chatgpt-web"), "{en}");
         for url in [tr, en] {
-            assert!(url.starts_with("https://github.com/tahap0l/nobetci/"), "{url}");
+            assert!(url.starts_with("https://github.com/tahap0l/nobi/"), "{url}");
         }
         // The pages they show are in the tree.
         assert!(repo.join("integrations/chatgpt-web/README.tr.md").is_file());
@@ -1604,7 +1626,7 @@ mod tests {
         std::fs::create_dir_all(codex.parent().unwrap()).unwrap();
         // Claude Code's file cannot be read as JSON: it is left alone and reported.
         std::fs::write(&claude, b"{ broken").unwrap();
-        let ours = "'/opt/nobetci/bin/nobetci-hook' codex Stop";
+        let ours = "'/opt/nobi/bin/nobi-hook' codex Stop";
         std::fs::write(
             &codex,
             serde_json::to_vec_pretty(&serde_json::json!({

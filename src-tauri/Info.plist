@@ -7,9 +7,9 @@
        runtime, which lets it ask at all only with the apple-events entitlement in
        entitlements.plist (also for the osascript it starts). -->
   <key>NSAppleEventsUsageDescription</key>
-  <string>Nöbetçi shows and controls the song playing in Spotify or Music. · Nöbetçi, Spotify veya Music'te çalan şarkıyı gösterir ve kontrol eder.</string>
-  <!-- The bundle is Nobetci.app (ASCII, like every path the app uses), but Finder,
-       the Dock and the disk image show "Nöbetçi" from macos/*.lproj/InfoPlist.strings,
+  <string>Nobi shows and controls the song playing in Spotify or Music. · Nobi, Spotify veya Music'te çalan şarkıyı gösterir ve kontrol eder.</string>
+  <!-- The bundle is Nobi.app (ASCII, like every path the app uses), but Finder,
+       the Dock and the disk image show "Nobi" from macos/*.lproj/InfoPlist.strings,
        which also carry the text above in each language. -->
   <key>LSHasLocalizedDisplayName</key>
   <true/>

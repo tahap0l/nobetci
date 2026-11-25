@@ -1,13 +1,13 @@
 [package]
-name = "nobetci"
-description = "Nöbetçi — a watchful owl for Claude Code, Codex and Cursor sessions"
+name = "nobi"
+description = "Nobi — a watchful owl for Claude Code, Codex and Cursor sessions"
 authors = ["Esat Taha Polat (tahap0l)"]
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 
 [lib]
-name = "nobetci_lib"
+name = "nobi_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
@@ -19,6 +19,8 @@ base64 = "0.23"
 tauri = { version = "2", features = ["tray-icon", "macos-private-api"] }
 tauri-plugin-single-instance = "2"
 tauri-plugin-autostart = "2"
+# Only to take out the login entry Nöbetçi (before 3.0) left: `migrate.rs`.
+auto-launch = "0.6"
 tauri-plugin-notification = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-global-shortcut = "2"

@@ -1,15 +1,15 @@
-# Nöbetçi Privacy Policy
+# Nobi Privacy Policy
 
 **Last updated: November 22, 2026**
 
-Nöbetçi is a desktop application that helps you review AI coding-agent permission requests and
+Nobi is a desktop application that helps you review AI coding-agent permission requests and
 prepare messages for AI agents. It runs on your computer and does not require an account.
 
 ## Information and local storage
 
-Nöbetçi does not send telemetry, analytics, crash reports, or update checks. Settings, request
+Nobi does not send telemetry, analytics, crash reports, or update checks. Settings, request
 history, and logs are stored locally on your computer. Prompt drafts and rewritten messages are not
-saved to history. Before request text is written to history or shown in a notification, Nöbetçi
+saved to history. Before request text is written to history or shown in a notification, Nobi
 masks recognized secrets such as API tokens, passwords, and private keys. The approval card shows
 the request in full so you can review what you are approving.
 
@@ -20,7 +20,7 @@ Prompt Studio sends a draft only after you choose a provider and select **Improv
 - **Ollama:** The draft is sent to the Ollama service on your computer. If you choose an Ollama
   model marked as cloud, that provider may forward the draft outside your computer.
 - **OpenAI:** If you select OpenAI and choose **Improve**, the current draft is sent to the OpenAI
-  API. The optional API key is kept in your operating system's credential store. Nöbetçi does not
+  API. The optional API key is kept in your operating system's credential store. Nobi does not
   save the draft to its history or forward the result to an AI agent. OpenAI handles API requests
   under its own terms and data policies.
 
@@ -36,7 +36,7 @@ processor, memory and graphics load on your device, only while it is on screen. 
 
 ## The island assistant
 
-When you send a message to an AI app from the assistant, Nöbetçi sends nothing to that service
+When you send a message to an AI app from the assistant, Nobi sends nothing to that service
 itself: it opens the app or your browser and copies the message to the clipboard. Where the message
 goes from there depends on what you picked:
 
@@ -52,7 +52,7 @@ goes from there depends on what you picked:
   address.
 
 **Ask here** sends the message to the provider you chose in Prompt Studio (Ollama or OpenAI). Voice
-input (Windows and macOS) is your operating system's own dictation; Nöbetçi records no audio.
+input (Windows and macOS) is your operating system's own dictation; Nobi records no audio.
 
 ## Installer and code signing
 
@@ -62,35 +62,35 @@ your computer (see the [code signing policy](CODE_SIGNING_POLICY.md)).
 
 ## Your choices
 
-You can use Nöbetçi without Prompt Studio, choose local Ollama, or choose OpenAI with your own API
+You can use Nobi without Prompt Studio, choose local Ollama, or choose OpenAI with your own API
 key. You can remove the saved OpenAI key in Prompt Studio. You control the local history and settings
 from the app.
 
 ## This website
 
-The website (<https://tahap0l.github.io/nobetci/>) is published on GitHub Pages: GitHub serves the
+The website (<https://tahap0l.github.io/nobi/>) is published on GitHub Pages: GitHub serves the
 pages and keeps its own record of visits (IP addresses included) under GitHub's privacy statement.
 The site has no cookies, analytics or ads. It remembers the language and mascot you pick in your
 browser only. The live demo runs entirely in your browser and sends nothing anywhere.
 
 ## Changes and contact
 
-This policy may be updated when Nöbetçi's data practices change. For questions or privacy requests,
-open an issue at <https://github.com/tahap0l/nobetci/issues>.
+This policy may be updated when Nobi's data practices change. For questions or privacy requests,
+open an issue at <https://github.com/tahap0l/nobi/issues>.
 
 ---
 
-# Nöbetçi Gizlilik Politikası
+# Nobi Gizlilik Politikası
 
 **Son güncelleme: 22 Kasım 2026**
 
-Nöbetçi, yapay zekâ kodlama ajanlarının izin isteklerini incelemene ve ajanlara göndereceğin
+Nobi, yapay zekâ kodlama ajanlarının izin isteklerini incelemene ve ajanlara göndereceğin
 mesajları hazırlamana yardımcı olan bir masaüstü uygulamasıdır. Bilgisayarında çalışır ve hesap
 açmanı gerektirmez.
 
 ## Bilgiler ve yerel kayıtlar
 
-Nöbetçi telemetri, analiz, çökme raporu veya güncelleme kontrolü göndermez. Ayarlar, istek geçmişi
+Nobi telemetri, analiz, çökme raporu veya güncelleme kontrolü göndermez. Ayarlar, istek geçmişi
 ve kayıtlar bilgisayarında tutulur. Mesaj taslakları ve düzeltilmiş metinler geçmişe kaydedilmez.
 İstek geçmişe yazılmadan veya bildirimde gösterilmeden önce API anahtarı, parola ve özel anahtar gibi
 tanınan sırlar maskelenir. Onay kartı, neye izin verdiğini inceleyebilmen için isteği eksiksiz
@@ -103,7 +103,7 @@ Mesaj Atölyesi taslağı yalnızca bir sağlayıcı seçip **Mesajı iyileştir
 - **Ollama:** Taslak, bilgisayarındaki Ollama servisine gönderilir. **Cloud** olarak işaretlenmiş bir
   Ollama modeli seçersen sağlayıcı taslağı bilgisayarının dışına iletebilir.
 - **OpenAI:** OpenAI'yi seçip **Mesajı iyileştir** dediğinde o anki taslak OpenAI API'sine gönderilir.
-  İsteğe bağlı API anahtarı işletim sisteminin parola kasasında tutulur. Nöbetçi taslağı geçmişine
+  İsteğe bağlı API anahtarı işletim sisteminin parola kasasında tutulur. Nobi taslağı geçmişine
   kaydetmez ve sonucu bir yapay zekâ ajanına iletmez. API isteklerinin işlenmesi OpenAI'nin kendi
   koşullarına ve veri politikalarına tabidir.
 
@@ -119,7 +119,7 @@ dosyasında kalır.
 
 ## Ada asistanı
 
-Asistanda bir yapay zekâ uygulaması seçip gönderdiğinde Nöbetçi o servise kendisi bir şey göndermez:
+Asistanda bir yapay zekâ uygulaması seçip gönderdiğinde Nobi o servise kendisi bir şey göndermez:
 uygulamayı ya da tarayıcını açar ve mesajı panoya kopyalar. Mesajın oradan nereye gittiği seçtiğin
 yere bağlıdır:
 
@@ -135,7 +135,7 @@ yere bağlıdır:
   panodan sen yapıştırır ve gönderirsin. Bir adrese sığmayacak kadar uzun bir mesaj için de böyledir.
 
 **Burada sor** seçeneği mesajı Mesaj Atölyesi'nde seçtiğin sağlayıcıya (Ollama ya da OpenAI)
-gönderir. Sesle yazma (Windows ve macOS) işletim sisteminin kendi dikte özelliğidir; Nöbetçi ses
+gönderir. Sesle yazma (Windows ve macOS) işletim sisteminin kendi dikte özelliğidir; Nobi ses
 kaydetmez.
 
 ## Kurulum dosyası ve kod imzalama
@@ -146,18 +146,18 @@ Kurulum dosyası bilgi toplamaz ve göndermez. Windows sürümleri henüz kod im
 
 ## Seçimlerin
 
-Nöbetçi'yi Mesaj Atölyesi olmadan kullanabilir, yerel Ollama'yı seçebilir veya kendi API anahtarınla
+Nobi'yi Mesaj Atölyesi olmadan kullanabilir, yerel Ollama'yı seçebilir veya kendi API anahtarınla
 OpenAI'yi seçebilirsin. Kayıtlı OpenAI anahtarını Mesaj Atölyesi'nden silebilirsin. Yerel geçmişini
 ve ayarlarını uygulama içinden yönetirsin.
 
 ## Bu web sitesi
 
-Web sitesi (<https://tahap0l.github.io/nobetci/>) GitHub Pages'te yayınlanır: sayfaları GitHub sunar
+Web sitesi (<https://tahap0l.github.io/nobi/>) GitHub Pages'te yayınlanır: sayfaları GitHub sunar
 ve ziyaretlerin kaydını (IP adresi dahil) GitHub'ın gizlilik bildirimine göre tutar. Sitede çerez,
 analiz ya da reklam yok. Seçtiğin dili ve maskotu yalnızca tarayıcında hatırlar. Canlı demo tamamen
 tarayıcında çalışır ve hiçbir yere bir şey göndermez.
 
 ## Değişiklikler ve iletişim
 
-Nöbetçi'nin veri uygulamaları değişirse bu politika güncellenebilir. Soru veya gizlilik talebi için
-<https://github.com/tahap0l/nobetci/issues> adresinden issue açabilirsin.
+Nobi'nin veri uygulamaları değişirse bu politika güncellenebilir. Soru veya gizlilik talebi için
+<https://github.com/tahap0l/nobi/issues> adresinden issue açabilirsin.

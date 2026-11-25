@@ -3,7 +3,7 @@
 // current language (see src/i18n/core.ts); `{name}` placeholders come from vars.
 //
 // Keys are grouped by area: common, units, labels, shell, then one block per tab,
-// and the first-run wizard last. Brand name stays "Nöbetçi" in both languages.
+// and the first-run wizard last. Brand name stays "Nobi" in both languages.
 
 import { defineMessages, locale, plural, type Vars } from "../i18n/core";
 
@@ -36,8 +36,8 @@ const M = {
     "A click pokes it, a double click opens the island. You can also switch it from the tray menu.",
   ],
   "genel.buddy.showHint@mac": [
-    "Tek tık dürter, çift tık adayı açar. Menü çubuğundaki Nöbetçi menüsünden de açıp kapatabilirsin.",
-    "A click pokes it, a double click opens the island. You can also switch it from Nöbetçi's menu in the menu bar.",
+    "Tek tık dürter, çift tık adayı açar. Menü çubuğundaki Nobi menüsünden de açıp kapatabilirsin.",
+    "A click pokes it, a double click opens the island. You can also switch it from Nobi's menu in the menu bar.",
   ],
   "genel.buddy.size": ["Boyut", "Size"],
   "genel.buddy.sizeHint": [
@@ -89,7 +89,7 @@ const M = {
   "common.savedPath": ["Kaydedildi: {path}", "Saved: {path}"],
   "common.chooseFolder": ["Klasör seç", "Choose folder"],
   "common.choose": ["Seç…", "Choose…"],
-  "common.onlyInApp": ["Bu yalnız Nöbetçi içinde çalışır.", "This only works inside Nöbetçi."],
+  "common.onlyInApp": ["Bu yalnız Nobi içinde çalışır.", "This only works inside Nobi."],
   "common.discardQ": ["Kaydedilmemiş değişiklikler atılsın mı?", "Discard your unsaved changes?"],
   "common.keepEditing": ["Düzenlemeye devam", "Keep editing"],
   "common.discard": ["Değişiklikleri at", "Discard changes"],
@@ -99,18 +99,18 @@ const M = {
     "The file changed after this preview, so nothing was written. Make a new preview.",
   ],
   "err.relayMissing": [
-    "Relay (nobetci-hook) yerinde değil; hook'lar ona işaret edeceği için kurulum yapılmadı. Nöbetçi'yi yeniden başlatmak onu geri koyar.",
-    "The relay (nobetci-hook) isn't in place, and the hooks would point at it, so nothing was installed. Restarting Nöbetçi puts it back.",
+    "Relay (nobi-hook) yerinde değil; hook'lar ona işaret edeceği için kurulum yapılmadı. Nobi'yi yeniden başlatmak onu geri koyar.",
+    "The relay (nobi-hook) isn't in place, and the hooks would point at it, so nothing was installed. Restarting Nobi puts it back.",
   ],
   "err.settingsUnreadable": [
-    "Nöbetçi açılışta ayar dosyasını olduğu gibi kullanamadı. Üzerine yazılmasın diye Nöbetçi yeniden başlatılana kadar değişiklikler kaydedilmiyor.",
-    "Nöbetçi couldn't use its settings file as it was at start. So that it isn't overwritten, changes aren't saved until Nöbetçi restarts.",
+    "Nobi açılışta ayar dosyasını olduğu gibi kullanamadı. Üzerine yazılmasın diye Nobi yeniden başlatılana kadar değişiklikler kaydedilmiyor.",
+    "Nobi couldn't use its settings file as it was at start. So that it isn't overwritten, changes aren't saved until Nobi restarts.",
   ],
   "err.saveFailed": ["Ayarlar diske yazılamadı.", "The settings couldn't be written to disk."],
   "err.saveFailedDetail": ["Ayarlar diske yazılamadı: {detail}", "The settings couldn't be written to disk: {detail}"],
-  "err.notNobetci": [
-    "Bu bir Nöbetçi ayar dosyası değil (Claude Code'un settings.json'ı olabilir). Hiçbir şey değiştirilmedi.",
-    "This isn't a Nöbetçi settings file (it may be Claude Code's settings.json). Nothing was changed.",
+  "err.notNobi": [
+    "Bu bir Nobi ayar dosyası değil (Claude Code'un settings.json'ı olabilir). Hiçbir şey değiştirilmedi.",
+    "This isn't a Nobi settings file (it may be Claude Code's settings.json). Nothing was changed.",
   ],
   "lang.tr": ["Türkçe", "Türkçe"],
   "lang.en": ["English", "English"],
@@ -145,7 +145,7 @@ const M = {
   "by.busy": ["Meşgul", "Busy"],
   "by.unseen": ["Görülmedi", "Not seen"],
   "by.resolved": ["Başka yerde yanıtlandı", "Answered elsewhere"],
-  // Answered in Nöbetçi, but the request had already ended: Claude Code never got it.
+  // Answered in Nobi, but the request had already ended: Claude Code never got it.
   "by.undelivered": ["Ulaşmadı", "Not delivered"],
   // Handed back to, or fell back on, the agent's own prompt instead of the terminal.
   "by.cursor": ["Cursor", "Cursor"],
@@ -168,7 +168,7 @@ const M = {
 
   // ── Shell ───────────────────────────────────────────────────────────────────
   "shell.settings": ["Ayarlar", "Settings"],
-  "shell.windowTitle": ["Nöbetçi — {tab}", "Nöbetçi — {tab}"],
+  "shell.windowTitle": ["Nobi — {tab}", "Nobi — {tab}"],
   "shell.navLabel": ["Ayar bölümleri", "Settings sections"],
   "shell.closeTitle": ["Ayarları kapat (Esc)", "Close settings (Esc)"],
   "shell.closeAria": ["Ayarları kapat", "Close settings"],
@@ -179,12 +179,12 @@ const M = {
   "shell.hookWarn": ["Bağlantı ilgi bekliyor", "Connection needs attention"],
   // Rust's detail follows the text: what failed, which values kept their defaults, where the copy is.
   "shell.loadErrorTitle": [
-    "Nöbetçi ayar dosyasını olduğu gibi kullanamadı.",
-    "Nöbetçi couldn't use its settings file as it is.",
+    "Nobi ayar dosyasını olduğu gibi kullanamadı.",
+    "Nobi couldn't use its settings file as it is.",
   ],
   "shell.loadErrorText": [
-    "Varsayılanlarla ya da dosyadan okuyabildiği her değerle açıldı (ayrıntılar aşağıda). Dosyanın üzerine yazmamak için Nöbetçi yeniden başlayana kadar değişiklikler kaydedilmez.",
-    "It started with the defaults, or with every value it could read (details below). To leave the file alone, changes aren't saved until Nöbetçi restarts.",
+    "Varsayılanlarla ya da dosyadan okuyabildiği her değerle açıldı (ayrıntılar aşağıda). Dosyanın üzerine yazmamak için Nobi yeniden başlayana kadar değişiklikler kaydedilmez.",
+    "It started with the defaults, or with every value it could read (details below). To leave the file alone, changes aren't saved until Nobi restarts.",
   ],
   "shell.saveErrorTitle": ["Son değişiklik kaydedilemedi.", "The last change wasn't saved."],
   "shell.warn.autostart": [
@@ -201,16 +201,16 @@ const M = {
   "genel.subtitle": ["Dil, başlangıç ve ada", "Language, startup and the island"],
   "genel.langTitle": ["Dil · Language", "Language · Dil"],
   "genel.langDesc": [
-    "Nöbetçi'nin konuştuğu dil. Otomatik, Windows'un görüntüleme dilini izler.",
-    "The language Nöbetçi speaks. Automatic follows your Windows display language.",
+    "Nobi'nin konuştuğu dil. Otomatik, Windows'un görüntüleme dilini izler.",
+    "The language Nobi speaks. Automatic follows your Windows display language.",
   ],
   "genel.langDesc@mac": [
-    "Nöbetçi'nin konuştuğu dil. Otomatik, macOS'un dil tercihini izler.",
-    "The language Nöbetçi speaks. Automatic follows your macOS language.",
+    "Nobi'nin konuştuğu dil. Otomatik, macOS'un dil tercihini izler.",
+    "The language Nobi speaks. Automatic follows your macOS language.",
   ],
   "genel.langDesc@linux": [
-    "Nöbetçi'nin konuştuğu dil. Otomatik, sistemin dil ayarını (LANG) izler.",
-    "The language Nöbetçi speaks. Automatic follows your system language (LANG).",
+    "Nobi'nin konuştuğu dil. Otomatik, sistemin dil ayarını (LANG) izler.",
+    "The language Nobi speaks. Automatic follows your system language (LANG).",
   ],
   "genel.langAuto": ["Otomatik (sistem: {lang})", "Automatic (system: {lang})"],
   "genel.glance.aria": ["Bir bakışta", "At a glance"],
@@ -253,12 +253,12 @@ const M = {
   "genel.autostart@mac": ["Oturum açınca başlat", "Start at login"],
   "genel.autostart@linux": ["Oturum açınca başlat", "Start at login"],
   "genel.autostartHint": [
-    "Oturum açtığında Nöbetçi tepsiye yerleşir; ada ilk istekte belirir.",
-    "Nöbetçi waits in the tray after you sign in; the island shows up with the first request.",
+    "Oturum açtığında Nobi tepsiye yerleşir; ada ilk istekte belirir.",
+    "Nobi waits in the tray after you sign in; the island shows up with the first request.",
   ],
   "genel.autostartHint@mac": [
-    "Oturum açtığında Nöbetçi menü çubuğuna yerleşir; ada ilk istekte belirir.",
-    "Nöbetçi waits in the menu bar after you log in; the island shows up with the first request.",
+    "Oturum açtığında Nobi menü çubuğuna yerleşir; ada ilk istekte belirir.",
+    "Nobi waits in the menu bar after you log in; the island shows up with the first request.",
   ],
   "genel.island": ["Ada", "Island"],
   "genel.islandDesc": [
@@ -305,18 +305,18 @@ const M = {
     "ChatGPT masaüstü “Hook bulunamadı” diyorsa Codex görünümünde bir yerel proje ekle, sonra Ayarlar → Hook'lar ekranında listeyi yenile.",
     "If the ChatGPT desktop app says “No hooks found”, add a local project in the Codex view, then refresh Settings → Hooks.",
   ],
-  "agents.intro": ["Cursor oturumlarını ve desteklenen izin isteklerini Nöbetçi'de izle.", "Watch Cursor sessions and supported permission requests in Nöbetçi."],
+  "agents.intro": ["Cursor oturumlarını ve desteklenen izin isteklerini Nobi'de izle.", "Watch Cursor sessions and supported permission requests in Nobi."],
   "agents.promptLimit": ["Mesaj gönderimlerini oturum akışında görürsün. Ajanların hook'ları metni otomatik değiştiremez; düzeltme için Mesaj Atölyesi'nde metni iyileştirip kendin yapıştır.", "Submitted prompts appear in the session timeline. These agents' hooks cannot replace prompt text; use Prompt Studio to improve it, then paste it yourself."],
-  "agents.codexTrust": ["ChatGPT masaüstünde Ayarlar → Hooks bölümünde Nöbetçi girdilerini incele ve güven. Yerel Work ve Codex bu dosyayı kullanır. Work Cloud bu yerel hook’ları çalıştırmaz.", "In the ChatGPT desktop app, open Settings → Hooks to review and trust the Nöbetçi entries. Local Work and Codex use this file. Work Cloud does not run these local hooks."],
+  "agents.codexTrust": ["ChatGPT masaüstünde Ayarlar → Hooks bölümünde Nobi girdilerini incele ve güven. Yerel Work ve Codex bu dosyayı kullanır. Work Cloud bu yerel hook’ları çalıştırmaz.", "In the ChatGPT desktop app, open Settings → Hooks to review and trust the Nobi entries. Local Work and Codex use this file. Work Cloud does not run these local hooks."],
   "agents.codexRepair": ["Bağlantıyı güncelle, ardından ChatGPT veya Codex’te değişen hook’ları yeniden inceleyip güvenilir olarak işaretle.", "Update the connection, then review and trust the changed hooks in ChatGPT or Codex."],
-  "agents.testRelay": ["Nöbetçi test sinyalini aldı ({ms} ms).", "Nöbetçi received its test signal ({ms} ms)."],
+  "agents.testRelay": ["Nobi test sinyalini aldı ({ms} ms).", "Nobi received its test signal ({ms} ms)."],
   "agents.testCodexEvent": ["Codex’ten alınan son olay {event} · {time}.", "Last event received from Codex was {event} at {time}."],
-  "agents.testCodexWaiting": ["Bu açılışta henüz Codex olayı alınmadı. Yeni bir yerel oturumda mesaj gönder ve testi yeniden çalıştır.", "No Codex event has arrived since Nöbetçi started. Send a message in a new local session and run the check again."],
+  "agents.testCodexWaiting": ["Bu açılışta henüz Codex olayı alınmadı. Yeni bir yerel oturumda mesaj gönder ve testi yeniden çalıştır.", "No Codex event has arrived since Nobi started. Send a message in a new local session and run the check again."],
   "agents.testFailed": ["Bağlantı testi sonuç vermedi.", "The connection test returned no result."],
   "agents.testUpdate": ["Hook kayıtlarının güncellenmesi gerekiyor.", "The hook entries need an update."],
   "agents.cursorApproval": [
-    "Cursor'ın komut ve MCP istekleri Nöbetçi'ye gelir. Nöbetçi karar vermezse (kapalıysa, duraklatılmışsa, süre dolduysa ya da isteği Cursor'a bıraktıysan) Cursor sana kendisi sorar. İşlemi yalnızca relay hiç çalışamazsa Cursor engeller. Cursor'ın onay moduna göre kendi onay penceresi ayrıca çıkabilir.",
-    "Cursor's shell and MCP requests come to Nöbetçi. When Nöbetçi gives no decision (it's closed or paused, the request timed out, or you handed it to Cursor), Cursor asks you itself. Cursor blocks the action only if the relay can't run at all. Cursor's own approval mode may still show its prompt as well.",
+    "Cursor'ın komut ve MCP istekleri Nobi'ye gelir. Nobi karar vermezse (kapalıysa, duraklatılmışsa, süre dolduysa ya da isteği Cursor'a bıraktıysan) Cursor sana kendisi sorar. İşlemi yalnızca relay hiç çalışamazsa Cursor engeller. Cursor'ın onay moduna göre kendi onay penceresi ayrıca çıkabilir.",
+    "Cursor's shell and MCP requests come to Nobi. When Nobi gives no decision (it's closed or paused, the request timed out, or you handed it to Cursor), Cursor asks you itself. Cursor blocks the action only if the relay can't run at all. Cursor's own approval mode may still show its prompt as well.",
   ],
   "agents.codex": ["ChatGPT Work (Yerel) ve Codex", "ChatGPT Work (Local) and Codex"],
   "agents.cursor": ["Cursor", "Cursor"],
@@ -369,7 +369,7 @@ const M = {
     "Görüntülenen değişiklik ayar dosyana yazılacak; diğer ayarlar olduğu gibi kalır.",
     "The changes shown here will be written to the settings file; your other settings stay as they are.",
   ],
-  "agents.removeText": ["Sadece Nöbetçi'nin hook girdileri kaldırılır.", "Only Nöbetçi hook entries will be removed."],
+  "agents.removeText": ["Sadece Nobi'nin hook girdileri kaldırılır.", "Only Nobi hook entries will be removed."],
   "agents.backup": ["Tarihli yedek: ", "Dated backup: "],
   "agents.confirmInstall": ["Onayla ve bağla", "Approve and connect"],
   "agents.confirmRemove": ["Onayla ve kaldır", "Approve and remove"],
@@ -427,7 +427,7 @@ const M = {
   "prompts.copied": ["Kopyalandı. Hedef uygulamada kendin gönderebilirsin.", "Copied. You can send it yourself in the target app."],
   "prompts.copyFailed": ["Panoya kopyalanamadı.", "Couldn't copy to the clipboard."],
   "prompts.emptyResult": ["Düzenlenmiş metin burada görünür.", "Your revised message will appear here."],
-  "prompts.manual": ["Mesajı incele, kopyala ve hedef uygulamada kendin gönder. Nöbetçi hiçbir ajana otomatik mesaj göndermez.", "Review and copy the message, then send it yourself in the target app. Nöbetçi never sends messages to an agent automatically."],
+  "prompts.manual": ["Mesajı incele, kopyala ve hedef uygulamada kendin gönder. Nobi hiçbir ajana otomatik mesaj göndermez.", "Review and copy the message, then send it yourself in the target app. Nobi never sends messages to an agent automatically."],
   "prompts.key": ["OpenAI API anahtarı", "OpenAI API key"],
   "prompts.keyPlaceholder": ["sk-…", "sk-…"],
   "prompts.keySave": ["Anahtarı güvenli kaydet", "Save key securely"],
@@ -484,8 +484,8 @@ const M = {
     "Not a hook but Claude Code's status line: brings context use, cost and the 5-hour / weekly limits to the island. Optional; shows a short line under the prompt.",
   ],
   "claude.statusLineTaken": [
-    "settings.json'da zaten kendi durum satırın var; Nöbetçi onu değiştirmez. Limitleri görmek istersen önce onu kaldırman gerekir.",
-    "settings.json already has your own status line; Nöbetçi won't replace it. To see the limits, remove yours first.",
+    "settings.json'da zaten kendi durum satırın var; Nobi onu değiştirmez. Limitleri görmek istersen önce onu kaldırman gerekir.",
+    "settings.json already has your own status line; Nobi won't replace it. To see the limits, remove yours first.",
   ],
   "claude.interactive": ["Sorular ve planlar", "Questions and plans"],
   "claude.questions": ["Claude'un sorularını ve planlarını adada cevapla", "Answer Claude's questions and plans on the island"],
@@ -521,8 +521,8 @@ const M = {
     "This change will be written to ~/.claude/settings.json. Your other hooks and settings stay as they are.",
   ],
   "claude.reviewRemoveText": [
-    "Sadece Nöbetçi'nin girdileri silinecek; başka hiçbir şeye dokunulmaz.",
-    "Only Nöbetçi's entries are removed; nothing else is touched.",
+    "Sadece Nobi'nin girdileri silinecek; başka hiçbir şeye dokunulmaz.",
+    "Only Nobi's entries are removed; nothing else is touched.",
   ],
   "claude.lines": ["satır", "lines"],
   "claude.noChange": [
@@ -560,15 +560,15 @@ const M = {
     "Hook ayarı güncel değil. Yeniden kur.",
     "A hook setting is out of date. Reinstall it.",
   ],
-  "claude.noEntries": ["settings.json'da Nöbetçi girdisi yok.", "No Nöbetçi entries in settings.json."],
+  "claude.noEntries": ["settings.json'da Nobi girdisi yok.", "No Nobi entries in settings.json."],
   // Windows only (hooks_status.gitBashOnly): the relay's path has $, a backtick, or spaces with no short name.
   "claude.gitBashOnly": [
     "Hook'lar yalnızca Claude Code'un Git Bash kullandığı yerde çalışır.",
     "Hooks run only where Claude Code uses Git Bash.",
   ],
   "claude.gitBashOnlyText": [
-    "Relay'in yolunda hem Git Bash'te hem PowerShell'de çalışan bir komutla yazılamayan karakterler var, bu yüzden hook'lar Git Bash için yazıldı. Claude masaüstü uygulaması hook'ları PowerShell'de çalıştırabilir; o zaman oradaki istekler Nöbetçi'ye ulaşmaz.",
-    "The relay's path has characters that no hook command can run in both Git Bash and PowerShell, so the hooks are written for Git Bash. The Claude desktop app may run hooks in PowerShell, and then its requests don't reach Nöbetçi.",
+    "Relay'in yolunda hem Git Bash'te hem PowerShell'de çalışan bir komutla yazılamayan karakterler var, bu yüzden hook'lar Git Bash için yazıldı. Claude masaüstü uygulaması hook'ları PowerShell'de çalıştırabilir; o zaman oradaki istekler Nobi'ye ulaşmaz.",
+    "The relay's path has characters that no hook command can run in both Git Bash and PowerShell, so the hooks are written for Git Bash. The Claude desktop app may run hooks in PowerShell, and then its requests don't reach Nobi.",
   ],
   "claude.kv.settings": ["Claude ayarları", "Claude settings"],
   "claude.kv.relay": ["Relay", "Relay"],
@@ -582,7 +582,7 @@ const M = {
   "claude.health.relayOk": ["Relay dosyası yerinde", "The relay is in place"],
   "claude.health.relayMissing": ["Relay dosyası yok", "The relay is missing"],
   "claude.health.entriesOk": ["settings.json girdileri var ({n} olay)", "settings.json has the entries ({n} events)"],
-  "claude.health.entriesMissing": ["settings.json'da Nöbetçi girdisi yok", "No Nöbetçi entries in settings.json"],
+  "claude.health.entriesMissing": ["settings.json'da Nobi girdisi yok", "No Nobi entries in settings.json"],
   "claude.health.missing": ["Eksik olaylar: {list}", "Missing events: {list}"],
   "claude.health.allEvents": ["Seçili olayların hepsi kurulu", "Every selected event is installed"],
   "claude.health.routesOk": [
@@ -598,12 +598,12 @@ const M = {
     "PreToolUse isn't selected: questions, plans and the desktop app's approvals won't reach the island",
   ],
   "claude.health.statusLineOurs": [
-    "Durum satırı Nöbetçi'nin: bağlam ve limitler adada",
-    "The status line is Nöbetçi's: context use and limits show on the island",
+    "Durum satırı Nobi'nin: bağlam ve limitler adada",
+    "The status line is Nobi's: context use and limits show on the island",
   ],
   "claude.health.statusLineForeign": [
-    "settings.json'daki durum satırı senin; Nöbetçi ona dokunmaz, limitler adada görünmez",
-    "The status line in settings.json is your own; Nöbetçi leaves it alone, so limits don't show on the island",
+    "settings.json'daki durum satırı senin; Nobi ona dokunmaz, limitler adada görünmez",
+    "The status line in settings.json is your own; Nobi leaves it alone, so limits don't show on the island",
   ],
   "claude.health.noStale": ["Eski konum girdisi yok", "No entries point to an old location"],
   "claude.health.ping": ["Pipe ping: {ms} ms", "Pipe ping: {ms} ms"],
@@ -615,21 +615,21 @@ const M = {
     "Mouse input could not be verified. Decide on high and critical risk requests in the terminal.",
   ],
   "claude.lost": [
-    "Hook'lar daha önce kuruluydu ama artık ~/.claude/settings.json'da yok — muhtemelen başka bir araç dosyayı yeniden yazdı. Nöbetçi şu an izin isteklerini göremiyor.",
-    "Your hooks were installed before but are gone from ~/.claude/settings.json — another tool probably rewrote the file. Nöbetçi can't see permission requests right now.",
+    "Hook'lar daha önce kuruluydu ama artık ~/.claude/settings.json'da yok — muhtemelen başka bir araç dosyayı yeniden yazdı. Nobi şu an izin isteklerini göremiyor.",
+    "Your hooks were installed before but are gone from ~/.claude/settings.json — another tool probably rewrote the file. Nobi can't see permission requests right now.",
   ],
   "claude.eventsTitle": ["Dinlenecek olaylar", "Events to listen to"],
   "claude.eventsDesc": [
-    "Claude Code hangi anlarda Nöbetçi'yi çağırsın. Az olay = daha az ayrıntı. Onaylar için PermissionRequest; sorular, planlar ve masaüstü uygulamasının onayları için PreToolUse şart.",
-    "Which Claude Code moments call Nöbetçi. Fewer events mean less detail. Approvals need PermissionRequest; questions, plans and the desktop app's approvals need PreToolUse.",
+    "Claude Code hangi anlarda Nobi'yi çağırsın. Az olay = daha az ayrıntı. Onaylar için PermissionRequest; sorular, planlar ve masaüstü uygulamasının onayları için PreToolUse şart.",
+    "Which Claude Code moments call Nobi. Fewer events mean less detail. Approvals need PermissionRequest; questions, plans and the desktop app's approvals need PreToolUse.",
   ],
   "claude.selectAll": ["Tümünü seç", "Select all"],
   "claude.required": ["onaylar için gerekli", "needed for approvals"],
   "claude.requiredPreTool": ["sorular, planlar ve masaüstü için gerekli", "needed for questions, plans and the desktop app"],
   "claude.noPreTool": ["PreToolUse seçili değil. ", "PreToolUse isn't selected. "],
   "claude.noPreToolText": [
-    "Claude'un soruları ve planları adada açılmaz; Claude masaüstü uygulamasındaki onaylar da Nöbetçi'ye gelmez, uygulama kendi penceresinde sorar.",
-    "Claude's questions and plans won't open on the island, and approvals in the Claude desktop app won't reach Nöbetçi — the app asks in its own dialog.",
+    "Claude'un soruları ve planları adada açılmaz; Claude masaüstü uygulamasındaki onaylar da Nobi'ye gelmez, uygulama kendi penceresinde sorar.",
+    "Claude's questions and plans won't open on the island, and approvals in the Claude desktop app won't reach Nobi — the app asks in its own dialog.",
   ],
   "claude.noPermission": ["PermissionRequest seçili değil. ", "PermissionRequest isn't selected. "],
   "claude.noPermissionText": [
@@ -646,8 +646,8 @@ const M = {
   ],
   "claude.connection": ["Bağlantı", "Connection"],
   "claude.connectionDesc": [
-    "Nöbetçi, Claude Code'un hook'ları üzerinden oturumları görür ve izin isteklerini yakalar. Nöbetçi kapalıyken hook anında çıkar; Claude Code asla beklemez.",
-    "Nöbetçi sees your sessions and catches permission requests through Claude Code's hooks. When Nöbetçi isn't running, the hook exits at once — Claude Code never waits.",
+    "Nobi, Claude Code'un hook'ları üzerinden oturumları görür ve izin isteklerini yakalar. Nobi kapalıyken hook anında çıkar; Claude Code asla beklemez.",
+    "Nobi sees your sessions and catches permission requests through Claude Code's hooks. When Nobi isn't running, the hook exits at once — Claude Code never waits.",
   ],
   "claude.btn.reinstall": ["Yeniden kur…", "Reinstall…"],
   "claude.btn.update": ["Hook'ları güncelle…", "Update hooks…"],
@@ -705,7 +705,7 @@ const M = {
   // D23 / C-25: the island's own wording, word for word.
   "guv.terminalOnly": [
     "Linux'ta bir programın sahte tıklaması gerçek tıklamadan ayırt edilemiyor; YÜKSEK ve KRİTİK istekleri terminalde onayla.",
-    "On Linux, Nöbetçi can't tell a program's fake click from a real one, so HIGH and CRITICAL requests are approved in the terminal.",
+    "On Linux, Nobi can't tell a program's fake click from a real one, so HIGH and CRITICAL requests are approved in the terminal.",
   ],
   "guv.terminalOnlyHow": [
     "Adadaki kart bu isteklerde Reddet'i ve “Terminale bırak”ı sunar (Cursor ve Claude uygulaması için “Cursor'a bırak”, “Claude'a bırak”). DÜŞÜK ve ORTA istekler adada onaylanmaya devam eder.",
@@ -782,7 +782,7 @@ const M = {
     "Bir isteği kaydedilmemiş ayarlarınla birlikte değerlendirir: kurallar, proje güveni, kapalı kategoriler ve tavan dahil. Hiçbir şey çalıştırılmaz.",
     "Scores a request against your current settings — rules, project trust, disabled categories and the ceiling included, even unsaved. Nothing is run.",
   ],
-  "tester.onlyInApp": ["Risk motoru sadece Nöbetçi içinde çalışır.", "The risk engine only runs inside Nöbetçi."],
+  "tester.onlyInApp": ["Risk motoru sadece Nobi içinde çalışır.", "The risk engine only runs inside Nobi."],
   "tester.empty": [
     "Bir komut, yol ya da URL yaz — sonuç yazdıkça burada görünür.",
     "Type a command, path or URL — the result updates as you type.",
@@ -805,8 +805,8 @@ const M = {
   "tester.tool.search": ["WebSearch (web araması)", "WebSearch (web search)"],
   "tester.ph.search": ["rust regex sözdizimi", "rust regex syntax"],
   "tester.otherNote": [
-    "Nöbetçi'nin tanımadığı araçlar hiçbir zaman kendiliğinden onaylanmaz: kurallar, güvenilir projeler ve oturum izinleri onlara izin veremez (bir kural yine de reddedebilir).",
-    "Tools Nöbetçi doesn't recognise are never approved automatically: rules, trusted projects and session grants can't allow them (a rule can still deny them).",
+    "Nobi'nin tanımadığı araçlar hiçbir zaman kendiliğinden onaylanmaz: kurallar, güvenilir projeler ve oturum izinleri onlara izin veremez (bir kural yine de reddedebilir).",
+    "Tools Nobi doesn't recognise are never approved automatically: rules, trusted projects and session grants can't allow them (a rule can still deny them).",
   ],
   "tester.noCwd": [
     "Çalışma klasörü boş: proje dışı denetimi ve proje güveni uygulanmadı. Gerçek istekler oturumun klasörüyle değerlendirilir.",
@@ -960,7 +960,7 @@ const M = {
     "Bir örnek yaz: bu kuralın eşleşip eşleşmediğini ve sonucu burada görürsün.",
     "Type a sample to see whether this rule matches and what happens.",
   ],
-  "editor.tryOnlyInApp": ["Test sadece Nöbetçi içinde çalışır.", "Testing only works inside Nöbetçi."],
+  "editor.tryOnlyInApp": ["Test sadece Nobi içinde çalışır.", "Testing only works inside Nobi."],
   "editor.whyTool": ["araç “{tool}” eşleşmiyor", "the tool “{tool}” doesn't match"],
   "editor.whyFolder": [
     "çalışma klasörü proje klasörünün içinde değil",
@@ -1192,7 +1192,7 @@ const M = {
   "snd.error": ["Hata", "Error"],
   "snd.errorDesc": ["Araç ya da yanıt hatayla bittiğinde", "A tool or reply ends with an error"],
   "snd.hoot": ["Baykuş selamı", "Owl hoot"],
-  "snd.hootDesc": ["Nöbetçi açılınca ve selamlarken", "When Nöbetçi starts and says hello"],
+  "snd.hootDesc": ["Nobi açılınca ve selamlarken", "When Nobi starts and says hello"],
   "snd.allow": ["İzin verildi", "Allowed"],
   "snd.allowDesc": ["Bir isteği onayladığında", "You approve a request"],
   "snd.deny": ["Reddedildi", "Denied"],
@@ -1247,12 +1247,12 @@ const M = {
   "hk.failed": ["Kaydedilemedi", "Couldn't register"],
   "hk.allowWarnLead": ["Dikkat: ", "Heads-up: "],
   "hk.allowWarn": [
-    "her program klavye vuruşu taklit edebilir ve Nöbetçi bunları gerçeğinden ayıramaz. Bu yüzden bu kısayol sadece DÜŞÜK riskli istekleri onaylar; ORTA, YÜKSEK ve KRİTİK için tıklaman gerekir.",
-    "any program can fake keystrokes, and Nöbetçi can't tell them from real ones. That's why this shortcut only approves LOW-risk requests — MEDIUM and above need a click.",
+    "her program klavye vuruşu taklit edebilir ve Nobi bunları gerçeğinden ayıramaz. Bu yüzden bu kısayol sadece DÜŞÜK riskli istekleri onaylar; ORTA, YÜKSEK ve KRİTİK için tıklaman gerekir.",
+    "any program can fake keystrokes, and Nobi can't tell them from real ones. That's why this shortcut only approves LOW-risk requests — MEDIUM and above need a click.",
   ],
   "hk.allowWarn@linux": [
-    "her program klavye vuruşu taklit edebilir ve Nöbetçi bunları gerçeğinden ayıramaz. Bu yüzden bu kısayol sadece DÜŞÜK riskli istekleri onaylar; ORTA için tıklaman gerekir, YÜKSEK ve KRİTİK istekler terminalde onaylanır.",
-    "any program can fake keystrokes, and Nöbetçi can't tell them from real ones. That's why this shortcut only approves LOW-risk requests: MEDIUM needs a click, and HIGH and CRITICAL ones are approved in the terminal.",
+    "her program klavye vuruşu taklit edebilir ve Nobi bunları gerçeğinden ayıramaz. Bu yüzden bu kısayol sadece DÜŞÜK riskli istekleri onaylar; ORTA için tıklaman gerekir, YÜKSEK ve KRİTİK istekler terminalde onaylanır.",
+    "any program can fake keystrokes, and Nobi can't tell them from real ones. That's why this shortcut only approves LOW-risk requests: MEDIUM needs a click, and HIGH and CRITICAL ones are approved in the terminal.",
   ],
   "hk.title": ["Kısayollar", "Shortcuts"],
   "hk.desc": [
@@ -1340,7 +1340,7 @@ const M = {
     "Gösterilmedi: bildirimler kapalı, “Onay isteği” seçili değil ya da şu an sessizsin.",
     "Not shown: notifications are off, “Approval request” isn't selected, or you're in quiet mode.",
   ],
-  "toasts.onlyInApp": ["Bildirimler sadece Nöbetçi içinde çalışır.", "Notifications only work inside Nöbetçi."],
+  "toasts.onlyInApp": ["Bildirimler sadece Nobi içinde çalışır.", "Notifications only work inside Nobi."],
   "toasts.onlyHidden": ["Sadece ada bunu göstermiyorken", "Only when the island isn't showing it"],
   "toasts.onlyHiddenHint": [
     "Ada zaten açıkken aynı şey için ayrıca bildirim gelmez.",
@@ -1366,7 +1366,7 @@ const M = {
   "hist.f.by": ["Karar veren", "Decided by"],
   "hist.f.rule": ["Kural", "Rule"],
   "hist.f.message": ["Claude'a mesaj", "Message to Claude"],
-  // No answer reached Claude Code (decision "none"): the message is Nöbetçi's note on why.
+  // No answer reached Claude Code (decision "none"): the message is Nobi's note on why.
   "hist.f.note": ["Not", "Note"],
   // C-22: a rule changed the level the risk engine found; both are shown.
   "hist.engineLevel": ["Risk motoru:", "Risk engine:"],
@@ -1449,16 +1449,16 @@ const M = {
   "hist.exportCancelled": ["Dışa aktarma iptal edildi.", "Export cancelled."],
   "hist.recording": ["Kayıt", "Recording"],
   "hist.recordingDesc": [
-    "Her izin isteğinin sonucu bu bilgisayarda, %LOCALAPPDATA%\\Nobetci\\audit.jsonl dosyasında tutulur. Hiçbir yere gönderilmez.",
-    "Every permission decision is kept on this computer in %LOCALAPPDATA%\\Nobetci\\audit.jsonl. It's never sent anywhere.",
+    "Her izin isteğinin sonucu bu bilgisayarda, %LOCALAPPDATA%\\Nobi\\audit.jsonl dosyasında tutulur. Hiçbir yere gönderilmez.",
+    "Every permission decision is kept on this computer in %LOCALAPPDATA%\\Nobi\\audit.jsonl. It's never sent anywhere.",
   ],
   "hist.recordingDesc@mac": [
-    "Her izin isteğinin sonucu bu bilgisayarda, ~/Library/Application Support/Nobetci/audit.jsonl dosyasında tutulur. Hiçbir yere gönderilmez.",
-    "Every permission decision is kept on this computer in ~/Library/Application Support/Nobetci/audit.jsonl. It's never sent anywhere.",
+    "Her izin isteğinin sonucu bu bilgisayarda, ~/Library/Application Support/Nobi/audit.jsonl dosyasında tutulur. Hiçbir yere gönderilmez.",
+    "Every permission decision is kept on this computer in ~/Library/Application Support/Nobi/audit.jsonl. It's never sent anywhere.",
   ],
   "hist.recordingDesc@linux": [
-    "Her izin isteğinin sonucu bu bilgisayarda, ~/.local/share/nobetci/audit.jsonl dosyasında tutulur. Hiçbir yere gönderilmez.",
-    "Every permission decision is kept on this computer in ~/.local/share/nobetci/audit.jsonl. It's never sent anywhere.",
+    "Her izin isteğinin sonucu bu bilgisayarda, ~/.local/share/nobi/audit.jsonl dosyasında tutulur. Hiçbir yere gönderilmez.",
+    "Every permission decision is kept on this computer in ~/.local/share/nobi/audit.jsonl. It's never sent anywhere.",
   ],
   "hist.showFile": ["Dosyayı göster", "Show file"],
   "hist.keep": ["Geçmişi kaydet", "Keep history"],
@@ -1558,12 +1558,12 @@ const M = {
   ],
   "about.resetFailed": ["Sıfırlanamadı. {why}", "Couldn't reset. {why}"],
   "about.resetUnsaved": [
-    "Şimdilik sıfırlandı: varsayılanlar Nöbetçi yeniden başlayana kadar geçerli, ama kaydedilmedi. {why}",
-    "Reset for now: the defaults are in effect until Nöbetçi restarts, but they weren't saved. {why}",
+    "Şimdilik sıfırlandı: varsayılanlar Nobi yeniden başlayana kadar geçerli, ama kaydedilmedi. {why}",
+    "Reset for now: the defaults are in effect until Nobi restarts, but they weren't saved. {why}",
   ],
   "about.importUnsaved": [
-    "Şimdilik içe aktarıldı: bu ayarlar Nöbetçi yeniden başlayana kadar geçerli, ama kaydedilmedi. {why}",
-    "Imported for now: these settings are in effect until Nöbetçi restarts, but they weren't saved. {why}",
+    "Şimdilik içe aktarıldı: bu ayarlar Nobi yeniden başlayana kadar geçerli, ama kaydedilmedi. {why}",
+    "Imported for now: these settings are in effect until Nobi restarts, but they weren't saved. {why}",
   ],
   "about.license": ["Lisans", "License"],
   "about.lic1a": [
@@ -1572,8 +1572,8 @@ const M = {
   ],
   "about.lic1b": ["'dan (MIT, © Louis Raillé) uyarlanmıştır.", " (MIT, © Louis Raillé)."],
   "about.lic2": [
-    "Baykuş, ikonlar, sentez sesler ve risk motoru Nöbetçi'ye özgüdür; Coucou'nun adı, karakteri, ikonları ve sesleri kullanılmamıştır.",
-    "The owl, icons, synthesised sounds and risk engine are Nöbetçi's own; Coucou's name, character, icons and sounds are not used.",
+    "Baykuş, ikonlar, sentez sesler ve risk motoru Nobi'ye özgüdür; Coucou'nun adı, karakteri, ikonları ve sesleri kullanılmamıştır.",
+    "The owl, icons, synthesised sounds and risk engine are Nobi's own; Coucou's name, character, icons and sounds are not used.",
   ],
   "about.heuristic": [
     "Risk analizi sezgiseldir: dikkat çekmesi gerekeni öne çıkarır ama bir sandbox değildir. DÜŞÜK “güvenli” demek değildir.",
@@ -1598,7 +1598,7 @@ const M = {
   "wz.s.health": ["Sağlık testi", "Health check"],
   "wz.s.safety": ["Güvenlik", "Safety"],
   "wz.s.done": ["Hazır", "Done"],
-  "wz.welcome.title": ["Nöbetçi'ye hoş geldin", "Welcome to Nöbetçi"],
+  "wz.welcome.title": ["Nobi'ye hoş geldin", "Welcome to Nobi"],
   "wz.welcome.tagline": [
     "Claude Code oturumlarına göz kulak olan baykuş.",
     "A watchful owl for your AI coding agents.",
@@ -1622,8 +1622,8 @@ const M = {
   "wz.welcome.lang": ["Dil · Language", "Language · Dil"],
   "wz.connect.title": ["Claude Code'a bağlan", "Connect Claude Code"],
   "wz.connect.p1": [
-    "Nöbetçi, Claude Code'un hook'larıyla çalışır: Claude Code bir şey yaptığında küçük bir relay programı çalışır ve haberi Nöbetçi'ye iletir. Nöbetçi kapalıysa relay anında çıkar — Claude Code asla beklemez.",
-    "Nöbetçi works through Claude Code's hooks: when Claude Code does something, a tiny relay passes the news to Nöbetçi. If Nöbetçi isn't running, the relay exits at once — Claude Code never waits.",
+    "Nobi, Claude Code'un hook'larıyla çalışır: Claude Code bir şey yaptığında küçük bir relay programı çalışır ve haberi Nobi'ye iletir. Nobi kapalıysa relay anında çıkar — Claude Code asla beklemez.",
+    "Nobi works through Claude Code's hooks: when Claude Code does something, a tiny relay passes the news to Nobi. If Nobi isn't running, the relay exits at once — Claude Code never waits.",
   ],
   "wz.connect.p2": [
     "Kurulum ~/.claude/settings.json dosyana birkaç satır ekler. Önce değişikliği fark olarak görürsün ve tarihli bir yedek alınır; sen onaylamadan hiçbir şey yazılmaz.",
@@ -1644,8 +1644,8 @@ const M = {
   "wz.rail.done": ["Tamam", "Done"],
   "wz.rail.skipped": ["Atlandı", "Skipped"],
   "wz.connect.noRelay": [
-    "Relay bulunamadı; Nöbetçi'yi yeniden başlatmak onu tekrar yerleştirir.",
-    "The relay is missing; restarting Nöbetçi puts it back.",
+    "Relay bulunamadı; Nobi'yi yeniden başlatmak onu tekrar yerleştirir.",
+    "The relay is missing; restarting Nobi puts it back.",
   ],
   "wz.health.title": ["Sağlık testi", "Health check"],
   "wz.health.p": [

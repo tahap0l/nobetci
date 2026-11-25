@@ -1,6 +1,6 @@
-// Linux: the few X11 questions Nöbetçi asks of the desktop.
+// Linux: the few X11 questions Nobi asks of the desktop.
 //
-// Nöbetçi runs on X11, or on XWayland under a Wayland session (`sys::use_x11`
+// Nobi runs on X11, or on XWayland under a Wayland session (`sys::use_x11`
 // picks the X11 backend), because only there can a window place itself at the
 // top of the screen and stay above the others. The same connection answers:
 //   * which window is in front, and is it full screen (full-screen quiet);
@@ -229,7 +229,7 @@ pub fn focus_within(top: c_ulong) -> bool {
 /// Gives the keyboard back from `island` to `before`, the window that had it,
 /// through the window manager. When that window is gone, the window manager's
 /// topmost other window takes it (not a panel, the desktop or a minimised
-/// window, and none of Nöbetçi's); with no window manager, the keyboard
+/// window, and none of Nobi's); with no window manager, the keyboard
 /// follows the pointer again.
 pub fn give_focus(before: Option<c_ulong>, island: c_ulong) {
     let Some(c) = Conn::open() else { return };

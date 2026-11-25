@@ -110,9 +110,9 @@ async function main() {
 
   if (!IS_TAURI) {
     // Plain browser (`npm run dev`): audio needs a gesture, and there is no Rust
-    // to feed events — `nobetci.inject({...})` in the console fakes a hook event.
+    // to feed events — `nobi.inject({...})` in the console fakes a hook event.
     document.addEventListener("click", () => Sound.resume(), { once: true });
-    (window as unknown as { nobetci: unknown }).nobetci = {
+    (window as unknown as { nobi: unknown }).nobi = {
       State,
       island,
       inject: (p: Parameters<typeof injectHook>[1]) => injectHook(island, p),

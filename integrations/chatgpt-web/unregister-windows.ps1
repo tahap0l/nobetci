@@ -3,8 +3,8 @@
 Removes the registration that register-windows.ps1 made. Windows only.
 
 .DESCRIPTION
-Deletes the browser's per-user registry key for Nobetci's ChatGPT Web bridge
-and the manifest in %LOCALAPPDATA%\Nobetci: for both Chrome and Edge, unless
+Deletes the browser's per-user registry key for Nobi's ChatGPT Web bridge
+and the manifest in %LOCALAPPDATA%\Nobi: for both Chrome and Edge, unless
 -Browser names one. The extension itself is removed in the browser, at
 chrome://extensions or edge://extensions.
 
@@ -26,8 +26,8 @@ function Say([string]$English, [string]$Turkish) {
     [regex]::Unescape($text)
 }
 
-$name = 'io.github.tahap0l.nobetci.chatgpt'
-$root = Join-Path $env:LOCALAPPDATA 'Nobetci'
+$name = 'io.github.tahap0l.nobi.chatgpt'
+$root = Join-Path $env:LOCALAPPDATA 'Nobi'
 $browsers = if ($Browser -eq 'Both') { @('Chrome', 'Edge') } else { @($Browser) }
 
 foreach ($each in $browsers) {

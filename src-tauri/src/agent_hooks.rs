@@ -2,7 +2,7 @@
 // this previews a merge in the file's own layout, backs up the original and
 // writes exactly the previewed bytes, only while the file still holds what the
 // preview was made from, so unrelated settings are never silently overwritten.
-// Removing takes out Nöbetçi's own commands and nothing else.
+// Removing takes out Nobi's own commands and nothing else.
 
 use std::path::{Path, PathBuf};
 
@@ -134,7 +134,7 @@ fn hook_is_stale(provider: Provider, event: &str, hook: &Value) -> bool {
                 != provider.events().iter().find_map(|(name, timeout)| (*name == event).then_some(*timeout)))
 }
 
-/// `list` without Nöbetçi's commands; None when none was there. A Codex group
+/// `list` without Nobi's commands; None when none was there. A Codex group
 /// loses only our commands, and goes only when nothing else was in it.
 fn strip_ours(provider: Provider, event: &str, list: &[Value]) -> Option<Vec<Value>> {
     let mut found = false;
@@ -165,7 +165,7 @@ fn strip_ours(provider: Provider, event: &str, list: &[Value]) -> Option<Vec<Val
     found.then_some(kept)
 }
 
-/// The file with Nöbetçi's entries for every event (`install`) or none. Other
+/// The file with Nobi's entries for every event (`install`) or none. Other
 /// entries stay where they are, keys keep their order, and a value that is not
 /// the shape we would write into is refused, never overwritten.
 fn merged(provider: Provider, existing: &Value, install: bool) -> Result<Value, String> {
@@ -177,9 +177,9 @@ fn merged(provider: Provider, existing: &Value, install: bool) -> Result<Value, 
         Some(_) if !install => return Ok(existing.clone()),
         Some(_) => {
             return Err(if is_tr() {
-                "hooks ayarı bir JSON nesnesi değil — Nöbetçi dokunmayacak.".into()
+                "hooks ayarı bir JSON nesnesi değil — Nobi dokunmayacak.".into()
             } else {
-                "The hooks setting isn't a JSON object — Nöbetçi won't touch it.".into()
+                "The hooks setting isn't a JSON object — Nobi won't touch it.".into()
             })
         }
     };
@@ -204,7 +204,7 @@ fn merged(provider: Provider, existing: &Value, install: bool) -> Result<Value, 
                     "timeout": timeout,
                     // Permission hooks must never silently run the tool if the
                     // relay crashes or times out: they stay fail-closed. Whenever
-                    // Nöbetçi gives no decision (closed, paused, handed back,
+                    // Nobi gives no decision (closed, paused, handed back,
                     // timed out, input it could not read) the relay answers
                     // `ask`, so Cursor asks the user itself instead of blocking.
                     "failClosed": *timeout == 120
@@ -217,9 +217,9 @@ fn merged(provider: Provider, existing: &Value, install: bool) -> Result<Value, 
                 }
                 Some(_) => {
                     return Err(if is_tr() {
-                        format!("hooks.{event} bir liste değil — Nöbetçi bu ayarı ezmeyecek.")
+                        format!("hooks.{event} bir liste değil — Nobi bu ayarı ezmeyecek.")
                     } else {
-                        format!("hooks.{event} isn't a list — Nöbetçi won't overwrite it.")
+                        format!("hooks.{event} isn't a list — Nobi won't overwrite it.")
                     });
                 }
             }
@@ -254,10 +254,10 @@ fn parse(bytes: &[u8], path: &str) -> Result<Value, String> {
     }
     match serde_json::from_slice::<Value>(text) {
         Ok(v) if v.is_object() => Ok(v),
-        Ok(_) if is_tr() => Err(format!("{path} bir JSON nesnesi değil — Nöbetçi dokunmayacak.")),
-        Ok(_) => Err(format!("{path} isn't a JSON object — Nöbetçi won't touch it.")),
-        Err(err) if is_tr() => Err(format!("{path} geçerli JSON değil ({err}) — Nöbetçi üzerine yazmayacak.")),
-        Err(err) => Err(format!("{path} isn't valid JSON ({err}) — Nöbetçi won't overwrite it.")),
+        Ok(_) if is_tr() => Err(format!("{path} bir JSON nesnesi değil — Nobi dokunmayacak.")),
+        Ok(_) => Err(format!("{path} isn't a JSON object — Nobi won't touch it.")),
+        Err(err) if is_tr() => Err(format!("{path} geçerli JSON değil ({err}) — Nobi üzerine yazmayacak.")),
+        Err(err) => Err(format!("{path} isn't valid JSON ({err}) — Nobi won't overwrite it.")),
     }
 }
 
@@ -332,7 +332,7 @@ pub fn apply(provider: Provider, install: bool, fingerprint: &str) -> Result<Opt
     hooks::apply_reviewed(fingerprint, install, &provider.settings_path())
 }
 
-/// Removes every Nöbetçi entry without a preview (the uninstaller). None when
+/// Removes every Nobi entry without a preview (the uninstaller). None when
 /// there was nothing of ours.
 pub fn remove_for_uninstall(provider: Provider) -> Result<Option<String>, String> {
     let change = prepare(provider, false)?;
@@ -402,7 +402,7 @@ mod tests {
     }
 
     #[test]
-    fn remove_only_drops_nobetci_events() {
+    fn remove_only_drops_nobi_events() {
         let installed = merged(Provider::Cursor, &json!({"hooks":{"stop":[{"command":"other"}]}}), true).unwrap();
         let removed = merged(Provider::Cursor, &installed, false).unwrap();
         assert_eq!(removed["hooks"]["stop"].as_array().unwrap().len(), 1);
@@ -412,7 +412,7 @@ mod tests {
     #[test]
     fn removal_keeps_key_order_and_foreign_commands_that_mention_the_relay() {
         let start =
-            json!({ "a": 1, "hooks": { "stop": [{ "command": "~/bin/nobetci-hook-log.sh cursor stop" }] }, "z": 2 });
+            json!({ "a": 1, "hooks": { "stop": [{ "command": "~/bin/nobi-hook-log.sh cursor stop" }] }, "z": 2 });
         let installed = merged(Provider::Cursor, &start, true).unwrap();
         let removed = merged(Provider::Cursor, &installed, false).unwrap();
         // The same text: key order included, and the look-alike command kept.
@@ -420,7 +420,7 @@ mod tests {
             serde_json::to_string(&removed).unwrap(),
             serde_json::to_string(&json!({
                 "a": 1,
-                "hooks": { "stop": [{ "command": "~/bin/nobetci-hook-log.sh cursor stop" }] },
+                "hooks": { "stop": [{ "command": "~/bin/nobi-hook-log.sh cursor stop" }] },
                 "z": 2,
                 "version": 1
             }))

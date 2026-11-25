@@ -191,7 +191,7 @@ fn rule(category: &'static str, level: Level, (label_tr, label_en): Label, tag: 
 
 // Labels a pattern and a reading of the command share, so the card shows one
 // finding however it was found.
-const L_SELF: Label = ("Nöbetçi'nin kendi dosyalarını değiştiriyor", "Changes Nöbetçi's own files");
+const L_SELF: Label = ("Nobi'nin kendi dosyalarını değiştiriyor", "Changes Nobi's own files");
 const L_DOWNLOAD_EXEC: Label =
     ("İnternetten indirilen kodu doğrudan çalıştırıyor", "Runs code downloaded from the internet");
 const L_DOWNLOAD_RUN: Label =
@@ -224,13 +224,11 @@ const L_HIDDEN: Label = (
     "Görünmez veya yön değiştiren karakter içeriyor (gizleme)",
     "Contains invisible or direction-changing characters (obfuscation)",
 );
-const L_UNHOOK: Label = (
-    "Nöbetçi'nin hook'larını kaldırıyor (ajanlar ona sormayı bırakır)",
-    "Removes Nöbetçi's hooks (agents stop asking it)",
-);
+const L_UNHOOK: Label =
+    ("Nobi'nin hook'larını kaldırıyor (ajanlar ona sormayı bırakır)", "Removes Nobi's hooks (agents stop asking it)");
 const L_FAKE_INPUT: Label = (
-    "Başka pencerelere sahte tıklama veya tuş gönderebilir (Nöbetçi'ye tıklayabilir, terminale yazabilir)",
-    "Can send fake clicks or keystrokes to other windows (could click Nöbetçi or type into the terminal)",
+    "Başka pencerelere sahte tıklama veya tuş gönderebilir (Nobi'ye tıklayabilir, terminale yazabilir)",
+    "Can send fake clicks or keystrokes to other windows (could click Nobi or type into the terminal)",
 );
 
 /// Categories a user has switched off in Settings.
@@ -320,12 +318,12 @@ use Level::{Critical, High, Low, Medium};
 /// delete — `/home/dev` or `C:\Windows`, not `/home/dev/project`.
 const ROOTISH: &str = r#"["']?(/|/\*|~|~/|~/\*|~/\.\*|~[a-z_][\w-]*/?|\$home"?/?\*?|\$\{home\}"?/?\*?|/[a-z]/users/[^/\s"';&|]+/?\*?|/mnt/[a-z]/users/[^/\s"';&|]+/?\*?|%userprofile%\\?|\$env:userprofile\\?|[a-z]:[\\/]?\*?|/c/?|/mnt/c/?|/(bin|boot|dev|etc|home|lib|lib64|opt|proc|root|sbin|srv|sys|usr|var|users|system|library|applications|private)/?\*?|/(home|users)/[^/\s"';&|]+/?\*?|[a-z]:[\\/](windows|users|program files( \(x86\))?|programdata)([\\/][^\\/\s"';&|]+)?[\\/]?\*?)["']?(\s|$|;|&|\|)"#;
 
-/// Nöbetçi's folders and installed programs on Windows, macOS and Linux, in the
-/// spellings a command or a path may use: `%APPDATA%\Nobetci`,
-/// `~/Library/Application Support/Nobetci`, `/Applications/Nobetci.app`,
-/// `~/.config/nobetci`, `$XDG_DATA_HOME/nobetci`, `~/.local/state/nobetci`,
-/// `/usr/bin/nobetci`.
-const SELF_DIRS: &str = r#"(?:(?:^|[\\/\s"'=:(])(?:appdata[\\/]+(?:local|roaming)|%(?:local)?appdata%|\$env:(?:local)?appdata|\$\{?(?:local)?appdata\}?|program files(?: \(x86\))?|library[\\/]+application(?: |\\ |%20)support|\.config|\$\{?xdg_(?:config|data|state)_home\}?|\.local[\\/]+(?:share|state)|/usr(?:/local)?/(?:bin|lib|lib64|libexec)|/opt)[\\/]+nobetci(?:-hook)?(?:\.exe)?|(?:^|[\\/\s"'=:(])applications[\\/]+nobetci\.app|(?:^|[\\/\s"'=:(])tmp[\\/]+nobetci-\d+|\[environment\]::getfolderpath\(\s*['"](?:local)?applicationdata['"]\s*\)\s*\+\s*['"][\\/]+nobetci|(?:join-path|\[(?:system\.)?io\.path\]::combine\()\s*(?:-path\s+)?["']?(?:\$env:(?:local)?appdata|%(?:local)?appdata%|\[environment\]::getfolderpath\(\s*['"](?:local)?applicationdata['"]\s*\))["']?\s*,?\s*(?:-childpath\s+)?["']?nobetci)(?:[\\/\s"',;&|)]|$)"#;
+/// Nobi's folders and installed programs on Windows, macOS and Linux, in the
+/// spellings a command or a path may use: `%APPDATA%\Nobi`,
+/// `~/Library/Application Support/Nobi`, `/Applications/Nobi.app`,
+/// `~/.config/nobi`, `$XDG_DATA_HOME/nobi`, `~/.local/state/nobi`,
+/// `/usr/bin/nobi`.
+const SELF_DIRS: &str = r#"(?:(?:^|[\\/\s"'=:(])(?:appdata[\\/]+(?:local|roaming)|%(?:local)?appdata%|\$env:(?:local)?appdata|\$\{?(?:local)?appdata\}?|program files(?: \(x86\))?|library[\\/]+application(?: |\\ |%20)support|\.config|\$\{?xdg_(?:config|data|state)_home\}?|\.local[\\/]+(?:share|state)|/usr(?:/local)?/(?:bin|lib|lib64|libexec)|/opt)[\\/]+(?:nobi|nobetci)(?:-hook)?(?:\.exe)?|(?:^|[\\/\s"'=:(])applications[\\/]+(?:nobi|nobetci)\.app|(?:^|[\\/\s"'=:(])tmp[\\/]+(?:nobi|nobetci)-\d+|\[environment\]::getfolderpath\(\s*['"](?:local)?applicationdata['"]\s*\)\s*\+\s*['"][\\/]+(?:nobi|nobetci)|(?:join-path|\[(?:system\.)?io\.path\]::combine\()\s*(?:-path\s+)?["']?(?:\$env:(?:local)?appdata|%(?:local)?appdata%|\[environment\]::getfolderpath\(\s*['"](?:local)?applicationdata['"]\s*\))["']?\s*,?\s*(?:-childpath\s+)?["']?(?:nobi|nobetci))(?:[\\/\s"',;&|)]|$)"#;
 
 /// Ways of putting something in a file that a pattern can see in front of the
 /// path; the reading of the command knows many more.
@@ -342,9 +340,9 @@ static COMMAND_RULES: LazyLock<Vec<Rule>> = LazyLock::new(|| {
     vec![
         // An agent that rewrites the watcher's settings or swaps its relay has
         // stepped around every rule here. This pattern sees a writing verb in
-        // front of one of Nöbetçi's folders; the reading of the command sees
+        // front of one of Nobi's folders; the reading of the command sees
         // every other way of writing there (`self_touched`).
-        rule("nobetci_self", Critical, L_SELF, Tag::None, &format!(r"{WRITE_VERBS}[^\n;&|]*{SELF_DIRS}")),
+        rule("nobi_self", Critical, L_SELF, Tag::None, &format!(r"{WRITE_VERBS}[^\n;&|]*{SELF_DIRS}")),
         // The uninstaller's command, however it is run: through a pipe into a
         // shell, a variable, `xargs`, `$(…)`, a git option, `script`, `tmux`.
         // The reading of the command (`shell::unhooks`) sees the plain ways;
@@ -352,14 +350,14 @@ static COMMAND_RULES: LazyLock<Vec<Rule>> = LazyLock::new(|| {
         // text that is only printed, searched or recorded — `echo`, `grep`,
         // `git commit -m`, `gh pr create --body` — and nothing in the line
         // runs what it is handed (`shell::only_mentions`).
-        rule("nobetci_unhook", Critical, L_UNHOOK, Tag::None, r"(?s:nobetci.*--remove-hooks|--remove-hooks.*nobetci)")
+        rule("nobi_unhook", Critical, L_UNHOOK, Tag::None, r"(?s:\b(?:nobi|nobetci).*--remove-hooks|--remove-hooks.*\b(?:nobi|nobetci))")
             .except(mentions_unhook),
         rule(
-            "nobetci_kill",
+            "nobi_kill",
             High,
-            ("Nöbetçi'yi kapatmaya veya kaldırmaya çalışıyor", "Tries to stop or uninstall Nöbetçi"),
+            ("Nobi'yi kapatmaya veya kaldırmaya çalışıyor", "Tries to stop or uninstall Nobi"),
             Tag::None,
-            r"(taskkill\b|tskill\b|stop-process\b|\bkill(all)?\b|\bpkill\b|\bxkill\b|\blaunchctl\s+(bootout|unload|remove|kill|stop|disable)\b|\bsystemctl\s+(--user\s+)?(stop|kill|disable|mask|restart)\b)[^\n]*nobetci|nobetci[^\n|]*\|\s*(stop-process|kill)\b|\bwmic\b[^\n]*nobetci[^\n]*\b(delete|terminate)\b|\bosascript\b[^\n]*(\bquit\b[^\n]*nobetci|nobetci[^\n]*\bquit\b)|\b(apt|apt-get|aptitude|dpkg|dnf|yum|zypper|rpm|pacman|snap|flatpak|brew|port|winget|choco|scoop)\b[^\n]*\s(remove|purge|uninstall|erase|autoremove|-r|-p|-e|-rn?s?)\b[^\n]*nobetci|nobetci[\\/]+uninstall(\.exe)?\b|remove-appxpackage\b[^\n]*nobetci",
+            r"(taskkill\b|tskill\b|stop-process\b|\bkill(all)?\b|\bpkill\b|\bxkill\b|\blaunchctl\s+(bootout|unload|remove|kill|stop|disable)\b|\bsystemctl\s+(--user\s+)?(stop|kill|disable|mask|restart)\b)[^\n]*\b(?:nobi|nobetci)\b|\b(?:nobi|nobetci)\b[^\n|]*\|\s*(stop-process|kill)\b|\bwmic\b[^\n]*\b(?:nobi|nobetci)\b[^\n]*\b(delete|terminate)\b|\bosascript\b[^\n]*(\bquit\b[^\n]*\b(?:nobi|nobetci)\b|\b(?:nobi|nobetci)\b[^\n]*\bquit\b)|\b(apt|apt-get|aptitude|dpkg|dnf|yum|zypper|rpm|pacman|snap|flatpak|brew|port|winget|choco|scoop)\b[^\n]*\s(remove|purge|uninstall|erase|autoremove|-r|-p|-e|-rn?s?)\b[^\n]*\b(?:nobi|nobetci)\b|\b(?:nobi|nobetci)\b[\\/]+uninstall(\.exe)?\b|remove-appxpackage\b[^\n]*\b(?:nobi|nobetci)\b",
         ),
         // Critical — hard or impossible to undo, or a classic attack shape.
         rule(
@@ -778,11 +776,11 @@ const DETECTORS: &[Detector] = &[
     Detector { category: "shutdown", level: High, label: L_SHUTDOWN, find: shell::powers_off },
     Detector { category: "recursive_delete", level: High, label: L_RECURSIVE, find: shell::runs_rimraf },
     Detector { category: "privilege", level: High, label: L_PRIVILEGE, find: shell::elevates },
-    // The uninstaller's command, run — not mentioned: it takes Nöbetçi out of
+    // The uninstaller's command, run — not mentioned: it takes Nobi out of
     // Claude Code's, Codex's and Cursor's hooks without a preview.
-    Detector { category: "nobetci_unhook", level: Critical, label: L_UNHOOK, find: shell::unhooks },
+    Detector { category: "nobi_unhook", level: Critical, label: L_UNHOOK, find: shell::unhooks },
     // xdotool, ydotool, xte, `xinput float`, XTest or uinput in a script: they
-    // can click Nöbetçi's Allow or type into the terminal.
+    // can click Nobi's Allow or type into the terminal.
     Detector { category: "synthetic_input", level: High, label: L_FAKE_INPUT, find: shell::fakes_input },
 ];
 
@@ -959,7 +957,7 @@ fn segment_and_cut(text: &str, at: Range<usize>) -> (&str, bool) {
     (&text[start..end], cut)
 }
 
-/// A line that names Nöbetçi and its uninstall option only in text it
+/// A line that names Nobi and its uninstall option only in text it
 /// prints, searches or records.
 fn mentions_unhook(text: &str, _at: Range<usize>) -> bool {
     shell::only_mentions(text, "--remove-hooks")
@@ -1124,17 +1122,17 @@ fn names_a_template(text: &str, at: Range<usize>) -> bool {
 static WRITE_PATH_RULES: LazyLock<Vec<Rule>> = LazyLock::new(|| {
     vec![
         // Its folders and installed programs…
-        rule("nobetci_self", Critical, L_SELF, Tag::None, SELF_DIRS),
+        rule("nobi_self", Critical, L_SELF, Tag::None, SELF_DIRS),
         // …and the relay's name, or the app's, wherever it lies.
         rule(
-            "nobetci_self",
+            "nobi_self",
             Critical,
             L_SELF,
             Tag::None,
             // The socket the relay reaches it by, wherever it fell back to
-            // (`/tmp/nobetci-1000/`, macOS's `$TMPDIR`): without it the relay
+            // (`/tmp/nobi-1000/`, macOS's `$TMPDIR`): without it the relay
             // finds no app and every agent stops asking.
-            r"(^|[\\/])nobetci-hook(\.exe)?[\\/]?$|(^|[\\/])nobetci[^\\/]*\.appimage$|(^|[\\/])nobetci\.sock$",
+            r"(^|[\\/])(?:nobi|nobetci)-hook(\.exe)?[\\/]?$|(^|[\\/])(?:nobi|nobetci)[^\\/]*\.appimage$|(^|[\\/])(?:nobi|nobetci)\.sock$",
         )
         .anywhere(),
         rule(
@@ -1827,7 +1825,7 @@ struct Place<'a> {
 /// path may stand for — a Windows alias of it, a pattern, an 8.3 name
 /// (`variants`). `by_place` limits the rules to those that know a file by its
 /// folder: for a file copied into a folder under its own name, which may be
-/// the relay's name without being the relay (`cp target/…/nobetci-hook dist/`).
+/// the relay's name without being the relay (`cp target/…/nobi-hook dist/`).
 fn check_write(raw: &str, path: &str, at: Place, by_place: bool, off: &Disabled, found: &mut Found) {
     if path.is_empty() {
         return;
@@ -1875,8 +1873,8 @@ fn check_derived(raw: &str, name: &str, at: Place, off: &Disabled, found: &mut F
 /// an archive unpacked there, a folder's contents copied in (`wide`), the
 /// folder made, replaced, removed or moved away as a whole: any file such a
 /// folder holds. Claude Code's settings in `.claude`, a hook in `.git/hooks`,
-/// Nöbetçi's own files, and the protected places further below it (`~/.config`
-/// holds Nöbetçi's settings; the home folder, everyone's). Files poured into
+/// Nobi's own files, and the protected places further below it (`~/.config`
+/// holds Nobi's settings; the home folder, everyone's). Files poured into
 /// the root of the system or of a drive may land in its system folders.
 fn check_receives(raw: &str, folder: &str, at: Place, wide: bool, off: &Disabled, found: &mut Found) {
     let base = folder.trim_end_matches(['/', '\\']);
@@ -1898,7 +1896,7 @@ fn check_receives(raw: &str, folder: &str, at: Place, wide: bool, off: &Disabled
 }
 
 /// Protected files in the home folder: every agent's settings and hooks,
-/// Nöbetçi's own files on each system, startup files and keys.
+/// Nobi's own files on each system, startup files and keys.
 const IN_HOME: &[&str] = &[
     ".claude/settings.json",
     ".claude/settings.local.json",
@@ -1906,22 +1904,22 @@ const IN_HOME: &[&str] = &[
     ".codex/hooks.json",
     ".codex/config.toml",
     ".cursor/hooks.json",
-    ".config/nobetci/settings.json",
-    ".local/share/nobetci/bin/nobetci-hook",
-    ".local/state/nobetci/nobetci.sock",
+    ".config/nobi/settings.json",
+    ".local/share/nobi/bin/nobi-hook",
+    ".local/state/nobi/nobi.sock",
     ".ssh/authorized_keys",
     ".bashrc",
     ".zshrc",
     ".profile",
     ".config/autostart/x.desktop",
-    "Library/Application Support/Nobetci/settings.json",
+    "Library/Application Support/Nobi/settings.json",
     "Library/LaunchAgents/x.plist",
-    "AppData/Roaming/Nobetci/settings.json",
-    "AppData/Local/Nobetci/bin/nobetci-hook.exe",
+    "AppData/Roaming/Nobi/settings.json",
+    "AppData/Local/Nobi/bin/nobi-hook.exe",
 ];
 
 /// The protected files of the home folder (IN_HOME) that lie below `folder`:
-/// all of them below `/` or `/home`, Nöbetçi's below `~/.config`.
+/// all of them below `/` or `/home`, Nobi's below `~/.config`.
 fn protected_below(folder: &str, home: &str) -> Vec<String> {
     let f = norm(folder);
     let h = resolve("", home);
@@ -1968,7 +1966,7 @@ fn swept(start: &str, home: &str) -> Vec<String> {
 
 /// Windows spellings the file system reads as another name: the default data/// Windows spellings the file system reads as another name: the default data
 /// stream (`settings.json::$DATA`) and trailing dots and spaces
-/// (`Nobetci.\settings.json`, `settings.json.`). The path as Windows reads it,
+/// (`Nobi.\settings.json`, `settings.json.`). The path as Windows reads it,
 /// when that differs. Elsewhere these are other files; reading them as these
 /// only ever adds a finding.
 fn windows_alias(path: &str) -> Option<String> {
@@ -2026,6 +2024,12 @@ const PLACE_NAMES: &[&str] = &[
     ".local",
     "share",
     "state",
+    "nobi",
+    "nobi-hook",
+    "nobi-hook.exe",
+    "nobi.exe",
+    "nobi.app",
+    // The names before 3.0 (Nöbetçi), until an old install is gone.
     "nobetci",
     "nobetci-hook",
     "nobetci-hook.exe",
@@ -2425,6 +2429,10 @@ const TAIL_FILES: &[&str] = &[
     "config.toml",
     "mcp.json",
     "authorized_keys",
+    "nobi-hook",
+    "nobi-hook.exe",
+    "nobi.exe",
+    "nobi.sock",
     "nobetci-hook",
     "nobetci-hook.exe",
     "nobetci.exe",
@@ -2465,7 +2473,7 @@ fn command_findings(cmd: &str, dialect: shell::Dialect, at: Place, off: &Disable
     // Where it writes meets the same rules as the Write tool: `cd ~/.claude`
     // then `> settings.json` is a write to Claude Code's settings, and the
     // shell's `~/../../etc` is /etc. A change of permissions only matters for
-    // Nöbetçi's own files (`chmod -x` on its relay).
+    // Nobi's own files (`chmod -x` on its relay).
     let (writes, lost) = shell::writes(&pipes, cwd);
     found.unread |= lost;
     for w in writes {
@@ -2477,7 +2485,7 @@ fn command_findings(cmd: &str, dialect: shell::Dialect, at: Place, off: &Disable
         let path = leads_to(&w.path, home);
         match w.how {
             shell::How::Meta => {
-                let own = WRITE_PATH_RULES.iter().filter(|r| r.category == "nobetci_self");
+                let own = WRITE_PATH_RULES.iter().filter(|r| r.category == "nobi_self");
                 scan_path(own, &w.raw, &path, off, found);
             }
             shell::How::Content => check_write(&w.raw, &path, at, false, off, found),
@@ -2531,24 +2539,20 @@ fn command_findings(cmd: &str, dialect: shell::Dialect, at: Place, off: &Disable
         }
     }
     // A program that is neither a known reader nor a known writer, handed one
-    // of Nöbetçi's paths, may well be writing there.
+    // of Nobi's paths, may well be writing there.
     let protected = |p: &str| SELF_TOUCH.is_match(p);
     if let Some(text) = shell::unknown_touch(&pipes, cwd, &protected) {
         let label = i18n::pick(L_SELF.1, L_SELF.0);
-        found.add(
-            Finding { category: "nobetci_self", level: Critical, label, excerpt: excerpt(&text) },
-            Tag::None,
-            off,
-        );
+        found.add(Finding { category: "nobi_self", level: Critical, label, excerpt: excerpt(&text) }, Tag::None, off);
     }
 }
 
-/// Nöbetçi's folders and programs as a program's argument. The relay counts by
-/// path (`…/nobetci-hook`), not as a bare word: `cargo test -p nobetci-hook`
+/// Nobi's folders and programs as a program's argument. The relay counts by
+/// path (`…/nobi-hook`), not as a bare word: `cargo test -p nobi-hook`
 /// builds it, it does not touch the installed one.
 static SELF_TOUCH: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(&format!(
-        r"(?i){SELF_DIRS}|[\\/]nobetci-hook(\.exe)?$|(^|[\\/])nobetci[^\\/\s]*\.appimage$|[\\/]nobetci\.sock$"
+        r"(?i){SELF_DIRS}|[\\/](?:nobi|nobetci)-hook(\.exe)?$|(^|[\\/])(?:nobi|nobetci)[^\\/\s]*\.appimage$|[\\/](?:nobi|nobetci)\.sock$"
     ))
     .expect("bad pattern")
 });
@@ -2918,14 +2922,13 @@ enum PathUse {
     /// Writes them (`write_file`, `download_file`, `take_screenshot`).
     Write,
     /// Says neither: read as reads, and as writes where a write would take
-    /// Nöbetçi or an agent's settings out of the loop.
+    /// Nobi or an agent's settings out of the loop.
     Unknown,
 }
 
 /// Rules a path handed to a tool that names no verb is checked against as a
 /// write: the places that switch the watchers off or run code at startup.
-const GUARDED: &[&str] =
-    &["nobetci_self", "claude_settings", "claude_hooks", "agent_hooks", "shell_profile", "git_hooks"];
+const GUARDED: &[&str] = &["nobi_self", "claude_settings", "claude_hooks", "agent_hooks", "shell_profile", "git_hooks"];
 
 fn path_use(tool: &str, level: Level) -> PathUse {
     let words = action_words(tool);
@@ -3610,29 +3613,34 @@ mod tests {
     }
 
     #[test]
-    fn nobetci_guards_itself() {
-        assert_eq!(cmd(r"Remove-Item $env:LOCALAPPDATA\Nobetci\bin\nobetci-hook.exe"), Critical);
+    fn nobi_guards_itself() {
+        assert_eq!(cmd(r"Remove-Item $env:LOCALAPPDATA\Nobi\bin\nobi-hook.exe"), Critical);
+        assert_eq!(cmd(r"copy evil.exe %LOCALAPPDATA%\Nobi\bin\nobi-hook.exe"), Critical);
+        assert_eq!(cmd(r#"echo {} > "C:\Users\dev\AppData\Roaming\Nobi\settings.json""#), Critical);
+        assert_eq!(cmd("taskkill /IM nobi.exe /F"), High);
+        // The old name's files stay guarded while an old install may linger.
         assert_eq!(cmd(r"copy evil.exe %LOCALAPPDATA%\Nobetci\bin\nobetci-hook.exe"), Critical);
-        assert_eq!(cmd(r#"echo {} > "C:\Users\dev\AppData\Roaming\Nobetci\settings.json""#), Critical);
         assert_eq!(cmd("taskkill /IM nobetci.exe /F"), High);
-        assert_eq!(write(r"C:\Users\dev\AppData\Roaming\Nobetci\settings.json", "{}"), Critical);
+        // A word that only starts like the name is not the name.
+        assert!(cmd("pkill -f nobility-server") < High);
+        assert_eq!(write(r"C:\Users\dev\AppData\Roaming\Nobi\settings.json", "{}"), Critical);
         // Reading its log is fine.
-        assert!(cmd(r"type %LOCALAPPDATA%\Nobetci\nobetci.log") < High);
+        assert!(cmd(r"type %LOCALAPPDATA%\Nobi\nobi.log") < High);
     }
 
     #[test]
-    fn nobetci_guards_itself_on_macos() {
-        let support = "/Users/dev/Library/Application Support/Nobetci";
-        assert_eq!(cmd(&format!("cp evil '{support}/bin/nobetci-hook'")), Critical);
-        assert_eq!(cmd(r"rm ~/Library/Application\ Support/Nobetci/settings.json"), Critical);
+    fn nobi_guards_itself_on_macos() {
+        let support = "/Users/dev/Library/Application Support/Nobi";
+        assert_eq!(cmd(&format!("cp evil '{support}/bin/nobi-hook'")), Critical);
+        assert_eq!(cmd(r"rm ~/Library/Application\ Support/Nobi/settings.json"), Critical);
         assert_eq!(cmd(&format!("echo '{{}}' > \"{support}/settings.json\"")), Critical);
-        assert_eq!(cmd("chmod -x ~/Library/Application\\ Support/Nobetci/bin/nobetci-hook"), Critical);
+        assert_eq!(cmd("chmod -x ~/Library/Application\\ Support/Nobi/bin/nobi-hook"), Critical);
         assert_eq!(write(&format!("{support}/settings.json"), "{}"), Critical);
-        assert_eq!(cmd("killall Nobetci"), High);
-        assert_eq!(cmd("osascript -e 'quit app \"Nobetci\"'"), High);
-        assert_eq!(cmd("osascript -e 'tell application \"Nobetci\" to quit'"), High);
+        assert_eq!(cmd("killall Nobi"), High);
+        assert_eq!(cmd("osascript -e 'quit app \"Nobi\"'"), High);
+        assert_eq!(cmd("osascript -e 'tell application \"Nobi\" to quit'"), High);
         // Reading its log is fine.
-        assert!(cmd(&format!("tail -n 50 '{support}/nobetci.log'")) < High);
+        assert!(cmd(&format!("tail -n 50 '{support}/nobi.log'")) < High);
     }
 
     #[test]
@@ -3696,8 +3704,8 @@ mod tests {
             "ls -la ~/Library/LaunchAgents",
             "cat ~/Library/LaunchAgents/com.example.agent.plist",
             "grep -rn \"login item\" docs",
-            // Nöbetçi's own build output is not its installed relay.
-            "cp target/release/nobetci-hook dist/",
+            // Nobi's own build output is not its installed relay.
+            "cp target/release/nobi-hook dist/",
             // The word "halt" and inspecting extended attributes are harmless.
             "vagrant halt",
             "git commit -m \"halt on first error\"",
@@ -3976,7 +3984,7 @@ mod tests {
         assert_eq!(resolve(p, "~/notes.txt"), "~/notes.txt");
         assert_eq!(resolve(p, "dist/"), "/home/dev/project/dist/");
         assert_eq!(resolve(r"C:\Users\dev\project", r"..\x.txt"), "C:/Users/dev/x.txt");
-        assert_eq!(resolve(p, r"%APPDATA%\Nobetci\settings.json"), "%APPDATA%/Nobetci/settings.json");
+        assert_eq!(resolve(p, r"%APPDATA%\Nobi\settings.json"), "%APPDATA%/Nobi/settings.json");
         assert_eq!(resolve("", "a/../../b"), "../b");
         assert_eq!(resolve("~/.claude", "settings.json"), "~/.claude/settings.json");
         // Places: a home that is known, and roots that cannot be placed.
@@ -4222,7 +4230,7 @@ mod tests {
             (r"C:\Users\dev", Some(r"C:\Users\dev\claude-config")),
         );
         assert_eq!(windows.level, Critical);
-        // The variable by name means that folder, whatever Nöbetçi's own environment says.
+        // The variable by name means that folder, whatever Nobi's own environment says.
         assert_eq!(bash("echo '{}' > \"$CLAUDE_CONFIG_DIR/settings.json\"", None), Critical);
         assert_eq!(bash("echo '{}' > ${CLAUDE_CONFIG_DIR}/settings.local.json", None), Critical);
         assert_eq!(write("$CLAUDE_CONFIG_DIR/settings.json", None), Critical);
