@@ -857,7 +857,7 @@ pub enum How {
     Content,
     /// Puts content there under the name of what it copies: `cp settings.json
     /// ~/.claude/` writes `~/.claude/settings.json`. The name may be the
-    /// relay's without the file being it (`cp target/…/nobetci-hook dist/`).
+    /// relay's without the file being it (`cp target/…/nobi-hook dist/`).
     Named,
     /// Changes only its permissions or attributes.
     Meta,
@@ -1228,7 +1228,7 @@ const KEPT_FOLDERS: &[&str] = &[
     ".docker",
     ".config",
     "autostart",
-    "nobetci",
+    "nobi",
     "bin",
     "launchagents",
     "launchdaemons",
@@ -1398,7 +1398,7 @@ fn quoted_paths(code: &str) -> Vec<String> {
 
 /// A protected place that code names by its parts rather than as one path:
 /// `os.path.join(home, '.claude', 'settings.json')`,
-/// `Path.home() / '.config' / 'nobetci'`, `Join-Path $env:APPDATA 'Nobetci'`.
+/// `Path.home() / '.config' / 'nobi'`, `Join-Path $env:APPDATA 'Nobi'`.
 /// Spelled out the way the path rules know it.
 fn parts_paths(code: &str) -> Vec<String> {
     let lower = code.to_lowercase();
@@ -1411,8 +1411,8 @@ fn parts_paths(code: &str) -> Vec<String> {
         v.push("~/.codex/hooks.json".to_string());
     }
     let homes = [".config", ".local", "application support", "appdata", "applicationdata", "xdg_"];
-    if has("nobetci") && homes.iter().any(|h| has(h)) {
-        v.push("~/.config/nobetci/settings.json".to_string());
+    if has("nobi") && homes.iter().any(|h| has(h)) {
+        v.push("~/.config/nobi/settings.json".to_string());
     }
     v
 }
@@ -1733,7 +1733,7 @@ fn written_by(s: &Simple, cmd: Option<&Cmd>) -> Vec<(String, How)> {
 // ── Variables ─────────────────────────────────────────────────────────────────
 
 /// Variables earlier commands set: `D=~/.claude`, `export D=$HOME/.claude`,
-/// PowerShell's `$D = "$env:APPDATA\Nobetci"`. A value that grows past
+/// PowerShell's `$D = "$env:APPDATA\Nobi"`. A value that grows past
 /// MAX_VALUE (`A=$A$A` again and again) is forgotten, not followed.
 #[derive(Default)]
 struct Vars(std::collections::HashMap<String, String>);
@@ -2427,7 +2427,7 @@ fn writes_known(cmd: &Cmd) -> bool {
 /// hang on a fixed list of verbs.
 pub fn unknown_touch(pipes: &[Pipeline], cwd: &str, protected: &dyn Fn(&str) -> bool) -> Option<String> {
     // A PowerShell assignment names the place for what follows it: `$p =
-    // "$env:APPDATA\Nobetci\settings.json"`, `$w = New-Object IO.StreamWriter
+    // "$env:APPDATA\Nobi\settings.json"`, `$w = New-Object IO.StreamWriter
     // "…"`. However the value is used later, a protected place in it counts.
     for s in pipes.iter().flat_map(|p| &p.stages) {
         let Some(first) = s.words.first().filter(|w| w.starts_with('$')) else { continue };
@@ -2853,11 +2853,11 @@ fn only_prints(c: &Cmd) -> bool {
     }
 }
 
-/// Runs Nöbetçi's uninstall command: `--remove-hooks` — the word itself, its
+/// Runs Nobi's uninstall command: `--remove-hooks` — the word itself, its
 /// quoting taken off (`--remove-ho''oks`), a variable put in — handed to any
 /// program but one that only prints, searches or records text (`only_prints`):
 /// a launcher, a pattern, a variable, `find -exec {}`, `xargs -I % %`, `cargo
-/// run`, all may start Nöbetçi. Or both words in a script's code. A message
+/// run`, all may start Nobi. Or both words in a script's code. A message
 /// that mentions it is one word, not the option (`git commit -m "… --remove-hooks …"`).
 /// risk.rs keeps the plain-text rule beside it for every way of running it the
 /// reading cannot follow (`only_mentions`).
@@ -2868,7 +2868,7 @@ pub fn unhooks(pipes: &[Pipeline]) -> Option<String> {
         }
         code_of(s, c).is_some_and(|code| {
             let code = code.to_lowercase();
-            code.contains("--remove-hooks") && code.contains("nobetci")
+            code.contains("--remove-hooks") && code.contains("nobi")
         })
     })
 }
@@ -3296,7 +3296,7 @@ fn keeps_fake_input(s: &Simple, c: &Cmd) -> bool {
 
 /// Starts a program that fakes input into other windows — or code that does,
 /// or lets one in (`xinput float`, `chmod` on /dev/uinput), or puts such code
-/// in a file. Such a program can click Nöbetçi's Allow or type into the
+/// in a file. Such a program can click Nobi's Allow or type into the
 /// terminal. Its name in a message, a search or `--help` is not running it.
 pub fn fakes_input(pipes: &[Pipeline]) -> Option<String> {
     first(pipes, |s, c| {
@@ -3444,8 +3444,8 @@ pub struct Sweep {
 }
 
 /// Every `find` that removes what it finds, with what it looks for:
-/// `find ~/.config -name settings.json -path '*nobetci*' -delete` takes
-/// Nöbetçi's settings without naming the folder.
+/// `find ~/.config -name settings.json -path '*nobi*' -delete` takes
+/// Nobi's settings without naming the folder.
 pub fn sweeps(pipes: &[Pipeline], cwd: &str) -> Vec<Sweep> {
     const REMOVERS: &[&str] = &["rm", "shred", "unlink", "srm", "trash", "trash-put"];
     let mut out = Vec::new();
@@ -3939,10 +3939,9 @@ mod tests {
 
     #[test]
     fn powershell_quotes_and_escapes() {
-        let p =
-            parse(r#"Set-Content -Path $env:APPDATA\Nobetci\a.json -Value 'it''s'; echo "a`"b""#, Dialect::PowerShell);
+        let p = parse(r#"Set-Content -Path $env:APPDATA\Nobi\a.json -Value 'it''s'; echo "a`"b""#, Dialect::PowerShell);
         let all: Vec<Vec<String>> = p.into_iter().flat_map(|p| p.stages).map(|s| s.words).collect();
-        assert_eq!(all[0], vec!["Set-Content", "-Path", r"$env:APPDATA\Nobetci\a.json", "-Value", "it's"]);
+        assert_eq!(all[0], vec!["Set-Content", "-Path", r"$env:APPDATA\Nobi\a.json", "-Value", "it's"]);
         assert_eq!(all[1], vec!["echo", "a\"b"]);
     }
 
@@ -4008,7 +4007,7 @@ mod tests {
         assert!(has("cp -t ~/.claude /tmp/settings.json", "~/.claude/settings.json", How::Named));
         assert!(has("install -m 644 /tmp/settings.json ~/.claude/", "~/.claude/settings.json", How::Named));
         assert!(has("cp .bashrc .zshrc ~/", "~/.zshrc", How::Named));
-        assert!(has("rsync -a /tmp/x/ ~/.config/nobetci/", "~/.config/nobetci/", How::Into));
+        assert!(has("rsync -a /tmp/x/ ~/.config/nobi/", "~/.config/nobi/", How::Into));
         assert!(has("cp -r cfg/. ~/.claude/", "~/.claude/", How::Into));
         assert!(has("tar xf cfg.tar -C ~/.claude", "~/.claude", How::Into));
         assert!(has("unzip -o cfg.zip -d ~/.claude", "~/.claude", How::Into));
@@ -4063,7 +4062,7 @@ mod tests {
         for line in ["key ctrl+v", "mousemove 1 2 click 1", "search --name x windowactivate", "script.xdo", "-"] {
             assert!(acts(line), "{line}");
         }
-        for line in ["getwindowfocus -f", "search --name Nobetci", "getmouselocation --shell", "", "--version"] {
+        for line in ["getwindowfocus -f", "search --name Nobi", "getmouselocation --shell", "", "--version"] {
             assert!(!acts(line), "{line}");
         }
     }

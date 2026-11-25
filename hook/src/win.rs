@@ -1,7 +1,7 @@
 //! The little bit of Win32 the relay needs: who we are, who is on the other end
 //! of the pipe, and the parent-process chain.
 //!
-//! Named pipes live in a machine-wide namespace, so `\\.\pipe\nobetci-<name>` can
+//! Named pipes live in a machine-wide namespace, so `\\.\pipe\nobi-<name>` can
 //! be created by *any* account that gets there first. Three defences, all cheap:
 //! the pipe name carries our SID; we open it at the identification level, so
 //! whoever serves it may learn who we are but can never act as us; and once
@@ -35,12 +35,12 @@ const ERROR_PIPE_BUSY: i32 = 231;
 /// without which the level would be ignored (`OpenOptionsExt::security_qos_flags`).
 const SECURITY_IDENTIFICATION: u32 = 1 << 16;
 
-/// `\\.\pipe\nobetci-<sid>`. The SID keeps two accounts on the same machine from
+/// `\\.\pipe\nobi-<sid>`. The SID keeps two accounts on the same machine from
 /// ever meeting on the same pipe; the name falls back to the user name only if
 /// the SID cannot be read at all, which should not happen.
 fn pipe_path() -> String {
     let key = current_user_sid().unwrap_or_else(|| std::env::var("USERNAME").unwrap_or_else(|_| "user".into()));
-    format!(r"\\.\pipe\nobetci-{key}")
+    format!(r"\\.\pipe\nobi-{key}")
 }
 
 /// Opens the pipe. Retries only while the server is busy: any other error means

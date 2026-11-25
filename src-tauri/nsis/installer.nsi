@@ -1,10 +1,10 @@
-; Nöbetçi's copy of Tauri's NSIS template (tauri-cli 2.12.4,
+; Nobi's copy of Tauri's NSIS template (tauri-cli 2.12.4,
 ; crates/tauri-bundler/src/bundle/windows/nsis/installer.nsi). Five changes,
-; each marked "Nöbetçi:": the welcome and finish pages get a SHOW / LEAVE
+; each marked "Nobi:": the welcome and finish pages get a SHOW / LEAVE
 ; function that animates the owl; installer-ui.nsh is included after the
 ; languages; replacing one version with another runs the old uninstaller with
 ; /UPDATE, so the hooks, autostart and data stay; and the uninstaller asks
-; about a running Nöbetçi before its hook removes anything. When updating
+; about a running Nobi before its hook removes anything. When updating
 ; Tauri, take its new template and make the same five changes again.
 
 Unicode true
@@ -177,9 +177,9 @@ VIAddVersionKey "ProductVersion" "${VERSION}"
 ; Installer pages, must be ordered as they appear
 ; 1. Welcome Page
 !define MUI_PAGE_CUSTOMFUNCTION_PRE SkipIfPassive
-; Nöbetçi: the owl waves on the welcome page.
-!define MUI_PAGE_CUSTOMFUNCTION_SHOW nobetci.WelcomeShow
-!define MUI_PAGE_CUSTOMFUNCTION_LEAVE nobetci.Stop
+; Nobi: the owl waves on the welcome page.
+!define MUI_PAGE_CUSTOMFUNCTION_SHOW nobi.WelcomeShow
+!define MUI_PAGE_CUSTOMFUNCTION_LEAVE nobi.Stop
 !insertmacro MUI_PAGE_WELCOME
 
 ; 2. License Page (if defined)
@@ -383,7 +383,7 @@ Function PageLeaveReinstall
     ${Else}
       ReadRegStr $4 SHCTX "${MANUPRODUCTKEY}" ""
       ReadRegStr $R1 SHCTX "${UNINSTKEY}" "UninstallString"
-      ; Nöbetçi: an upgrade or a downgrade ($R0 = 1 or -1) is an update, not the
+      ; Nobi: an upgrade or a downgrade ($R0 = 1 or -1) is an update, not the
       ; user leaving: with /UPDATE the old uninstaller keeps the hooks, autostart
       ; and data (every version since 0.2.0 honours it). Only "Uninstall" on the
       ; same-version page removes everything.
@@ -459,9 +459,9 @@ Var AppStartMenuFolder
 !define MUI_FINISHPAGE_RUN
 !define MUI_FINISHPAGE_RUN_FUNCTION RunMainBinary
 !define MUI_PAGE_CUSTOMFUNCTION_PRE SkipIfPassive
-; Nöbetçi: the owl cheers on the finish page.
-!define MUI_PAGE_CUSTOMFUNCTION_SHOW nobetci.FinishShow
-!define MUI_PAGE_CUSTOMFUNCTION_LEAVE nobetci.Stop
+; Nobi: the owl cheers on the finish page.
+!define MUI_PAGE_CUSTOMFUNCTION_SHOW nobi.FinishShow
+!define MUI_PAGE_CUSTOMFUNCTION_LEAVE nobi.Stop
 !insertmacro MUI_PAGE_FINISH
 
 Function RunMainBinary
@@ -529,8 +529,8 @@ LangString choowHowToInstall 0 ""
   !include "{{this}}"
 {{/each}}
 
-; Nöbetçi: the owl's frames, its timer and the welcome and finish texts.
-!include "${NOBETCI_NSIS}\installer-ui.nsh"
+; Nobi: the owl's frames, its timer and the welcome and finish texts.
+!include "${NOBI_NSIS}\installer-ui.nsh"
 
 Function .onInit
   ${GetOptions} $CMDLINE "/P" $PassiveMode
@@ -845,7 +845,7 @@ FunctionEnd
 
 Section Uninstall
 
-  ; Nöbetçi: ask about a running Nöbetçi before the hook takes anything away,
+  ; Nobi: ask about a running Nobi before the hook takes anything away,
   ; so that Cancel leaves the installation, its hooks and its relay as they were.
   !insertmacro CheckIfAppIsRunning "$INSTDIR\${MAINBINARYNAME}.exe" "${PRODUCTNAME}"
 

@@ -2486,9 +2486,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "nobetci"
-version = "2.5.0"
+name = "nobi"
+version = "3.0.0"
 dependencies = [
+ "auto-launch",
  "base64 0.23.1",
  "block2",
  "dbus",
@@ -2516,8 +2517,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "nobetci-hook"
-version = "2.5.0"
+name = "nobi-hook"
+version = "3.0.0"
 dependencies = [
  "libc",
  "serde_json",

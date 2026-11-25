@@ -6,9 +6,9 @@ releases come out signed. The policy users read is [CODE_SIGNING_POLICY.md](../C
 ## On SignPath
 
 1. Turn on multi-factor authentication for your SignPath user (and keep it on for GitHub).
-2. Install the SignPath GitHub App for `tahap0l/nobetci` and add **GitHub.com** as a trusted build
+2. Install the SignPath GitHub App for `tahap0l/nobi` and add **GitHub.com** as a trusted build
    system for the organization.
-3. Create a project with the slug `nobetci` and link the repository `https://github.com/tahap0l/nobetci`.
+3. Create a project with the slug `nobi` and link the repository `https://github.com/tahap0l/nobi`.
 4. Add two artifact configurations, pasting the files from
    [`artifact-configurations/`](artifact-configurations/):
    - slug `app` ← `app.xml` (the app and the relay)
@@ -24,7 +24,7 @@ releases come out signed. The policy users read is [CODE_SIGNING_POLICY.md](../C
 |---|---|---|
 | Variable | `SIGNPATH_ORGANIZATION_ID` | the SignPath organization ID |
 | Secret | `SIGNPATH_API_TOKEN` | the CI user's API token |
-| Variable (optional) | `SIGNPATH_PROJECT_SLUG` | only if not `nobetci` |
+| Variable (optional) | `SIGNPATH_PROJECT_SLUG` | only if not `nobi` |
 | Variable (optional) | `SIGNPATH_POLICY_SLUG` | only if not `release-signing` |
 
 Without `SIGNPATH_ORGANIZATION_ID` the workflow builds unsigned, exactly as before.

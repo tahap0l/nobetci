@@ -1,13 +1,13 @@
 [package]
-name = "nobetci-hook"
-description = "Relays Claude Code hook events to Nöbetçi over a named pipe (Windows) or a Unix socket (macOS, Linux)"
+name = "nobi-hook"
+description = "Relays Claude Code hook events to Nobi over a named pipe (Windows) or a Unix socket (macOS, Linux)"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 build = "build.rs"
 
 [[bin]]
-name = "nobetci-hook"
+name = "nobi-hook"
 path = "src/main.rs"
 
 [dependencies]

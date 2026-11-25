@@ -1,4 +1,4 @@
-/* Nöbetçi island. The window is transparent; only #island is painted. */
+/* Nobi island. The window is transparent; only #island is painted. */
 
 :root {
   /* Form controls, scrollbars and the like follow the dark island (A-17). */
@@ -1122,7 +1122,7 @@ mark.lvl-critical { background: #f4505e; }
   color: #ffb3ba;
 }
 
-/* A request that reached Nöbetçi cut short (A-3). */
+/* A request that reached Nobi cut short (A-3). */
 .appr-cut {
   background: rgba(251, 146, 60, 0.12);
   border: 1px solid rgba(251, 146, 60, 0.5);

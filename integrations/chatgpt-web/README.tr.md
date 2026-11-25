@@ -2,7 +2,7 @@
 
 [English](README.md) · **Türkçe**
 
-chatgpt.com Chrome'da ya da Edge'de yanıt yazarken Nöbetçi adada bir **ChatGPT Web** oturumu
+chatgpt.com Chrome'da ya da Edge'de yanıt yazarken Nobi adada bir **ChatGPT Web** oturumu
 gösterir. Yanıt bitince oturum bunu belirtir; sekmeyi kapattığında oturum kalkar.
 
 **Yalnız Windows.** Köprüyü tarayıcıya yalnız bu klasördeki Windows betiği kaydeder. macOS ve
@@ -10,7 +10,7 @@ Linux'ta kayıt yok, bu yüzden orada eklentinin konuşacağı bir şey olmaz.
 
 ## Ne gönderir?
 
-Eklenti tek bir şeye bakar: ChatGPT'nin durdurma düğmesi sayfada mı? Nöbetçi'ye rastgele bir
+Eklenti tek bir şeye bakar: ChatGPT'nin durdurma düğmesi sayfada mı? Nobi'ye rastgele bir
 oturum kimliği ve üç durumdan birini gönderir: çalışıyor, bitti ya da kapandı. Sohbeti, başlığını,
 adresini ya da çerezlerini asla göndermez.
 
@@ -19,9 +19,9 @@ yüzden onaylanacak bir şey de olmaz.
 
 ## Kurulum
 
-1. Nöbetçi'nin son sürümünü kur ve bir kez aç: aktarıcısını `%LOCALAPPDATA%\Nobetci\bin`
-   klasörüne koyar. Nöbetçi 2.1.4 ile 2.4.1 arası köprünün mesajlarını düşürür; bu sürümlerle
-   adada hiçbir şey görünmez. Nöbetçi 2.5.0 bunu düzeltiyor.
+1. Nobi'nin son sürümünü kur ve bir kez aç: aktarıcısını `%LOCALAPPDATA%\Nobi\bin`
+   klasörüne koyar. Nobi 2.1.4 ile 2.4.1 arası köprünün mesajlarını düşürür; bu sürümlerle
+   adada hiçbir şey görünmez. Nobi 2.5.0 bunu düzeltiyor.
 2. Chrome'da `chrome://extensions`, Edge'de `edge://extensions` sayfasını aç. **Geliştirici
    modu**nu aç, **Paketlenmemiş öğe yükle**'yi seç ve buradaki `extension` klasörünü göster.
 3. Eklentinin kimliğini kopyala (a ile p arasındaki harflerden 32 karakter). Bu klasörde
@@ -37,9 +37,9 @@ yüzden onaylanacak bir şey de olmaz.
 4. ChatGPT sekmesini yenile ve bir yanıt başlat. Adada önce çalışan, sonra biten bir oturum
    görünür.
 
-Betik `%LOCALAPPDATA%\Nobetci\chatgpt-native-host-Chrome.json` (ya da `-Edge.json`) dosyasını
+Betik `%LOCALAPPDATA%\Nobi\chatgpt-native-host-Chrome.json` (ya da `-Edge.json`) dosyasını
 yazar ve
-`HKCU\Software\Google\Chrome\NativeMessagingHosts\io.github.tahap0l.nobetci.chatgpt` kayıt
+`HKCU\Software\Google\Chrome\NativeMessagingHosts\io.github.tahap0l.nobi.chatgpt` kayıt
 anahtarını (Edge için `Microsoft\Edge` altındaki aynı anahtarı) bu dosyaya yönlendirir. Başka
 hiçbir şeyi değiştirmez ve yönetici yetkisi istemez. Mesajları Windows'un görüntüleme dilini izler.
 
@@ -53,15 +53,15 @@ Bu komut kaydı iki tarayıcı için de kaldırır; yalnız birini kaldırmak i�
 `-Browser Edge` ekle. Ardından eklentiyi `chrome://extensions` ya da `edge://extensions`
 sayfasından kaldır.
 
-Nöbetçi'yi kaldırmak da kaydı iki tarayıcı için siler; sana yalnızca eklentiyi kaldırmak kalır.
+Nobi'yi kaldırmak da kaydı iki tarayıcı için siler; sana yalnızca eklentiyi kaldırmak kalır.
 Güncelleme kaydı korur. 2.4.1 ve önceki sürümlerin kaldırıcıları ise kaydı geride bırakır ve
 tarayıcı artık orada olmayan bir aktarıcıyı gösterir: bunlardan birini kaldıracaksan önce
 yukarıdaki komutu çalıştır.
 
 ## Adada bir şey görünmüyorsa
 
-- **Nöbetçi açık mı?** Nöbetçi kapalıyken eklenti denemeler arasında giderek daha uzun bekler:
-  önce 5 saniye, sonra her seferinde iki katı, en çok bir dakika. Nöbetçi'yi yeniden açınca ada en
+- **Nobi açık mı?** Nobi kapalıyken eklenti denemeler arasında giderek daha uzun bekler:
+  önce 5 saniye, sonra her seferinde iki katı, en çok bir dakika. Nobi'yi yeniden açınca ada en
   geç bir dakika içinde durumu yakalar.
 - **Doğru tarayıcı, doğru kimlik mi?** Kayıt betiğini `chrome://extensions` sayfasının şu an
   gösterdiği kimlikle yeniden çalıştır. Paketlenmemiş bir eklentinin klasörü taşınınca kimliği

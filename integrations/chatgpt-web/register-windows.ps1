@@ -1,11 +1,11 @@
 <#
 .SYNOPSIS
-Registers the ChatGPT Web bridge of Nobetci with Chrome or Edge. Windows only.
+Registers the ChatGPT Web bridge of Nobi with Chrome or Edge. Windows only.
 
 .DESCRIPTION
-Writes the native-messaging host manifest to %LOCALAPPDATA%\Nobetci and points
-the browser's per-user registry key at it. The manifest names Nobetci's relay
-(nobetci-hook.exe) and lets only the given extension start it.
+Writes the native-messaging host manifest to %LOCALAPPDATA%\Nobi and points
+the browser's per-user registry key at it. The manifest names Nobi's relay
+(nobi-hook.exe) and lets only the given extension start it.
 
 Run it from this folder without changing the system's execution policy:
 
@@ -34,9 +34,9 @@ function Say([string]$English, [string]$Turkish) {
     [regex]::Unescape($text)
 }
 
-$name = 'io.github.tahap0l.nobetci.chatgpt'
-$root = Join-Path $env:LOCALAPPDATA 'Nobetci'
-$relay = Join-Path $root 'bin\nobetci-hook.exe'
+$name = 'io.github.tahap0l.nobi.chatgpt'
+$root = Join-Path $env:LOCALAPPDATA 'Nobi'
+$relay = Join-Path $root 'bin\nobi-hook.exe'
 if (-not (Test-Path -LiteralPath $relay -PathType Leaf)) {
     throw ((Say 'N\u00f6bet\u00e7i''s relay was not found at {0}. Install N\u00f6bet\u00e7i, open it once, then run this script again.' `
             'N\u00f6bet\u00e7i''nin aktar\u0131c\u0131s\u0131 {0} konumunda bulunamad\u0131. N\u00f6bet\u00e7i''yi kur, bir kez a\u00e7 ve bu beti\u011fi yeniden \u00e7al\u0131\u015ft\u0131r.') -f $relay)
@@ -48,7 +48,7 @@ if (-not (Test-Path -LiteralPath $relay -PathType Leaf)) {
 $manifest = Join-Path $root "chatgpt-native-host-$Browser.json"
 $json = [ordered]@{
     name            = $name
-    description     = 'Nobetci ChatGPT Web status relay'
+    description     = 'Nobi ChatGPT Web status relay'
     path            = $relay
     type            = 'stdio'
     allowed_origins = @("chrome-extension://$ExtensionId/")

@@ -4,7 +4,7 @@
 // otherwise the static heads from mascot-themes.js stand in.
 
 (() => {
-  const { animals, avatar, gaze, read, save } = window.NobetciThemes;
+  const { animals, avatar, gaze, read, save } = window.NobiThemes;
   const ids = Object.keys(animals);
   const englishNames = { owl: "Owl", wolf: "Wolf", hawk: "Hawk", octopus: "Octopus", lion: "Lion", canary: "Canary", eagle: "Eagle" };
   const english = () => document.documentElement.lang === "en";
@@ -21,7 +21,7 @@
   let theme = read();
   let greetingTimer;
   // The app's own mascot engine when it loaded: every theme, the owl included, is the animated character.
-  const live = window.NobetciEngine?.mount(mascot, theme);
+  const live = window.NobiEngine?.mount(mascot, theme);
   if (live) {
     companion.classList.add("is-live");
     companion.querySelector(".owl-art")?.remove();
@@ -29,7 +29,7 @@
   // The closing call to action shows the same mascot, drawn at the screen's own resolution.
   let ctaLive = null;
   if (ctaHost) {
-    ctaLive = window.NobetciEngine?.mount(ctaHost, theme) ?? null;
+    ctaLive = window.NobiEngine?.mount(ctaHost, theme) ?? null;
     ctaHost.classList.toggle("is-live", !!ctaLive);
     ctaHost.closest(".cta")?.querySelector(".button-primary")?.addEventListener("pointerenter", () => ctaLive?.wave());
   }

@@ -3,10 +3,10 @@ members = ["src-tauri", "hook"]
 resolver = "2"
 
 [workspace.package]
-version = "2.5.0"
+version = "3.0.0"
 edition = "2021"
 license = "MIT"
-repository = "https://github.com/tahap0l/nobetci"
+repository = "https://github.com/tahap0l/nobi"
 
 # Release profile shared by the app and the hook relay: the hook must start fast
 # (Claude Code spawns it on every event), so we optimise for size and speed.

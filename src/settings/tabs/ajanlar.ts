@@ -62,7 +62,7 @@ function statusKey(s: AgentHookStatus | null): string {
 
 /**
  * Reads the connection again. When it changed meanwhile (the hooks were removed
- * with `nobetci --remove-hooks`, or edited by hand), the last message and
+ * with `nobi --remove-hooks`, or edited by hand), the last message and
  * health report describe a connection that is gone: "Connected." next to a
  * "Not connected" pill. They are dropped.
  */

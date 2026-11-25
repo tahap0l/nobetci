@@ -1,13 +1,13 @@
 name: Feature request
-description: Suggest an idea or an improvement for Nöbetçi.
+description: Suggest an idea or an improvement for Nobi.
 labels: ["enhancement"]
 body:
   - type: markdown
     attributes:
       value: |
-        Ideas are welcome. A few things are off the table by design, because they would make Nöbetçi less trustworthy: approving HIGH or CRITICAL requests without a person, an "always allow", telemetry or network access you didn't switch on yourself, and changing `~/.claude/settings.json` without a reviewed diff. [CONTRIBUTING.md](https://github.com/tahap0l/nobetci/blob/main/CONTRIBUTING.md) explains why.
+        Ideas are welcome. A few things are off the table by design, because they would make Nobi less trustworthy: approving HIGH or CRITICAL requests without a person, an "always allow", telemetry or network access you didn't switch on yourself, and changing `~/.claude/settings.json` without a reviewed diff. [CONTRIBUTING.md](https://github.com/tahap0l/nobi/blob/main/CONTRIBUTING.md) explains why.
 
-        For a missing or wrong risk rule, use the [risk rule template](https://github.com/tahap0l/nobetci/issues/new?template=risk_rule.yml) instead.
+        For a missing or wrong risk rule, use the [risk rule template](https://github.com/tahap0l/nobi/issues/new?template=risk_rule.yml) instead.
 
   - type: textarea
     id: problem

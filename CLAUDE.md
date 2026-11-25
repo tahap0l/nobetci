@@ -1,4 +1,4 @@
-# Nöbetçi — guide for AI coding agents
+# Nobi — guide for AI coding agents
 
 Tray / menu bar app for Windows, macOS and Linux (Tauri 2: Rust + TypeScript, no frontend framework). An owl on a
 black island at the top of the screen shows Claude Code sessions and lets the user
@@ -14,23 +14,23 @@ approve permission requests, each scored by a risk engine.
 ## Rules
 - **Never block Claude Code.** The relay exits silently if the app is closed; only PermissionRequest waits, and never past its budget. The one exception: in the Claude desktop app (`CLAUDE_CODE_ENTRYPOINT=claude-desktop`), which never runs PermissionRequest hooks, the relay turns a PreToolUse for a tool that would ask into a permission request (`desktop_gate` in `hook/src/main.rs`) — same budget, silence falls back to the app's own dialog. The relay also waits on a PreToolUse for Claude's AskUserQuestion and ExitPlanMode in every surface (`interactive_tool`): only the user answers them (never a rule), the reply echoes the input in `updatedInput`, and a cut input is never answered.
 - **Batch approval covers LOW only** (`pipe::allow_low`): never medium or above, never a question or plan, one physical click for the lot.
-- The status line (`nobetci-hook statusline`) is opt-in (the `StatusLine` pseudo-event), never waits on the app, and never replaces a `statusLine` that isn't ours.
+- The status line (`nobi-hook statusline`) is opt-in (the `StatusLine` pseudo-event), never waits on the app, and never replaces a `statusLine` that isn't ours.
 - **Never write `~/.claude/settings.json` without a reviewed diff**: dated backup, merge, show the diff, write only after an explicit click, refuse if the file changed since the preview.
 - **High/critical approvals need a hold** — enforced in `pipe.rs::resolve`, not just the UI. Never add an "always allow".
 - **Nothing high or critical is ever auto-approved** — rules, trusted projects and session grants are capped in `rules.rs` (`auto_allow_max` ≤ medium, sanitised in `settings.rs`). The cap looks at the engine's own level too: a rule that re-scores a high request to low makes it a plain click, never an automatic pass. Rules may always deny.
 - Every PermissionRequest outcome is written to the history (`audit.rs`); CSV export must stay formula-safe.
 - Relay ↔ app speak a small JSON line (`{"behavior":"deny","message":…,"interrupt":…,"stop":…}`); only `hook/src/main.rs` knows Claude Code's output format.
 - **No innerHTML.** The approval card shows attacker-controllable text in a window that can approve commands. Build DOM with `h()` / text nodes only.
-- What the card shows must be what runs: never truncate approval payloads silently (`nobetci_truncated` flag → high risk). The assessment's `target` is the whole command, path, URL or argument object — rules and session grants match on it.
+- What the card shows must be what runs: never truncate approval payloads silently (`nobi_truncated` flag → high risk). The assessment's `target` is the whole command, path, URL or argument object — rules and session grants match on it.
 - No telemetry. Network access is limited to things the user switches on: an explicit Prompt
   Studio provider call — Ollama on loopback (cloud-tagged models may forward the draft) or OpenAI
   after the user selects it and asks for a rewrite, or asks the island's assistant with **Here** —
   and the island's weather card, which asks Open-Meteo for the chosen city's forecast (off until a
   city is picked). The assistant's other targets only open a fixed `https://` address from
-  `assistant.rs`'s table through `sys::open_url` (http(s) only); Nöbetçi itself sends nothing.
+  `assistant.rs`'s table through `sys::open_url` (http(s) only); Nobi itself sends nothing.
 - The assistant may open a desktop AI app only through the fixed links in `assistant.rs`'s `APPS`
   table (`sys::open_app_link`, never http/file schemes), and only when the scheme's handler name
-  matches. Dictation is the OS's own (Win+H, `startDictation:`); Nöbetçi never records audio.
+  matches. Dictation is the OS's own (Win+H, `startDictation:`); Nobi never records audio.
 - The system card (`widgets/stats.rs`) and media are polled only while their card is on screen;
   looping CSS animations are scoped to `#island[data-mode="expanded"]`.
 - The agenda (`agenda.rs`) lives in `agenda.json` next to the settings; reminders respect quiet
@@ -47,3 +47,4 @@ approve permission requests, each scored by a risk engine.
 - Text that outlives the card (history, notifications) goes through `redact::redact`; the card itself always shows the request in full.
 - No literal invisible or bidi characters in source files — write them as escapes (`\u200B`). The repo is scanned for them.
 - New risk rules come with tests in `risk.rs`, including a "stays low" case for everyday commands.
+- **The old name (Nöbetçi, before 3.0) still has to work.** `migrate.rs` copies the old install's data once, before the first settings read, never over Nobi's own; `hooks.rs` (`LEGACY_RELAY`, `short_alias`) counts `nobetci-hook` entries as ours so they show as out of date; `risk.rs` guards both names (`(?:nobi|nobetci)`, word-bounded where a bare name could match a longer word); `prompts.rs` moves the old keyring entry. Don't remove these until old installs are long gone.

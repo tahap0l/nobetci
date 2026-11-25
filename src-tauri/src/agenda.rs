@@ -3,7 +3,7 @@
 // Kept in `agenda.json` next to the settings and written like them: a file only
 // the user can read (0600 in a 0700 folder on Linux and macOS), replaced in one
 // step through a temporary file. An item with a time gets a reminder: a desktop
-// notification (unless Nöbetçi is quiet) and an `agenda-due` event the island
+// notification (unless Nobi is quiet) and an `agenda-due` event the island
 // reacts to. The reminder thread wakes twice a minute and does nothing else.
 //
 // The file is the user's, and a hand edit can break it. That never costs the
@@ -159,7 +159,7 @@ fn read_entries(entries: &[Value]) -> (Vec<Item>, Vec<String>) {
             time: field("time"),
             done: entry.get("done").and_then(Value::as_bool).unwrap_or(false),
         };
-        // A missing, odd or repeated id gets a new one: ids are Nöbetçi's own
+        // A missing, odd or repeated id gets a new one: ids are Nobi's own
         // handles, and the entry itself is worth keeping.
         if !is_id(&item.id) || ids.contains(&item.id) {
             item.id = fresh_id(&ids, n);
@@ -292,8 +292,8 @@ impl Agenda {
             Guard::Clear => {}
             Guard::Unread => {
                 return Err(pick(
-                    "Nöbetçi couldn't read agenda.json, so it doesn't save over it. Check the file, then try again.",
-                    "Nöbetçi agenda.json dosyasını okuyamadı, bu yüzden üzerine kaydetmiyor. Dosyayı kontrol edip yeniden dene.",
+                    "Nobi couldn't read agenda.json, so it doesn't save over it. Check the file, then try again.",
+                    "Nobi agenda.json dosyasını okuyamadı, bu yüzden üzerine kaydetmiyor. Dosyayı kontrol edip yeniden dene.",
                 )
                 .to_string());
             }
@@ -514,7 +514,7 @@ mod tests {
 
     impl Dir {
         fn new(name: &str) -> Dir {
-            let dir = std::env::temp_dir().join(format!("nobetci-agenda-{name}-{}", std::process::id()));
+            let dir = std::env::temp_dir().join(format!("nobi-agenda-{name}-{}", std::process::id()));
             let _ = std::fs::remove_dir_all(&dir);
             std::fs::create_dir_all(&dir).unwrap();
             Dir(dir)
@@ -777,7 +777,7 @@ mod tests {
     fn the_file_and_its_folder_are_private() {
         use std::os::unix::fs::PermissionsExt;
         let dir = Dir::new("private");
-        let folder = dir.0.join("nobetci");
+        let folder = dir.0.join("nobi");
         std::fs::create_dir(&folder).unwrap();
         std::fs::set_permissions(&folder, std::fs::Permissions::from_mode(0o755)).unwrap();
         let file = folder.join("agenda.json");

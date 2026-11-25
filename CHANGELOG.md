@@ -1,11 +1,46 @@
 # Changelog
 
-All notable changes to Nöbetçi are documented in this file.
+All notable changes to Nobi are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [3.0.0] - 2026-11-25
+
+**Nöbetçi is now Nobi.** The new name is short, easy to say in any language and works as a
+domain and a handle; the owl, the risk engine and every rule stay as they were. The major
+version marks the rename: the app's identifier, folders, relay and package names change, and an
+existing install is moved over.
+
+### Changed
+- The app, the relay (`nobi-hook`), the installers, the Linux package, the settings and history
+  folders, the relay's pipe and socket, the credential-store entry and every user-visible string
+  (Turkish included) are now named Nobi. The repository moves to `tahap0l/nobi` and the website
+  to `tahap0l.github.io/nobi`; GitHub forwards the old repository links.
+
+### Migration
+- **Data.** On its first start Nobi copies the old install's settings, rules, history and agenda
+  from the Nöbetçi folders (`%APPDATA%\Nobetci` and `%LOCALAPPDATA%\Nobetci` on Windows,
+  `~/Library/Application Support/Nobetci` on macOS, `~/.config/nobetci` and
+  `~/.local/share/nobetci` on Linux), once, and never over data Nobi already has. The old
+  folders are left in place.
+- **Hooks.** Hooks that still run `nobetci-hook` are recognised as Nobi's and shown as out of date
+  on the Claude tab, which opens by itself after a migration; one click on the reviewed diff
+  replaces them. `~/.claude/settings.json` is never written without that click.
+- **Windows.** The installer runs the old Nöbetçi uninstaller silently first: its hook entries
+  come out with dated backups, its shortcuts and relay go, and its data stays for the step above.
+- **Start at login.** Nöbetçi's login entry is removed and Nobi's own is made when the copied
+  setting has it on.
+- **OpenAI key.** A key saved by Nöbetçi moves to Nobi's credential-store entry the first time it
+  is read.
+- **Linux.** The `.deb` replaces the `nobetci` package. An old AppImage file can simply be deleted.
+- **macOS.** Move the old Nöbetçi app to the Trash after installing Nobi.
+
+### Security
+- The self-protection rules guard the old names' folders, relay and processes too, while an old
+  install may still be around; words that only start like the name (`nobility`) are not matched.
 
 ## [2.5.0] - 2026-11-23
 
@@ -45,7 +80,7 @@ reworked release jobs; their signing steps have not run, because no code signing
   Cursor request — and **Deny**, and Rust refuses any approval of it from the island, whether a
   click, a hold or a key. The level that counts is the one on the card, after your rules. LOW and
   MEDIUM requests are still approved on the island, with a click the guard accepts: presses from
-  virtual (XTEST) devices count as synthetic, including a pointer a program adds after Nöbetçi
+  virtual (XTEST) devices count as synthetic, including a pointer a program adds after Nobi
   started (`xinput create-master`). Settings → Safety and the documents say the same. Windows and
   macOS are unchanged.
 - **A program's press spoils the click.** Every mouse button a program holds down is followed
@@ -58,16 +93,16 @@ reworked release jobs; their signing steps have not run, because no code signing
   visible island. The second click of a double-click, or the release of a hold, meant for the card
   before can no longer approve the next request unread — and no longer raises a false "a program
   tried to approve" alarm either.
-- **Nöbetçi guards itself on every system.** `nobetci --remove-hooks` is CRITICAL however it is
+- **Nobi guards itself on every system.** `nobi --remove-hooks` is CRITICAL however it is
   run — by any path, piped into a shell, through `xargs`, `$(…)` or a variable, or from an option
   of git, `script`, `tmux` or `env -S` — while a line that only prints, searches or records it (an
-  `echo`, a `grep`, a commit message) isn't. Writing to Nöbetçi's folders on Windows, macOS and
-  Linux (`~/.config/nobetci`, `~/.local/share/nobetci` and `~/.local/state/nobetci` were not
+  `echo`, a `grep`, a commit message) isn't. Writing to Nobi's folders on Windows, macOS and
+  Linux (`~/.config/nobi`, `~/.local/share/nobi` and `~/.local/state/nobi` were not
   covered before), its installed programs, its relay or its socket's fallback folder is CRITICAL
   however the command writes — a redirection, `cp`, `curl -o`, `sed -i`, an editor, a one-liner,
   PowerShell's .NET file calls — and variables, braces, globs, Windows' 8.3 short names, `::$DATA`
   and trailing dots or spaces no longer get a write past these names. Stopping or uninstalling it
-  is HIGH, and so is `systemctl --user stop nobetci`. Writing Codex's or Cursor's hook files, or
+  is HIGH, and so is `systemctl --user stop nobi`. Writing Codex's or Cursor's hook files, or
   Codex's `config.toml`, is CRITICAL.
 - **Rules can't be slipped past.** Glob patterns cross line breaks, and a *starts with* pattern
   ends at a word boundary (`npm test` no longer matches `npm testing`). A loose rule that allows or
@@ -117,11 +152,11 @@ reworked release jobs; their signing steps have not run, because no code signing
     queries and mentions stay LOW. On Linux that sends them to the terminal.
   - A request too tangled to read in full — nested too deep (`bash -c` inside `eval` inside …),
     handing over too much, thousands of `cd`s — is HIGH, can't be switched off and is never
-    approved automatically; it can no longer make Nöbetçi run out of memory.
+    approved automatically; it can no longer make Nobi run out of memory.
   - MCP tools are read by the words of their name (`push_files`, `apply_migration`,
     `wipe_device`…), and SQL, command, path and URL arguments are read too, as are tools that
     download, export or save to a path, destination keys, SQL in query tools, Serena's and
-    JetBrains' path keys, `file://` addresses and argument arrays. A tool Nöbetçi doesn't know is
+    JetBrains' path keys, `file://` addresses and argument arrays. A tool Nobi doesn't know is
     shown and matched with all of its arguments and is never approved automatically; only Bash and
     PowerShell run their `command`, and only WebFetch its `url`.
   - More invisible characters are caught — U+061C, U+2060, the soft hyphen, Hangul fillers, tag
@@ -145,7 +180,7 @@ reworked release jobs; their signing steps have not run, because no code signing
   notifications. "Token" or "password" in an ordinary sentence no longer is, and
   `docker run -u 1000:1000` or the rest of a command after a cookie header stays as written. A
   notification is masked before it is shortened, so its cut can't show the start of a secret.
-- **Your files are private.** On macOS and Linux, Nöbetçi's settings and data folders and the
+- **Your files are private.** On macOS and Linux, Nobi's settings and data folders and the
   files in them — settings, agenda, history, log and their copies — are readable by your account
   only. On a file system without Unix permissions (FAT, exFAT, some network shares) they are used
   as they are, and the log says so.
@@ -153,7 +188,7 @@ reworked release jobs; their signing steps have not run, because no code signing
   project that wasn't trusted, can't be read, allow rules and rules that lower a risk to LOW are
   off and trusted projects count as normal until the file is fixed, and an auto-allow ceiling that
   can't be read is off; the settings window says so.
-- **Settings import takes only Nöbetçi settings.** Importing `~/.claude/settings.json` by mistake
+- **Settings import takes only Nobi settings.** Importing `~/.claude/settings.json` by mistake
   used to reset every rule, project and shortcut; such files are now refused, and exports carry a
   marker that says what they are.
 - **Windows:** the relay opens the pipe without letting the other end impersonate you, and an
@@ -178,7 +213,7 @@ reworked release jobs; their signing steps have not run, because no code signing
   **Start with Windows** with it. An update now keeps them, and the data too, and so does going
   back to an older version with an installer newer than 2.4.1. To go back to 2.4.1 or earlier,
   choose **Do not uninstall** on the page its installer shows.
-- **Uninstalling on Windows is safer.** It asks about a running Nöbetçi before anything is touched
+- **Uninstalling on Windows is safer.** It asks about a running Nobi before anything is touched
   (Cancel really changes nothing); if the hooks can't be removed it keeps the relay and the log
   and says what to finish by hand: which hook files to clean (also under `CLAUDE_CONFIG_DIR` or
   `CODEX_HOME`), and to delete only the relay folder and the log, so your history stays;
@@ -186,7 +221,7 @@ reworked release jobs; their signing steps have not run, because no code signing
   Web bridge's browser registration is removed (an update keeps it); the machine-wide **Start with
   Windows** entry is removed when possible; and the installer falls back to English, not Turkish,
   on other Windows languages.
-- **Cursor isn't blocked when Nöbetçi is closed.** When Nöbetçi gives no answer — closed, paused,
+- **Cursor isn't blocked when Nobi is closed.** When Nobi gives no answer — closed, paused,
   handed back, queue full or timed out — Cursor now asks you itself instead of refusing every
   shell and MCP command. A relay that can't run at all still makes Cursor refuse.
 - **Denying no longer stops Claude.** A plain deny — the button, a reason, the hotkey or a rule —
@@ -205,7 +240,7 @@ reworked release jobs; their signing steps have not run, because no code signing
 - **ChatGPT Web reaches the island.** The bridge's messages were dropped by the app since 2.1.4;
   its guide is in English and Turkish now (the Turkish one opens from a Turkish interface),
   registers without changing the PowerShell policy, works when your Windows user folder has
-  letters outside ASCII, has an unregister script, and the extension backs off while Nöbetçi is
+  letters outside ASCII, has an unregister script, and the extension backs off while Nobi is
   closed.
 - **No more lost data.**
   - An unreadable `settings.json` is copied aside as `settings.json.unreadable-…`, the window says
@@ -220,7 +255,7 @@ reworked release jobs; their signing steps have not run, because no code signing
   - An import or a reset keeps the settings it replaces as `settings.json.bak-…`, two saves at once
     can no longer mix their contents, and a settings file saved by Notepad imports.
   - A save that fails says so instead of "Saved", a reset or an import whose save fails says the
-    settings are in effect until Nöbetçi restarts but weren't saved, and a failed agenda change is
+    settings are in effect until Nobi restarts but weren't saved, and a failed agenda change is
     undone on screen.
 - **Long approval cards keep their buttons.** The findings scroll and the buttons stay pinned to the
   bottom of the island; the card no longer jumps or flashes a hint while it settles, and a cut
@@ -313,10 +348,10 @@ reworked release jobs; their signing steps have not run, because no code signing
     (MCP tools as server › tool, the full text on hover), and the filters are never cut off.
   - The health check knows a status line that belongs to someone else and explains `PreToolUse`;
     hooks can't be installed while the relay is missing, and they go to
-    `$CLAUDE_CONFIG_DIR/settings.json` when Claude Code keeps its settings there and Nöbetçi itself
+    `$CLAUDE_CONFIG_DIR/settings.json` when Claude Code keeps its settings there and Nobi itself
     sees that variable (Settings → Claude Code shows the file); on Windows the page says when hooks
     can run only where Claude Code uses Git Bash.
-  - For other agents, the Cursor note says Cursor asks you itself when Nöbetçi gives no answer, a
+  - For other agents, the Cursor note says Cursor asks you itself when Nobi gives no answer, a
     "Connected" message no longer outlives hooks removed outside the window, connecting no longer
     promises a backup when there is no file, and a review that changes nothing shows no backup line.
   - The first-run wizard shows its errors, ticks only the steps you did — a health check with gaps
@@ -330,13 +365,13 @@ reworked release jobs; their signing steps have not run, because no code signing
 - **Start with Windows / at login follows the system.** Switched off or removed in Task Manager,
   Login Items or your desktop's autostart settings, it shows as off instead of coming back, and a
   change that fails is reported.
-- **Hooks are installed and removed precisely.** Only Nöbetçi's own hook commands are touched —
+- **Hooks are installed and removed precisely.** Only Nobi's own hook commands are touched —
   never another tool's hook in the same group, while a relay path an older version wrote in
-  Windows' 8.3 short form still counts as Nöbetçi's — the file keeps its key order, a symlinked
+  Windows' 8.3 short form still counts as Nobi's — the file keeps its key order, a symlinked
   `settings.json` is written through the link, the preview is worked out on the file's own text
   and layout (a change of line endings is named at its top) and a file that needs no change isn't
   rewritten, the backup named in the preview is the one written (and none is announced when there
-  was no file), and `nobetci --remove-hooks` reports failure with its exit code.
+  was no file), and `nobi --remove-hooks` reports failure with its exit code.
 - **History.** Every outcome is recorded: requests too large for the channel, questions and plans
   handed straight to the terminal, and answers that never reached the agent, marked **Not
   delivered**. One damaged line no longer hides the whole file, a failed roll-over no longer drops
@@ -353,7 +388,7 @@ reworked release jobs; their signing steps have not run, because no code signing
   - Reduced motion is honoured by the island's mascot, the small heads in the session list, the
     pill and the gallery, the desktop mascot and the greeting, and under it the island opens
     without overshooting.
-  - The desktop mascot draws nothing while it sleeps, while it is hidden and while Nöbetçi is
+  - The desktop mascot draws nothing while it sleeps, while it is hidden and while Nobi is
     paused (it used to redraw about 15 times a second); Ctrl+wheel resizing keeps its feet where
     they are; it shows a grabbing cursor while you hold it; and a double-click opens the island
     without poking, frowning or getting dizzy first.
@@ -370,7 +405,7 @@ reworked release jobs; their signing steps have not run, because no code signing
 - **Linux.**
   - The AppImage plays the island's sounds (it now carries GStreamer, and is about 11–15 MB
     bigger), and programs it opens get your desktop's own GTK and GStreamer settings rather than
-    the AppImage's; programs opened from Nöbetçi no longer inherit its X11 setting either.
+    the AppImage's; programs opened from Nobi no longer inherit its X11 setting either.
   - Clicking the island no longer takes the keyboard from your terminal; the assistant opened with
     its shortcut takes your typing on the first try, and when you leave an island text box the
     keyboard goes back to the window you were in.
@@ -382,7 +417,7 @@ reworked release jobs; their signing steps have not run, because no code signing
     moved AppImage is put into the entry's `Exec=` line without touching what you added there.
   - The media card only talks to a player that is already running, and one with an odd bus name
     can't crash it; the `.deb` no longer lists its dependencies twice.
-  - The relay's socket file is removed when Nöbetçi quits or is stopped (`SIGTERM`, `SIGINT`), on
+  - The relay's socket file is removed when Nobi quits or is stopped (`SIGTERM`, `SIGINT`), on
     macOS too.
 - **Windows.** The island stays out of Alt-Tab and never takes focus after it changes its window
   flags, and when you leave an island text box the keyboard goes back to the window you were in;
@@ -409,10 +444,10 @@ reworked release jobs; their signing steps have not run, because no code signing
   deny rule catches.
 - **Releases.** The notes list the Linux files and say whether the release is signed and
   notarized, and every file also comes without the version in its name
-  (`Nobetci-setup.exe`, `Nobetci-macos-universal.dmg`, `Nobetci-linux-amd64.deb`,
-  `Nobetci-linux-amd64.AppImage`) for links that always fetch the newest one.
+  (`Nobi-setup.exe`, `Nobi-macos-universal.dmg`, `Nobi-linux-amd64.deb`,
+  `Nobi-linux-amd64.AppImage`) for links that always fetch the newest one.
 - **macOS.** A Big Sur–style icon, a disk image whose labels are readable in light and dark mode,
-  and the name Nöbetçi in Finder and the Dock (the app on disk is still `Nobetci.app`). The app is
+  and the name Nobi in Finder and the Dock (the app on disk is still `Nobi.app`). The app is
   signed with the Apple Events entitlement that the media card's AppleScript needs under macOS's
   hardened runtime.
 - **The website** speaks your language from the first paint, covers 2.4 (questions, plans, batch
@@ -439,12 +474,12 @@ reworked release jobs; their signing steps have not run, because no code signing
 
 ### Changed
 
-- **A new look for the Windows installer.** Dark welcome and finish pages in Nöbetçi's colours, with
+- **A new look for the Windows installer.** Dark welcome and finish pages in Nobi's colours, with
   a little island and the owl in the sidebar: it waves on the welcome page and cheers when setup is
   done. New welcome and finish texts in Turkish and English, and the owl in the header of every
   page. The pictures are drawn with the app's own mascot engine (`scripts/installer-art.mjs`).
 - **A new look for the macOS disk image too.** The window that opens with the `.dmg` has the
-  same night sky, the island and a soft arrow from Nöbetçi to Applications, with the instruction in
+  same night sky, the island and a soft arrow from Nobi to Applications, with the instruction in
   Turkish and English, sharp on Retina screens.
 
 ## [2.4.0] - 2026-11-19
@@ -464,7 +499,7 @@ reworked release jobs; their signing steps have not run, because no code signing
 - **Context and plan limits.** Tick **StatusLine** under **Settings → Claude Code → Events** and
   the session view shows context use and the session's cost, the island header shows the 5-hour
   limit, and meters show the 5-hour and weekly windows with their reset times. It uses Claude
-  Code's own status line (a short line under the prompt), so it is opt-in, and Nöbetçi never
+  Code's own status line (a short line under the prompt), so it is opt-in, and Nobi never
   replaces a status line of yours.
 - **Allow all low-risk requests at once.** With two or more LOW requests waiting, one click allows
   them all. Medium and above, questions and plans are never part of it, and the click must be a
@@ -476,7 +511,7 @@ reworked release jobs; their signing steps have not run, because no code signing
 
 - **The Claude desktop app on Windows.** Claude Code runs a hook in Git Bash, or in PowerShell when it
   cannot find Git Bash, which is often the case in the Claude desktop app even when the terminal
-  finds it. Nöbetçi wrote its hooks as a quoted path, which PowerShell reads as a plain string, so
+  finds it. Nobi wrote its hooks as a quoted path, which PowerShell reads as a plain string, so
   in the app the relay never ran and nothing reached the island. The hooks are now a bare path
   that runs in both shells (the 8.3 short form when the path has spaces).
 - **Update the hooks once:** Settings → Claude Code says the hooks are out of date; review the
@@ -488,10 +523,10 @@ reworked release jobs; their signing steps have not run, because no code signing
 
 - **Approvals from the Claude desktop app.** The Code tab of the Claude desktop app shows its own
   permission dialog and never runs Claude Code's `PermissionRequest` hook, so its requests never
-  reached the island. Nöbetçi now asks from the `PreToolUse` hook there instead: commands, file
+  reached the island. Nobi now asks from the `PreToolUse` hook there instead: commands, file
   edits, web fetches and MCP tools wait for your decision on the island, with the same risk score,
   hold and real-click guard. Reads never wait, and nothing waits in a mode where the app would not
-  ask (Accept edits for file edits, Bypass permissions). With no answer, or with Nöbetçi closed,
+  ask (Accept edits for file edits, Bypass permissions). With no answer, or with Nobi closed,
   the app's own dialog appears as before. The terminal and VS Code are unchanged.
 - **Update the hooks once:** Settings → Claude Code says the hooks are out of date (the
   `PreToolUse` entry gets the same timeout as `PermissionRequest`); review the diff and reinstall.
@@ -501,7 +536,7 @@ reworked release jobs; their signing steps have not run, because no code signing
 ### Added
 
 - **Voice input** in the assistant: the microphone button starts the system's own dictation
-  (Windows voice typing, macOS Dictation) into the text box. Nöbetçi never hears the audio.
+  (Windows voice typing, macOS Dictation) into the text box. Nobi never hears the audio.
 - **Prompt ideas**: about twenty ready-made prompts in six groups (getting started, writing,
   learning, work, code, everyday), in Turkish and English. Each one shows how a good prompt is
   built; the parts in [brackets] are selected for you, and Tab jumps to the next one.
@@ -534,14 +569,14 @@ reworked release jobs; their signing steps have not run, because no code signing
 ### Added
 
 - **Linux.** A `.deb` and an AppImage for x86-64. The island runs on X11 and, through XWayland, on
-  Wayland desktops; the relay talks over a Unix socket in `~/.local/state/nobetci` and checks the
+  Wayland desktops; the relay talks over a Unix socket in `~/.local/state/nobi` and checks the
   peer's user id; the click guard reads XInput2 raw events and refuses XTEST clicks (`xdotool`);
   quiet in full screen, **Go to window**, start at login and the Secret Service keyring all work.
 - **An assistant on the island** (`Ctrl+Alt+Space` or the ✦ button). Write a message and send it to
   ChatGPT, Claude, Gemini, Perplexity, Copilot, Grok, DeepSeek or Mistral: the app opens with the
   message (where it accepts one in its address) and the message is on the clipboard too. **Here**
   answers on the island with the Prompt Studio model. Slash commands (`/pause`, `/dnd`, `/focus 25`,
-  `/play`, `/next`, `/prev`, `/settings`, in Turkish too) control Nöbetçi, and ↑/↓ bring back
+  `/play`, `/next`, `/prev`, `/settings`, in Turkish too) control Nobi, and ↑/↓ bring back
   earlier messages. The island takes the keyboard only while you type there.
 - **A new media card**: the artwork blurred behind the card, a live time bar you can click (or
   move with ←/→) to seek, and larger controls. It now works on all three systems — the system
@@ -695,7 +730,7 @@ reworked release jobs; their signing steps have not run, because no code signing
 
 - **Codex and Cursor monitoring.** Install their local hooks from Settings → Other agents to track sessions and submitted prompts. Codex permission requests and Cursor shell/MCP requests can be reviewed from the island; exact configuration diffs and timestamped backups are shown before changing settings.
 - **Safe prompt handling.** Prompt events are recorded in the session timeline. Agent hooks cannot replace submitted text, so typo correction stays in Prompt Studio and the user pastes the reviewed result.
-- **Safe fallback and cleanup.** Cursor permission hooks fail closed; if Nöbetçi cannot decide, the action is denied with a retry message. Uninstall removes only Nöbetçi's own hooks.
+- **Safe fallback and cleanup.** Cursor permission hooks fail closed; if Nobi cannot decide, the action is denied with a retry message. Uninstall removes only Nobi's own hooks.
 
 ## [2.0.1] - 2026-10-20
 
@@ -730,7 +765,7 @@ macOS 11 or later.
   LaunchAgents), suspicious built-in Windows tools, secrets and exfiltration (the macOS keychain
   included),
   destructive git operations, publishing, cloud and database deletions, changes to Claude Code's
-  own settings and hooks, changes to Nöbetçi's own files, invisible characters, content hidden behind long runs of whitespace,
+  own settings and hooks, changes to Nobi's own files, invisible characters, content hidden behind long runs of whitespace,
   and more. Categories can be switched off one by one, except the two that catch hiding.
 - **Press and hold to allow** HIGH requests (1.2 s by default) and CRITICAL ones (2.4 s).
 - **Rules** that match on tool, pattern (contains, starts with, equals, glob or regex) and project
@@ -756,7 +791,7 @@ macOS 11 or later.
 - **Placement and behaviour**: the island can sit left, centre or right, on the main display or the
   one with the mouse; start with Windows or at login; adjustable auto-close and stale-session
   cleanup.
-- **A per-user installer** that needs no administrator rights. Uninstalling removes Nöbetçi's own
+- **A per-user installer** that needs no administrator rights. Uninstalling removes Nobi's own
   hook entries from `~/.claude/settings.json` (with a dated backup) and nothing else.
 - **macOS (beta)**: one universal app for Apple silicon and Intel in a disk image. It lives in the
   menu bar, the island sits just below the menu bar (clear of the notch), the relay talks to the
@@ -798,23 +833,24 @@ pipe relay, the reviewed-diff hook installer and the island window were adapted 
 [Coucou](https://github.com/Louis-CFM/coucou) (MIT). Everything they had, and much more, shipped
 publicly in 0.2.0.
 
-[Unreleased]: https://github.com/tahap0l/nobetci/compare/v2.5.0...HEAD
-[2.5.0]: https://github.com/tahap0l/nobetci/compare/v2.4.1...v2.5.0
-[2.4.1]: https://github.com/tahap0l/nobetci/compare/v2.4.0...v2.4.1
-[2.4.0]: https://github.com/tahap0l/nobetci/compare/v2.3.3...v2.4.0
-[2.3.3]: https://github.com/tahap0l/nobetci/compare/v2.3.2...v2.3.3
-[2.3.2]: https://github.com/tahap0l/nobetci/compare/v2.3.1...v2.3.2
-[2.3.1]: https://github.com/tahap0l/nobetci/compare/v2.3.0...v2.3.1
-[2.3.0]: https://github.com/tahap0l/nobetci/compare/v2.2.0...v2.3.0
-[2.2.0]: https://github.com/tahap0l/nobetci/compare/v2.1.7...v2.2.0
-[2.1.7]: https://github.com/tahap0l/nobetci/compare/v2.1.6...v2.1.7
-[2.1.6]: https://github.com/tahap0l/nobetci/compare/v2.1.5...v2.1.6
-[2.1.5]: https://github.com/tahap0l/nobetci/compare/v2.1.4...v2.1.5
-[2.1.4]: https://github.com/tahap0l/nobetci/compare/v2.1.3...v2.1.4
-[2.1.3]: https://github.com/tahap0l/nobetci/compare/v2.1.2...v2.1.3
-[2.1.2]: https://github.com/tahap0l/nobetci/compare/v2.1.1...v2.1.2
-[2.1.1]: https://github.com/tahap0l/nobetci/compare/v2.1.0...v2.1.1
-[2.1.0]: https://github.com/tahap0l/nobetci/compare/v2.0.2...v2.1.0
-[2.0.2]: https://github.com/tahap0l/nobetci/compare/v2.0.1...v2.0.2
-[0.2.0]: https://github.com/tahap0l/nobetci/releases/tag/v0.2.0
-[2.0.1]: https://github.com/tahap0l/nobetci/compare/v0.2.0...v2.0.1
+[Unreleased]: https://github.com/tahap0l/nobi/compare/v3.0.0...HEAD
+[3.0.0]: https://github.com/tahap0l/nobi/compare/v2.5.0...v3.0.0
+[2.5.0]: https://github.com/tahap0l/nobi/compare/v2.4.1...v2.5.0
+[2.4.1]: https://github.com/tahap0l/nobi/compare/v2.4.0...v2.4.1
+[2.4.0]: https://github.com/tahap0l/nobi/compare/v2.3.3...v2.4.0
+[2.3.3]: https://github.com/tahap0l/nobi/compare/v2.3.2...v2.3.3
+[2.3.2]: https://github.com/tahap0l/nobi/compare/v2.3.1...v2.3.2
+[2.3.1]: https://github.com/tahap0l/nobi/compare/v2.3.0...v2.3.1
+[2.3.0]: https://github.com/tahap0l/nobi/compare/v2.2.0...v2.3.0
+[2.2.0]: https://github.com/tahap0l/nobi/compare/v2.1.7...v2.2.0
+[2.1.7]: https://github.com/tahap0l/nobi/compare/v2.1.6...v2.1.7
+[2.1.6]: https://github.com/tahap0l/nobi/compare/v2.1.5...v2.1.6
+[2.1.5]: https://github.com/tahap0l/nobi/compare/v2.1.4...v2.1.5
+[2.1.4]: https://github.com/tahap0l/nobi/compare/v2.1.3...v2.1.4
+[2.1.3]: https://github.com/tahap0l/nobi/compare/v2.1.2...v2.1.3
+[2.1.2]: https://github.com/tahap0l/nobi/compare/v2.1.1...v2.1.2
+[2.1.1]: https://github.com/tahap0l/nobi/compare/v2.1.0...v2.1.1
+[2.1.0]: https://github.com/tahap0l/nobi/compare/v2.0.2...v2.1.0
+[2.0.2]: https://github.com/tahap0l/nobi/compare/v2.0.1...v2.0.2
+[0.2.0]: https://github.com/tahap0l/nobi/releases/tag/v0.2.0
+[2.0.1]: https://github.com/tahap0l/nobi/compare/v0.2.0...v2.0.1

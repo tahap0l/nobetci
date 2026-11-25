@@ -1,13 +1,13 @@
 # Microsoft Store preparation
 
-This guide describes the current Store build path for Nöbetçi. A package built with the command
+This guide describes the current Store build path for Nobi. A package built with the command
 below is **offline**, but it is not ready for Store submission until it is signed and the remaining
 Partner Center requirements are completed.
 
 ## Status
 
 - **Not submittable yet.** Microsoft requires the installer and every program in it to be
-  code-signed. No Nöbetçi release has been signed so far (see the
+  code-signed. No Nobi release has been signed so far (see the
   [code signing policy](../CODE_SIGNING_POLICY.md)): Windows signing through SignPath is ready in the
   release workflow but not switched on.
 - **Built by hand.** The [release workflow](../.github/workflows/release.yml) builds and publishes
@@ -27,19 +27,19 @@ From a Windows build environment with the project's Node.js and Rust dependencie
 npm run pack:store:offline
 ```
 
-The resulting package is written to `release/store/Nobetci-<version>-setup.exe`. It supports the
+The resulting package is written to `release/store/Nobi-<version>-setup.exe`. It supports the
 NSIS silent-install switch `/S`. Tauri's offline WebView2 mode adds about 127 MB to the installer.
 
 What the Store package shares with the regular installer:
 
-- It installs for the current user only, into `%LOCALAPPDATA%\Nobetci`, without administrator
+- It installs for the current user only, into `%LOCALAPPDATA%\Nobi`, without administrator
   rights, and speaks Turkish on a Turkish Windows and English elsewhere.
 - A silent `/S` install over an existing installation never shows the reinstall page, so it
   overwrites the program files in place: the Claude Code, Codex and Cursor hooks, **Start with
   Windows** and the user's data stay. (The interactive installer keeps them too: replacing one
   version with another runs the old uninstaller in update mode.)
-- The uninstaller asks about a running Nöbetçi before it removes anything, removes only
-  Nöbetçi's own hook entries (with a dated backup of each file), keeps the relay and log if that
+- The uninstaller asks about a running Nobi before it removes anything, removes only
+  Nobi's own hook entries (with a dated backup of each file), keeps the relay and log if that
   fails, removes the ChatGPT Web bridge's per-user browser registration if the user made one, and
   deletes the application data only when the user ticks **Delete the application data**. It makes
   no network requests.
@@ -51,13 +51,13 @@ What the Store package shares with the regular installer:
    and the Store package is not built by the release workflow, so it would have to be signed
    separately.
 2. Keep the Store package as a standalone installer. It must not download dependencies or other
-   binaries during installation. Test `/S` and confirm the installation only installs Nöbetçi.
+   binaries during installation. Test `/S` and confirm the installation only installs Nobi.
 3. Host each submitted version at a reliable HTTPS download URL. Use a new versioned URL for each
    binary and never replace a submitted binary at the same URL.
 4. Create or complete the developer account in Partner Center, reserve the app name, and provide
    the package URL, architecture, installer type, and `/S` installer parameter.
 5. Complete the Store listing: description, category, age rating, screenshots, support details, and
-   this privacy policy at `https://github.com/tahap0l/nobetci/blob/main/PRIVACY.md`. Desktop
+   this privacy policy at `https://github.com/tahap0l/nobi/blob/main/PRIVACY.md`. Desktop
    screenshots must be at least 1366×768; one is required and four are recommended. Capture them
    at 2× scale as described below.
 6. Submit for certification. For each update, sign and host a new immutable package, then submit
@@ -65,27 +65,27 @@ What the Store package shares with the regular installer:
    installer or app must manage updates.
 
 Microsoft also recommends MSIX for Store publishing because the Store can sign it and deliver
-updates. Nöbetçi does not currently produce MSIX; validate the Claude Code hook integration and
+updates. Nobi does not currently produce MSIX; validate the Claude Code hook integration and
 other installer behavior before switching packaging formats.
 
 ## Store listing draft
 
-**Name:** Nöbetçi
+**Name:** Nobi
 
 **Short description:** Review Claude Code, Codex and Cursor permission requests and prepare clearer
 messages for AI agents.
 
-**Long description:** Nöbetçi keeps your AI coding agents' permission requests visible while you
+**Long description:** Nobi keeps your AI coding agents' permission requests visible while you
 work. It shows why a request may be risky and lets you decide whether to allow or deny it; risky
 requests need a deliberate press-and-hold, and nothing high-risk is ever approved automatically.
 Prompt Studio can help improve a message for Claude Code, Codex, Cursor, ChatGPT, Gemini, or
 another agent. Drafts stay local with Ollama, unless you choose a cloud model. If you select
-OpenAI, the draft is sent only when you choose Improve. Nöbetçi never sends the rewritten message
+OpenAI, the draft is sent only when you choose Improve. Nobi never sends the rewritten message
 to an agent automatically; review and copy it yourself.
 
 **Category:** Developer tools
 
-**Privacy policy:** `https://github.com/tahap0l/nobetci/blob/main/PRIVACY.md`
+**Privacy policy:** `https://github.com/tahap0l/nobi/blob/main/PRIVACY.md`
 
 ## Store screenshot capture
 
@@ -93,8 +93,8 @@ Start a frontend-only dev server with `npx vite --host 127.0.0.1`, then capture 
 screens in both languages without overwriting the README images:
 
 ```powershell
-$env:NOBETCI_SCALE = "2"
-$env:NOBETCI_OUT = "store-assets"
+$env:NOBI_SCALE = "2"
+$env:NOBI_OUT = "store-assets"
 node scripts/screenshots.mjs en tr critical overview session settings-prompts
 ```
 

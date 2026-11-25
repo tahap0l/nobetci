@@ -221,16 +221,16 @@ mod live {
         println!("{:?}", super::read(false));
     }
 
-    /// Needs a session bus that could start `org.mpris.MediaPlayer2.nobetciactivation`
-    /// on demand, whose start writes the file named by NOBETCI_ACTIVATION_MARK:
+    /// Needs a session bus that could start `org.mpris.MediaPlayer2.nobiactivation`
+    /// on demand, whose start writes the file named by NOBI_ACTIVATION_MARK:
     /// `cargo test -- --ignored a_player_that_is_not_running_is_never_started`.
     #[test]
     #[ignore]
     fn a_player_that_is_not_running_is_never_started() {
-        let mark = std::path::PathBuf::from(std::env::var_os("NOBETCI_ACTIVATION_MARK").expect("the mark file"));
+        let mark = std::path::PathBuf::from(std::env::var_os("NOBI_ACTIVATION_MARK").expect("the mark file"));
         let _ = std::fs::remove_file(&mark);
         for action in ["toggle", "next", "previous", "seek"] {
-            assert!(!super::control("org.mpris.MediaPlayer2.nobetciactivation", action, Some(1_000)));
+            assert!(!super::control("org.mpris.MediaPlayer2.nobiactivation", action, Some(1_000)));
         }
         std::thread::sleep(std::time::Duration::from_millis(500));
         assert!(!mark.exists(), "asking a player that is not running must not start it");

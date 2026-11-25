@@ -1,4 +1,4 @@
-// Nöbetçi's night-watch owl — a small Canvas 2D character engine. The owl is
+// Nobi's night-watch owl — a small Canvas 2D character engine. The owl is
 // the default; the other mascots are skins (skins.ts) on the same engine, so
 // they share every movement below.
 //

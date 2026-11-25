@@ -1,4 +1,4 @@
-// The relay server for nobetci-hook.
+// The relay server for nobi-hook.
 //
 // The transport is per OS — a named pipe on Windows (`pipe/named_pipe.rs`), a
 // Unix socket on macOS and Linux (`pipe/unix_socket.rs`); everything below it is
@@ -12,7 +12,7 @@
 // relay was no longer there to receive.
 //
 // Claude Code is never blocked by us. Three things guarantee it:
-//   * nobetci-hook gives up on connecting within 300 ms (2 s for the whole
+//   * nobi-hook gives up on connecting within 300 ms (2 s for the whole
 //     event) and exits cleanly if we are closed;
 //   * we only wait for a person once the island has *confirmed* the card is on
 //     screen (or queued), so a paused island or a webview that is not listening
@@ -22,7 +22,7 @@
 //
 // What we write back is a small JSON line (`{"behavior":"deny","message":…,
 // "interrupt":…,"stop":…}`). Turning that into the documented hookSpecificOutput
-// is nobetci-hook's job, so the wire format Claude Code expects lives in exactly
+// is nobi-hook's job, so the wire format Claude Code expects lives in exactly
 // one place.
 
 use std::collections::HashMap;
@@ -46,7 +46,7 @@ use crate::risk::Level;
 use crate::rules::{self, Outcome, SessionGrants};
 use crate::Shared;
 
-/// Slightly under nobetci-hook's own 110 s wait, so we always answer first.
+/// Slightly under nobi-hook's own 110 s wait, so we always answer first.
 const DECISION_TIMEOUT: Duration = Duration::from_secs(108);
 /// How long the island gets to say "the card is up" (or "it is queued").
 const ACK_TIMEOUT: Duration = Duration::from_millis(800);
@@ -63,11 +63,11 @@ const MIN_VIEW: Duration = Duration::from_millis(350);
 const HOTKEY_WINDOW: Duration = Duration::from_millis(1500);
 static CONNECTIONS: Semaphore = Semaphore::const_new(64);
 /// The event name the health check sends through the real relay.
-pub const PING_EVENT: &str = "NobetciPing";
+pub const PING_EVENT: &str = "NobiPing";
 
 /// A decision on its way back to the relay.
 pub struct Answer {
-    /// The JSON line nobetci-hook turns into Claude Code's output.
+    /// The JSON line nobi-hook turns into Claude Code's output.
     pub reply: String,
     pub decision: &'static str,
     pub by: &'static str,
@@ -164,14 +164,14 @@ use named_pipe as transport;
 #[cfg(unix)]
 use unix_socket as transport;
 
-/// One connection from nobetci-hook, whatever carries it.
+/// One connection from nobi-hook, whatever carries it.
 trait Conn: AsyncRead + AsyncWrite + Unpin + Send + 'static {
     /// Ends the conversation once the relay has had whatever we wrote; it then
     /// sees end-of-file.
     fn close(&mut self) -> impl Future<Output = ()> + Send;
 }
 
-/// Starts listening for nobetci-hook.
+/// Starts listening for nobi-hook.
 pub fn start(app: AppHandle) {
     transport::start(app);
 }
@@ -316,7 +316,7 @@ async fn handle<C: Conn>(app: AppHandle, mut pipe: C) {
     }
 
     let settings = app.state::<Shared>().settings.lock().unwrap().clone();
-    payload["nobetci_quiet"] = json!(crate::quiet::reason(&settings));
+    payload["nobi_quiet"] = json!(crate::quiet::reason(&settings));
 
     if event == "SessionEnd" {
         app.state::<SessionGrants>().forget_session(str_of(&payload, "session_id"));
@@ -331,7 +331,7 @@ async fn handle<C: Conn>(app: AppHandle, mut pipe: C) {
     let cwd = str_of(&payload, "cwd").to_string();
     let session = str_of(&payload, "session_id").to_string();
     let input = payload.get("tool_input").cloned().unwrap_or(Value::Null);
-    let truncated = payload.get("nobetci_truncated").and_then(Value::as_bool).unwrap_or(false);
+    let truncated = payload.get("nobi_truncated").and_then(Value::as_bool).unwrap_or(false);
 
     let interactive = interactive_kind(&tool);
     let mut eval = rules::evaluate(
@@ -439,7 +439,7 @@ async fn handle<C: Conn>(app: AppHandle, mut pipe: C) {
     }
 
     payload["request_id"] = json!(id);
-    payload["nobetci_kind"] = json!(kind);
+    payload["nobi_kind"] = json!(kind);
     let mut risk = serde_json::to_value(a).unwrap_or(Value::Null);
     if let Some(risk) = risk.as_object_mut() {
         risk.insert("engineLevel".into(), json!(eval.engine_level));
@@ -482,7 +482,7 @@ async fn handle<C: Conn>(app: AppHandle, mut pipe: C) {
 
     entry.ms = audit::now_ms().saturating_sub(started);
     match outcome {
-        // A reply here is the whole point; nobetci-hook turns it into output.
+        // A reply here is the whole point; nobi-hook turns it into output.
         Ok(answer) => {
             let delivered = deliver(&mut pipe, &answer.reply).await;
             entry.message = answer.message;
@@ -496,8 +496,8 @@ async fn handle<C: Conn>(app: AppHandle, mut pipe: C) {
                 let _ = app.emit_to(WINDOW_LABEL, UNDELIVERED_EVENT, undelivered_notice(&id));
             }
         }
-        // No decision: say nothing at all. nobetci-hook then writes nothing to
-        // stdout and Claude Code asks in the terminal, as if Nöbetçi were closed
+        // No decision: say nothing at all. nobi-hook then writes nothing to
+        // stdout and Claude Code asks in the terminal, as if Nobi were closed
         // (Cursor is told to ask itself; the Claude app shows its own dialog).
         Err(reason) => {
             entry.decision = "none".into();
@@ -539,7 +539,7 @@ fn taken_by(reason: &'static str, host: &'static str) -> &'static str {
     }
 }
 
-/// Who asked instead of Nöbetçi, for a history message: English, Turkish.
+/// Who asked instead of Nobi, for a history message: English, Turkish.
 fn who_asks(agent: &str, host: &str) -> (&'static str, &'static str) {
     match (agent, host) {
         ("Cursor", _) => ("Cursor asked the user itself", "Cursor kullanıcıya kendisi sordu"),
@@ -563,13 +563,13 @@ async fn deliver<C: Conn>(pipe: &mut C, reply: &impl std::fmt::Display) -> bool 
 fn undelivered(entry: &mut Entry, decision: &str) {
     let what = if decision == "allow" {
         pick(
-            "Allowed through Nöbetçi, but the request had already ended: Claude Code never got the answer.",
-            "Nöbetçi üzerinden izin verildi, ama istek çoktan bitmişti: cevap Claude Code'a ulaşmadı.",
+            "Allowed through Nobi, but the request had already ended: Claude Code never got the answer.",
+            "Nobi üzerinden izin verildi, ama istek çoktan bitmişti: cevap Claude Code'a ulaşmadı.",
         )
     } else {
         pick(
-            "Denied through Nöbetçi, but the request had already ended: Claude Code never got the answer.",
-            "Nöbetçi üzerinden reddedildi, ama istek çoktan bitmişti: cevap Claude Code'a ulaşmadı.",
+            "Denied through Nobi, but the request had already ended: Claude Code never got the answer.",
+            "Nobi üzerinden reddedildi, ama istek çoktan bitmişti: cevap Claude Code'a ulaşmadı.",
         )
     };
     // A reason the user gave is kept; the stock one says nothing new.
@@ -584,7 +584,7 @@ fn undelivered(entry: &mut Entry, decision: &str) {
 }
 
 /// What Claude is told when the user denies without a reason: English, Turkish.
-const DEFAULT_DENY: (&str, &str) = ("The user denied this through Nöbetçi.", "Kullanıcı Nöbetçi üzerinden reddetti.");
+const DEFAULT_DENY: (&str, &str) = ("The user denied this through Nobi.", "Kullanıcı Nobi üzerinden reddetti.");
 
 /// A frame over MAX_PAYLOAD is refused unread, and Claude Code asks in the
 /// terminal (Cursor asks itself, the Claude app shows its dialog). It is still
@@ -620,9 +620,9 @@ fn too_long(app: &AppHandle, start: &[u8]) {
         decision: "none".into(),
         by: host.into(),
         message: if is_tr() {
-            format!("1 MiB'tan büyük: Nöbetçi tamamını gösteremeyeceği için {who_tr}.")
+            format!("1 MiB'tan büyük: Nobi tamamını gösteremeyeceği için {who_tr}.")
         } else {
-            format!("Over 1 MiB: too large for Nöbetçi to show whole, so {who_en}.")
+            format!("Over 1 MiB: too large for Nobi to show whole, so {who_en}.")
         },
         ..Entry::default()
     };
@@ -742,7 +742,7 @@ pub fn shown(app: &AppHandle, request_id: &str) {
 
 /// Every request still waiting, oldest first, as the island was sent it in the
 /// `hook` event — for an island that reloaded and lost its cards. Each also says
-/// how long it has waited (`nobetci_waited_ms`), so a card put back counts down
+/// how long it has waited (`nobi_waited_ms`), so a card put back counts down
 /// to the moment this side gives up, not from the start again.
 pub fn pending(app: &AppHandle) -> Vec<Value> {
     payloads(&app.state::<Pending>().0.lock().unwrap(), Instant::now())
@@ -757,7 +757,7 @@ fn payloads(map: &HashMap<String, Waiting>, now: Instant) -> Vec<Value> {
             // The long wait (DECISION_TIMEOUT) starts at the ack.
             let waited = now.saturating_duration_since(w.acked_at.unwrap_or(w.queued_at));
             let mut payload = w.payload.clone();
-            payload["nobetci_waited_ms"] = json!(u64::try_from(waited.as_millis()).unwrap_or(u64::MAX));
+            payload["nobi_waited_ms"] = json!(u64::try_from(waited.as_millis()).unwrap_or(u64::MAX));
             payload
         })
         .collect()
@@ -1596,8 +1596,8 @@ mod tests {
         let back = payloads(&map, now);
         assert_eq!(back.iter().map(|p| p["request_id"].clone()).collect::<Vec<_>>(), [json!("a"), json!("b")]);
         assert_eq!(back[0]["risk"]["engineLevel"], "high", "what the hook event carried");
-        assert_eq!(back[0]["nobetci_waited_ms"], 20_000, "counted from the ack, like the long wait");
-        assert_eq!(back[1]["nobetci_waited_ms"], 29_995, "never acknowledged: from its arrival");
+        assert_eq!(back[0]["nobi_waited_ms"], 20_000, "counted from the ack, like the long wait");
+        assert_eq!(back[1]["nobi_waited_ms"], 29_995, "never acknowledged: from its arrival");
         assert!(payloads(&HashMap::new(), now).is_empty());
     }
 

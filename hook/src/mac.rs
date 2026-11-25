@@ -1,7 +1,7 @@
-//! The macOS half of the relay: the Unix socket Nöbetçi listens on, and the
+//! The macOS half of the relay: the Unix socket Nobi listens on, and the
 //! parent-process chain.
 //!
-//! The socket is `~/Library/Application Support/Nobetci/nobetci.sock` (or the
+//! The socket is `~/Library/Application Support/Nobi/nobi.sock` (or the
 //! per-user temporary folder when the home path is too long for a socket). The
 //! app keeps that folder at 0700 and the socket at 0600, so another account
 //! cannot reach it in the first place. Before sending anything we still check two
@@ -36,13 +36,13 @@ const MAX_SOCKET_PATH: usize = 103;
 
 /// Must match the app's `pipe::unix_socket::socket_path()` exactly.
 fn socket_path() -> Option<PathBuf> {
-    let preferred = home()?.join("Library/Application Support/Nobetci/nobetci.sock");
+    let preferred = home()?.join("Library/Application Support/Nobi/nobi.sock");
     if preferred.as_os_str().len() <= MAX_SOCKET_PATH {
         return Some(preferred);
     }
     // A very long home folder (a network home, say): the per-user temporary
     // folder instead, which macOS keeps at 0700 for this account alone.
-    Some(user_temp_dir()?.join("nobetci.sock"))
+    Some(user_temp_dir()?.join("nobi.sock"))
 }
 
 /// The per-user temporary folder (`/var/folders/…/T/`), from confstr rather than

@@ -1,6 +1,6 @@
 # Security policy
 
-Nöbetçi sits between an AI coding agent and your machine, so we take reports about it seriously —
+Nobi sits between an AI coding agent and your machine, so we take reports about it seriously —
 including ones that turn out to be "only" a confusing card.
 
 ## Reporting a vulnerability
@@ -9,12 +9,12 @@ including ones that turn out to be "only" a confusing card.
 
 Report it privately through GitHub instead: open the repository's **Security** tab and choose
 **Report a vulnerability**, or go straight to
-<https://github.com/tahap0l/nobetci/security/advisories/new>. Only the maintainers can see the
+<https://github.com/tahap0l/nobi/security/advisories/new>. Only the maintainers can see the
 report. ([How private reporting works](https://docs.github.com/en/code-security/how-tos/report-and-fix-vulnerabilities/report-privately).)
 
 A useful report says:
 
-- the Nöbetçi version, the operating system (Windows, macOS or Linux — and on Linux, X11 or
+- the Nobi version, the operating system (Windows, macOS or Linux — and on Linux, X11 or
   Wayland and which desktop) and its version, and the version of the agent (Claude Code, Codex or
   Cursor);
 - what an attacker can do, and from where (the agent's own output, another program running as you,
@@ -22,7 +22,7 @@ A useful report says:
 - the steps to reproduce it. Please keep proofs of concept harmless — `echo`, `calc.exe` or a file
   in a temporary folder make the point without risking anyone's machine.
 
-What happens next. Nöbetçi is maintained by volunteers, so these are goals rather than guarantees:
+What happens next. Nobi is maintained by volunteers, so these are goals rather than guarantees:
 
 - we acknowledge your report within **7 days**;
 - we keep you posted at least every **14 days** until it's resolved;
@@ -45,9 +45,9 @@ Report privately anything that breaks one of the promises below, for example:
 - text from a request being interpreted as HTML or script in the island or the settings window;
 - another account, or a remote machine, reading from or writing to your pipe or socket, or a
   fake server tricking the relay into talking to it;
-- Nöbetçi writing to `~/.claude/settings.json`, or to Codex's or Cursor's `hooks.json`, without
+- Nobi writing to `~/.claude/settings.json`, or to Codex's or Cursor's `hooks.json`, without
   your explicit consent, or damaging them;
-- an agent request that changes Nöbetçi's own files, swaps its relay or removes its hooks without
+- an agent request that changes Nobi's own files, swaps its relay or removes its hooks without
   being scored CRITICAL;
 - secrets that the redaction should catch ending up in the history or in a notification;
 - formula injection through an exported CSV;
@@ -58,13 +58,13 @@ Report privately anything that breaks one of the promises below, for example:
 
 - **A risky command that scores too low, or a harmless one that scores too high**, is a gap in a
   heuristic rather than a vulnerability. Use the
-  [risk rule issue template](https://github.com/tahap0l/nobetci/issues/new?template=risk_rule.yml)
-  — unless the trick makes the *card* lie about what will run, or gets past Nöbetçi's
+  [risk rule issue template](https://github.com/tahap0l/nobi/issues/new?template=risk_rule.yml)
+  — unless the trick makes the *card* lie about what will run, or gets past Nobi's
   self-protection, which belong here.
 - **Vulnerabilities in Claude Code itself** go to Anthropic:
   <https://www.anthropic.com/responsible-disclosure-policy>.
 - **Bugs in Windows, macOS, Linux desktops, WebView2, WKWebView, WebKitGTK or Tauri** go to their
-  respective projects. If one of them affects Nöbetçi, a private report here is still welcome so we
+  respective projects. If one of them affects Nobi, a private report here is still welcome so we
   can work around it.
 
 ## Supported versions
@@ -78,9 +78,9 @@ Fixes land in the latest release only. Please update before reporting.
 
 ## Threat model
 
-### What Nöbetçi is
+### What Nobi is
 
-Nöbetçi is a **reviewer**, not a sandbox. It shows you the permission requests Claude Code would
+Nobi is a **reviewer**, not a sandbox. It shows you the permission requests Claude Code would
 otherwise ask about in a terminal — and those of Codex and Cursor, as far as their hooks allow —
 scores each one with a set of heuristics, and passes your decision back. It runs as you, on your
 machine. It decides on its own only where you told it to — a rule, a trusted project or a session
@@ -94,7 +94,7 @@ opens that app through a fixed link, or your browser at a fixed `https://` addre
 targets the message travels in that link or address, and the service may answer it as soon as it
 opens (the [privacy policy](PRIVACY.md) says which).
 
-Nöbetçi runs on Windows, on macOS (since 0.2.0) and on Linux (since 2.3.0). Where they differ, this
+Nobi runs on Windows, on macOS (since 0.2.0) and on Linux (since 2.3.0). Where they differ, this
 page says so.
 
 It assumes the following can be hostile:
@@ -103,8 +103,8 @@ It assumes the following can be hostile:
   agent that may have been steered by prompt injection;
 - **other programs on your desktop** that try to approve a request on your behalf by faking input;
 - **other accounts on the same machine**, and remote machines, that try to talk to your pipe or
-  socket, or pose as Nöbetçi;
-- **files that leave Nöbetçi**, such as a CSV export opened in a spreadsheet program.
+  socket, or pose as Nobi;
+- **files that leave Nobi**, such as a CSV export opened in a spreadsheet program.
 
 ### What it helps with
 
@@ -145,7 +145,7 @@ command runs past it. Deny rules match anywhere. For a file path, an allow rule,
 the level and a "don't ask again" grant have to match the path both as written and where it really
 leads once `..`, `.`, `~`, `$HOME` and relative parts are resolved — an allow rule for `/work/app/*`
 doesn't cover `/work/app/../../etc/hosts`, nor one for `~/*` cover `~/../../etc/x` — and a path that
-climbs above a folder Nöbetçi can't place (another user's `~bob`, `%APPDATA%`) never passes that
+climbs above a folder Nobi can't place (another user's `~bob`, `%APPDATA%`) never passes that
 way. Deny, always-ask and raising rules match the path as written or where it leads, and these
 other spellings of it: repeated leading slashes (`//etc/x`), a process's root folder on Linux
 (`/proc/self/root/etc/x`), `/private/etc/x` on macOS, Windows device and object-manager paths
@@ -182,7 +182,7 @@ Write and edit requests show the whole content, and every edit of a multi-edit. 
   of it out of view;
 - a command box that has to scroll says so.
 
-For a tool it doesn't know, Nöbetçi shows, scores and matches the whole argument object, not one
+For a tool it doesn't know, Nobi shows, scores and matches the whole argument object, not one
 field of it.
 
 **No HTML from requests.** The island and the settings window build their DOM from text nodes and
@@ -198,14 +198,14 @@ window alone; the desktop mascot only shows itself, says it is ready and opens t
 can't send the island events. A script running in the settings window or the mascot can't approve
 a request.
 
-**Physical-click guard.** While a request is waiting, Nöbetçi records every press of the primary
+**Physical-click guard.** While a request is waiting, Nobi records every press of the primary
 mouse button and whether it came from a real device:
 
 - **Windows:** it listens to Raw Input through a message-only window, without any global hook. A
   press from a real device carries the handle of that device; input synthesised with `SendInput`
   carries none, and pressing a button through UI Automation produces no mouse input at all. With
   the mouse buttons swapped (left-handed), the guard follows the button you made primary.
-- **macOS:** a local AppKit event monitor sees the presses Nöbetçi's own windows receive (no
+- **macOS:** a local AppKit event monitor sees the presses Nobi's own windows receive (no
   Accessibility or Input Monitoring permission needed). Every mouse event carries the process id
   of whoever posted it: events from a real mouse or trackpad come from the HID system with pid 0,
   events posted by a program (`CGEventPost`) carry that program's pid, and pressing a button
@@ -224,13 +224,13 @@ mouse button and whether it came from a real device:
   the guard is a speed bump for LOW and MEDIUM approvals, not a proof, and **HIGH and CRITICAL
   requests are never approved on the island**: their card explains why and offers **Hand to
   terminal** (**Hand to Cursor** in Cursor) and **Deny**, and Rust refuses any approval of them from
-  the island. Nöbetçi asks for XInput 2.2, so it also sees the release while the island's own
+  the island. Nobi asks for XInput 2.2, so it also sees the release while the island's own
   toolkit holds the pointer. The guard follows the button maps (`xinput set-button-map`, or
   `xmodmap -e 'pointer = 3 2 1'` for a left-handed mouse), so the press it records is the one that
   acts as the primary click; a press a program makes counts as synthetic whatever its button, and a
   real click judged while a button map was changing under it backs no approval (click again).
 
-Nöbetçi also notes where each press landed. An approval made on the island is accepted only if the
+Nobi also notes where each press landed. An approval made on the island is accepted only if the
 most recent press was physical, began after the card appeared, is fresh — released within 3 seconds,
 or the hold time plus 3 seconds while still held — and landed on the Allow button, and no button a
 program pressed was still held down when it began. A card accepts no approval in its first 350 ms. A
@@ -253,26 +253,26 @@ and takes one physical click.
 
 **A channel only you can use.**
 
-- **Windows:** the relay and the app talk over `\\.\pipe\nobetci-<your SID>`. The app creates it
+- **Windows:** the relay and the app talk over `\\.\pipe\nobi-<your SID>`. The app creates it
   with an explicit DACL that grants access to your account and SYSTEM only, rejects remote
   clients, and refuses to start serving if another process already owns that name. Before
   sending anything, the relay checks that the process serving the pipe runs under your SID; if it
   can't tell, it sends nothing. It also opens the pipe at the identification level, so a server
   that grabbed the name first could at most learn who you are, never act as you. An answer is
   flushed before the pipe is disconnected, so a decision made on the spot by a rule is never lost.
-- **macOS:** they talk over a Unix socket, `~/Library/Application Support/Nobetci/nobetci.sock`.
+- **macOS:** they talk over a Unix socket, `~/Library/Application Support/Nobi/nobi.sock`.
   The app keeps that folder at mode 0700 and the socket at 0600, refuses to start if something
   already answers on the socket, and drops any connection whose peer (`getpeereid`) isn't your
   user id. Before sending anything, the relay checks that the socket file belongs to you and that
   the process on the other end runs as you; otherwise it sends nothing.
-- **Linux:** the same, with the socket at `~/.local/state/nobetci/nobetci.sock` (or
-  `/tmp/nobetci-<uid>/` when the home path is too long for a socket) and the peer checked with
+- **Linux:** the same, with the socket at `~/.local/state/nobi/nobi.sock` (or
+  `/tmp/nobi-<uid>/` when the home path is too long for a socket) and the peer checked with
   `SO_PEERCRED`.
 
-**Failing safe, never failing open.** If Nöbetçi is closed, paused, busy or slow, the request falls
+**Failing safe, never failing open.** If Nobi is closed, paused, busy or slow, the request falls
 back to the agent's own prompt: Claude Code and Codex ask in the terminal, and Cursor asks you
 itself. The relay never prints a decision it doesn't fully recognise: unknown or malformed answers
-produce no output, which leaves the decision to the terminal. Nöbetçi registers its Cursor
+produce no output, which leaves the decision to the terminal. Nobi registers its Cursor
 permission hooks fail-closed, so a relay that crashes or can't be started makes Cursor refuse the
 command rather than run it unreviewed.
 
@@ -286,35 +286,35 @@ announced only when there is a file to back up. Writes go to a temporary file th
 the original — for a symbolic link, over the file it points to, so the link stays a link — and a
 file that can't be read or parsed is never overwritten. Codex's and Cursor's `hooks.json` are handled
 the same way. When Claude Code keeps its settings elsewhere with an absolute `CLAUDE_CONFIG_DIR`,
-Nöbetçi writes `$CLAUDE_CONFIG_DIR/settings.json` instead, provided Nöbetçi itself sees that
+Nobi writes `$CLAUDE_CONFIG_DIR/settings.json` instead, provided Nobi itself sees that
 variable; Settings → Claude Code shows which file it uses.
 
-`nobetci --remove-hooks` is the one path without a preview. The Windows uninstaller runs it, and on
-macOS and Linux you run it by hand before deleting the app. It removes only Nöbetçi's own hook
+`nobi --remove-hooks` is the one path without a preview. The Windows uninstaller runs it, and on
+macOS and Linux you run it by hand before deleting the app. It removes only Nobi's own hook
 commands — those whose program is the relay, also when an older version wrote its Windows 8.3
-short name — never another tool's hook, even one that shares a matcher group with Nöbetçi's — from
+short name — never another tool's hook, even one that shares a matcher group with Nobi's — from
 `~/.claude/settings.json`, Codex's `hooks.json` and `~/.cursor/hooks.json`, keeps a dated backup of
 each, and prints one line per file in a terminal on macOS and Linux (on Windows, where it has no
-console, `nobetci.log` notes each file it cleaned or couldn't clean). It exits with status 1 when a
-file couldn't be cleaned (0 when no entry of Nöbetçi's is left), in which case the Windows
+console, `nobi.log` notes each file it cleaned or couldn't clean). It exits with status 1 when a
+file couldn't be cleaned (0 when no entry of Nobi's is left), in which case the Windows
 uninstaller keeps the relay in place and tells you what is left.
 
-**Nöbetçi guards itself.** A request from the agent to change Claude Code's permission or hook
+**Nobi guards itself.** A request from the agent to change Claude Code's permission or hook
 settings (`settings.json` or `settings.local.json` in `~/.claude`, or in the folder
-`CLAUDE_CONFIG_DIR` names — when Nöbetçi sees that variable, and whenever a command spells
+`CLAUDE_CONFIG_DIR` names — when Nobi sees that variable, and whenever a command spells
 `$CLAUDE_CONFIG_DIR` out), or Codex's or Cursor's hook settings (their `hooks.json`, and Codex's
 `config.toml`), is scored CRITICAL; one that writes hooks, agents, commands, skills, plugins or
-`.mcp.json` is HIGH. The same goes for Nöbetçi itself, on all three systems:
+`.mcp.json` is HIGH. The same goes for Nobi itself, on all three systems:
 
-- writing to its folders — `%APPDATA%\Nobetci` and `%LOCALAPPDATA%\Nobetci` on Windows;
-  `~/Library/Application Support/Nobetci` and `/Applications/Nobetci.app` on macOS;
-  `~/.config/nobetci`, `~/.local/share/nobetci`, `~/.local/state/nobetci` (and their
+- writing to its folders — `%APPDATA%\Nobi` and `%LOCALAPPDATA%\Nobi` on Windows;
+  `~/Library/Application Support/Nobi` and `/Applications/Nobi.app` on macOS;
+  `~/.config/nobi`, `~/.local/share/nobi`, `~/.local/state/nobi` (and their
   `$XDG_*_HOME` forms) and the installed programs on Linux — or to its relay wherever it lies, is
   CRITICAL, whatever does the writing: a redirection, `tee`, `cp`, `mv`, `install`, `ln`, `rsync`,
   `curl -o`, `wget -O`, `sed -i`, `chmod`, `rm`, `dd of=`, an editor or a one-liner in a scripting
-  language — and a program Nöbetçi doesn't know, handed one of those paths, counts as writing
+  language — and a program Nobi doesn't know, handed one of those paths, counts as writing
   there. Reading those files stays LOW;
-- `nobetci --remove-hooks` is CRITICAL by any path and however it is run — piped into a shell,
+- `nobi --remove-hooks` is CRITICAL by any path and however it is run — piped into a shell,
   through `xargs`, `$(…)` or a variable, or from an option of git, `script`, `tmux` or `env -S`
   that runs commands. A line that only names it in text it prints, searches or records (`echo`,
   `grep`, `git commit -m`, `gh pr create --body`), and runs nothing that is handed that text, isn't
@@ -332,7 +332,7 @@ Windows device and object-manager paths (`\\?\C:\…`, `\\.\C:\…`, `\??\C:\…
 administrative shares (`\\localhost\C$\…`), 8.3 short names such as `C:\PROGRA~1`, and Git Bash's
 `/c/…` — so a write into a system folder is HIGH in any of them, as it is in the plain spelling.
 
-**No telemetry; explicit provider requests only.** Nöbetçi has no analytics, crash reporting or
+**No telemetry; explicit provider requests only.** Nobi has no analytics, crash reporting or
 update checks. Prompt drafts are not saved. Ollama receives the draft at the local Ollama service;
 Ollama models marked cloud may forward it. The OpenAI API receives it only after the user selects
 OpenAI and clicks Improve. The optional API key is stored in the operating system credential vault,
@@ -353,9 +353,9 @@ after another `=` or `:`, as in `$env:API_TOKEN=…`, `--from-literal=password=�
 pass:`); and passwords in URLs, with or without a user name (`redis://:…@host`). A word like
 "token" or "password" in a sentence is left alone. A notification is masked first and shortened
 afterwards, so the cut can't leave the beginning of a secret showing. The approval card is
-deliberately not redacted: you have to see exactly what you approve. The log file (`nobetci.log`)
+deliberately not redacted: you have to see exactly what you approve. The log file (`nobi.log`)
 records what happened — request IDs, tool names, risk levels and decisions — but not the requests
-themselves. On macOS and Linux, Nöbetçi keeps its settings and data folders readable by your
+themselves. On macOS and Linux, Nobi keeps its settings and data folders readable by your
 account only (0700) and writes the settings, the agenda, their dated copies, the history and the
 log for your account only (0600). On a file system that can't hold those permissions (FAT, exFAT,
 some network shares) it uses its own folders as they are and says so in the log; a folder that
@@ -369,7 +369,7 @@ separator is a comma, or a semicolon for spreadsheets that expect one.
 
 ### What it does not protect against
 
-**It is not a sandbox.** An approved command runs with your full rights. Nöbetçi doesn't contain,
+**It is not a sandbox.** An approved command runs with your full rights. Nobi doesn't contain,
 monitor or undo what it does afterwards.
 
 **Heuristics can be evaded.** Quoting and escaping tricks, variables and aliases, a harmless-looking
@@ -381,17 +381,17 @@ there are many ways to make a dangerous action look ordinary. LOW means "nothing
 between programs of the same account, and so do macOS and Linux for files in your home folder.
 Anything running as you — including something an approved command started — can edit
 `~/.claude/settings.json` (for example to allow everything so Claude Code never asks), change
-Nöbetçi's settings or history, replace the relay in `%LOCALAPPDATA%\Nobetci\bin` (Windows),
-`~/Library/Application Support/Nobetci/bin` (macOS) or `~/.local/share/nobetci/bin` (Linux), or
-simply end Nöbetçi. Nöbetçi scores an agent's request to do any of this CRITICAL or HIGH, but it
+Nobi's settings or history, replace the relay in `%LOCALAPPDATA%\Nobi\bin` (Windows),
+`~/Library/Application Support/Nobi/bin` (macOS) or `~/.local/share/nobi/bin` (Linux), or
+simply end Nobi. Nobi scores an agent's request to do any of this CRITICAL or HIGH, but it
 can't see what a program does after you approved it. An administrator can do all of that for every
 account.
 
-**Decisions made somewhere else.** Nöbetçi only sees the requests the agent would ask you about.
+**Decisions made somewhere else.** Nobi only sees the requests the agent would ask you about.
 Tool calls that Claude Code's own permission settings already allow, sessions running with
 permission checks turned off, and requests answered in the terminal (after **Hand to terminal**, a
-timeout, a pause, or while Nöbetçi isn't running) are never reviewed by it. (In the Claude desktop
-app, where Nöbetçi asks from `PreToolUse`, it does see calls the app's allow list would have let
+timeout, a pause, or while Nobi isn't running) are never reviewed by it. (In the Claude desktop
+app, where Nobi asks from `PreToolUse`, it does see calls the app's allow list would have let
 through — and makes them wait for the island.)
 
 **Fake keystrokes.** Any program can trigger a global hotkey. That's why the allow hotkey is off by
@@ -436,7 +436,7 @@ signing secrets, and the jobs that use one run nothing from the repository, npm 
 `cargo audit` job checks `Cargo.lock` against the RustSec advisory database whenever the Rust
 dependencies change and once a week, and Dependabot watches npm and the actions. One advisory
 can't be fixed here yet: glib 0.18 (RUSTSEC-2024-0429), which Tauri's GTK 3 stack brings in on
-Linux, is unsound only in an iterator that neither Nöbetçi nor any crate it builds calls, and goes
+Linux, is unsound only in an iterator that neither Nobi nor any crate it builds calls, and goes
 away when Tauri moves to GTK 4. (rustix is at 1.1.6, past RUSTSEC-2026-0486.)
 `SHA256SUMS.txt` is published next to the Windows installer, the macOS disk image and the Linux
 packages. Releases are not code-signed yet (the macOS app is only ad-hoc signed and not

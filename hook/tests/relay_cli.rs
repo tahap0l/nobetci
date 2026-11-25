@@ -1,13 +1,13 @@
 //! The relay binary as the hosts run it. Every case here stops before the relay
 //! would connect (the input cannot be read, or is not a status message), so the
-//! tests never reach a Nöbetçi that happens to be running on this machine.
+//! tests never reach a Nobi that happens to be running on this machine.
 
 use std::io::Write;
 use std::process::{Command, Stdio};
 
 /// Runs the relay with `args` and `stdin`; returns stdout and the exit code.
 fn relay(args: &[&str], stdin: &[u8]) -> (Vec<u8>, i32) {
-    let mut child = Command::new(env!("CARGO_BIN_EXE_nobetci-hook"))
+    let mut child = Command::new(env!("CARGO_BIN_EXE_nobi-hook"))
         .args(args)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())

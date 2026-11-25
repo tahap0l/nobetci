@@ -53,7 +53,7 @@ const TABS: Record<TabId, Tab> = {
   hakkinda: hakkindaTab,
 };
 
-const LAST_TAB_KEY = "nobetci.settings.tab";
+const LAST_TAB_KEY = "nobi.settings.tab";
 
 function isTab(v: string | null): v is TabId {
   return !!v && (TAB_IDS as readonly string[]).includes(v);
@@ -142,7 +142,7 @@ function buildShell() {
           "div",
           { class: "brand" },
           owlMark(30),
-          h("div", { class: "brand-text" }, h("strong", { text: "Nöbetçi" }), brandSub),
+          h("div", { class: "brand-text" }, h("strong", { text: "Nobi" }), brandSub),
         ),
         navEl,
         sideFoot,

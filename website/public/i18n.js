@@ -1,4 +1,4 @@
-// Nöbetçi website: every string the pages show, in Turkish and English, and the
+// Nobi website: every string the pages show, in Turkish and English, and the
 // visitor's language decided before the first paint.
 //
 // Loaded without `defer` at the end of <head> on every page. The HTML carries
@@ -12,39 +12,39 @@
   const COPY = {
     tr: {
       // Page titles and descriptions, by <html data-page>.
-      title_home: "Nöbetçi — Son karar sende",
-      desc_home: "Nöbetçi, Claude Code'un izin isteklerini ekranının üstündeki bir adada gösterir: komutu ve riskini gör, kararı sen ver. Codex ve Cursor'u da izler. Asistan, ajanda, müzik, hava ve sistem kartlarıyla. Windows, macOS ve Linux için ücretsiz.",
-      title_demo: "Nöbetçi · Canlı demo",
-      desc_demo: "Nöbetçi'nin gerçek arayüzünü tarayıcında dene: izin kartları, sorular ve planlar, asistan, ajanda, hava ve sistem kartları.",
-      title_privacy: "Gizlilik politikası — Nöbetçi",
-      desc_privacy: "Nöbetçi'nin gizlilik politikası: yerel kayıtlar, isteğe bağlı yapay zekâ mesaj incelemesi, ada asistanı ve veri tercihlerin.",
-      title_signing: "Kod imzalama politikası — Nöbetçi",
-      desc_signing: "Nöbetçi'nin kod imzalama politikası: güncel durum, neler imzalanır, sürümler nasıl imzalanır ve ekip rolleri.",
-      title_404: "Sayfa bulunamadı — Nöbetçi",
+      title_home: "Nobi — AI agent guard · Son karar sende",
+      desc_home: "Nobi, Claude Code'un izin isteklerini ekranının üstündeki bir adada gösterir: komutu ve riskini gör, kararı sen ver. Codex ve Cursor'u da izler. Asistan, ajanda, müzik, hava ve sistem kartlarıyla. Windows, macOS ve Linux için ücretsiz.",
+      title_demo: "Nobi · Canlı demo",
+      desc_demo: "Nobi'nin gerçek arayüzünü tarayıcında dene: izin kartları, sorular ve planlar, asistan, ajanda, hava ve sistem kartları.",
+      title_privacy: "Gizlilik politikası — Nobi",
+      desc_privacy: "Nobi'nin gizlilik politikası: yerel kayıtlar, isteğe bağlı yapay zekâ mesaj incelemesi, ada asistanı ve veri tercihlerin.",
+      title_signing: "Kod imzalama politikası — Nobi",
+      desc_signing: "Nobi'nin kod imzalama politikası: güncel durum, neler imzalanır, sürümler nasıl imzalanır ve ekip rolleri.",
+      title_404: "Sayfa bulunamadı — Nobi",
       desc_404: "Aradığın sayfa burada yok.",
 
       // Shared header and footer.
       skip: "İçeriğe atla", menu: "Menü", menuClose: "Kapat", navMain: "Ana gezinme",
       navFeatures: "Özellikler", navNew: "Yenilikler", navDemo: "Canlı demo", navDownload: "İndir", navFaq: "SSS",
-      langLabel: "Switch language to English", homeLabel: "Nöbetçi ana sayfa",
+      langLabel: "Switch language to English", homeLabel: "Nobi ana sayfa",
       footerLine: "Dikkatli ajanlar için küçük bir baykuş.", footerNav: "Alt gezinme", footerHome: "Ana sayfa",
       footerPrivacy: "Gizlilik", footerSigning: "Kod imzalama politikası", footerChanges: "Sürüm notları",
       footerLicense: "MIT lisansı", footerContact: "İletişim",
-      back: "← Nöbetçi ana sayfasına dön",
+      back: "← Nobi ana sayfasına dön",
 
       // 404
       nfTitle: "Bu sayfa nöbette değil.",
-      nfText: "Aradığın sayfa burada yok; taşınmış ya da kaldırılmış olabilir. Nöbetçi ana sayfasından devam edebilirsin.",
+      nfText: "Aradığın sayfa burada yok; taşınmış ya da kaldırılmış olabilir. Nobi ana sayfasından devam edebilirsin.",
       nfHome: "Ana sayfaya dön", nfDemo: "Canlı demoyu aç",
 
       // Home: hero
-      pill: "Daha keskin risk motoru, daha güvenli onaylar",
+      pill: "Nöbetçi artık Nobi",
       heroTitle: "Yapay zekâ kod yazsın.<br /><em>Son karar sende.</em>",
-      heroText: "Nöbetçi, Claude Code oturumlarını (Codex ve Cursor'u da) ekranının üstündeki küçük bir adada izler. Bir izin isteği geldiğinde komutu ve riskini tek bakışta gösterir; onaylamak ya da reddetmek sana kalır.",
+      heroText: "Nobi, Claude Code oturumlarını (Codex ve Cursor'u da) ekranının üstündeki küçük bir adada izler. Bir izin isteği geldiğinde komutu ve riskini tek bakışta gösterir; onaylamak ya da reddetmek sana kalır.",
       download: "Ücretsiz indir", downloadFor: "{os} için indir", tryDemo: "Canlı demoyu dene",
       meta1: "Ücretsiz ve açık kaynak", meta2: "Hesap yok, telemetri yok", meta3: "Windows · macOS · Linux",
       themeLabel: "Maskot", themeGroup: "Sitenin maskotu ve renkleri",
-      barFile: "Dosya", barView: "Görünüm", frameTitle: "Nöbetçi adası, canlı", stageHint: "Canlı · gerçek uygulama arayüzü",
+      barFile: "Dosya", barView: "Görünüm", frameTitle: "Nobi adası, canlı", stageHint: "Canlı · gerçek uygulama arayüzü",
       stagePause: "Durdur", stagePauseLabel: "Turu durdur", stagePlay: "Oynat", stagePlayLabel: "Turu oynat",
       chip1: "Karar sende", chip1s: "Yüksek risk asla kendiliğinden onaylanmaz", chip2: "Risk motoru", chip2s: "Her komut puanlanır ve açıklanır",
       stripLabel: "Uyumlu araçlar", stripLead: "Şunlarla çalışır:", stripDesktop: "Claude masaüstü (Code)",
@@ -79,6 +79,10 @@
 
       // Home: what's new
       newEyebrow: "Yenilikler", newTitle: "Her sürümde <em>biraz daha yetenekli.</em>", newAll: "Tüm sürüm notları →",
+      d300: "25 Kasım 2026",
+      n300a: "Nöbetçi artık Nobi: yeni ad, aynı baykuş",
+      n300b: "Ayarların, kuralların, geçmişin ve ajandan ilk açılışta kendiliğinden taşınıyor",
+      n300c: "Kurulum eski Nöbetçi'yi kaldırıyor; hook'lar tek tıkla, incelenen bir farkla yenileniyor",
       d250: "23 Kasım 2026", d241: "19 Kasım 2026", d240: "19 Kasım 2026", d233: "16–19 Kasım 2026", d231: "15 Kasım 2026", d230: "14 Kasım 2026",
       n250a: "Risk motoru çok daha fazla tehlikeli komutu yakalıyor; gündelik komutlar düşük kalıyor",
       n250b: "Reddetmek Claude'u durdurmuyor; geçmiş her sonucu kaydediyor",
@@ -103,11 +107,11 @@
       howEyebrow: "Üç adımda", howTitle: "Gör. Anla.<br /><em>Sonra karar ver.</em>",
       s1: "İstek ekrana gelir", s1t: "Claude Code bir işlem için izin istediğinde ada açılır ve isteği önüne getirir.",
       s2: "Neyi çalıştıracağını incele", s2t: "Komutun tamamı, risk seviyesi, nedenleri ve şüpheli parçalar tek kartta.",
-      s3: "Kararını ver", s3t: "İzin ver, reddet ya da terminale bırak. Nöbetçi kapalıysa ajan hiç beklemeden çalışmaya devam eder.",
+      s3: "Kararını ver", s3t: "İzin ver, reddet ya da terminale bırak. Nobi kapalıysa ajan hiç beklemeden çalışmaya devam eder.",
       howCaption: "Otomatik izin tavanı, basılı tutma süreleri ve gerçek tıklama koruması senin elinde.",
 
       // Home: download
-      dlEyebrow: "İndir", dlTitle: "Nöbetçi <em>nöbete hazır.</em>", dlIntro: "Ücretsiz indir, kurulum sihirbazıyla Claude Code'a bağla, ilk izin isteğinde kararını ver.",
+      dlEyebrow: "İndir", dlTitle: "Nobi <em>nöbete hazır.</em>", dlIntro: "Ücretsiz indir, kurulum sihirbazıyla Claude Code'a bağla, ilk izin isteğinde kararını ver.",
       dlLatest: "Son sürüm", yours: "Senin sistemin", get: "İndir",
       winReq: "Windows 10 ve 11, 64 bit. Kurulum sihirbazı her şeyi ayarlar.",
       macReq: "macOS 11 ve üstü, Apple Silicon ve Intel tek pakette.",
@@ -118,46 +122,46 @@
 
       // Home: FAQ, closing
       faqEyebrow: "Sık sorulanlar", faqTitle: "Merak ettiklerin",
-      q1: "Nöbetçi kapalıysa ajanım takılır mı?", a1: "Hayır. Uygulama kapalıysa köprü hiçbir şey yapmadan çıkar ve Claude Code her zamanki gibi terminalde sorar. Açıkken bile bir isteğe yalnızca belirli bir süre bekler.",
+      q1: "Nobi kapalıysa ajanım takılır mı?", a1: "Hayır. Uygulama kapalıysa köprü hiçbir şey yapmadan çıkar ve Claude Code her zamanki gibi terminalde sorar. Açıkken bile bir isteğe yalnızca belirli bir süre bekler.",
       q2: "Verilerim bir yere gönderiliyor mu?", a2: "Hayır. Hesap, telemetri ya da analiz yok. Ağa yalnızca senin açtığın şeyler çıkar: Mesaj Atölyesi'nde ya da asistanın Burada sor seçeneğinde seçtiğin sağlayıcı ve şehir seçtiysen hava durumu. Asistan bir web uygulamasını ya da bağlantısıyla bir masaüstü uygulamasını açtığında mesajın, adresin içinde o servise gider ve hemen cevaplanabilir.",
       q3: "Yüksek riskli bir komut kendiliğinden onaylanabilir mi?", a3: "Hayır. Kurallar, güvenilen projeler ve oturum izinleri en fazla orta riske kadar otomatik izin verebilir. Yüksek ve kritik istekler her zaman basılı tutmayla, gerçek bir tıklamayla onaylanır; Linux'ta ise, bir programın sahte tıklaması gerçeğinden ayırt edilemediği için, adada değil terminalde onaylanır.",
       q4: "Claude masaüstü uygulamasıyla da çalışıyor mu?", a4: "Evet. Uygulamanın Code sekmesindeki Claude Code oturumları terminaldekiler gibi izlenir, izin istekleri de adaya gelir; ada her oturumun nerede çalıştığını yazar. Normal sohbet bölümü izlenmez.",
       q6: "Codex ve Cursor ile de çalışıyor mu?", a6: "Evet, ayarlardan bağladığında: Codex ve Cursor oturumları, gönderdiğin mesajlar ve desteklenen izin istekleri adada görünür. Ne kadarının desteklendiği her ajanın hook'larına bağlı; risk incelemesinin tamamı Claude Code içindir.",
-      q5: "Ücretli mi?", a5: "Hayır. Nöbetçi ücretsiz ve MIT lisanslı açık kaynak bir projedir.",
+      q5: "Ücretli mi?", a5: "Hayır. Nobi ücretsiz ve MIT lisanslı açık kaynak bir projedir.",
       ctaTitle: "Yapay zekâ çalışsın, <em>sen izle.</em>", ctaText: "Birkaç dakikada kur, ilk izin isteğinde farkı gör.",
       owlLabel: "Baykuşun başını döndür", owlHint: "Tıkla, selam versin",
     },
     en: {
-      title_home: "Nöbetçi — You make the call",
-      desc_home: "Nöbetçi shows Claude Code's permission requests on an island at the top of your screen: see the command and its risk, then make the call. It watches Codex and Cursor too, with an assistant, an agenda, music, weather and system cards. Free for Windows, macOS and Linux.",
-      title_demo: "Nöbetçi · Live demo",
-      desc_demo: "Try Nöbetçi's real interface in your browser: approval cards, questions and plans, the assistant, the agenda, weather and system cards.",
-      title_privacy: "Privacy policy — Nöbetçi",
-      desc_privacy: "Nöbetçi's privacy policy: local records, optional AI message review, the island assistant and your choices.",
-      title_signing: "Code signing policy — Nöbetçi",
-      desc_signing: "Nöbetçi's code signing policy: the current status, what is signed, how a release is signed and the team's roles.",
-      title_404: "Page not found — Nöbetçi",
+      title_home: "Nobi — AI agent guard · You make the call",
+      desc_home: "Nobi shows Claude Code's permission requests on an island at the top of your screen: see the command and its risk, then make the call. It watches Codex and Cursor too, with an assistant, an agenda, music, weather and system cards. Free for Windows, macOS and Linux.",
+      title_demo: "Nobi · Live demo",
+      desc_demo: "Try Nobi's real interface in your browser: approval cards, questions and plans, the assistant, the agenda, weather and system cards.",
+      title_privacy: "Privacy policy — Nobi",
+      desc_privacy: "Nobi's privacy policy: local records, optional AI message review, the island assistant and your choices.",
+      title_signing: "Code signing policy — Nobi",
+      desc_signing: "Nobi's code signing policy: the current status, what is signed, how a release is signed and the team's roles.",
+      title_404: "Page not found — Nobi",
       desc_404: "The page you're looking for isn't here.",
 
       skip: "Skip to content", menu: "Menu", menuClose: "Close", navMain: "Main navigation",
       navFeatures: "Features", navNew: "What's new", navDemo: "Live demo", navDownload: "Download", navFaq: "FAQ",
-      langLabel: "Türkçeye geç", homeLabel: "Nöbetçi home page",
+      langLabel: "Türkçeye geç", homeLabel: "Nobi home page",
       footerLine: "A little owl for careful agents.", footerNav: "Footer", footerHome: "Home",
       footerPrivacy: "Privacy", footerSigning: "Code signing policy", footerChanges: "Release notes",
       footerLicense: "MIT license", footerContact: "Contact",
-      back: "← Back to the Nöbetçi home page",
+      back: "← Back to the Nobi home page",
 
       nfTitle: "This page isn't on watch.",
-      nfText: "The page you're looking for isn't here; it may have moved or been removed. You can carry on from the Nöbetçi home page.",
+      nfText: "The page you're looking for isn't here; it may have moved or been removed. You can carry on from the Nobi home page.",
       nfHome: "Back to the home page", nfDemo: "Open the live demo",
 
-      pill: "A sharper risk engine and safer approvals",
+      pill: "Nöbetçi is now Nobi",
       heroTitle: "Let AI write the code.<br /><em>You make the&nbsp;call.</em>",
-      heroText: "Nöbetçi watches your Claude Code sessions (Codex and Cursor too) from a small island at the top of your screen. When a permission request arrives, it shows the command and its risk at a glance; allowing or denying it is up to you.",
+      heroText: "Nobi watches your Claude Code sessions (Codex and Cursor too) from a small island at the top of your screen. When a permission request arrives, it shows the command and its risk at a glance; allowing or denying it is up to you.",
       download: "Download free", downloadFor: "Download for {os}", tryDemo: "Try the live demo",
       meta1: "Free and open source", meta2: "No account, no telemetry", meta3: "Windows · macOS · Linux",
       themeLabel: "Mascot", themeGroup: "The site's mascot and colours",
-      barFile: "File", barView: "View", frameTitle: "The Nöbetçi island, live", stageHint: "Live · the real app's interface",
+      barFile: "File", barView: "View", frameTitle: "The Nobi island, live", stageHint: "Live · the real app's interface",
       stagePause: "Pause", stagePauseLabel: "Pause the tour", stagePlay: "Play", stagePlayLabel: "Play the tour",
       chip1: "Your call", chip1s: "High risk is never approved on its own", chip2: "Risk engine", chip2s: "Every command scored and explained",
       stripLabel: "Works with", stripLead: "Works with:", stripDesktop: "Claude desktop (Code)",
@@ -190,6 +194,10 @@
       altSecurity: "The Safety page in the settings window",
 
       newEyebrow: "What's new", newTitle: "A little more capable <em>with every release.</em>", newAll: "All release notes →",
+      d300: "25 November 2026",
+      n300a: "Nöbetçi is now Nobi: a new name, the same owl",
+      n300b: "Your settings, rules, history and agenda move over by themselves on first launch",
+      n300c: "The installer removes the old Nöbetçi; hooks are renewed with one click on a reviewed diff",
       d250: "23 November 2026", d241: "19 November 2026", d240: "19 November 2026", d233: "16–19 November 2026", d231: "15 November 2026", d230: "14 November 2026",
       n250a: "The risk engine catches many more dangerous commands; everyday ones stay low",
       n250b: "Denying no longer stops Claude; the history records every outcome",
@@ -213,32 +221,32 @@
       howEyebrow: "Three steps", howTitle: "See it. Understand it.<br /><em>Then decide.</em>",
       s1: "A request appears", s1t: "When Claude Code asks permission for an action, the island opens and brings it to you.",
       s2: "Review what will run", s2t: "The whole command, its risk level, the reasons and any suspicious parts on one card.",
-      s3: "Make your decision", s3t: "Allow, deny or hand it back to the terminal. If Nöbetçi is closed, your agent carries on without waiting.",
+      s3: "Make your decision", s3t: "Allow, deny or hand it back to the terminal. If Nobi is closed, your agent carries on without waiting.",
       howCaption: "The auto-allow ceiling, hold times and the real-click guard are yours to set.",
 
-      dlEyebrow: "Download", dlTitle: "Nöbetçi is <em>ready to keep watch.</em>", dlIntro: "Download for free, connect Claude Code with the setup wizard, and decide on its first request.",
+      dlEyebrow: "Download", dlTitle: "Nobi is <em>ready to keep watch.</em>", dlIntro: "Download for free, connect Claude Code with the setup wizard, and decide on its first request.",
       dlLatest: "Latest release", yours: "Your system", get: "Download",
       winReq: "Windows 10 and 11, 64-bit. The setup wizard sets everything up.",
       macReq: "macOS 11 or later, Apple silicon and Intel in one package.",
       linuxReq: "x86-64; X11, or Wayland through XWayland, with a compositor running. A .deb for Debian and Ubuntu, an AppImage for any distribution. High and critical requests are approved in the terminal.",
       dlNote: "Every release comes with SHA256SUMS.txt so you can check your download. The source is MIT licensed.",
-      dlUnsigned: "Windows releases are not code-signed yet (Nöbetçi has applied for SignPath Foundation's free code signing), so SmartScreen may warn you.",
+      dlUnsigned: "Windows releases are not code-signed yet (Nobi has applied for SignPath Foundation's free code signing), so SmartScreen may warn you.",
       dlSigning: "Code signing policy",
 
       faqEyebrow: "Questions", faqTitle: "Things people ask",
-      q1: "Does my agent get stuck if Nöbetçi is closed?", a1: "No. If the app is closed, the relay exits without doing anything and Claude Code asks in the terminal as usual. Even when it's open, it waits only so long for an answer.",
+      q1: "Does my agent get stuck if Nobi is closed?", a1: "No. If the app is closed, the relay exits without doing anything and Claude Code asks in the terminal as usual. Even when it's open, it waits only so long for an answer.",
       q2: "Is my data sent anywhere?", a2: "No. No account, no telemetry, no analytics. Only what you switch on goes online: the provider you pick for Prompt Studio or the assistant's Here, and the weather if you choose a city. When the assistant opens a web app, or a desktop app through its link, your message travels to that service in the address and may be answered at once.",
       q3: "Can a high-risk command be approved automatically?", a3: "No. Rules, trusted projects and session grants can auto-allow up to medium risk at most. High and critical requests always need a press and hold with a real click; on Linux, where a program's fake click can't be told from a real one, they are approved in the terminal instead of on the island.",
       q4: "Does it work with the Claude desktop app?", a4: "Yes. Claude Code sessions in the app's Code tab are watched like terminal ones and their permission requests reach the island, which shows where each session runs. The regular chat isn't watched.",
       q6: "Does it work with Codex and Cursor?", a6: "Yes, once you connect them in Settings: Codex and Cursor sessions, the prompts you send and supported permission requests show on the island. How much is covered depends on each agent's hooks; the full safety review is for Claude Code.",
-      q5: "Does it cost anything?", a5: "No. Nöbetçi is free, open source and MIT licensed.",
+      q5: "Does it cost anything?", a5: "No. Nobi is free, open source and MIT licensed.",
       ctaTitle: "Let AI work. <em>You keep watch.</em>", ctaText: "Set it up in a few minutes and see the difference at the first permission request.",
       owlLabel: "Make the owl turn its head", owlHint: "Click to say hello",
     },
   };
 
   const root = document.documentElement;
-  const base = document.querySelector('meta[name="nobetci-base"]')?.content || "/";
+  const base = document.querySelector('meta[name="nobi-base"]')?.content || "/";
   /** The language the HTML is written in. */
   const STATIC = "tr";
 
@@ -246,7 +254,7 @@
     const asked = new URLSearchParams(location.search).get("lang");
     if (asked === "tr" || asked === "en") return asked;
     try {
-      const saved = localStorage.getItem("nobetci-lang");
+      const saved = localStorage.getItem("nobi-lang");
       if (saved === "tr" || saved === "en") return saved;
     } catch { /* storage is optional */ }
     const preferred = navigator.languages?.length ? navigator.languages : [navigator.language || STATIC];
@@ -255,7 +263,7 @@
 
   /** The mascot the visitor picked for the site (mascot-themes.js keeps it). */
   function savedTheme() {
-    try { return localStorage.getItem("nobetci-demo-theme") || "owl"; } catch { return "owl"; }
+    try { return localStorage.getItem("nobi-demo-theme") || "owl"; } catch { return "owl"; }
   }
 
   const lang = decide();
@@ -364,10 +372,10 @@
 
   // Should site.js never arrive, show the page anyway.
   setTimeout(() => {
-    if (!window.NobetciSite) root.classList.remove("js");
+    if (!window.NobiSite) root.classList.remove("js");
   }, 4000);
 
-  window.NobetciI18n = {
+  window.NobiI18n = {
     COPY,
     base,
     lang,

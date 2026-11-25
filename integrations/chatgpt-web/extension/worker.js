@@ -1,4 +1,4 @@
-const nativeHost = "io.github.tahap0l.nobetci.chatgpt";
+const nativeHost = "io.github.tahap0l.nobi.chatgpt";
 const queues = new Map();
 
 function enqueue(tabId, task) {

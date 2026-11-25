@@ -570,7 +570,7 @@ mod media_tests {
     #[cfg(unix)]
     #[test]
     fn a_helper_program_that_hangs_is_stopped_and_reaped() {
-        let pid_file = std::env::temp_dir().join(format!("nobetci-hang-{}", std::process::id()));
+        let pid_file = std::env::temp_dir().join(format!("nobi-hang-{}", std::process::id()));
         let _ = std::fs::remove_file(&pid_file);
         let started = Instant::now();
         let script = format!("echo $$ > '{}'; exec sleep 30", pid_file.display());

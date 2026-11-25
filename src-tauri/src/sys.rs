@@ -10,11 +10,11 @@ use std::process::Command;
 #[cfg(target_os = "linux")]
 use std::sync::atomic::{AtomicBool, Ordering};
 
-/// Linux: Nöbetçi set GDK_BACKEND=x11 for itself (`use_x11`).
+/// Linux: Nobi set GDK_BACKEND=x11 for itself (`use_x11`).
 #[cfg(target_os = "linux")]
 static X11_FORCED: AtomicBool = AtomicBool::new(false);
 
-/// Linux: runs Nöbetçi on X11 (XWayland under Wayland). A Wayland window can
+/// Linux: runs Nobi on X11 (XWayland under Wayland). A Wayland window can
 /// neither place itself at the top of the screen nor stay above the others,
 /// and the click guard and "go to window" speak X11. Somebody who set
 /// GDK_BACKEND knows why, so their choice stands. Must run before GTK starts.
@@ -26,14 +26,14 @@ pub fn use_x11() {
     }
 }
 
-/// A program Nöbetçi starts (a browser through xdg-open, VS Code, the relay).
-/// On Linux it does not inherit the X11 backend Nöbetçi chose for itself: a
+/// A program Nobi starts (a browser through xdg-open, VS Code, the relay).
+/// On Linux it does not inherit the X11 backend Nobi chose for itself: a
 /// browser opened from a link runs natively on Wayland, as if started from the
-/// desktop. Nöbetçi's own web views keep it. Nor, when Nöbetçi runs from an
+/// desktop. Nobi's own web views keep it. Nor, when Nobi runs from an
 /// AppImage, what the AppImage set up for its own GTK and GStreamer
 /// (`appimage_leftovers`): that program draws with the user's theme and loads
 /// the system's modules, not the ones inside an image that disappears when
-/// Nöbetçi quits.
+/// Nobi quits.
 pub fn command(program: impl AsRef<std::ffi::OsStr>) -> Command {
     #[cfg_attr(not(target_os = "linux"), allow(unused_mut))]
     let mut cmd = Command::new(program);
@@ -52,10 +52,10 @@ pub fn command(program: impl AsRef<std::ffi::OsStr>) -> Command {
     cmd
 }
 
-/// What an AppImage's start-up hooks put in Nöbetçi's environment for its own
+/// What an AppImage's start-up hooks put in Nobi's environment for its own
 /// GTK (linuxdeploy-plugin-gtk) and GStreamer (linuxdeploy-plugin-gstreamer,
 /// D19), plus the AppImage runtime's own markers: none of it belongs to a
-/// program Nöbetçi starts.
+/// program Nobi starts.
 #[cfg(any(target_os = "linux", test))]
 const APPIMAGE_VARS: &[&str] = &[
     "APPIMAGE",
@@ -82,11 +82,11 @@ const APPIMAGE_VARS: &[&str] = &[
 ];
 
 /// The environment changes that undo an AppImage's set-up for a program
-/// Nöbetçi starts: each variable to remove (None) or to set back. Nothing when
-/// Nöbetçi does not run from an AppImage (`APPDIR` unset), so a user's own
+/// Nobi starts: each variable to remove (None) or to set back. Nothing when
+/// Nobi does not run from an AppImage (`APPDIR` unset), so a user's own
 /// GTK_THEME and the like stay. XDG_DATA_DIRS gets back what it was before the
 /// GTK hook put the image's folders in front of it, or goes when it had no
-/// value. `env` reads Nöbetçi's own environment.
+/// value. `env` reads Nobi's own environment.
 #[cfg(any(target_os = "linux", test))]
 fn appimage_leftovers(
     env: impl Fn(&str) -> Option<std::ffi::OsString>,
@@ -243,7 +243,7 @@ fn exec_starting(value: &str, program: &str, exists: &dyn Fn(&str) -> bool) -> O
         _ => (arg.value.as_str(), arg.end),
     };
     let file = old.rsplit('/').next().unwrap_or(old).to_lowercase();
-    let ours = old == program || file.ends_with(".appimage") || file.starts_with("nobetci");
+    let ours = old == program || file.ends_with(".appimage") || file.starts_with("nobi");
     // A bare command name (`sh`, `flatpak`) is looked up in PATH: there.
     if !ours && (!old.starts_with('/') || exists(old)) {
         return None;
@@ -718,7 +718,7 @@ mod tests {
     #[cfg(target_os = "linux")]
     #[test]
     fn programs_we_start_get_the_desktops_own_gdk_backend() {
-        // Without Nöbetçi having forced X11, nothing is touched.
+        // Without Nobi having forced X11, nothing is touched.
         X11_FORCED.store(false, Ordering::Relaxed);
         assert_eq!(command("xdg-open").get_envs().count(), 0);
         // Once it has, children do not inherit it.
@@ -729,16 +729,16 @@ mod tests {
         X11_FORCED.store(false, Ordering::Relaxed);
     }
 
-    /// shell-widgets#2: a program started from Nöbetçi's AppImage gets none of
+    /// shell-widgets#2: a program started from Nobi's AppImage gets none of
     /// the image's GTK and GStreamer set-up, and XDG_DATA_DIRS as it was.
     #[test]
     fn programs_started_from_the_appimage_get_the_desktops_environment() {
         use std::collections::HashMap;
         use std::ffi::OsString;
         let appimage: HashMap<&'static str, &'static str> = [
-            ("APPIMAGE", "/home/u/Apps/Nobetci.AppImage"),
+            ("APPIMAGE", "/home/u/Apps/Nobi.AppImage"),
             ("APPDIR", "/tmp/.mount_NobetcX"),
-            ("ARGV0", "Nobetci.AppImage"),
+            ("ARGV0", "Nobi.AppImage"),
             ("GTK_THEME", "Adwaita:dark"),
             ("GTK_PATH", "/tmp/.mount_NobetcX//usr/lib/gtk-3.0"),
             ("GIO_MODULE_DIR", "/tmp/.mount_NobetcX//usr/lib/gio/modules"),
@@ -785,7 +785,7 @@ mod tests {
     /// removed, and a refresh changes its Exec= line and nothing else.
     #[test]
     fn a_login_entry_switched_off_by_the_desktop_is_recognised_and_kept() {
-        let written = "[Desktop Entry]\nType=Application\nVersion=1.0\nName=Nobetci\nComment=Nobetci startup script\nExec=/home/u/Apps/Nobetci.AppImage \nStartupNotify=false\nTerminal=false";
+        let written = "[Desktop Entry]\nType=Application\nVersion=1.0\nName=Nobi\nComment=Nobi startup script\nExec=/home/u/Apps/Nobi.AppImage \nStartupNotify=false\nTerminal=false";
         assert!(!login_entry_switched_off(written));
         for off in [
             format!("{written}\nHidden=true"),
@@ -799,18 +799,17 @@ mod tests {
         assert!(!login_entry_switched_off("[Other Group]\nHidden=true\n"), "only the entry's own group counts");
         let gone = |_: &str| false;
         // Already this program: left alone.
-        assert_eq!(login_entry_for(written, "/home/u/Apps/Nobetci.AppImage", gone), None);
+        assert_eq!(login_entry_for(written, "/home/u/Apps/Nobi.AppImage", gone), None);
         // A moved AppImage: only Exec= changes; the user's delay and comment stay.
-        let customised =
-            "# mine\n[Desktop Entry]\nName=Nobetci\nExec=/old/Nobetci.AppImage \nX-GNOME-Autostart-Delay=10\n";
+        let customised = "# mine\n[Desktop Entry]\nName=Nobi\nExec=/old/Nobi.AppImage \nX-GNOME-Autostart-Delay=10\n";
         assert_eq!(
-            login_entry_for(customised, "/new/Nobetci.AppImage", gone).as_deref(),
-            Some("# mine\n[Desktop Entry]\nName=Nobetci\nExec=/new/Nobetci.AppImage \nX-GNOME-Autostart-Delay=10\n")
+            login_entry_for(customised, "/new/Nobi.AppImage", gone).as_deref(),
+            Some("# mine\n[Desktop Entry]\nName=Nobi\nExec=/new/Nobi.AppImage \nX-GNOME-Autostart-Delay=10\n")
         );
         // An entry without Exec= gets one in its group.
         assert_eq!(
-            login_entry_for("[Desktop Entry]\nName=N\n[Extra]\nA=b\n", "/p/nobetci", gone).as_deref(),
-            Some("[Desktop Entry]\nName=N\nExec=/p/nobetci \n[Extra]\nA=b\n")
+            login_entry_for("[Desktop Entry]\nName=N\n[Extra]\nA=b\n", "/p/nobi", gone).as_deref(),
+            Some("[Desktop Entry]\nName=N\nExec=/p/nobi \n[Extra]\nA=b\n")
         );
     }
 
@@ -819,36 +818,32 @@ mod tests {
     /// that differs is replaced.
     #[test]
     fn a_customised_exec_line_keeps_what_the_user_wrote() {
-        let entry = |exec: &str| format!("[Desktop Entry]\nName=Nobetci\nExec={exec}\nX-GNOME-Autostart-Delay=10\n");
+        let entry = |exec: &str| format!("[Desktop Entry]\nName=Nobi\nExec={exec}\nX-GNOME-Autostart-Delay=10\n");
         let gone: fn(&str) -> bool = |_| false;
         // The review's three: already this program, so nothing to do.
         for (exec, program) in [
-            ("env GDK_SCALE=2 /home/u/Apps/Nobetci.AppImage ", "/home/u/Apps/Nobetci.AppImage"),
-            ("/home/u/Apps/Nobetci.AppImage --minimized", "/home/u/Apps/Nobetci.AppImage"),
-            ("\"/home/u/My Apps/Nobetci.AppImage\"", "/home/u/My Apps/Nobetci.AppImage"),
-            ("env -u GTK_THEME LANG=tr_TR.UTF-8 /usr/bin/nobetci %U", "/usr/bin/nobetci"),
+            ("env GDK_SCALE=2 /home/u/Apps/Nobi.AppImage ", "/home/u/Apps/Nobi.AppImage"),
+            ("/home/u/Apps/Nobi.AppImage --minimized", "/home/u/Apps/Nobi.AppImage"),
+            ("\"/home/u/My Apps/Nobi.AppImage\"", "/home/u/My Apps/Nobi.AppImage"),
+            ("env -u GTK_THEME LANG=tr_TR.UTF-8 /usr/bin/nobi %U", "/usr/bin/nobi"),
         ] {
             assert_eq!(login_entry_for(&entry(exec), program, gone), None, "{exec}");
         }
         // Moved: the program alone changes, quoted when it has a space.
         for (exec, program, want) in [
             (
-                "env GDK_SCALE=2 /old/Nobetci.AppImage --minimized",
-                "/new/My Apps/Nobetci.AppImage",
-                "env GDK_SCALE=2 \"/new/My Apps/Nobetci.AppImage\" --minimized",
+                "env GDK_SCALE=2 /old/Nobi.AppImage --minimized",
+                "/new/My Apps/Nobi.AppImage",
+                "env GDK_SCALE=2 \"/new/My Apps/Nobi.AppImage\" --minimized",
             ),
-            ("\"/old dir/Nobetci.AppImage\" --minimized", "/new/Nobetci.AppImage", "/new/Nobetci.AppImage --minimized"),
+            ("\"/old dir/Nobi.AppImage\" --minimized", "/new/Nobi.AppImage", "/new/Nobi.AppImage --minimized"),
             // The plugin writes a path unquoted: with a space in it, it reads
             // as two arguments — taken together, and quoted from now on.
-            (
-                "/home/u/My Apps/Nobetci.AppImage ",
-                "/home/u/My Apps/Nobetci.AppImage",
-                "\"/home/u/My Apps/Nobetci.AppImage\" ",
-            ),
-            ("/home/u/Old Apps/Nobetci_2.4.0.AppImage ", "/home/u/Nobetci.AppImage", "/home/u/Nobetci.AppImage "),
-            ("/home/u/My Apps/nobetci --minimized", "/usr/bin/nobetci", "/usr/bin/nobetci --minimized"),
+            ("/home/u/My Apps/Nobi.AppImage ", "/home/u/My Apps/Nobi.AppImage", "\"/home/u/My Apps/Nobi.AppImage\" "),
+            ("/home/u/Old Apps/Nobi_2.4.0.AppImage ", "/home/u/Nobi.AppImage", "/home/u/Nobi.AppImage "),
+            ("/home/u/My Apps/nobi --minimized", "/usr/bin/nobi", "/usr/bin/nobi --minimized"),
             // Some other program that is gone: the entry would start nothing.
-            ("/home/u/gone/start-nobetci.sh", "/p/Nobetci.AppImage", "/p/Nobetci.AppImage"),
+            ("/home/u/gone/start-nobi.sh", "/p/Nobi.AppImage", "/p/Nobi.AppImage"),
         ] {
             assert_eq!(login_entry_for(&entry(exec), program, gone), Some(entry(want)), "{exec}");
         }
@@ -856,14 +851,14 @@ mod tests {
         // command found in PATH is there.
         let there: fn(&str) -> bool = |_| true;
         for (exec, exists) in [
-            ("/home/u/bin/start-nobetci.sh", there),
-            ("sh -c \"sleep 10; /home/u/Nobetci.AppImage\"", gone),
+            ("/home/u/bin/start-nobi.sh", there),
+            ("sh -c \"sleep 10; /home/u/Nobi.AppImage\"", gone),
             ("flatpak run org.example.Wrapper", gone),
         ] {
-            assert_eq!(login_entry_for(&entry(exec), "/p/Nobetci.AppImage", exists), None, "{exec}");
+            assert_eq!(login_entry_for(&entry(exec), "/p/Nobi.AppImage", exists), None, "{exec}");
         }
         // Quoting as the desktop reads it, both ways.
-        for program in ["/opt/Nöbetçi/nobetci", "/a b/c", "/a\"b/c$d`e", "/a\\b c", "/tab\there"] {
+        for program in ["/opt/Nobi/nobi", "/a b/c", "/a\"b/c$d`e", "/a\\b c", "/tab\there"] {
             let args = exec_args(&format!("{} --x", exec_arg(program)));
             let read: Vec<&str> = args.iter().map(|a| a.value.as_str()).collect();
             assert_eq!(read, [program, "--x"], "{}", exec_arg(program));

@@ -1,7 +1,7 @@
 // Only observe the availability of ChatGPT's stop-generation control.
 const id = crypto.randomUUID();
-// Every try makes the browser start Nöbetçi's native host, a new process. After
-// a failed one (Nöbetçi closed, the host not registered) wait before the next:
+// Every try makes the browser start Nobi's native host, a new process. After
+// a failed one (Nobi closed, the host not registered) wait before the next:
 // 5 s, then twice as long each time, up to a minute.
 const FIRST_RETRY_MS = 5_000;
 const LAST_RETRY_MS = 60_000;

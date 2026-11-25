@@ -5,7 +5,7 @@
 // no mouse input at all. While a request waits we listen to raw mouse input on a
 // message-only window (no hooks) and hand every press of the primary button to
 // the shared guard. Listening stops as soon as nothing is waiting, so a quiet
-// Nöbetçi still costs nothing.
+// Nobi still costs nothing.
 //
 // Raw input reports physical buttons: with "Primary mouse button: Right" (the
 // left-handed setting, SM_SWAPBUTTON) the click a page sees is the right one.
@@ -173,13 +173,13 @@ pub fn start(_app: &AppHandle) {
         let class = WNDCLASSW {
             lpfnWndProc: Some(wndproc),
             hInstance: module.into(),
-            lpszClassName: w!("NobetciInputGuard"),
+            lpszClassName: w!("NobiInputGuard"),
             ..Default::default()
         };
         RegisterClassW(&class);
         let Ok(hwnd) = CreateWindowExW(
             WINDOW_EX_STYLE::default(),
-            w!("NobetciInputGuard"),
+            w!("NobiInputGuard"),
             w!(""),
             WINDOW_STYLE::default(),
             0,

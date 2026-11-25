@@ -1,6 +1,6 @@
 # Notice
 
-Nöbetçi began as a fork of the Windows build of **Coucou**
+Nobi began as a fork of the Windows build of **Coucou**
 (<https://github.com/Louis-CFM/coucou>, commit `5ae7bd9`), © 2026 Louis Raillé,
 released under the MIT License.
 
@@ -13,6 +13,6 @@ Carried over and adapted from Coucou's MIT-licensed source:
 - the open/close state machine and spring helpers (`src/island/fsm.ts`, `src/core/anim.ts`).
 
 
-New in Nöbetçi: the risk engine (`src-tauri/src/risk.rs`), hold-to-confirm
+New in Nobi: the risk engine (`src-tauri/src/risk.rs`), hold-to-confirm
 approvals enforced in Rust, per-session tracking and the approval queue, the
 fix for truncated commands on approval cards, and the Turkish UI.

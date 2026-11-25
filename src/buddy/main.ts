@@ -7,7 +7,7 @@
 // its wings, letting go lands it.
 //
 // Like the island it draws only while something moves: once it has nodded off
-// (two minutes of calm, or as soon as the island itself sleeps or Nöbetçi is
+// (two minutes of calm, or as soon as the island itself sleeps or Nobi is
 // paused) the frame loop stops and costs nothing until something stirs it. With
 // the system's "reduce motion" setting the engine keeps still, so the loop also
 // stops whenever nothing changes.
@@ -266,7 +266,7 @@ function islandSays(mood: OwlMood) {
           stir();
         }, 6500)
       : null;
-  // The island nodding off — or Nöbetçi paused — is no news to wake up for: the
+  // The island nodding off — or Nobi paused — is no news to wake up for: the
   // mascot nods off with it and stops drawing.
   if (mood === "sleeping") doze();
   else stir();
@@ -308,8 +308,8 @@ async function main() {
 
   if (!IS_TAURI) {
     // Plain browser (`npm run dev`, /buddy.html): no island to listen to, so
-    // `nobetciBuddy.mood("danger")` / `.emote("approve")` in the console stand in.
-    (window as unknown as { nobetciBuddy: unknown }).nobetciBuddy = {
+    // `nobiBuddy.mood("danger")` / `.emote("approve")` in the console stand in.
+    (window as unknown as { nobiBuddy: unknown }).nobiBuddy = {
       owl,
       mood: islandSays,
       emote: (e: OwlEmote) => {

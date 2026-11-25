@@ -179,7 +179,7 @@ function buildHeader(actions: ViewActions): ViewHost {
   const el = h(
     "div",
     { id: "header" },
-    h("span", { class: "hdr-title", text: "Nöbetçi" }),
+    h("span", { class: "hdr-title", text: "Nobi" }),
     status,
     h("span", { class: "grow" }),
     assistantBtn,
@@ -1764,7 +1764,7 @@ function buildApproval(actions: ViewActions): ViewHost {
     whoName.textContent = session?.name ?? t("ap.session");
     // A session from the Claude desktop app asks in its own window, not a
     // terminal: its button says so, with the app's icon rather than a prompt.
-    // So does Cursor, which shows its own prompt when Nöbetçi hands a request
+    // So does Cursor, which shows its own prompt when Nobi hands a request
     // back (the relay answers "ask", D3). The note left after the hand-off
     // names the same place (`handBackTo`, island.ts).
     const place = handBackTo(session);

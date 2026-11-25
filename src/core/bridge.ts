@@ -20,7 +20,7 @@ async function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T |
   try {
     return await invoke<T>(cmd, args);
   } catch (err) {
-    console.error(`[nobetci] ${cmd} failed`, err);
+    console.error(`[nobi] ${cmd} failed`, err);
     return null;
   }
 }
@@ -65,11 +65,11 @@ export interface HookStatus {
   settingsPath: string;
   hookPath: string;
   hookReady: boolean;
-  /** Events that currently have a Nöbetçi entry in ~/.claude/settings.json. */
+  /** Events that currently have a Nobi entry in ~/.claude/settings.json. */
   events: string[];
   /** Some entry points at an old relay path. */
   stale: boolean;
-  /** settings.json has someone else's status line; Nöbetçi leaves it alone. */
+  /** settings.json has someone else's status line; Nobi leaves it alone. */
   foreignStatusLine?: boolean;
   /**
    * Windows only: no spelling of the relay's path runs in both Git Bash and
@@ -335,7 +335,7 @@ export const Bridge = {
     try {
       await emit(event, payload);
     } catch (err) {
-      console.error(`[nobetci] ${event} failed`, err);
+      console.error(`[nobi] ${event} failed`, err);
     }
   },
   buddyOpenIsland: () => call<void>("buddy_open_island"),
@@ -420,7 +420,7 @@ export const Bridge = {
   pickFolder: (start?: string) => call<string | null>("pick_folder", { start: start ?? null }),
   closeSettingsWindow: () => call<void>("close_settings_window"),
 
-  /** Writes to nobetci.log in Nöbetçi's data folder, next to the Rust lines. */
+  /** Writes to nobi.log in Nobi's data folder, next to the Rust lines. */
   log: (message: string) => call<void>("log_line", { message }),
 
   // ── Claude Code hooks ─────────────────────────────────────────────────────

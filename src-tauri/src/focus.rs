@@ -74,7 +74,7 @@ mod win {
                 return true;
             }
             // The click on the island was the last input event, which normally
-            // lets Nöbetçi hand the foreground over.
+            // lets Nobi hand the foreground over.
             if SetForegroundWindow(hwnd).as_bool() {
                 return true;
             }

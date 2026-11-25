@@ -6,7 +6,9 @@ use std::time::Duration;
 use keyring::Entry;
 use serde_json::{json, Value};
 
-const KEYRING_SERVICE: &str = "Nobetci";
+const KEYRING_SERVICE: &str = "Nobi";
+/// Where the key lived before 3.0 (Nöbetçi). Moved to the new entry on first read.
+const LEGACY_KEYRING_SERVICE: &str = "Nobetci";
 const KEYRING_USER: &str = "openai-api-key";
 const MAX_TEXT_CHARS: usize = 30_000;
 
@@ -17,9 +19,26 @@ fn entry() -> Result<Entry, String> {
     })
 }
 
+/// The stored key. A key only Nöbetçi's entry holds is moved to Nobi's first;
+/// if the move fails the old entry stays and is read again next time.
+fn stored_key() -> Result<String, keyring::Error> {
+    let current = entry().map_err(|_| keyring::Error::NoEntry)?;
+    match current.get_password() {
+        Err(keyring::Error::NoEntry) => {}
+        other => return other,
+    }
+    let legacy = Entry::new(LEGACY_KEYRING_SERVICE, KEYRING_USER)?;
+    let key = legacy.get_password()?;
+    if current.set_password(&key).is_ok() {
+        let _ = legacy.delete_credential();
+    }
+    Ok(key)
+}
+
 #[tauri::command]
 pub fn openai_api_key_status() -> Result<bool, String> {
-    match entry()?.get_password() {
+    entry()?;
+    match stored_key() {
         Ok(_) => Ok(true),
         Err(keyring::Error::NoEntry) => Ok(false),
         Err(_) => Err(crate::i18n::pick(
@@ -49,6 +68,10 @@ pub fn set_openai_api_key(api_key: String) -> Result<(), String> {
 
 #[tauri::command]
 pub fn delete_openai_api_key() -> Result<(), String> {
+    // Nöbetçi's copy goes too, or the next read would bring it back.
+    if let Ok(legacy) = Entry::new(LEGACY_KEYRING_SERVICE, KEYRING_USER) {
+        let _ = legacy.delete_credential();
+    }
     match entry()?.delete_credential() {
         Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
         Err(_) => Err(crate::i18n::pick(
@@ -149,7 +172,7 @@ pub async fn complete(instruction: &str, text: &str, provider: &str, model: &str
                 .to_string()
             })?,
         "openai" => {
-            let api_key = entry()?.get_password().map_err(|_| {
+            let api_key = stored_key().map_err(|_| {
                 crate::i18n::pick(
                     "Add an OpenAI API key in Prompt Studio first.",
                     "Önce Mesaj Atölyesi'ne bir OpenAI API anahtarı ekle.",

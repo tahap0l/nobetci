@@ -5,7 +5,7 @@
   },
   "bundle": {
     "targets": ["app", "dmg"],
-    "resources": { "../target/release/nobetci-hook": "nobetci-hook" },
+    "resources": { "../target/release/nobi-hook": "nobi-hook" },
     "macOS": {
       "minimumSystemVersion": "11.0",
       "signingIdentity": "-",

@@ -1,9 +1,9 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Nobetci",
-  "mainBinaryName": "nobetci",
-  "version": "2.5.0",
-  "identifier": "io.github.tahap0l.nobetci",
+  "productName": "Nobi",
+  "mainBinaryName": "nobi",
+  "version": "3.0.0",
+  "identifier": "io.github.tahap0l.nobi",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
@@ -20,7 +20,7 @@
     "windows": [
       {
         "label": "island",
-        "title": "Nöbetçi",
+        "title": "Nobi",
         "url": "index.html",
         "width": 240,
         "height": 6,
@@ -53,12 +53,12 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "copyright": "© 2026 Nöbetçi contributors · based on Coucou (MIT, © Louis Raillé)",
+    "copyright": "© 2026 Nobi contributors · based on Coucou (MIT, © Louis Raillé)",
     "publisher": "tahap0l",
-    "homepage": "https://github.com/tahap0l/nobetci",
+    "homepage": "https://github.com/tahap0l/nobi",
     "category": "DeveloperTool",
     "shortDescription": "A watchful owl for your AI coding agents",
-    "longDescription": "Nöbetçi is an owl at the top of your screen: it monitors Claude Code, Codex and Cursor sessions, records submitted prompts, and routes supported permission requests through a risk review so you can decide without switching to the terminal.",
+    "longDescription": "Nobi is an owl at the top of your screen: it monitors Claude Code, Codex and Cursor sessions, records submitted prompts, and routes supported permission requests through a risk review so you can decide without switching to the terminal.",
     "windows": {
       "nsis": {
         "installMode": "currentUser",

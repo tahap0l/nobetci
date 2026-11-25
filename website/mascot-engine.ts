@@ -5,4 +5,4 @@
 
 import { mountMascot } from "../src/baykus/embed";
 
-(window as unknown as { NobetciEngine: { mount: typeof mountMascot } }).NobetciEngine = { mount: mountMascot };
+(window as unknown as { NobiEngine: { mount: typeof mountMascot } }).NobiEngine = { mount: mountMascot };

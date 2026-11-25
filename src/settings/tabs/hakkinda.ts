@@ -12,7 +12,7 @@ import { openWizard } from "../wizard";
 
 /**
  * Ours are re-translated on render, and so are Rust's coded errors (a file that
- * isn't Nöbetçi's settings, say); Rust's own wording is shown as it came. With
+ * isn't Nobi's settings, say); Rust's own wording is shown as it came. With
  * both a key and an error, the key's sentence carries the error's text as {why}.
  */
 let message: { kind: "ok" | "error" | "info" | "warn"; key?: MsgKey; path?: string; err?: unknown } | null = null;
@@ -20,7 +20,7 @@ let message: { kind: "ok" | "error" | "info" | "warn"; key?: MsgKey; path?: stri
 /**
  * A reset or an import whose save failed is still in effect: Rust applies the
  * settings (and tells every window) before it writes them. Only a save error
- * means that; anything else (not a Nöbetçi file, unreadable JSON) changed nothing.
+ * means that; anything else (not a Nobi file, unreadable JSON) changed nothing.
  */
 function appliedButUnsaved(err: unknown): boolean {
   const code = errCode(err)?.code;
@@ -57,7 +57,7 @@ function render(): HTMLElement {
         h(
           "h2",
           { class: "hero-title" },
-          "Nöbetçi",
+          "Nobi",
           app.version ? h("span", { class: "version", text: `v${app.version}` }) : null,
         ),
         h("p", { text: t("about.tagline") }),

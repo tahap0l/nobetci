@@ -36,7 +36,7 @@ This Code of Conduct applies within all community spaces, and also applies when 
 
 ## Enforcement
 
-Instances of abusive, harassing, or otherwise unacceptable behavior may be reported to the community leaders responsible for enforcement privately, through this repository's **Security** tab: choose **Report a vulnerability** (<https://github.com/tahap0l/nobetci/security/advisories/new>) and start the title with "Code of Conduct". Only the maintainers can see these reports. For matters that need no privacy, a regular [issue](https://github.com/tahap0l/nobetci/issues) is fine too. All complaints will be reviewed and investigated promptly and fairly.
+Instances of abusive, harassing, or otherwise unacceptable behavior may be reported to the community leaders responsible for enforcement privately, through this repository's **Security** tab: choose **Report a vulnerability** (<https://github.com/tahap0l/nobi/security/advisories/new>) and start the title with "Code of Conduct". Only the maintainers can see these reports. For matters that need no privacy, a regular [issue](https://github.com/tahap0l/nobi/issues) is fine too. All complaints will be reviewed and investigated promptly and fairly.
 
 All community leaders are obligated to respect the privacy and security of the reporter of any incident.
 

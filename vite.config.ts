@@ -6,14 +6,14 @@ import { resolve } from "node:path";
 // runtime (src/core/sound.ts), so there are no audio assets to ship.
 const root = import.meta.dirname;
 const websiteRoot = resolve(root, "website");
-const websiteBase = process.env.NOBETCI_WEBSITE_BASE ?? "/";
+const websiteBase = process.env.NOBI_WEBSITE_BASE ?? "/";
 /** The app's mascot engine (src/baykus), bundled for the website's pages. */
 const MASCOT_ENGINE = "mascot-engine.js";
 
 export default defineConfig(process.env.CF_PAGES === "1" ? {
   root: websiteRoot,
   plugins: [{
-    name: "nobetci-website-images",
+    name: "nobi-website-images",
     // The pages ask for the built file name; in the dev server it is the source.
     configureServer(server) {
       server.middlewares.use((req, _res, next) => {

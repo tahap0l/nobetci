@@ -1,4 +1,4 @@
-# Contributing to Nöbetçi
+# Contributing to Nobi
 
 Thanks for helping the owl keep watch. Bug reports, false positives, new risk rules, translations
 and code are all welcome.
@@ -7,7 +7,7 @@ Before you start:
 
 - **Security problems** go through private reporting, not issues — see [SECURITY.md](SECURITY.md).
 - **A command scored too high or too low?** Open a
-  [risk rule issue](https://github.com/tahap0l/nobetci/issues/new?template=risk_rule.yml). That's
+  [risk rule issue](https://github.com/tahap0l/nobi/issues/new?template=risk_rule.yml). That's
   one of the most useful contributions there is.
 - **Bigger changes** (new features, new dependencies, changes to the relay or the pipe protocol):
   please open an issue first, so we can agree on the approach before you spend time on it.
@@ -47,14 +47,14 @@ To build the AppImage with working sounds, add `patchelf` and the GStreamer plug
 Then, on any of them:
 
 ```sh
-git clone https://github.com/tahap0l/nobetci.git
-cd nobetci
+git clone https://github.com/tahap0l/nobi.git
+cd nobi
 npm ci
 node scripts/build-relay.mjs
 ```
 
 Why build the relay first? The platform config (`src-tauri/tauri.windows.conf.json`,
-`tauri.macos.conf.json` or `tauri.linux.conf.json`) bundles `target/release/nobetci-hook(.exe)` into
+`tauri.macos.conf.json` or `tauri.linux.conf.json`) bundles `target/release/nobi-hook(.exe)` into
 the app, and the app's build script stops if the file isn't there — so on a fresh clone,
 `cargo clippy` fails until it exists. `npm test`, `npm run dev`, `npm run tauri dev`,
 `npm run build` and the `pack` scripts build it for you, which also means they all need Rust.
@@ -72,7 +72,7 @@ app without an installer, run `npm run tauri build -- --no-bundle`, which builds
 
 ```sh
 npm run build                                                      # the relay, then the pages into dist/
-cargo build --release -p nobetci --features tauri/custom-protocol  # → target/release/nobetci
+cargo build --release -p nobi --features tauri/custom-protocol  # → target/release/nobi
 ```
 
 The `pack` scripts build the app the same way before they bundle it.
@@ -88,9 +88,9 @@ The `pack` scripts build the app the same way before they bundle it.
 | `npm run lint` | `cargo clippy --workspace --all-targets -- -D warnings`, then `tsc --noEmit`. |
 | `npm run fmt` | `cargo fmt --all` (settings in `rustfmt.toml`: 120 columns). |
 | `npm run check:invisible` | Fails if any text file git tracks — source, scripts, `.nsi`, `.ps1`, `.xml`, `.plist` and the rest — contains zero-width, bidirectional or other invisible or control characters. |
-| `npm run pack` | Windows: builds the installer into `release\Nobetci-<version>-setup.exe`. |
+| `npm run pack` | Windows: builds the installer into `release\Nobi-<version>-setup.exe`. |
 | `npm run pack:store:offline` | Windows: the Microsoft Store variant with the offline WebView2 installer, into `release/store/` (see [docs/microsoft-store.md](docs/microsoft-store.md)). |
-| `npm run pack:mac` | macOS: builds the universal disk image into `release/Nobetci-<version>-macos-universal.dmg`. |
+| `npm run pack:mac` | macOS: builds the universal disk image into `release/Nobi-<version>-macos-universal.dmg`. |
 | `npm run pack:linux` | Linux: builds the `.deb` and the AppImage into `release/`. |
 | `npm run icons` | Regenerates `src-tauri/icons` from the owl's geometry in code. |
 | `npm run screenshots` | Renders the README images into `docs/media/<lang>/` (see below). |
@@ -133,7 +133,7 @@ runs `cargo audit` whenever the Rust dependencies change and once a week.
   `devParam()` calls and the list at the top of that file.
 - Add `&lang=en` or `&lang=tr` to either. In Settings, `&platform=macos` or `&platform=linux` shows
   the Mac or Linux wording; the island follows the browser's own system.
-- In the console, `nobetci.inject({ … })` feeds the island a fake hook event.
+- In the console, `nobi.inject({ … })` feeds the island a fake hook event.
 
 **Against the real app**, pipe an event into the relay, exactly as Claude Code would. A
 permission request waits for your decision on the island and prints the answer. On Windows, from
@@ -148,35 +148,35 @@ $event = @{
   tool_input      = @{ command = "git push --force origin main" }
 } | ConvertTo-Json -Compress
 
-$event | & "$env:LOCALAPPDATA\Nobetci\bin\nobetci-hook.exe" PermissionRequest
+$event | & "$env:LOCALAPPDATA\Nobi\bin\nobi-hook.exe" PermissionRequest
 ```
 
 On macOS, from Terminal:
 
 ```sh
 echo '{"hook_event_name":"PermissionRequest","session_id":"demo","cwd":"/Users/you/src/demo","tool_name":"Bash","tool_input":{"command":"git push --force origin main"}}' \
-  | ~/Library/Application\ Support/Nobetci/bin/nobetci-hook PermissionRequest
+  | ~/Library/Application\ Support/Nobi/bin/nobi-hook PermissionRequest
 ```
 
-On Linux, the same with `~/.local/share/nobetci/bin/nobetci-hook`. To see what Cursor would get,
+On Linux, the same with `~/.local/share/nobi/bin/nobi-hook`. To see what Cursor would get,
 feed the relay Cursor's own shape of event and put `cursor` before the event name (`codex` works
 the same way for Codex):
 
 ```sh
 echo '{"conversation_id":"demo","command":"git push --force origin main","workspace_roots":["/home/you/src/demo"]}' \
-  | ~/.local/share/nobetci/bin/nobetci-hook cursor beforeShellExecution
+  | ~/.local/share/nobi/bin/nobi-hook cursor beforeShellExecution
 ```
 
-If you use Claude Code to work on Nöbetçi: its sandboxed Bash tool may not reach the pipe or
+If you use Claude Code to work on Nobi: its sandboxed Bash tool may not reach the pipe or
 socket (the relay's same-user check refuses it there), so run these from a normal terminal.
 
 ### Screenshots
 
 `npm run screenshots` drives headless Microsoft Edge against a running dev server and writes every
 README image in English and Turkish into `docs/media/en/` and `docs/media/tr/`. On macOS and
-Linux, point `NOBETCI_EDGE` at Edge, Chrome or Chromium. Text is set in the system font, so
+Linux, point `NOBI_EDGE` at Edge, Chrome or Chromium. Text is set in the system font, so
 regenerate every image on the same system to keep them alike, and at the same scale: the README
-shows them at 2× (`NOBETCI_SCALE=2`), and an image taken at 1× next to them looks blurred and
+shows them at 2× (`NOBI_SCALE=2`), and an image taken at 1× next to them looks blurred and
 sits at a different height.
 
 Each image is taken once its page is ready, not after a fixed time: the script talks to the browser
@@ -189,13 +189,13 @@ loaded and stops 3.5 s later, `Math.random` is seeded, and the text caret is hid
 
 ```powershell
 npm run dev                                  # terminal 1
-$env:NOBETCI_SCALE = "2"                     # terminal 2 (sh: export NOBETCI_SCALE=2)
+$env:NOBI_SCALE = "2"                     # terminal 2 (sh: export NOBI_SCALE=2)
 npm run screenshots                          # every README image
 node scripts/screenshots.mjs tr critical     # just some languages and images
 ```
 
-Set `NOBETCI_URL` if your dev server isn't on `http://127.0.0.1:1420`, `NOBETCI_EDGE` if Edge
-isn't in its usual place, and `NOBETCI_OUT` to write somewhere other than `docs/media`. Pair
+Set `NOBI_URL` if your dev server isn't on `http://127.0.0.1:1420`, `NOBI_EDGE` if Edge
+isn't in its usual place, and `NOBI_OUT` to write somewhere other than `docs/media`. Pair
 images of the same shape in the README (the island views are 720×460, the dashboard views 16:9),
 and describe in the alt text what is actually in the frame.
 
@@ -242,7 +242,7 @@ scripts/               packaging, icons, screenshots, the invisible-character ch
 
 ## The ground rules
 
-These are what make Nöbetçi trustworthy. A change that breaks one of them won't be merged, however
+These are what make Nobi trustworthy. A change that breaks one of them won't be merged, however
 useful it is otherwise.
 
 ### 1. Never block Claude Code
@@ -268,12 +268,12 @@ it starts once per event.
 ### 2. Never write `~/.claude/settings.json` without a reviewed diff
 
 The file belongs to the user and may hold other tools' hooks. Any write takes a dated backup,
-merges without touching anything that isn't Nöbetçi's, shows the diff, happens only after an
+merges without touching anything that isn't Nobi's, shows the diff, happens only after an
 explicit click, writes exactly what the preview showed, and is refused if the file changed since
 the preview. A file that can't be read or parsed is never overwritten. Codex's and Cursor's
 `hooks.json` get the same treatment (`agent_hooks.rs`). The only exception is
-`nobetci --remove-hooks` — the Windows uninstaller runs it, and people run it by hand on macOS
-and Linux — which removes nothing but Nöbetçi's own hook commands (never a foreign hook that
+`nobi --remove-hooks` — the Windows uninstaller runs it, and people run it by hand on macOS
+and Linux — which removes nothing but Nobi's own hook commands (never a foreign hook that
 shares a matcher group), keeps the file's key order, writes through a symlink, still keeps a dated
 backup, and exits non-zero if anything is left. The risk engine scores any command that runs it as
 CRITICAL. The tests in `hooks.rs` and `agent_hooks.rs` guard this; extend them when you touch it.
@@ -302,7 +302,7 @@ the DOM with `h()` (`src/ui/dom.ts`) and text nodes only — no `innerHTML`, `ou
 ### 5. What the card shows is what runs
 
 Never shorten an approval payload silently. When the relay has to cut something, it sets
-`nobetci_truncated` and the request becomes HIGH. Invisible characters and long runs of
+`nobi_truncated` and the request becomes HIGH. Invisible characters and long runs of
 whitespace are made visible on the card; keep it that way.
 
 ### 6. Every decision is recorded, safely
@@ -338,7 +338,7 @@ the island is hidden, and keep looping CSS animations inside `#island[data-mode=
 
 ### 10. Original assets only
 
-The owl, the icons and the sounds are Nöbetçi's own. Sounds are synthesised in code
+The owl, the icons and the sounds are Nobi's own. Sounds are synthesised in code
 (`src/core/sound.ts`) and the icons are generated by `scripts/gen-icons.mjs`. Don't import
 anything from Coucou's Mochi character, icons or sounds: they are not MIT-licensed.
 
@@ -362,7 +362,7 @@ help with the translation.
 
 ### 12. No invisible characters in the source
 
-Nöbetçi flags zero-width, bidirectional and other invisible control characters as an obfuscation
+Nobi flags zero-width, bidirectional and other invisible control characters as an obfuscation
 trick, so its own files must be free of them. If a test or a pattern needs one, write it as a
 Unicode escape sequence, never as the raw character. `npm run check:invisible` (and CI) scans
 every text file git tracks and will tell you.
@@ -376,8 +376,8 @@ shared, and every rule above holds on all three.
 
 ## Proposing a risk rule or reporting a false positive
 
-The quickest way is the [risk rule issue template](https://github.com/tahap0l/nobetci/issues/new?template=risk_rule.yml):
-the exact command, path or URL, the tool, the level you expected, the level Nöbetçi gave, and why.
+The quickest way is the [risk rule issue template](https://github.com/tahap0l/nobi/issues/new?template=risk_rule.yml):
+the exact command, path or URL, the tool, the level you expected, the level Nobi gave, and why.
 You can check what it gives today in **Settings → Safety**, which has a tester.
 
 To send a pull request instead:
@@ -442,8 +442,8 @@ then the installer signed (once SignPath is switched on) and the macOS app signe
 (once there is an Apple Developer ID), writes `SHA256SUMS.txt`, and publishes a GitHub release
 with that version's CHANGELOG section as its notes. The notes also say whether the release's
 files are signed and notarized. Every file is published twice: with the version in its name, and
-without it (`Nobetci-setup.exe`, `Nobetci-macos-universal.dmg`, `Nobetci-linux-amd64.deb`,
-`Nobetci-linux-amd64.AppImage`), so a page can link to the newest one through
+without it (`Nobi-setup.exe`, `Nobi-macos-universal.dmg`, `Nobi-linux-amd64.deb`,
+`Nobi-linux-amd64.AppImage`), so a page can link to the newest one through
 `releases/latest/download/<name>`. A tag with a `-` in it (for example `v0.3.0-beta.1`) becomes a
 pre-release; its notes may come from **Unreleased**. A run from another branch builds and tests
 everything but publishes nothing.

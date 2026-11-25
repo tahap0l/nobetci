@@ -1,13 +1,13 @@
-// macOS: a Unix socket at ~/Library/Application Support/Nobetci/nobetci.sock, or
+// macOS: a Unix socket at ~/Library/Application Support/Nobi/nobi.sock, or
 // in the per-user temporary folder when the home path is too long for a socket.
-// Linux: ~/.local/state/nobetci/nobetci.sock, or /tmp/nobetci-<uid>/ when the home
+// Linux: ~/.local/state/nobi/nobi.sock, or /tmp/nobi-<uid>/ when the home
 // path is too long.
 //
 // Filesystem permissions do most of the work: the folder is kept at 0700 and the
 // socket at 0600, so no other account can even reach it. Every connection is
 // still checked — the peer must run as this user — and we refuse to start if
 // something is already answering on the socket rather than serving on top of it.
-// nobetci-hook makes the mirror-image checks (socket owner, peer uid) before it
+// nobi-hook makes the mirror-image checks (socket owner, peer uid) before it
 // sends anything.
 //
 // A socket file outlives its process. One left behind breaks nothing (the next
@@ -40,7 +40,7 @@ impl Conn for UnixStream {
     async fn close(&mut self) {}
 }
 
-/// The home folder from the user database, not `$HOME` — exactly as nobetci-hook
+/// The home folder from the user database, not `$HOME` — exactly as nobi-hook
 /// finds it, so the two always agree on the socket.
 fn home() -> Option<PathBuf> {
     unsafe {
@@ -63,32 +63,32 @@ const MAX_SOCKET_PATH: usize = 103;
 #[cfg(target_os = "linux")]
 const MAX_SOCKET_PATH: usize = 107;
 
-/// Must match nobetci-hook's `socket_path()` (hook/src/linux.rs) exactly.
+/// Must match nobi-hook's `socket_path()` (hook/src/linux.rs) exactly.
 #[cfg(target_os = "linux")]
 pub fn socket_path() -> Option<PathBuf> {
-    let preferred = home()?.join(".local/state/nobetci/nobetci.sock");
+    let preferred = home()?.join(".local/state/nobi/nobi.sock");
     if preferred.as_os_str().len() <= MAX_SOCKET_PATH {
         return Some(preferred);
     }
     // A very long home folder: a folder of our own in /tmp, which `private_dir`
     // refuses to use unless it belongs to us and nobody else can enter it.
-    Some(PathBuf::from(format!("/tmp/nobetci-{}/nobetci.sock", me())))
+    Some(PathBuf::from(format!("/tmp/nobi-{}/nobi.sock", me())))
 }
 
-/// Must match nobetci-hook's `socket_path()` (hook/src/mac.rs) exactly.
+/// Must match nobi-hook's `socket_path()` (hook/src/mac.rs) exactly.
 #[cfg(target_os = "macos")]
 pub fn socket_path() -> Option<PathBuf> {
-    let preferred = home()?.join("Library/Application Support/Nobetci/nobetci.sock");
+    let preferred = home()?.join("Library/Application Support/Nobi/nobi.sock");
     if preferred.as_os_str().len() <= MAX_SOCKET_PATH {
         return Some(preferred);
     }
     // A very long home folder (a network home, say): the per-user temporary
     // folder instead, which macOS keeps at 0700 for this account alone.
-    Some(user_temp_dir()?.join("nobetci.sock"))
+    Some(user_temp_dir()?.join("nobi.sock"))
 }
 
 /// The per-user temporary folder (`/var/folders/…/T/`), from confstr rather than
-/// `$TMPDIR`, exactly as nobetci-hook finds it.
+/// `$TMPDIR`, exactly as nobi-hook finds it.
 #[cfg(target_os = "macos")]
 fn user_temp_dir() -> Option<PathBuf> {
     let mut buf = vec![0 as libc::c_char; 1024];
@@ -141,7 +141,7 @@ fn bind(path: &Path) -> io::Result<UnixListener> {
     if let Some(dir) = path.parent() {
         private_dir(dir)?;
     }
-    // Somebody already answering here — another Nöbetçi, or anything else — keeps
+    // Somebody already answering here — another Nobi, or anything else — keeps
     // the socket; we do not serve on top of it.
     if std::os::unix::net::UnixStream::connect(path).is_ok() {
         return Err(io::Error::new(io::ErrorKind::AddrInUse, "something is already listening on the socket"));
@@ -275,16 +275,16 @@ mod tests {
 
     #[test]
     fn only_the_socket_we_bound_is_removed() {
-        let dir = std::env::temp_dir().join(format!("nobetci-socket-test-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("nobi-socket-test-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        let path = dir.join("nobetci.sock");
+        let path = dir.join("nobi.sock");
         remove_ours(); // nothing bound yet: nothing happens
         let ours = std::os::unix::net::UnixListener::bind(&path).unwrap();
         remember(&path);
         remove_ours();
         assert!(std::fs::symlink_metadata(&path).is_err(), "the socket we bound is gone");
-        // Another socket in its place — another Nöbetçi that started after this
+        // Another socket in its place — another Nobi that started after this
         // one lost its file, say — is not ours to remove.
         let theirs = std::os::unix::net::UnixListener::bind(&path).unwrap();
         remove_ours();

@@ -114,7 +114,7 @@ function templates(): Template[] {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 /** Name of the stand-in rule the editor's tester uses to see if the draft matches. */
-const PROBE = "__nobetci_probe__";
+const PROBE = "__nobi_probe__";
 
 function toolMatches(spec: string, tool: string): boolean {
   return spec

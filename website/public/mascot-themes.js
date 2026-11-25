@@ -222,13 +222,13 @@ function gaze(container, x, y) {
 
 function read() {
   try {
-    const saved = localStorage.getItem("nobetci-demo-theme");
+    const saved = localStorage.getItem("nobi-demo-theme");
     if (Object.hasOwn(animals, saved)) return saved;
   } catch { /* storage is optional */ }
   return "owl";
 }
 function save(id) {
-  try { localStorage.setItem("nobetci-demo-theme", id); } catch { /* storage is optional */ }
+  try { localStorage.setItem("nobi-demo-theme", id); } catch { /* storage is optional */ }
 }
-window.NobetciThemes = { animals, avatar, gaze, read, save };
+window.NobiThemes = { animals, avatar, gaze, read, save };
 })();

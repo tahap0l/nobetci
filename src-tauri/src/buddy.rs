@@ -135,7 +135,7 @@ pub fn create(app: &AppHandle, url: WebviewUrl, browser_args: &str, s: &Settings
     let (w, h) = size_for(s.buddy_size);
     let builder = WebviewWindowBuilder::new(app, LABEL, url)
         .additional_browser_args(browser_args)
-        .title(pick("Nöbetçi mascot", "Nöbetçi maskotu"))
+        .title(pick("Nobi mascot", "Nobi maskotu"))
         .inner_size(w, h)
         // Linux: GTK holds a window that cannot be resized at its web view's
         // natural size (it came up 200 × 200 whatever was asked); one that can,

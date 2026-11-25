@@ -1,12 +1,14 @@
 <div align="center">
 
-<img src="src-tauri/icons/128x128@2x.png" width="96" height="96" alt="Nöbetçi'nin baykuşu">
+<img src="src-tauri/icons/128x128@2x.png" width="96" height="96" alt="Nobi'nin baykuşu">
 
-# Nöbetçi
+# Nobi
 
-**Claude Code, Codex ve Cursor oturumlarını izleyen bir baykuş.**
+**Nobi — AI agent guard.** Claude Code, Codex ve Cursor oturumlarını izleyen bir baykuş.
 
-[![CI](https://github.com/tahap0l/nobetci/actions/workflows/ci.yml/badge.svg)](https://github.com/tahap0l/nobetci/actions/workflows/ci.yml)
+<sub>Eski adıyla **Nöbetçi**. 3.0 ile adı değişti; mevcut kurulumun kendiliğinden taşınır.</sub>
+
+[![CI](https://github.com/tahap0l/nobi/actions/workflows/ci.yml/badge.svg)](https://github.com/tahap0l/nobi/actions/workflows/ci.yml)
 ![Windows 10 | 11](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D4)
 ![macOS 11+](https://img.shields.io/badge/macOS-11%2B-555555)
 ![Linux](https://img.shields.io/badge/Linux-x86__64-555555)
@@ -19,16 +21,16 @@
 
 ## İndir ve kullan
 
-**[Güncel Windows, macOS ve Linux kurulumları](https://github.com/tahap0l/nobetci/releases/latest)**
+**[Güncel Windows, macOS ve Linux kurulumları](https://github.com/tahap0l/nobi/releases/latest)**
 
-[Web sitesi](https://tahap0l.github.io/nobetci/) · [Etkileşimli web demosu](https://tahap0l.github.io/nobetci/demo/)
+[Web sitesi](https://tahap0l.github.io/nobi/) · [Etkileşimli web demosu](https://tahap0l.github.io/nobi/demo/)
 
-Nöbetçi ekranın üstünde küçük bir ada olarak durur. Adaya tıklayarak ajan oturumlarını ve kartları açabilirsin. İzin isteği geldiğinde onay kartı öne çıkar.
+Nobi ekranın üstünde küçük bir ada olarak durur. Adaya tıklayarak ajan oturumlarını ve kartları açabilirsin. İzin isteği geldiğinde onay kartı öne çıkar.
 
 - **Ajan takibi.** Claude Code, Codex ve Cursor oturumlarını ve desteklenen izin isteklerini izle. Windows’ta Chrome veya Edge’deki ChatGPT yanıt durumunu da görebilirsin (köprü yalnız Windows'ta kurulabiliyor). [ChatGPT Web kurulumu](integrations/chatgpt-web/README.tr.md)
 - **Beş ada sekmesi.** **Medya** (odak sayacıyla), **Ajanda**, **Takvim**, **Hava** ve **Sistem**: bir sekmeye tıkla ya da kartlar arasında kaydır. Takvimde oklarla haftalar arasında gez, hava durumu tablosunda seçtiğin şehrin sıcaklığını ve güncel koşullarını gör.
 - **Medya ve odak.** Oynatıcı çalan parçayı kartın arkasında bulanık kapak görseliyle, tıklayıp ileri sarabileceğin canlı bir süre çubuğuyla ve oynat, duraklat, sonraki, önceki düğmeleriyle gösterir. Windows'ta sistem medya kontrollerini (Spotify, tarayıcılar…), macOS'ta Spotify ve Müzik'i, Linux'ta MPRIS destekleyen her oynatıcıyı (Spotify, VLC, tarayıcılar…) izler. 25 dakikalık odak sayacı duraklatılabilir ve sıfırlanabilir. **Ayarlar → Genel → Ada bileşenleri** bölümünden hava durumu için şehir seçebilir ve medya kartını açabilirsin.
-- **Adada bir asistan.** `Ctrl+Alt+Space`'e (ya da ✦ düğmesine) bas, ne istediğini yaz ve ChatGPT, Claude, Gemini, Perplexity, Copilot, Grok, DeepSeek ya da Mistral'e gönder — uygulama ya da web sitesi açılır, mesajın panoya da kopyalanır. Web'de ChatGPT, Claude, Perplexity, Copilot ve Grok ile ChatGPT ve Perplexity uygulamaları mesajı açılırken alır ve hemen cevaplamaya başlayabilir (web'de mesaj sayfa adresinin içinde gider, bu yüzden tarayıcı geçmişin de onu saklar); Claude uygulaması mesajı yalnızca yazı kutusuna koyar, göndermek sana kalır; Gemini, DeepSeek, Mistral ve Copilot uygulaması mesajsız açılır, mesajı sen yapıştırırsın — bir adrese sığmayacak kadar uzun bir mesajı da. **Burada** seçeneği Mesaj Atölyesi modelinle yanıtı adanın üstünde verir. Aynı kutudan eğik çizgi komutlarıyla Nöbetçi'yi yönetirsin: `/duraklat`, `/sessiz`, `/odak 25`, `/müzik`, `/sonraki`, `/önceki`, `/ayarlar` (medya komutları medya kartı kapalıyken de, zaten çalışan bir oynatıcıda çalışır); ↑ ve ↓ önceki mesajları geri getirir. Esc, ✕ ya da kısayol asistanı yeniden kapatır.
+- **Adada bir asistan.** `Ctrl+Alt+Space`'e (ya da ✦ düğmesine) bas, ne istediğini yaz ve ChatGPT, Claude, Gemini, Perplexity, Copilot, Grok, DeepSeek ya da Mistral'e gönder — uygulama ya da web sitesi açılır, mesajın panoya da kopyalanır. Web'de ChatGPT, Claude, Perplexity, Copilot ve Grok ile ChatGPT ve Perplexity uygulamaları mesajı açılırken alır ve hemen cevaplamaya başlayabilir (web'de mesaj sayfa adresinin içinde gider, bu yüzden tarayıcı geçmişin de onu saklar); Claude uygulaması mesajı yalnızca yazı kutusuna koyar, göndermek sana kalır; Gemini, DeepSeek, Mistral ve Copilot uygulaması mesajsız açılır, mesajı sen yapıştırırsın — bir adrese sığmayacak kadar uzun bir mesajı da. **Burada** seçeneği Mesaj Atölyesi modelinle yanıtı adanın üstünde verir. Aynı kutudan eğik çizgi komutlarıyla Nobi'yi yönetirsin: `/duraklat`, `/sessiz`, `/odak 25`, `/müzik`, `/sonraki`, `/önceki`, `/ayarlar` (medya komutları medya kartı kapalıyken de, zaten çalışan bir oynatıcıda çalışır); ↑ ve ↓ önceki mesajları geri getirir. Esc, ✕ ya da kısayol asistanı yeniden kapatır.
 - **Ses ve hazır promptlar.** 🎙 düğmesi sistemin dikte özelliğini başlatır (Windows'ta sesle yazma, macOS'ta Dikte; Linux'ta sistem dikte özelliği olmadığı için orada düğme yok); **Hazır promptlar** yapay zekâyı yeni kullananlara yirmiye yakın doldur-gönder kalıbı sunar. Claude, ChatGPT, Perplexity ya da Copilot uygulaması yüklüyse asistan tarayıcı yerine onu açar (**Ayarlar → Genel → Asistan → Yüklü uygulamaları kullan**).
 - **Ajanda, takvim, hava ve sistem.** Bir güne yapılacak not al, istersen saat ver hatırlatsın; takvimde dolu günleri gör; önümüzdeki 12 saatin animasyonlu tahmini; canlı CPU, RAM ve GPU kullanımı.
 
@@ -39,7 +41,7 @@ Nöbetçi ekranın üstünde küçük bir ada olarak durur. Adaya tıklayarak aj
   <img src="docs/media/tr/card-system.png" width="49%" alt="Sistem sekmesi: halkalar hâlinde işlemci, bellek ve ekran kartı yükü ve işlemcinin son bir dakikası">
 </p>
 
-- **Claude Code her yerde.** Terminalden, VS Code'dan ve **Claude masaüstü uygulamasının Code sekmesinden** açılan oturumlar adada görünür; kart her birinin nerede çalıştığını söyler. Masaüstü uygulaması Claude Code'un `PermissionRequest` kancasını hiç çalıştırmadığından Nöbetçi orada komutlar, düzenlemeler, web istekleri ve MCP araçları için `PreToolUse` üzerinden sorar — ekranın başında kimse yokken bunun bedeli için bkz. [Claude Code'u asla rehin tutmaz](#claude-codeu-asla-rehin-tutmaz).
+- **Claude Code her yerde.** Terminalden, VS Code'dan ve **Claude masaüstü uygulamasının Code sekmesinden** açılan oturumlar adada görünür; kart her birinin nerede çalıştığını söyler. Masaüstü uygulaması Claude Code'un `PermissionRequest` kancasını hiç çalıştırmadığından Nobi orada komutlar, düzenlemeler, web istekleri ve MCP araçları için `PreToolUse` üzerinden sorar — ekranın başında kimse yokken bunun bedeli için bkz. [Claude Code'u asla rehin tutmaz](#claude-codeu-asla-rehin-tutmaz).
 - **Sorular ve planlar adada.** Claude çoktan seçmeli bir soru sorduğunda ya da planını onayına sunduğunda kart adada açılır: bir cevap seç (ya da kendin yaz), planı onayla ya da notla geri gönder.
 - **Ne değişti, ne kadar kaldı.** Oturum ekranı her oturumun düzenlediği dosyaları eklenen ve silinen satır sayısıyla listeler; farkı bir tık uzakta. İsteğe bağlı durum satırıyla bağlam kullanımını, maliyeti, 5 saatlik ve haftalık plan limitlerini de gösterir.
 - **Yedi maskot.** Baykuş, kurt, şahin, ahtapot, aslan, kanarya ve kartal aynı şekilde hareket eder ve tepki verir: izin isteğinde el sallar, riskli istekte kabarır, oturum bitince zıplar, çalışan bir şey yokken uyuklar. Maskotu **Ayarlar → Genel → Görünüm** bölümünden seç; kart renkleri ve geçişler de ona göre değişir. Tepkileri web demosunda deneyebilirsin.
@@ -55,13 +57,13 @@ Nöbetçi ekranın üstünde küçük bir ada olarak durur. Adaya tıklayarak aj
 
 
 
-Nöbetçi, ekranının üst kenarında siyah bir adada yaşayan küçük bir baykuş. Claude Code, Codex ve
+Nobi, ekranının üst kenarında siyah bir adada yaşayan küçük bir baykuş. Claude Code, Codex ve
 Cursor oturumlarını ve gönderilen mesajları izler; desteklenen izin isteklerini adaya taşır.
 Claude Code tam risk incelemesine sahiptir; Codex ve Cursor desteği her ajanın hook yeteneklerine
 bağlıdır. Ne çalışacağını ve riskini görüp doğru terminali aramadan karar verirsin.
 
 <p align="center">
-  <img src="docs/media/tr/critical.png" width="720" alt="KRİTİK bir istek için Nöbetçi onay kartı: indirilen bir betiği bash'e veren ve AWS kimlik bilgilerini uzak bir makineye gönderen komut; riskli kısımlar vurgulu, dört bulgu listelenmiş, Reddet ve Basılı tut · İzin ver butonları">
+  <img src="docs/media/tr/critical.png" width="720" alt="KRİTİK bir istek için Nobi onay kartı: indirilen bir betiği bash'e veren ve AWS kimlik bilgilerini uzak bir makineye gönderen komut; riskli kısımlar vurgulu, dört bulgu listelenmiş, Reddet ve Basılı tut · İzin ver butonları">
 </p>
 
 ## Neden
@@ -71,7 +73,7 @@ terminalde sorar: o an bakmadığın terminalde ya da yan yana çalışan dörd�
 sorular ya fark edilmeden bekler ya da refleksle onaylanır — üstelik terminaldeki bir soruda
 `npm test` ile `curl … | bash` birbirinin aynısı görünür.
 
-Nöbetçi bu kararı her zaman görebileceğin tek bir yere taşır. Her isteği dikkatli bir gözden
+Nobi bu kararı her zaman görebileceğin tek bir yere taşır. Her isteği dikkatli bir gözden
 geçirici gibi okur, göze batanı ve nedenini söyler; tehlikeli olanlarda tek tıklama yetmez,
 butonu bilerek basılı tutman (Linux'ta ise terminalde cevap vermen) gerekir. Sana ihtiyaç
 olmadığında ekranın üst kenarına çekilir.
@@ -134,15 +136,15 @@ olmadığında ekranın üst kenarına çekilir.
   inceleyip kendin kopyala — hiçbir ajana otomatik gönderilmez.
 - **Ve dahası.** Genel kısayollar, gerçek relay üzerinden hook sağlık testi, hangi hook
   olaylarının dinleneceğini seçme, risk kategorilerini tek tek kapatma, adanın konumu, ayarları
-  içe ve dışa aktarma (içe aktarma yalnızca Nöbetçi'nin kendi ayar dosyalarını kabul eder; içe
+  içe ve dışa aktarma (içe aktarma yalnızca Nobi'nin kendi ayar dosyalarını kabul eder; içe
   aktarma da sıfırlama da yerini aldıkları ayarların tarihli bir kopyasını saklar); sistem diline
   göre kendiliğinden Türkçe ya da İngilizce arayüz.
 
 ### 🔒 Gizlilik
 
 - **Telemetri yok, hesap yok.** Açıkça istediğin mesaj incelemesi, **Burada** ile sorduğun asistan
-  sorusu ve şehir seçtiğinde hava durumu kartı dışında Nöbetçi ağ isteği yapmaz. Bir yapay zekâ
-  uygulamasına mesaj göndermek o uygulamayı ya da tarayıcını açar; Nöbetçi kendisi bir şey
+  sorusu ve şehir seçtiğinde hava durumu kartı dışında Nobi ağ isteği yapmaz. Bir yapay zekâ
+  uygulamasına mesaj göndermek o uygulamayı ya da tarayıcını açar; Nobi kendisi bir şey
   göndermez — ama web'deki ChatGPT, Claude, Perplexity, Copilot ve Grok için mesaj sayfa adresinin
   içindedir: servis onu sayfa açılırken alır, tarayıcı geçmişin de saklar. Ollama varsayılan olarak
   yerel servisini kullanır; **cloud** etiketli Ollama modelleri taslağı dışarı iletebilir. OpenAI
@@ -170,8 +172,8 @@ kimin onayladığı: [Kod imzalama politikası](CODE_SIGNING_POLICY.md).
 ```mermaid
 flowchart LR
     CC["Claude Code<br/>(terminal ya da IDE)"]
-    R["nobetci-hook<br/>küçük relay"]
-    subgraph APP["Nöbetçi (tepsi / menü çubuğu uygulaması)"]
+    R["nobi-hook<br/>küçük relay"]
+    subgraph APP["Nobi (tepsi / menü çubuğu uygulaması)"]
         direction TB
         E["Risk motoru + kuralların<br/>(Rust)"]
         I["Ada<br/>onay kartı"]
@@ -184,9 +186,9 @@ flowchart LR
     R -- "stdout'ta karar JSON'u" --> CC
 ```
 
-Claude Code, Nöbetçi'nin kayıtlı olduğu her hook olayında relay'i (`nobetci-hook`) çalıştırır.
+Claude Code, Nobi'nin kayıtlı olduğu her hook olayında relay'i (`nobi-hook`) çalıştırır.
 Relay olayı sadece senin hesabının açabildiği bir kanaldan iletir — Windows'ta bir named pipe,
-macOS'ta Library klasöründeki, Linux'ta `~/.local/state/nobetci` altındaki bir Unix soketi — ve
+macOS'ta Library klasöründeki, Linux'ta `~/.local/state/nobi` altındaki bir Unix soketi — ve
 çıkar. Yanıt bekleyen tek olay izin isteğidir: risk motoru onu puanlar, ilk sözü kuralların söyler;
 bir kural, güvenilir bir proje ya da oturum izni kararı anında verebilir. Gerisi adada bir karta
 dönüşür, senin kararın da aynı yoldan geri döner. Codex ve Cursor da kendi hook'larıyla aynı
@@ -196,27 +198,27 @@ relay'i kullanır.
 
 | Durum | Ne olur |
 | --- | --- |
-| Nöbetçi çalışmıyor | Relay dinleyen kimseyi bulamaz, hiçbir çıktı vermeden hemen çıkar ve Claude Code her zamanki gibi terminalde sorar. Windows'ta var olan ama meşgul bir pipe için en fazla **300 ms** bekler. |
+| Nobi çalışmıyor | Relay dinleyen kimseyi bulamaz, hiçbir çıktı vermeden hemen çıkar ve Claude Code her zamanki gibi terminalde sorar. Windows'ta var olan ama meşgul bir pipe için en fazla **300 ms** bekler. |
 | Ada kartı gösteremiyor | Uygulama, kartın ekranda ya da sırada olduğunu doğrulaması için adaya **800 ms** tanır. Doğrulama gelmezse istek terminale döner. |
 | Kimse yanıt vermiyor | Uygulama **108 sn**, relay **110 sn** sonra bırakır (hook'un kendisi 120 sn zaman aşımıyla kayıtlıdır). Ardından Claude Code terminalde sorar. |
 | Duraklatıldı ya da sırada zaten altı istek var | Yeni istekler doğrudan terminale gider. |
 | Diğer bütün hook olayları | Gönder ve unut: bağlan, yaz, çık — kesin bir 2 sn bütçeyle. |
-| Cursor'da Nöbetçi cevap vermiyor | Nöbetçi kapalı ya da duraklatılmışsa, isteği geri verdiysen, sıra doluysa ya da süre dolduysa relay "sor" (ask) cevabı verir ve Cursor sana kendisi sorar. Ama Nöbetçi'nin Cursor izin hook'ları güvenli tarafta kapanır (fail-closed): relay hiç çalışamazsa (örneğin klasörü silindiyse) Cursor, hook'lar kaldırılana kadar kabuk ve MCP komutlarını engeller. |
-| Claude masaüstü uygulaması | `PermissionRequest` hook'unu hiç çalıştırmadığı için Nöbetçi, uygulamanın kendi denetiminden önce gelen `PreToolUse` üzerinden sorar. Soru sorabilecek her komut, düzenleme, web isteği ve MCP çağrısı adayı bekler; **Claude izin kurallarının zaten izin verdikleri de dahil**. Kimse cevap vermezse uygulamanın kendi davranışı en fazla **108 sn** sonra devreye girer. Bir masaüstü oturumunu başında kimse olmadan çalışmaya bırakmadan önce Nöbetçi'yi tepsiden duraklat (istekler o zaman doğrudan geri döner) ya da DÜŞÜK istekleri güvenilir bir proje veya kurallarla geçir. |
+| Cursor'da Nobi cevap vermiyor | Nobi kapalı ya da duraklatılmışsa, isteği geri verdiysen, sıra doluysa ya da süre dolduysa relay "sor" (ask) cevabı verir ve Cursor sana kendisi sorar. Ama Nobi'nin Cursor izin hook'ları güvenli tarafta kapanır (fail-closed): relay hiç çalışamazsa (örneğin klasörü silindiyse) Cursor, hook'lar kaldırılana kadar kabuk ve MCP komutlarını engeller. |
+| Claude masaüstü uygulaması | `PermissionRequest` hook'unu hiç çalıştırmadığı için Nobi, uygulamanın kendi denetiminden önce gelen `PreToolUse` üzerinden sorar. Soru sorabilecek her komut, düzenleme, web isteği ve MCP çağrısı adayı bekler; **Claude izin kurallarının zaten izin verdikleri de dahil**. Kimse cevap vermezse uygulamanın kendi davranışı en fazla **108 sn** sonra devreye girer. Bir masaüstü oturumunu başında kimse olmadan çalışmaya bırakmadan önce Nobi'yi tepsiden duraklat (istekler o zaman doğrudan geri döner) ya da DÜŞÜK istekleri güvenilir bir proje veya kurallarla geçir. |
 
 ## Kurulum
 
 > 📖 [Kurulum kılavuzu](docs/kurulum.md) her adımı, güncellemeyi, kaldırmayı ve sorun gidermeyi
 > ayrıntılı anlatır.
 
-Nöbetçi **Windows 10 ve 11**'de (64 bit), **macOS 11 ya da üstünde** (Apple Silicon ve Intel) ve
+Nobi **Windows 10 ve 11**'de (64 bit), **macOS 11 ya da üstünde** (Apple Silicon ve Intel) ve
 **Linux**'ta (x86-64, X11 ya da Wayland) çalışır. Aynı sistemde çalışan
 [Claude Code](https://code.claude.com/docs/en/overview) gerekir — WSL ya da bir konteyner içindeki
 Claude Code ayarlarını başka bir yerde tutar, kapsam dışıdır.
 
 Aşağıda `x.y.z`, indirdiğin sürümün yerini tutar. 2.4.1'den sonraki sürümler her dosyayı adında
-sürüm olmadan da taşır (`Nobetci-setup.exe`, `Nobetci-macos-universal.dmg`,
-`Nobetci-linux-amd64.deb`, `Nobetci-linux-amd64.AppImage`); bunlar da `SHA256SUMS.txt` içinde
+sürüm olmadan da taşır (`Nobi-setup.exe`, `Nobi-macos-universal.dmg`,
+`Nobi-linux-amd64.deb`, `Nobi-linux-amd64.AppImage`); bunlar da `SHA256SUMS.txt` içinde
 listelenir.
 
 ### Windows
@@ -224,17 +226,17 @@ listelenir.
 Microsoft Edge WebView2 Runtime Windows 11'de ve güncel Windows 10'da zaten vardır; yoksa kurulum
 programı onu indirir.
 
-1. [Son sürümden](https://github.com/tahap0l/nobetci/releases/latest) `Nobetci-x.y.z-setup.exe` ve
+1. [Son sürümden](https://github.com/tahap0l/nobi/releases/latest) `Nobi-x.y.z-setup.exe` ve
    `SHA256SUMS.txt` dosyalarını indir.
 2. Kurulum dosyasının yayımlanan dosyanın kendisi olduğunu doğrula:
 
    ```powershell
-   Get-FileHash .\Nobetci*setup.exe -Algorithm SHA256
+   Get-FileHash .\Nobi*setup.exe -Algorithm SHA256
    Get-Content .\SHA256SUMS.txt
    ```
 
    İki hash birebir aynı olmalı (büyük ya da küçük harf fark etmez).
-3. Kurulumu çalıştır. Sadece senin Windows hesabın için, `%LOCALAPPDATA%\Nobetci` klasörüne
+3. Kurulumu çalıştır. Sadece senin Windows hesabın için, `%LOCALAPPDATA%\Nobi` klasörüne
    kurulur ve yönetici izni istemez. Kurulum programı Türkçe Windows'ta Türkçe, diğer her dilde
    İngilizce konuşur. Sessiz kurulum için `/S` ekle.
 
@@ -245,59 +247,59 @@ programı onu indirir.
 
 ### macOS
 
-1. [Son sürümden](https://github.com/tahap0l/nobetci/releases/latest)
-   `Nobetci-x.y.z-macos-universal.dmg` ve `SHA256SUMS.txt` dosyalarını indir.
+1. [Son sürümden](https://github.com/tahap0l/nobi/releases/latest)
+   `Nobi-x.y.z-macos-universal.dmg` ve `SHA256SUMS.txt` dosyalarını indir.
 2. Disk görüntüsünü Terminal'de doğrula:
 
    ```sh
-   shasum -a 256 ~/Downloads/Nobetci-x.y.z-macos-universal.dmg
+   shasum -a 256 ~/Downloads/Nobi-x.y.z-macos-universal.dmg
    cat ~/Downloads/SHA256SUMS.txt
    ```
 
 3. Disk görüntüsünü aç ve baykuşu **Uygulamalar** (Applications) klasörüne sürükle. (Finder onu
-   Nöbetçi ya da Nobetci diye gösterebilir; diskte her zaman `/Applications/Nobetci.app` olarak
+   Nobi ya da Nobi diye gösterebilir; diskte her zaman `/Applications/Nobi.app` olarak
    durur.)
 4. Uygulamalar'dan aç. Uygulama henüz Apple tarafından onaylanmadığı (notarize edilmediği) için
    macOS ilk seferde açmayı reddeder: **Bitti**'yi seç, sonra **Sistem Ayarları → Gizlilik ve
    Güvenlik**'e git, uygulamanın engellendiğini söyleyen satıra in ve **Yine de Aç**'a tıkla.
    (macOS 14 ve öncesinde uygulamaya Control tuşuyla tıklayıp **Aç → Aç** demek de olur.)
 
-Nöbetçi menü çubuğunda yaşar, Dock'ta simgesi olmaz. Ayrıntılar
+Nobi menü çubuğunda yaşar, Dock'ta simgesi olmaz. Ayrıntılar
 [kurulum kılavuzunda](docs/kurulum.md#macos).
 
 ### Linux
 
-Nöbetçi X11'de ve XWayland üzerinden Wayland masaüstlerinde (GNOME, KDE Plasma, Xfce, Cinnamon…)
+Nobi X11'de ve XWayland üzerinden Wayland masaüstlerinde (GNOME, KDE Plasma, Xfce, Cinnamon…)
 çalışır. Güncel Ubuntu, Debian, Fedora ve Arch'ın getirdiği WebKitGTK 4.1 ve — X11'de — bir
 bileşikleştirici (compositor) gerekir, çünkü ada saydam bir penceredir. GNOME, KDE Plasma ve
 Cinnamon bunu kendileri yapar; Xfce'de pencere yöneticisinin ince ayarlarındaki (**Window Manager
 Tweaks**) **Compositor** sekmesinden bileşikleştirmeyi aç, yalın bir pencere yöneticisinde `picom`
-gibi bir bileşikleştirici çalıştır. Yoksa Nöbetçi penceresini adanın kendisine kırpar (köşeler kare,
+gibi bir bileşikleştirici çalıştır. Yoksa Nobi penceresini adanın kendisine kırpar (köşeler kare,
 gölge yok; 2.4.1'e kadar ekranın üstünde siyah bir kutu görünüyordu), masaüstü maskotunun penceresini
 de maskota ve çevresindeki dar bir kenara kırpar (2.4.1'e kadar siyah bir karenin üstünde duruyordu);
 ikisinin de tam görünümü için bir bileşikleştirici gerekir.
 
-1. [Son sürümden](https://github.com/tahap0l/nobetci/releases/latest)
-   `Nobetci-x.y.z-linux-amd64.deb` (Debian, Ubuntu, Mint…) ya da
-   `Nobetci-x.y.z-linux-amd64.AppImage` (her dağıtım) ve `SHA256SUMS.txt` dosyalarını indir.
+1. [Son sürümden](https://github.com/tahap0l/nobi/releases/latest)
+   `Nobi-x.y.z-linux-amd64.deb` (Debian, Ubuntu, Mint…) ya da
+   `Nobi-x.y.z-linux-amd64.AppImage` (her dağıtım) ve `SHA256SUMS.txt` dosyalarını indir.
 2. İndirdiğini doğrula (indirdiğin her dosya için `OK` yazmalı):
 
    ```sh
    sha256sum --check --ignore-missing SHA256SUMS.txt
    ```
 
-3. Paketi `sudo apt install ./Nobetci-x.y.z-linux-amd64.deb` ile kur ya da AppImage'ı
-   çalıştırılabilir yap (`chmod +x Nobetci-*.AppImage`) ve aç.
+3. Paketi `sudo apt install ./Nobi-x.y.z-linux-amd64.deb` ile kur ya da AppImage'ı
+   çalıştırılabilir yap (`chmod +x Nobi-*.AppImage`) ve aç.
 
-Nöbetçi sistem tepsisinde yaşar. GNOME'da tepsi için *AppIndicator* eklentisi gerekir (Ubuntu'da
-zaten var). Relay soketi `~/.local/state/nobetci/nobetci.sock`, ayarlar `~/.config/nobetci`,
-geçmiş `~/.local/share/nobetci` altındadır.
+Nobi sistem tepsisinde yaşar. GNOME'da tepsi için *AppIndicator* eklentisi gerekir (Ubuntu'da
+zaten var). Relay soketi `~/.local/state/nobi/nobi.sock`, ayarlar `~/.config/nobi`,
+geçmiş `~/.local/share/nobi` altındadır.
 
-Bir **Wayland** oturumunda (güncel Ubuntu, Fedora ve KDE Plasma'nın varsayılanı) Nöbetçi'nin
+Bir **Wayland** oturumunda (güncel Ubuntu, Fedora ve KDE Plasma'nın varsayılanı) Nobi'nin
 penceresi XWayland'de çalışır ve üç özellik yalnız X11 pencerelerini görür: genel kısayollar yalnız
 bir X11 penceresi odaktayken çalışır, **Pencereye git** doğrudan Wayland'de çalışan terminalleri
 bulamaz (onun yerine oturumun klasörünü açar) ve tam ekranda sessizlik yerel Wayland uygulamalarını
-fark etmez. Nöbetçi'nin senin için açtığı programlar — bağlantılar, VS Code, dosya yöneticisi — yine
+fark etmez. Nobi'nin senin için açtığı programlar — bağlantılar, VS Code, dosya yöneticisi — yine
 doğrudan Wayland'de açılır. Ayrıntılar [kurulum kılavuzunda](docs/kurulum.md#linux).
 
 **Linux'ta YÜKSEK ve KRİTİK istekler terminalde onaylanır.** X11, senin hesabınla çalışan her
@@ -313,16 +315,16 @@ with C++" iş yüküyle [Visual Studio Build Tools](https://visualstudio.microso
 gerekir.
 
 ```powershell
-git clone https://github.com/tahap0l/nobetci.git
-cd nobetci
+git clone https://github.com/tahap0l/nobi.git
+cd nobi
 npm ci
 npm test         # önce relay'i derler, sonra Rust testleri: risk motoru, kurallar, relay, geçmiş…
-npm run pack     # → release\Nobetci-<sürüm>-setup.exe
+npm run pack     # → release\Nobi-<sürüm>-setup.exe
 ```
 
 Mac'te Xcode Command Line Tools (`xcode-select --install`), iki Apple hedefiyle Rust
 (`rustup target add aarch64-apple-darwin x86_64-apple-darwin`) ve Node.js 22 ya da üstü gerekir;
-`npm run pack:mac`, `release/Nobetci-<sürüm>-macos-universal.dmg` dosyasını üretir.
+`npm run pack:mac`, `release/Nobi-<sürüm>-macos-universal.dmg` dosyasını üretir.
 
 Linux'ta Rust, Node.js 22 ya da üstü ve WebKitGTK geliştirme paketleri gerekir (Debian ve
 Ubuntu'da `sudo apt install libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxi-dev libxdo-dev libdbus-1-dev libssl-dev`);
@@ -333,22 +335,22 @@ ve `patchelf` paketlerini kur, yoksa AppImage'ın sesleri çalmaz.
 
 ## İlk çalıştırma
 
-Nöbetçi'yi Başlat menüsünden (Mac'te Uygulamalar'dan) aç. Baykuş ekranın üstünde — Mac'te menü
-çubuğunun hemen altında — selam verir, ardından ada kenara çekilir ve Nöbetçi bildirim alanından
+Nobi'yi Başlat menüsünden (Mac'te Uygulamalar'dan) aç. Baykuş ekranın üstünde — Mac'te menü
+çubuğunun hemen altında — selam verir, ardından ada kenara çekilir ve Nobi bildirim alanından
 (tepsiden; Mac'te menü çubuğundan) nöbetini sürdürür. İlk açılışta ayrıca kısa bir hoş
 geldin sihirbazı açılır: dilini seç, Claude Code'a bağlan, sağlık testini çalıştır, güvenlik
 temellerini ayarla, bitti. İstersen atlayabilirsin — sihirbazdaki her şey Ayarlar'da da var.
 
-Nöbetçi'nin Claude Code'u görebilmesi için hook'larının `~/.claude/settings.json` dosyasında
+Nobi'nin Claude Code'u görebilmesi için hook'larının `~/.claude/settings.json` dosyasında
 olması gerekir (Claude Code'un ayarlarını `CLAUDE_CONFIG_DIR` ile kendi seçtiğin bir klasörde
-tutuyorsan ve Nöbetçi de bu değişkeni görüyorsa `$CLAUDE_CONFIG_DIR/settings.json` dosyasında; hangi
+tutuyorsan ve Nobi de bu değişkeni görüyorsa `$CLAUDE_CONFIG_DIR/settings.json` dosyasında; hangi
 dosyanın kullanıldığını **Ayarlar → Claude Code** gösterir). Sihirbazın **Claude Code'a bağlan** adımı — ya da istediğin
 zaman **Ayarlar → Claude Code → Hook'ları kur…** — bunu dikkatle yapar:
 
 - yapılacak değişikliği, dosyaya dokunulmadan önce fark (diff) olarak görürsün;
 - dosyanın yanına önce tarihli bir yedek alınır (`settings.json.bak-YYYYMMDD-HHMMSS`);
 - diğer ayarların ve başka araçların hook'ları olduğu gibi kalır;
-- sen tıklamadan hiçbir şey yazılmaz; önizlemeyle tıklaman arasında dosya değişirse Nöbetçi
+- sen tıklamadan hiçbir şey yazılmaz; önizlemeyle tıklaman arasında dosya değişirse Nobi
   yazmayı reddeder ve sana yeni farkı gösterir.
 
 <p align="center">
@@ -361,7 +363,7 @@ Code hook'ları oturum başlarken okur; o sırada açık olan oturumları yenide
 
 Yerel ChatGPT Work ve Codex'i bağlamak için **Ayarlar → ChatGPT**, Cursor için **Ayarlar → Diğer
 ajanlar** sayfasını aç. **Bağla…** ile ayar dosyasındaki farkı incele ve onayla. Ardından
-ChatGPT masaüstü uygulamasında **Ayarlar → Hooks** bölümünde Nöbetçi hook'larını inceleyip
+ChatGPT masaüstü uygulamasında **Ayarlar → Hooks** bölümünde Nobi hook'larını inceleyip
 güvenilir olarak işaretle. Liste boşsa Codex görünümünde yerel bir proje ekleyip listeyi yenile.
 Codex CLI'da bunun için `/hooks` komutunu kullan. **Sağlık testi**, relay testini ve Codex'ten gelen
 son olayı ayrı ayrı gösterir. Windows eski girdiler bildirirse **Bağlantıyı güncelle…**'yi seç ve
@@ -369,7 +371,7 @@ değişen hook'ları ChatGPT'de ya da Codex'te yeniden inceleyip güvenilir olar
 doğrulamak için yeni bir yerel sohbette mesaj gönder ve **Sağlık testi**'ni yeniden çalıştır. Work
 Cloud yerel hook'ları çalıştırmaz.
 Yerel Work ve Codex'te gönderilen mesajlar ve desteklenen izin istekleri aynı hook'ları kullanır.
-Cursor'da gönderilen mesajlar ile kabuk/MCP istekleri izlenir. Nöbetçi bir Cursor isteğine cevap
+Cursor'da gönderilen mesajlar ile kabuk/MCP istekleri izlenir. Nobi bir Cursor isteğine cevap
 vermezse (kapalı ya da duraklatılmışsa, isteği geri verdiysen ya da süre dolduysa) Cursor sana
 kendisi sorar; Cursor'un komutu engellemesi yalnız relay hiç çalışamadığında olur, çünkü izin
 hook'ları güvenli tarafta kapanacak (fail-closed) biçimde kuruludur. Mesajlar oturum akışında
@@ -402,7 +404,7 @@ Ada klavyeyi almaz: ona ya da masaüstü maskotuna tıklamak terminalini ya da e
 Windows'ta ikisi de Alt-Tab'da görünmez. Klavyeyi yalnızca adanın yazı kutuları — asistan, oturum
 araması, ajanda ve soru ile plan kartlarındaki cevap ve not kutuları — sen içlerine yazarken alır.
 
-Tepsi simgesinde (Mac'te menü çubuğu simgesinde) **Nöbetçi'yi aç**, **Ayarlar…**, **Duraklat /
+Tepsi simgesinde (Mac'te menü çubuğu simgesinde) **Nobi'yi aç**, **Ayarlar…**, **Duraklat /
 devam et**, **Rahatsız etme aç / kapat**, **Masaüstü maskotu aç / kapat** ve **Çıkış** var.
 Duraklatmak bekleyen her isteği terminale geri verir ve bunu oturumun zaman çizelgesine yazar.
 Gizli bir ada neredeyse hiç kaynak harcamaz: animasyon döngüsü durur, imleç takibi uykuya geçer.
@@ -433,7 +435,7 @@ Gizli bir ada neredeyse hiç kaynak harcamaz: animasyon döngüsü durur, imleç
 - **Bu oturumda … için tekrar sorma** yalnızca otomatik izin tavanının izin verdiği yerde çıkar:
   varsayılan tavanda DÜŞÜK için, *DÜŞÜK + ORTA* tavanında DÜŞÜK ve ORTA için; tavan kapalıyken hiç
   çıkmaz. Kutu neyi kapsadığını söyler — tam olarak bu komut, bu dosyadaki değişiklikler, bu adres
-  ya da aynı argümanlarla bu araç — ve o oturumda, Nöbetçi yeniden başlayana kadar geçerlidir.
+  ya da aynı argümanlarla bu araç — ve o oturumda, Nobi yeniden başlayana kadar geçerlidir.
   Sonraki her istek yine puanlanır; tavanın üstündeki her şey sana geri gelir.
 - **Terminale bırak**, soruyu Claude Code'un terminaline geri verir.
 
@@ -482,11 +484,11 @@ Linux'ta YÜKSEK ve KRİTİK istekler basılı tutmayla değil, terminalde onayl
   kapatmak, gizlilik izinlerini sıfırlamak (`tccutil reset`) ya da birleşik günlüğü silmek; diski
   biçimlendirmek ya da üzerine yazmak (`diskutil erase…` dahil); ev dizinini, bir sürücüyü ya da
   kökü silmek; bir GitHub deposunu silmek ya da herkese açmak; Claude Code'un izin ya da hook
-  ayarlarını, Codex'in ya da Cursor'un hook ayarlarını değiştirmek; Nöbetçi'nin kendi dosyalarını,
+  ayarlarını, Codex'in ya da Cursor'un hook ayarlarını değiştirmek; Nobi'nin kendi dosyalarını,
   programlarını ya da relay'ini değiştirmek — Windows'ta, macOS'ta ve Linux'ta, yazma işini hangi
-  komut yaparsa yapsın; Nöbetçi'nin hook'larını kaldırmak (`nobetci --remove-hooks`); SSH
+  komut yaparsa yapsın; Nobi'nin hook'larını kaldırmak (`nobi --remove-hooks`); SSH
   `authorized_keys`'e dokunmak.
-- **YÜKSEK** — Nöbetçi'yi kapatmaya ya da kaldırmaya çalışmak; özyinelemeli silme; zorla push,
+- **YÜKSEK** — Nobi'yi kapatmaya ya da kaldırmaya çalışmak; özyinelemeli silme; zorla push,
   işlenmemiş değişiklikleri atan git komutları (`git restore .`, `git checkout -f`,
   `git clean --force`) ve geri alınamaz diğer git işlemleri; paket ya da sürüm yayınlamak; `sudo`,
   `doas`, `pkexec`, `su`, `runas`, `gsudo` ve AppleScript'in `with administrator privileges`'ı;
@@ -523,7 +525,7 @@ Komut, içinde kelime aranarak değil komut olarak okunur: `git commit -m "grace
 `./.git/hooks/pre-commit` ya da `../../usr/local/bin/git` düz yazılışlarıyla aynı kurallara takılır,
 `~/../../etc/cron.d/x` ya da `$HOME/../..` da gerçekte vardığı yere sayılır. Claude Code ayar
 dosyaları (`~/.claude` içinde ya da `CLAUDE_CONFIG_DIR`'in gösterdiği klasörde), Codex'in ve
-Cursor'un hook dosyaları, Nöbetçi'nin kendi dosyaları ve `~/.ssh` altındaki her şey için KRİTİK;
+Cursor'un hook dosyaları, Nobi'nin kendi dosyaları ve `~/.ssh` altındaki her şey için KRİTİK;
 Claude Code hook, agent, komut, skill ve eklentileri, `.mcp.json`, git hook'ları ve git ayarı, kabuk
 profilleri, başlangıç klasörleri ve LaunchAgents, sistem dosyaları, sır dosyaları (macOS anahtar
 zinciri dahil) ve özel anahtar ya da görünmez karakter içeren içerik için YÜKSEK; CI iş akışları,
@@ -542,7 +544,7 @@ dizgileri için ORTA, şifresiz `http://` için DÜŞÜK.
 (delete, remove, trash, destroy, drop, purge, wipe, terminate, revoke…) YÜKSEK; bir şey gönderiyor,
 yayınlıyor, itiyor, oluşturuyor, güncelliyor, yüklüyor, ödüyor, dağıtıyor, taşıyor ya da
 çalıştırıyorsa ORTA; gerisi DÜŞÜK. Argümanları da denetlenir: bir komut, bir URL, bir dosya yolu
-ya da SQL (`execute_sql` çağrısındaki `DROP TABLE` YÜKSEK). Nöbetçi'nin tanımadığı bir araç bütün
+ya da SQL (`execute_sql` çağrısındaki `DROP TABLE` YÜKSEK). Nobi'nin tanımadığı bir araç bütün
 argümanlarıyla gösterilir ve eşleştirilir.
 
 **Birleşimler** — aynı istekte bir sır ve dışarı giden bir yol varsa KRİTİK, sığması için kesilmek
@@ -590,12 +592,12 @@ Desenler nasıl eşleşir:
   seviyeyi yükselten kurallar her yerde eşleşir.
 - **Boş desen** o aracın her isteğiyle eşleşir ("MCP araçları için her seferinde sor" şablonu buna
   dayanır); her araç için boş desenli bir kuralı kaydetmeden önce düzenleyici seni uyarır.
-- **Bir yol, vardığı yer sayılır.** Nöbetçi bir yolun gerçekte nereye vardığını çıkarır: `..`, `.`,
+- **Bir yol, vardığı yer sayılır.** Nobi bir yolun gerçekte nereye vardığını çıkarır: `..`, `.`,
   `~` ve `$HOME` (`%USERPROFILE%`) çözülür, göreli yollar oturumun klasöründen başlar. Bir dosya
   için izin veren ya da seviyeyi düşüren bir kural (ve bir "tekrar sorma" izni) yolla hem yazıldığı
   hâliyle hem de vardığı yerle eşleşmek zorundadır; böylece `..` bir kuralın gösterdiği klasörden
   dışarı tırmanamaz: `Write /work/app/*`, `/work/app/../../etc/hosts`'u kapsamaz; `Write ~/*` da
-  aslında `/etc/x` olan `~/../../etc/x`'i kapsamaz. Nöbetçi'nin yerini bilemediği bir klasörün
+  aslında `/etc/x` olan `~/../../etc/x`'i kapsamaz. Nobi'nin yerini bilemediği bir klasörün
   (başka bir kullanıcının `~bob`'u, `%APPDATA%`) üstüne tırmanan bir yol böyle bir kuralla asla
   geçmez. Yasaklayan, her zaman sorduran ve seviyeyi yükselten kuralların ise yolla yazıldığı ya da
   vardığı hâliyle eşleşmesi yeter; böylece klasörlerine tırmanarak giren bir yolu da yakalarlar ve
@@ -643,12 +645,12 @@ aktarabilirsin. CSV virgülle ya da — noktalı virgül bekleyen dillerdeki tab
 (örneğin Türkçe Excel) — noktalı virgülle ayrılır ve açması güvenlidir: formül gibi okunacak
 hücreler etkisiz hâle getirilir.
 
-Geçmiş, Nöbetçi'nin veri klasöründeki `audit.jsonl` dosyasında durur (bkz.
+Geçmiş, Nobi'nin veri klasöründeki `audit.jsonl` dosyasında durur (bkz.
 [Geliştirme](#geliştirme)); dosya 10 MB'a ulaşınca (ayarlanabilir) eski kayıtlar `audit.1.jsonl`'e
 taşınır. **Ayarlar → Geçmiş**'ten kapatılabilir ya da temizlenebilir. Bozuk bir satır dosyanın
 tamamını değil yalnız kendini kaybettirir; macOS ve Linux'ta dosyayı yalnız senin hesabın okuyabilir.
 Unix izinleri olmayan bir dosya sistemi (FAT, exFAT, bazı ağ paylaşımları) bunun dışındadır: orada
-Nöbetçi klasörü olduğu gibi kullanır ve bunu kayıt dosyasına yazar.
+Nobi klasörü olduğu gibi kullanır ve bunu kayıt dosyasına yazar.
 
 ### Kısayollar
 
@@ -678,7 +680,7 @@ saatler hiç sessizlik demektir; bütün gün sessizlik için Rahatsız etme'yi 
 
 ## Güvenlik modeli
 
-Nöbetçi ikinci bir göz, bir sandbox değil. Risk motoru sezgisel kurallardan oluşur: bariz olanı
+Nobi ikinci bir göz, bir sandbox değil. Risk motoru sezgisel kurallardan oluşur: bariz olanı
 ve klasik olanı yakalar, kararlı bir saldırgan onu atlatabilir; DÜŞÜK "belirgin bir şey yok"
 demektir, asla "güvenli" değil. Kattığı şey görünürlük, tehlikeli işlerde bilinçli bir yavaşlama
 ve okuyabileceğin gerekçelerdir.
@@ -694,7 +696,7 @@ bir betik ajan adına "İzin ver"e basamaz (Linux'ta X11 bir programın gerçek 
 tıklamasına izin verdiği için bu denetim orada yalnızca bir yavaşlatıcıdır; YÜKSEK ve KRİTİK
 istekler orada terminalde onaylanır); relay ile uygulama sadece senin hesabının açabildiği bir
 named pipe (Windows) ya da Unix soketi (macOS, Linux) üzerinden konuşur ve relay karşı uçtaki
-uygulamanın senin hesabınla çalıştığını denetler; Nöbetçi'nin kendi dosyalarını değiştirmek,
+uygulamanın senin hesabınla çalıştığını denetler; Nobi'nin kendi dosyalarını değiştirmek,
 relay'ini değiştirmek ya da hook'larını kaldırmak her sistemde KRİTİK sayılır; geçmiş sırları
 maskeler, CSV dışa aktarımı formül enjeksiyonuna karşı korumalıdır.
 
@@ -707,26 +709,26 @@ açığını nasıl bildireceğin için [SECURITY.md](SECURITY.md)'ye bak.
 **Claude Code'u yavaşlatır ya da bloklar mı?**
 Hayır. Relay küçük, yerel bir program: bağlanır, olayı teslim eder ve çıkar; kesin 2 saniyelik
 bir bütçesi vardır, pratikte çok daha azını kullanır (**Sağlık testi** senin makinendeki
-gidiş-dönüş süresini gösterir). Nöbetçi çalışmıyorsa relay hemen çıkar. Sadece izin istekleri
+gidiş-dönüş süresini gösterir). Nobi çalışmıyorsa relay hemen çıkar. Sadece izin istekleri
 bekler; o da sadece kart gerçekten ekranındayken ve terminal devralmadan önce en fazla 110 saniye.
 
 **Bir yere veri gönderiyor mu?**
-Nöbetçi telemetri, hata raporu, güncelleme denetimi ya da hesap kullanmaz. **Ayarlar → Mesaj
+Nobi telemetri, hata raporu, güncelleme denetimi ya da hesap kullanmaz. **Ayarlar → Mesaj
 Atölyesi**'nde Ollama varsayılan olarak yerel servise bağlanır; **cloud** etiketli Ollama modelleri
 taslağı dışarı iletebilir. OpenAI'yi seçip **Mesajı iyileştir** dediğinde yalnızca o anki taslak
-OpenAI API'sine gönderilir. Nöbetçi mesajı ajana iletmez ve geçmişe kaydetmez. Asistanın
+OpenAI API'sine gönderilir. Nobi mesajı ajana iletmez ve geçmişe kaydetmez. Asistanın
 **Burada** seçeneği aynı sağlayıcıyı kullanır; hava durumu kartı da seçtiğin şehri Open-Meteo'ya
 sorar. Hepsini [gizlilik politikası](PRIVACY.md) sayar.
 
-**Nöbetçi kapalıysa, duraklatılmışsa ya da çökerse ne olur?**
-Claude Code ve Codex, Nöbetçi hiç kurulmamış gibi devam eder: dinleyen kimse yoksa (ya da ada
+**Nobi kapalıysa, duraklatılmışsa ya da çökerse ne olur?**
+Claude Code ve Codex, Nobi hiç kurulmamış gibi devam eder: dinleyen kimse yoksa (ya da ada
 duraklatılmışsa) relay çıktı vermeden çıkar ve terminalde sorarlar. Cursor sana kendisi sorar.
 Engelleyen tek durum, relay'i hiç çalışamayan bir Cursor hook'udur — bkz. [Kaldırma](#kaldırma).
 
 **Kaldırınca ne olur?**
-Windows'ta kaldırma programı `nobetci.exe --remove-hooks` komutunu çalıştırır; bu da
+Windows'ta kaldırma programı `nobi.exe --remove-hooks` komutunu çalıştırır; bu da
 `~/.claude/settings.json`'dan ve Codex'in ve Cursor'un `hooks.json` dosyalarından sadece
-Nöbetçi'nin girdilerini siler — her dosyanın yanına tarihli bir yedek bırakarak — ve başka hiçbir
+Nobi'nin girdilerini siler — her dosyanın yanına tarihli bir yedek bırakarak — ve başka hiçbir
 şeye dokunmaz. Mac'te ve Linux'ta bunu senin yerine yapacak bir kaldırma programı yok; uygulamayı
 silmeden önce aynı komutu çalıştır (ya da bağlantıları Ayarlar'dan kaldır). Bkz.
 [Kaldırma](#kaldırma).
@@ -747,64 +749,64 @@ kereliğine **Sistem Ayarları → Gizlilik ve Güvenlik → Yine de Aç** ile a
 **SmartScreen ya da Defender neden uyarıyor?**
 Kurulum dosyası henüz kod imzalı değil, bu yüzden SmartScreen'de itibarı yok. SHA-256'yı sürümle
 karşılaştır, ardından **Ek bilgi → Yine de çalıştır**'ı seç. Microsoft Defender bir sürümü
-işaretlerse lütfen [bir issue aç](https://github.com/tahap0l/nobetci/issues); dosyayı Microsoft'a
+işaretlerse lütfen [bir issue aç](https://github.com/tahap0l/nobi/issues); dosyayı Microsoft'a
 yanlış pozitif olarak bildirmek de işe yarar.
 
 **VS Code, Cursor, Windows Terminal, Terminal.app ya da iTerm2 ile çalışır mı?**
-Evet. Nöbetçi doğrudan Claude Code'a bağlandığı için oturumun nerede çalıştığı fark etmez.
+Evet. Nobi doğrudan Claude Code'a bağlandığı için oturumun nerede çalıştığı fark etmez.
 **Pencereye git**, oturumun süreç zincirini izleyerek yaşadığı pencereyi (Mac'te uygulamayı)
 bulur; bulamazsa proje klasörünü açar.
 
-**Claude kendi isteklerini Nöbetçi üzerinden onaylayabilir mi?**
+**Claude kendi isteklerini Nobi üzerinden onaylayabilir mi?**
 Ada üzerinden hayır: onaylar fiziksel bir tıklamadan gelmeli, izin kısayolu varsayılan olarak
 kapalı ve sadece DÜŞÜK risk için, YÜKSEK ve KRİTİK ise basılı tutma istiyor — Linux'ta, bir program
 gerçek fare üzerinden tıklayabildiği için, bunlar adada hiç onaylanamıyor. Ama onaylanmış bir
 komutun başlattığı her şey senin yetkilerinle çalışır ve örneğin Claude Code'un ayarlarını,
-Nöbetçi'nin kendi ayarlarını değiştirebilir ya da hook'larını kaldırabilir — tam da bu yüzden böyle
+Nobi'nin kendi ayarlarını değiştirebilir ya da hook'larını kaldırabilir — tam da bu yüzden böyle
 istekler KRİTİK sayılır. Ayrıntılar [tehdit modelinde](SECURITY.md).
 
 **Claude masaüstü uygulamasında zaten izin verdiğim komutlar neden adayı bekliyor?**
-Masaüstü uygulaması Claude Code'un `PermissionRequest` hook'unu hiç çalıştırmaz; bu yüzden Nöbetçi,
+Masaüstü uygulaması Claude Code'un `PermissionRequest` hook'unu hiç çalıştırmaz; bu yüzden Nobi,
 uygulamanın kendi izin denetiminden önce gelen ve Claude'daki izin listeni göremeyen `PreToolUse`
 üzerinden sorar. Kimsenin cevaplamadığı bir istek en fazla 108 sn bekler, sonra uygulama normalde
 nasıl karar verecekse öyle karar verir. Böyle bir oturumu başında kimse olmadan bırakmadan önce
-Nöbetçi'yi duraklat ya da DÜŞÜK istekleri güvenilir bir proje veya kurallarla geçir.
+Nobi'yi duraklat ya da DÜŞÜK istekleri güvenilir bir proje veya kurallarla geçir.
 
 ## Kaldırma
 
-Nöbetçi'nin hook'ları başka programların ayar dosyalarında durur: Claude Code için
+Nobi'nin hook'ları başka programların ayar dosyalarında durur: Claude Code için
 `~/.claude/settings.json`, bağladıysan Codex'in `hooks.json` dosyası (`$CODEX_HOME` içinde ya da
 `~/.codex` altında) ve `~/.cursor/hooks.json`. Uygulamayı silmeden önce onları çıkar. Relay yerinde
 durduğu sürece unutulan bir hook zarar vermez: Claude Code ve Codex her zamanki gibi sorar, Cursor da
 sana kendisi sorar. Ama relay silinince Claude Code her adımda bir hook hatası bildirir; Cursor ise —
-Nöbetçi izin hook'larını güvenli tarafta kapanacak (fail-closed) biçimde kurduğu için — girdiler
+Nobi izin hook'larını güvenli tarafta kapanacak (fail-closed) biçimde kurduğu için — girdiler
 kaldırılana kadar her kabuk ve MCP komutunu engeller.
 
-`nobetci --remove-hooks` üç dosyadan da yalnızca Nöbetçi'nin kendi girdilerini kaldırır; diğer
+`nobi --remove-hooks` üç dosyadan da yalnızca Nobi'nin kendi girdilerini kaldırır; diğer
 ayarlara ve başka araçların hook'larına dokunmaz, her dosyanın yanına tarihli bir yedek bırakır
 (`settings.json.bak-…`, `hooks.json.bak-…`). Fark göstermez — kaldırma programının komutudur — ama
 macOS'ta ve Linux'ta terminalde her dosya için bir satır yazar; temizleyemediği bir dosya olursa da
 1 koduyla çıkar. Windows'ta konsolu yoktur: neyi kaldırdığı ya da kaldıramadığı
-`%LOCALAPPDATA%\Nobetci\nobetci.log` dosyasına yazılır, çıkış kodunu da kaldırma programı okur. (Bir
-ajan onu çalıştırmak isterse Nöbetçi bunu KRİTİK sayar: onu yalnız sen çalıştırmalısın.) Her
+`%LOCALAPPDATA%\Nobi\nobi.log` dosyasına yazılır, çıkış kodunu da kaldırma programı okur. (Bir
+ajan onu çalıştırmak isterse Nobi bunu KRİTİK sayar: onu yalnız sen çalıştırmalısın.) Her
 değişikliği incelemek istersen **Ayarlar → Claude Code → Kaldır…**, **Ayarlar → ChatGPT →
 Bağlantıyı kaldır…** ve **Ayarlar → Diğer ajanlar → Bağlantıyı kaldır…** düğmelerini kullan.
 
 ### Windows
 
 **Ayarlar → Uygulamalar → Yüklü uygulamalar**'ı (Windows 10'da **Uygulamalar ve özellikler**)
-aç, **Nobetci**'yi bul ve **Kaldır**'ı seç. Kaldırma programı:
+aç, **Nobi**'yi bul ve **Kaldır**'ı seç. Kaldırma programı:
 
-1. Nöbetçi açıksa kapatmanı ister — orada **İptal** her şeyi olduğu gibi bırakır;
-2. Claude Code, Codex ve Cursor dosyalarında `nobetci.exe --remove-hooks` (yukarıda) çalıştırır;
-3. uygulamayı, relay'i (`%LOCALAPPDATA%\Nobetci\bin`), kayıt dosyasını, **Windows açılınca
+1. Nobi açıksa kapatmanı ister — orada **İptal** her şeyi olduğu gibi bırakır;
+2. Claude Code, Codex ve Cursor dosyalarında `nobi.exe --remove-hooks` (yukarıda) çalıştırır;
+3. uygulamayı, relay'i (`%LOCALAPPDATA%\Nobi\bin`), kayıt dosyasını, **Windows açılınca
    başlat**'ı ve [ChatGPT Web köprüsünü](integrations/chatgpt-web/README.tr.md) kurduysan onun
    Chrome ve Edge'deki kaydını kaldırır (eklentinin kendisini tarayıcıdan sen kaldırırsın).
 
 Hook'lar kaldırılamazsa relay ve kayıt dosyası yerinde kalır; böylece Claude Code, Codex ve Cursor
 çalışmaya devam eder ve bir mesaj hangi girdileri elle sileceğini söyler.
 
-Tercihlerin ve ajandan (`%APPDATA%\Nobetci`) ve geçmişin (`%LOCALAPPDATA%\Nobetci\audit.jsonl`)
+Tercihlerin ve ajandan (`%APPDATA%\Nobi`) ve geçmişin (`%LOCALAPPDATA%\Nobi\audit.jsonl`)
 yerinde kalır; yeniden kurarsan kaldığın yerden devam edersin. Bunları da silmek için kaldırma
 programında **Uygulama verilerini sil** kutusunu işaretle. Kurulu sürümün üstüne daha yeni bir
 sürüm — ya da 2.4.1'den yeni bir kurulum programıyla daha eski bir sürüm — kurmak kaldırma değil
@@ -814,26 +816,26 @@ gerçekleştirme**'yi seç ([ayrıntılar](docs/kurulum.md#8-güncelleme)).
 
 ### macOS
 
-1. Terminal'de `/Applications/Nobetci.app/Contents/MacOS/nobetci --remove-hooks` çalıştır — ya da
+1. Terminal'de `/Applications/Nobi.app/Contents/MacOS/nobi --remove-hooks` çalıştır — ya da
    yukarıdaki gibi her bağlantıyı Ayarlar'dan kaldır.
 2. **Oturum açınca başlat** açıksa **Ayarlar → Genel**'den kapat.
-3. Nöbetçi'den menü çubuğundan çık ve onu Uygulamalar'dan Çöp Sepeti'ne taşı.
+3. Nobi'den menü çubuğundan çık ve onu Uygulamalar'dan Çöp Sepeti'ne taşı.
 
-Tercihlerin, ajandan, geçmişin ve relay `~/Library/Application Support/Nobetci` klasöründe kalır;
+Tercihlerin, ajandan, geçmişin ve relay `~/Library/Application Support/Nobi` klasöründe kalır;
 hiç iz kalmasın istiyorsan o klasörü de sil.
 
 ### Linux
 
-1. `nobetci --remove-hooks` (`.deb`) ya da `./Nobetci-x.y.z-linux-amd64.AppImage --remove-hooks`
+1. `nobi --remove-hooks` (`.deb`) ya da `./Nobi-x.y.z-linux-amd64.AppImage --remove-hooks`
    çalıştır — ya da yukarıdaki gibi her bağlantıyı Ayarlar'dan kaldır.
 2. **Oturum açınca başlat** açıksa **Ayarlar → Genel**'den kapat
-   (`~/.config/autostart/Nobetci.desktop` dosyasıdır).
-3. Nöbetçi'den tepsiden çık, sonra `sudo apt remove nobetci` çalıştır ya da AppImage'ı sil. Paket
+   (`~/.config/autostart/Nobi.desktop` dosyasıdır).
+3. Nobi'den tepsiden çık, sonra `sudo apt remove nobi` çalıştır ya da AppImage'ı sil. Paket
    yöneticisi root olarak çalışır ve hook'ları senin ev klasöründen çıkaramaz; 1. adımın önce
    gelmesi bu yüzden.
 
-Ayarlar ve ajanda `~/.config/nobetci`, geçmiş, kayıt dosyası ve relay `~/.local/share/nobetci`,
-soketin klasörü `~/.local/state/nobetci` altında kalır; hiç iz kalmasın istiyorsan üçünü de sil.
+Ayarlar ve ajanda `~/.config/nobi`, geçmiş, kayıt dosyası ve relay `~/.local/share/nobi`,
+soketin klasörü `~/.local/state/nobi` altında kalır; hiç iz kalmasın istiyorsan üçünü de sil.
 
 ## Geliştirme
 
@@ -860,10 +862,10 @@ Geliştirme sunucusu çalışırken:
   `gecmis`, `hakkinda`; hoş geldin sihirbazı için `hosgeldin`.
 - Dili seçmek için `&lang=tr` ya da `&lang=en` ekle. Ayarlar'da `&platform=macos` ya da
   `&platform=linux` Mac ya da Linux metinlerini gösterir.
-- Tarayıcı konsolunda `nobetci.inject({ … })` adaya sahte bir hook olayı gönderir.
+- Tarayıcı konsolunda `nobi.inject({ … })` adaya sahte bir hook olayı gönderir.
 
 ```text
-hook/                  nobetci-hook — Claude Code, Codex ve Cursor'un her hook olayında çalıştırdığı relay
+hook/                  nobi-hook — Claude Code, Codex ve Cursor'un her hook olayında çalıştırdığı relay
   src/win.rs · mac.rs · linux.rs   named pipe (Windows) / Unix soketi (macOS, Linux), üst süreç zinciri
   src/browser.rs       ChatGPT Web köprüsünün native-messaging sunucusu
 src-tauri/src/
@@ -896,10 +898,10 @@ scripts/               kurulum paketleme, ikon üretici, ekran görüntüleri, d
 
 | Ne | Windows | macOS | Linux |
 | --- | --- | --- | --- |
-| Tercihler, ajanda | `%APPDATA%\Nobetci\` | `~/Library/Application Support/Nobetci/` | `~/.config/nobetci/` |
-| Geçmiş | `%LOCALAPPDATA%\Nobetci\audit.jsonl` (+ `audit.1.jsonl`) | `~/Library/Application Support/Nobetci/audit.jsonl` | `~/.local/share/nobetci/audit.jsonl` |
-| Kayıt dosyası | `%LOCALAPPDATA%\Nobetci\nobetci.log` | `~/Library/Application Support/Nobetci/nobetci.log` | `~/.local/share/nobetci/nobetci.log` |
-| Relay | `%LOCALAPPDATA%\Nobetci\bin\nobetci-hook.exe` | `~/Library/Application Support/Nobetci/bin/nobetci-hook` | `~/.local/share/nobetci/bin/nobetci-hook` |
+| Tercihler, ajanda | `%APPDATA%\Nobi\` | `~/Library/Application Support/Nobi/` | `~/.config/nobi/` |
+| Geçmiş | `%LOCALAPPDATA%\Nobi\audit.jsonl` (+ `audit.1.jsonl`) | `~/Library/Application Support/Nobi/audit.jsonl` | `~/.local/share/nobi/audit.jsonl` |
+| Kayıt dosyası | `%LOCALAPPDATA%\Nobi\nobi.log` | `~/Library/Application Support/Nobi/nobi.log` | `~/.local/share/nobi/nobi.log` |
+| Relay | `%LOCALAPPDATA%\Nobi\bin\nobi-hook.exe` | `~/Library/Application Support/Nobi/bin/nobi-hook` | `~/.local/share/nobi/bin/nobi-hook` |
 | Claude Code hook'ları | `%USERPROFILE%\.claude\settings.json` | `~/.claude/settings.json` | `~/.claude/settings.json` |
 
 Claude Code ayarlarının yedekleri yanlarında `settings.json.bak-*`, Codex'in ve Cursor'unkiler

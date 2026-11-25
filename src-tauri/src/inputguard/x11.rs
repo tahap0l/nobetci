@@ -780,7 +780,7 @@ mod tests {
     /// The guard's own reading of both maps on a real X server. It changes the
     /// server's button maps, so it runs only by hand, on a throwaway Xvfb
     /// started with `-noreset`:
-    /// `DISPLAY=:87 cargo test -p nobetci --lib live_ -- --ignored --test-threads=1`.
+    /// `DISPLAY=:87 cargo test -p nobi --lib live_ -- --ignored --test-threads=1`.
     #[test]
     #[ignore]
     fn live_button_maps() {

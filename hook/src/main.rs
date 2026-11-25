@@ -1,20 +1,20 @@
-//! nobetci-hook — the relay Claude Code, Codex and Cursor run on every hook event.
+//! nobi-hook — the relay Claude Code, Codex and Cursor run on every hook event.
 //!
 //! Reads the hook JSON on stdin, adds a little terminal context, and hands it to
-//! Nöbetçi: over the named pipe `\\.\pipe\nobetci-<sid>` on Windows (`win.rs`),
-//! over a Unix socket in `~/Library/Application Support/Nobetci` on macOS
-//! (`mac.rs`) and in `~/.local/state/nobetci` on Linux (`linux.rs`). It is also
+//! Nobi: over the named pipe `\\.\pipe\nobi-<sid>` on Windows (`win.rs`),
+//! over a Unix socket in `~/Library/Application Support/Nobi` on macOS
+//! (`mac.rs`) and in `~/.local/state/nobi` on Linux (`linux.rs`). It is also
 //! the native-messaging host of the ChatGPT Web extension (`browser.rs`).
 //!
 //! Hard rule: **never block Claude Code.**
-//! * If nobody is listening — Nöbetçi is closed — we exit 0 immediately with
+//! * If nobody is listening — Nobi is closed — we exit 0 immediately with
 //!   nothing on stdout, and the session carries on untouched.
 //! * Talking to the app runs under a deadline enforced by the main thread, so a
 //!   pipe that accepts the connection and then stops reading cannot wedge the
 //!   session either: we abandon the worker and exit.
 //! * Only `PermissionRequest` waits for an answer, because approving from the
 //!   island is the whole point. No answer means empty stdout, and Claude Code
-//!   asks in the terminal exactly as if Nöbetçi were not installed.
+//!   asks in the terminal exactly as if Nobi were not installed.
 //! * The one exception is the Code tab of the Claude desktop app, which shows
 //!   its own permission dialog and never runs `PermissionRequest` hooks. There a
 //!   `PreToolUse` for a tool that would ask (see `desktop_gate`) is relayed as a
@@ -22,7 +22,7 @@
 //!   same silence when nobody answers: the app's own dialog then appears.
 //! * Cursor is the one host that needs words instead of silence: its permission
 //!   hooks are installed fail-closed (a crashed relay must not let a command
-//!   through), so an empty answer would block the tool. Whenever Nöbetçi gives
+//!   through), so an empty answer would block the tool. Whenever Nobi gives
 //!   no decision — closed, paused, handed back, timed out, or input it could not
 //!   read — the relay answers `ask`, and Cursor asks the user itself.
 //!
@@ -30,8 +30,8 @@
 //! strings cut evenly until it fits, and the payload says it was cut (see
 //! `fit_frame`).
 //!
-//! Usage: `nobetci-hook <EventName>`, `nobetci-hook codex|cursor <EventName>`,
-//! `nobetci-hook statusline` (the event name is also read from the JSON).
+//! Usage: `nobi-hook <EventName>`, `nobi-hook codex|cursor <EventName>`,
+//! `nobi-hook statusline` (the event name is also read from the JSON).
 
 use std::io::{Read, Write};
 use std::sync::mpsc;
@@ -53,7 +53,7 @@ const MAX_FIELD_LEN: usize = 2_000;
 /// payload is flagged and the island treats the request as high risk.
 const MAX_APPROVAL_FIELD_LEN: usize = 64 * 1024;
 /// Set on the payload when any field had to be cut.
-const TRUNCATED_FLAG: &str = "nobetci_truncated";
+const TRUNCATED_FLAG: &str = "nobi_truncated";
 /// The longest line the app reads (`MAX_PAYLOAD` in src-tauri/src/pipe.rs), the
 /// newline not counted. A longer one is refused unread, so nothing of it reaches
 /// the island and the rules never see it.
@@ -137,7 +137,7 @@ fn finish(json: Option<String>) -> ! {
     std::process::exit(0)
 }
 
-/// What the host is told when Nöbetçi gave no decision: the app is closed or
+/// What the host is told when Nobi gave no decision: the app is closed or
 /// paused, the island handed the request back or let it expire, the answer made
 /// no sense, or the input could not be read.
 ///
@@ -158,9 +158,9 @@ fn no_decision_json(provider: &str, event: &str) -> Option<String> {
 
 /// Shown by Cursor with its own approval prompt. In both languages: the relay
 /// does not know which one the app is set to.
-const LEFT_TO_CURSOR: &str = "Nöbetçi left this request to Cursor. · Nöbetçi bu isteği Cursor'a bıraktı.";
+const LEFT_TO_CURSOR: &str = "Nobi left this request to Cursor. · Nobi bu isteği Cursor'a bıraktı.";
 
-/// Nöbetçi's name for a host's event: Cursor's events are mapped onto Claude
+/// Nobi's name for a host's event: Cursor's events are mapped onto Claude
 /// Code's, which Codex already uses.
 fn event_name<'a>(provider: &str, event: &'a str) -> &'a str {
     if provider != "cursor" {
@@ -259,7 +259,7 @@ fn clean_message(value: Option<&serde_json::Value>, fallback: &str) -> String {
 
 /// Longest denial message passed on to Claude Code.
 const MAX_MESSAGE: usize = 500;
-const DEFAULT_DENY: &str = "Denied through Nöbetçi.";
+const DEFAULT_DENY: &str = "Denied through Nobi.";
 
 /// The documented PermissionRequest output, built from what the app answered.
 ///
@@ -307,7 +307,7 @@ fn decision_json(answer: &str) -> Option<String> {
     };
     // "Deny and stop": the universal `continue: false` ends the turn outright.
     if reply.get("stop").and_then(|v| v.as_bool()) == Some(true) {
-        let reason = clean(reply.get("message")).unwrap_or_else(|| "Stopped by Nöbetçi.".to_string());
+        let reason = clean(reply.get("message")).unwrap_or_else(|| "Stopped by Nobi.".to_string());
         out["continue"] = serde_json::Value::Bool(false);
         out["stopReason"] = serde_json::Value::String(reason);
     }
@@ -327,7 +327,7 @@ fn pre_tool_use_json(answer: &str) -> Option<String> {
                 "hookSpecificOutput": {
                     "hookEventName": "PreToolUse",
                     "permissionDecision": "allow",
-                    "permissionDecisionReason": "Approved in Nöbetçi."
+                    "permissionDecisionReason": "Approved in Nobi."
                 }
             });
             // AskUserQuestion and ExitPlanMode only run when the answer comes back
@@ -348,7 +348,7 @@ fn pre_tool_use_json(answer: &str) -> Option<String> {
     };
     if reply.get("stop").and_then(|v| v.as_bool()) == Some(true) {
         out["continue"] = serde_json::Value::Bool(false);
-        out["stopReason"] = serde_json::Value::String(clean_message(reply.get("message"), "Stopped by Nöbetçi."));
+        out["stopReason"] = serde_json::Value::String(clean_message(reply.get("message"), "Stopped by Nobi."));
     }
     Some(out.to_string())
 }
@@ -379,7 +379,7 @@ fn desktop_gate(entrypoint: &str, tool: &str, mode: &str) -> bool {
         "" | "default" | "plan" => asks,
         "acceptEdits" => asks && !EDIT_TOOLS.contains(&tool),
         // bypassPermissions, dontAsk, auto and anything newer: the user chose not
-        // to be asked, so Nöbetçi does not ask either.
+        // to be asked, so Nobi does not ask either.
         _ => false,
     }
 }
@@ -552,7 +552,7 @@ fn prepare(
     if let Some(chain) = parents {
         let list: Vec<serde_json::Value> =
             chain.into_iter().map(|(pid, name)| serde_json::json!({ "pid": pid, "name": name })).collect();
-        map.insert("nobetci_parents".into(), serde_json::Value::Array(list));
+        map.insert("nobi_parents".into(), serde_json::Value::Array(list));
     }
 
     let text = |key: &str| map.get(key).and_then(|v| v.as_str()).unwrap_or_default().to_string();
@@ -563,7 +563,7 @@ fn prepare(
     if gated {
         event = "PermissionRequest".to_string();
         map.insert("hook_event_name".into(), serde_json::Value::String(event.clone()));
-        map.insert("nobetci_via".into(), serde_json::Value::String("PreToolUse".into()));
+        map.insert("nobi_via".into(), serde_json::Value::String("PreToolUse".into()));
     }
 
     let limit = if event == "PermissionRequest" { MAX_APPROVAL_FIELD_LEN } else { MAX_FIELD_LEN };
@@ -573,7 +573,7 @@ fn prepare(
 
     // Added after the cut: the diff has its own, larger cap.
     if let (Some(change), Some(map)) = (change, payload.as_object_mut()) {
-        map.insert("nobetci_change".into(), change);
+        map.insert("nobi_change".into(), change);
     }
 
     // One line, ended by a newline: the app reads up to it and drops a frame
@@ -735,7 +735,7 @@ fn file_change(map: &serde_json::Map<String, serde_json::Value>) -> Option<serde
     }))
 }
 
-/// `nobetci-hook statusline`: Claude Code's status line command. It hands us the
+/// `nobi-hook statusline`: Claude Code's status line command. It hands us the
 /// session's context use, cost and plan limits on stdin; we pass them to the
 /// island (never waiting for it) and print a short line for Claude Code to show.
 fn status_line() {
@@ -827,9 +827,9 @@ fn status_text(data: &serde_json::Value) -> String {
     .flatten()
     .collect();
     if parts.is_empty() {
-        "Nöbetçi".to_string()
+        "Nobi".to_string()
     } else {
-        format!("Nöbetçi · {}", parts.join(" · "))
+        format!("Nobi · {}", parts.join(" · "))
     }
 }
 
@@ -947,7 +947,7 @@ mod tests {
         let d = &deny["hookSpecificOutput"]["decision"];
         assert_eq!(d["behavior"], "deny");
         assert_eq!(d["interrupt"], false, "a plain deny lets Claude carry on");
-        assert!(d["message"].as_str().unwrap().contains("Nöbetçi"));
+        assert!(d["message"].as_str().unwrap().contains("Nobi"));
         assert!(deny.get("continue").is_none());
     }
 
@@ -974,7 +974,7 @@ mod tests {
     }
 
     #[test]
-    fn cursor_is_told_to_ask_whenever_nobetci_gives_no_decision() {
+    fn cursor_is_told_to_ask_whenever_nobi_gives_no_decision() {
         // Closed, paused, handed back, timed out, or input that could not be read:
         // never a deny that blames an app that may well be running.
         let ask: serde_json::Value =
@@ -1287,8 +1287,8 @@ mod tests {
         let chain = vec![(10, "claude.exe".to_string()), (9, "pwsh.exe".to_string())];
         let (line, _, _) = prepare(raw, "claude", String::new(), Some(chain), &Context::default()).unwrap();
         let sent: serde_json::Value = serde_json::from_str(&line).unwrap();
-        assert_eq!(sent["nobetci_parents"][0]["name"], "claude.exe");
-        assert_eq!(sent["nobetci_parents"][1]["pid"], 9);
+        assert_eq!(sent["nobi_parents"][0]["name"], "claude.exe");
+        assert_eq!(sent["nobi_parents"][1]["pid"], 9);
     }
 
     #[test]
@@ -1344,7 +1344,7 @@ mod tests {
         assert_eq!(event, "PermissionRequest");
         let sent: serde_json::Value = serde_json::from_str(&line).unwrap();
         assert_eq!(sent["hook_event_name"], "PermissionRequest");
-        assert_eq!(sent["nobetci_via"], "PreToolUse");
+        assert_eq!(sent["nobi_via"], "PreToolUse");
         assert_eq!(sent["tool_input"]["command"], "rm -rf build");
 
         // The same event from the terminal is only displayed.
@@ -1419,14 +1419,13 @@ mod tests {
         // answer that sets `interrupt`, and Cursor's permission answer has no
         // field to end the turn; both get the deny and its words, nothing more —
         // whatever an older app sends.
-        let stop =
-            r#"{"behavior":"deny","message":"Stopped by the user through Nöbetçi.","interrupt":true,"stop":true}"#;
+        let stop = r#"{"behavior":"deny","message":"Stopped by the user through Nobi.","interrupt":true,"stop":true}"#;
         let codex: serde_json::Value =
             serde_json::from_str(&codex_decision_json("PermissionRequest", stop).unwrap()).unwrap();
         assert_eq!(
             codex,
             serde_json::json!({ "hookSpecificOutput": { "hookEventName": "PermissionRequest",
-                "decision": { "behavior": "deny", "message": "Stopped by the user through Nöbetçi." } } })
+                "decision": { "behavior": "deny", "message": "Stopped by the user through Nobi." } } })
         );
         let cursor: serde_json::Value =
             serde_json::from_str(&cursor_decision_json("PermissionRequest", stop).unwrap()).unwrap();
@@ -1470,7 +1469,7 @@ mod tests {
         let (line, event, gated) = prepare(raw.as_bytes(), "claude", String::new(), None, &Context::default()).unwrap();
         assert!(gated);
         assert_eq!(event, "PermissionRequest");
-        assert!(line.contains("\"nobetci_via\":\"PreToolUse\""));
+        assert!(line.contains("\"nobi_via\":\"PreToolUse\""));
         let plan = raw.replace("AskUserQuestion", "ExitPlanMode");
         assert!(prepare(plan.as_bytes(), "claude", String::new(), None, &Context::default()).unwrap().2);
         // Other tools in the terminal are only displayed.
@@ -1509,7 +1508,7 @@ mod tests {
         .to_string();
         let (line, _, _) = prepare(from_patch.as_bytes(), "claude", String::new(), None, &Context::default()).unwrap();
         let v: serde_json::Value = serde_json::from_str(&line).unwrap();
-        let c = &v["nobetci_change"];
+        let c = &v["nobi_change"];
         assert_eq!(c["file"], "/w/a.rs");
         assert_eq!((c["added"].as_u64(), c["removed"].as_u64()), (Some(2), Some(1)));
         assert!(c["diff"].as_str().unwrap().starts_with("@@ -3,2 +3,3 @@"));
@@ -1523,12 +1522,12 @@ mod tests {
         .to_string();
         let (line, _, _) = prepare(from_input.as_bytes(), "claude", String::new(), None, &Context::default()).unwrap();
         let v: serde_json::Value = serde_json::from_str(&line).unwrap();
-        assert_eq!(v["nobetci_change"]["added"], 3);
-        assert_eq!(v["nobetci_change"]["created"], true);
+        assert_eq!(v["nobi_change"]["added"], 3);
+        assert_eq!(v["nobi_change"]["created"], true);
 
         let read = from_input.replace("\"Write\"", "\"Read\"");
         let (line, _, _) = prepare(read.as_bytes(), "claude", String::new(), None, &Context::default()).unwrap();
-        assert!(!line.contains("nobetci_change"));
+        assert!(!line.contains("nobi_change"));
     }
 
     #[test]
@@ -1541,13 +1540,13 @@ mod tests {
             "cost": { "total_cost_usd": 0.5 },
             "rate_limits": { "five_hour": { "used_percentage": 41.0, "resets_at": 1700000000 } },
         });
-        assert_eq!(status_text(&data), "Nöbetçi · Opus · ctx 23% · 5h 41%");
+        assert_eq!(status_text(&data), "Nobi · Opus · ctx 23% · 5h 41%");
         let sent: serde_json::Value = serde_json::from_str(&status_payload(&data, "cli").unwrap()).unwrap();
         assert_eq!(sent["hook_event_name"], "StatusLine");
         assert_eq!(sent["entrypoint"], "cli");
         assert_eq!(sent["five_hour"]["used"], 41.0);
         assert!(sent["seven_day"]["used"].is_null());
-        assert_eq!(status_text(&serde_json::json!({})), "Nöbetçi");
+        assert_eq!(status_text(&serde_json::json!({})), "Nobi");
         assert!(status_payload(&serde_json::json!({}), "").is_none());
     }
 }
